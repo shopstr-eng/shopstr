@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useMemo } from "react";
 import {
   Modal,
   ModalContent,
@@ -13,26 +13,32 @@ import {
   CheckCircleIcon,
   XCircleIcon,
 } from "@heroicons/react/24/outline";
-import { ProfileMapContext, ChatsContext } from "../../utils/context/context";
+import { useTheme } from "next-themes";
+import {
+  ProfileMapContext,
+  ChatsContext,
+  CashuWalletContext,
+} from "../../utils/context/context";
 import {
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
+  publishWalletEvent,
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
 import { nip19 } from "nostr-tools";
 import {
   Mint as CashuMint,
   Wallet as CashuWallet,
   Proof,
-  getDecodedToken,
+  getTokenMetadata,
   getEncodedToken,
 } from "@cashu/cashu-ts";
-import * as cashuCompat from "@/utils/cashu/compat";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { formatWithCommas } from "./display-monetary-info";
@@ -40,7 +46,13 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
+import {
+  checkMintP2pkSupport,
+  parseP2PKProofSet,
+  pubkeysEqual,
+} from "@/utils/cashu/p2pk-checkout";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
+import { ParsedP2PK } from "@/utils/types/types";
 
 export default function ClaimButton({ token }: { token: string }) {
   const [lnurl, setLnurl] = useState("");
@@ -48,6 +60,7 @@ export default function ClaimButton({ token }: { token: string }) {
   const chatsContext = useContext(ChatsContext);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
+  const { cashuPubkey, cashuPrivkey } = useContext(CashuWalletContext);
 
   const [openClaimTypeModal, setOpenClaimTypeModal] = useState(false);
   const [openRedemptionModal, setOpenRedemptionModal] = useState(false);
@@ -62,11 +75,49 @@ export default function ClaimButton({ token }: { token: string }) {
 
   const [isInvalidSuccess, setIsInvalidSuccess] = useState(false);
   const [isReceived, setIsReceived] = useState(false);
+  const [isRefunded, setIsRefunded] = useState(false);
   const [isSpent, setIsSpent] = useState(false);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
-
+  const [isP2pkKeyMissing, setIsP2pkKeyMissing] = useState(false);
+  const [p2pk, setP2PK] = useState<ParsedP2PK | null>(null);
   const { mints, tokens, history } = getLocalStorageData();
+
+  // True when locktime has expired and the current wallet key is an
+  // authorized refund signer. refundKeys are stored as "02"+x-only (66 chars)
+  // by cashu-ts; cashuPubkey from context is x-only (64 chars).
+  const isRefundEligible = useMemo(() => {
+    if (!p2pk || !p2pk.expired || !cashuPubkey) return false;
+    return p2pk.refundKeys.some((k) => pubkeysEqual(k, cashuPubkey));
+  }, [p2pk, cashuPubkey]);
+
+  const assertP2pkMintSupported = async () => {
+    if (!p2pk) return;
+
+    const mintSupport = await checkMintP2pkSupport(tokenMint);
+    if (!mintSupport.supported) {
+      throw new Error(
+        mintSupport.reason ?? "This mint does not support P2PK proofs."
+      );
+    }
+  };
+
+  const { theme } = useTheme();
+
+  useEffect(() => {
+    if (proofs.length === 0) {
+      setP2PK(null);
+      return;
+    }
+
+    const parsedP2pk = parseP2PKProofSet(proofs);
+    if (parsedP2pk.invalidReason) {
+      setP2PK(null);
+      setIsInvalidToken(true);
+      return;
+    }
+    setP2PK(parsedP2pk.p2pk);
+  }, [proofs]);
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
@@ -90,28 +141,45 @@ export default function ClaimButton({ token }: { token: string }) {
   }, []);
 
   useEffect(() => {
-    try {
-      const decodedToken = getDecodedToken(token, []);
-      const mint = decodedToken.mint;
-      setTokenMint(mint);
-      const proofs = decodedToken.proofs;
-      setProofs(proofs);
-      const newWallet = new CashuWallet(new CashuMint(mint));
-      setWallet(newWallet);
-      const totalAmount =
-        Array.isArray(proofs) && proofs.length > 0
-          ? proofs.reduce(
-              (acc, current: Proof) => acc + cashuCompat.proofAmount(current),
-              0
-            )
-          : 0;
+    let isActive = true;
 
-      setTokenAmount(totalAmount);
-      setFormattedTokenAmount(formatWithCommas(totalAmount, "sats"));
-    } catch (error) {
-      console.error("Error decoding token:", error);
-      setIsInvalidToken(true);
-    }
+    const decodeToken = async () => {
+      try {
+        setIsInvalidToken(false);
+        setProofs([]);
+        setWallet(undefined);
+        const tokenMetadata = getTokenMetadata(token);
+        const newWallet = new CashuWallet(new CashuMint(tokenMetadata.mint), {
+          unit: tokenMetadata.unit,
+        });
+        await newWallet.loadMint();
+        const decodedToken = newWallet.decodeToken(token);
+        if (!isActive) return;
+
+        const mint = decodedToken.mint;
+        setTokenMint(mint);
+        const proofs = decodedToken.proofs;
+        setProofs(proofs);
+        setWallet(newWallet);
+        const totalAmount =
+          Array.isArray(proofs) && proofs.length > 0
+            ? sumProofAmounts(proofs)
+            : 0;
+
+        setTokenAmount(totalAmount);
+        setFormattedTokenAmount(formatWithCommas(totalAmount, "sats"));
+      } catch (error) {
+        if (!isActive) return;
+        console.error("Error decoding token:", error);
+        setIsInvalidToken(true);
+      }
+    };
+
+    decodeToken();
+
+    return () => {
+      isActive = false;
+    };
   }, [token]);
 
   const checkProofsSpent = async () => {
@@ -137,6 +205,10 @@ export default function ClaimButton({ token }: { token: string }) {
   };
 
   const handleClaimButtonClick = async () => {
+    if (p2pk && !cashuPrivkey) {
+      setIsP2pkKeyMissing(true);
+      return;
+    }
     const alreadySpent = await checkProofsSpent();
     if (!alreadySpent) {
       setOpenClaimTypeModal(true);
@@ -153,7 +225,7 @@ export default function ClaimButton({ token }: { token: string }) {
         ? sellerProfile.content.lud16
         : "invalid"
     );
-  }, [profileContext, userPubkey]);
+  }, [profileContext, tokenMint, userPubkey]);
 
   const handleClaimType = async (type: string) => {
     if (type === "receive") {
@@ -167,7 +239,7 @@ export default function ClaimButton({ token }: { token: string }) {
     }
   };
 
-  const receive = async (isInvalid: boolean) => {
+  const receive = async (isInvalid: boolean, isRefund = false) => {
     setOpenClaimTypeModal(false);
     setIsDuplicateToken(false);
     setIsInvalidSuccess(false);
@@ -176,6 +248,69 @@ export default function ClaimButton({ token }: { token: string }) {
     setIsInvalidToken(false);
     setIsRedeeming(true);
     try {
+      // P2PK locked proofs must be unlocked at the mint before storage.
+      // wallet.receive() calls completeSwap() internally, which signs the inputs
+      // with privkey and swaps them for fresh unlocked proofs in one mint round-trip.
+      // Both the seller claim path and the buyer refund path use this branch;
+      // the mint is the authority on which signing path is valid.
+      if (p2pk) {
+        if (!cashuPrivkey) {
+          setIsP2pkKeyMissing(true);
+          setIsRedeeming(false);
+          return;
+        }
+        await assertP2pkMintSupported();
+        await wallet!.loadMint();
+        const freshProofs = await wallet!.receive(proofs, {
+          privkey: cashuPrivkey,
+        });
+        await publishProofEvent(
+          nostr!,
+          signer!,
+          tokenMint,
+          freshProofs,
+          "in",
+          tokenAmount.toString()
+        );
+        localStorage.setItem(
+          "tokens",
+          JSON.stringify([...tokens, ...freshProofs])
+        );
+        if (!mints.includes(tokenMint)) {
+          const updatedMints = [...mints, tokenMint];
+          localStorage.setItem("mints", JSON.stringify(updatedMints));
+          if (cashuPrivkey) {
+            await publishWalletEvent(
+              nostr!,
+              signer!,
+              { cashuPubkey, cashuPrivkey },
+              { mints: updatedMints }
+            );
+          }
+        }
+        if (isRefund) {
+          setIsRefunded(true);
+        } else if (isInvalid) {
+          setIsInvalidSuccess(true);
+        } else {
+          setIsReceived(true);
+        }
+        setIsRedeeming(false);
+        localStorage.setItem(
+          "history",
+          JSON.stringify([
+            {
+              type: 1,
+              amount: tokenAmount,
+              date: Math.floor(Date.now() / 1000),
+            },
+            ...history,
+          ])
+        );
+        return;
+      }
+
+      // Non-P2PK path: plain proofs are immediately spendable; store directly.
       const proofsStates = await wallet?.checkProofsStates(proofs);
       const spentYs = proofsStates
         ? new Set(
@@ -206,6 +341,14 @@ export default function ClaimButton({ token }: { token: string }) {
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
+          if (cashuPrivkey) {
+            await publishWalletEvent(
+              nostr!,
+              signer!,
+              { cashuPubkey, cashuPrivkey },
+              { mints: updatedMints }
+            );
+          }
         }
         if (isInvalid) {
           setIsInvalidSuccess(true);
@@ -242,20 +385,22 @@ export default function ClaimButton({ token }: { token: string }) {
     const ln = new LightningAddress(lnurl);
     try {
       if (wallet) {
+        await assertP2pkMintSupported();
         await wallet.loadMint();
         await ln.fetch();
         const invoice = await ln.requestInvoice({ satoshi: newAmount });
         const invoicePaymentRequest = invoice.paymentRequest;
-        const meltQuote = await cashuCompat.createMeltQuote(
-          wallet,
+        const meltQuote = await wallet.createMeltQuoteBolt11(
           invoicePaymentRequest
         );
         if (meltQuote) {
           const meltQuoteTotal =
-            cashuCompat.amountToNumber(meltQuote.amount) +
-            cashuCompat.amountToNumber(meltQuote.fee_reserve);
+            meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
           const swapOutcome = await safeSwap(wallet, meltQuoteTotal, proofs, {
-            sendConfig: { includeFees: true },
+            sendConfig: {
+              includeFees: true,
+              ...(p2pk && cashuPrivkey ? { privkey: cashuPrivkey } : {}),
+            },
           });
           if (swapOutcome.status !== "swapped") {
             throw new Error(
@@ -274,11 +419,7 @@ export default function ClaimButton({ token }: { token: string }) {
           const changeProofs = [...keep, ...meltOutcome.changeProofs];
           const changeAmount =
             Array.isArray(changeProofs) && changeProofs.length > 0
-              ? changeProofs.reduce(
-                  (acc, current: Proof) =>
-                    acc + cashuCompat.proofAmount(current),
-                  0
-                )
+              ? sumProofAmounts(changeProofs)
               : 0;
           if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
             const decodedRandomPubkeyForSender =
@@ -339,19 +480,48 @@ export default function ClaimButton({ token }: { token: string }) {
     }
   };
 
+  const handleRefundClick = async () => {
+    if (p2pk && !cashuPrivkey) {
+      setIsP2pkKeyMissing(true);
+      return;
+    }
+    await receive(false, true);
+  };
+
+  const buttonClassName = useMemo(() => {
+    const disabledStyle =
+      "min-w-fit from-gray-300 to-gray-400 cursor-not-allowed";
+    const enabledStyle = SHOPSTRBUTTONCLASSNAMES;
+    const className = isRedeemed ? disabledStyle : enabledStyle;
+    return className;
+  }, [isRedeemed]);
+
   return (
     <div>
+      {p2pk && (
+        <span
+          data-testid="p2pk-detected"
+          aria-hidden="true"
+          style={{ display: "none" }}
+        />
+      )}
       <Button
         className={
           isRedeemed || isInvalidToken
-            ? "mt-2 min-w-fit cursor-not-allowed rounded-xl border border-zinc-700 bg-zinc-800 text-xs font-bold tracking-wider text-zinc-500 uppercase opacity-60"
-            : `${NEO_BTN} mt-2 min-w-fit text-xs`
+            ? "mt-2 min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
+            : buttonClassName + " mt-2 min-w-fit"
         }
         onClick={handleClaimButtonClick}
         isDisabled={isRedeemed || isInvalidToken}
       >
         {isRedeeming ? (
-          <Spinner size="sm" color="warning" />
+          <>
+            {theme === "dark" ? (
+              <Spinner size={"sm"} color="warning" />
+            ) : (
+              <Spinner size={"sm"} color="secondary" />
+            )}
+          </>
         ) : isInvalidToken ? (
           <>Invalid Token</>
         ) : isRedeemed ? (
@@ -360,42 +530,70 @@ export default function ClaimButton({ token }: { token: string }) {
           <>Claim: {formattedTokenAmount}</>
         )}
       </Button>
+      {isRefundEligible && (
+        <Button
+          className={
+            isRefunded
+              ? "mt-2 min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
+              : SHOPSTRBUTTONCLASSNAMES + " mt-2 min-w-fit"
+          }
+          onClick={handleRefundClick}
+          isDisabled={isRefunded || isRedeeming}
+        >
+          {isRedeeming ? (
+            <>
+              {theme === "dark" ? (
+                <Spinner size={"sm"} color="warning" />
+              ) : (
+                <Spinner size={"sm"} color="secondary" />
+              )}
+            </>
+          ) : isRefunded ? (
+            <>Refunded: {formattedTokenAmount}</>
+          ) : (
+            <>Refund: {formattedTokenAmount}</>
+          )}
+        </Button>
+      )}
       <Modal
         backdrop="blur"
         isOpen={openClaimTypeModal}
         onClose={() => setOpenClaimTypeModal(false)}
+        // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
         classNames={{
-          base: "bg-[#161616] border border-zinc-800 rounded-2xl",
-          body: "py-8",
-          backdrop: "bg-black/80 backdrop-blur-sm",
-          header: "border-b border-zinc-800 text-white",
-          closeButton: "hover:bg-white/10 text-white",
+          body: "py-6 ",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
+          closeButton: "hover:bg-black/5 active:bg-white/10",
         }}
         isDismissable={true}
         scrollBehavior={"normal"}
         placement={"center"}
-        size="md"
+        size="2xl"
       >
         <ModalContent>
-          <ModalBody className="flex flex-col gap-6 overflow-hidden text-zinc-300">
-            <div className="flex items-center justify-center text-center font-bold tracking-tight text-white uppercase">
+          <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
+            <div className="flex items-center justify-center">
               Would you like to claim the token directly to your Shopstr wallet,
               or to your Lightning address?
             </div>
-            <div className="flex w-full flex-col items-center justify-center gap-4 sm:flex-row">
+            <div className="flex w-full flex-wrap justify-evenly gap-2">
               <Button
-                className="h-14 w-full rounded-xl border border-zinc-700 bg-[#111] text-xs font-bold tracking-wider text-white uppercase transition-colors hover:border-yellow-400 sm:w-[48%]"
+                className={SHOPSTRBUTTONCLASSNAMES + " mt-2 w-[20%]"}
                 onClick={() => handleClaimType("receive")}
                 startContent={
-                  <ArrowDownTrayIcon className="h-6 w-6 text-yellow-400" />
+                  <ArrowDownTrayIcon className="h-6 w-6 hover:text-yellow-500" />
                 }
               >
                 Receive
               </Button>
               <Button
-                className="h-14 w-full rounded-xl border border-zinc-700 bg-[#111] text-xs font-bold tracking-wider text-white uppercase transition-colors hover:border-yellow-400 sm:w-[48%]"
+                className={SHOPSTRBUTTONCLASSNAMES + " mt-2 w-[20%]"}
                 onClick={() => handleClaimType("redeem")}
-                startContent={<BoltIcon className="h-6 w-6 text-yellow-400" />}
+                startContent={
+                  <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
+                }
               >
                 Redeem
               </Button>
@@ -409,24 +607,25 @@ export default function ClaimButton({ token }: { token: string }) {
             backdrop="blur"
             isOpen={isInvalidSuccess}
             onClose={() => setIsInvalidSuccess(false)}
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
-              base: "bg-[#161616] border border-zinc-800 rounded-2xl",
-              body: "py-8",
-              backdrop: "bg-black/80 backdrop-blur-sm",
-              header: "border-b border-zinc-800 text-white",
-              closeButton: "hover:bg-white/10 text-white",
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
             }}
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="md"
+            size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">No valid Lightning address found!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   Check your Shopstr wallet for your sats.
                 </div>
@@ -441,24 +640,25 @@ export default function ClaimButton({ token }: { token: string }) {
             backdrop="blur"
             isOpen={isReceived}
             onClose={() => setIsReceived(false)}
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
-              base: "bg-[#161616] border border-zinc-800 rounded-2xl",
-              body: "py-8",
-              backdrop: "bg-black/80 backdrop-blur-sm",
-              header: "border-b border-zinc-800 text-white",
-              closeButton: "hover:bg-white/10 text-white",
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
             }}
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="md"
+            size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully claimed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   Check your Shopstr wallet for your sats.
                 </div>
@@ -473,24 +673,25 @@ export default function ClaimButton({ token }: { token: string }) {
             backdrop="blur"
             isOpen={isDuplicateToken}
             onClose={() => setIsDuplicateToken(false)}
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
-              base: "bg-[#161616] border border-zinc-800 rounded-2xl",
-              body: "py-8",
-              backdrop: "bg-black/80 backdrop-blur-sm",
-              header: "border-b border-zinc-800 text-white",
-              closeButton: "hover:bg-white/10 text-white",
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
             }}
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="md"
+            size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Duplicate token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim is already in your Shopstr
                   wallet.
@@ -500,30 +701,63 @@ export default function ClaimButton({ token }: { token: string }) {
           </Modal>
         </>
       ) : null}
+      {isP2pkKeyMissing ? (
+        <Modal
+          backdrop="blur"
+          isOpen={isP2pkKeyMissing}
+          onClose={() => setIsP2pkKeyMissing(false)}
+          classNames={{
+            body: "py-6",
+            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+            header: "border-b-[1px] border-[#292f46]",
+            footer: "border-t-[1px] border-[#292f46]",
+            closeButton: "hover:bg-black/5 active:bg-white/10",
+          }}
+          isDismissable={true}
+          scrollBehavior={"normal"}
+          placement={"center"}
+          size="2xl"
+        >
+          <ModalContent>
+            <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
+              <XCircleIcon className="h-6 w-6 text-red-500" />
+              <div className="ml-2">Wallet not ready</div>
+            </ModalHeader>
+            <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
+              <div className="flex items-center justify-center">
+                Unable to claim escrow token: Cashu wallet identity not yet
+                available. Please wait for your wallet to finish loading and try
+                again.
+              </div>
+            </ModalBody>
+          </ModalContent>
+        </Modal>
+      ) : null}
       {isSpent ? (
         <>
           <Modal
             backdrop="blur"
             isOpen={isSpent}
             onClose={() => setIsSpent(false)}
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
-              base: "bg-[#161616] border border-zinc-800 rounded-2xl",
-              body: "py-8",
-              backdrop: "bg-black/80 backdrop-blur-sm",
-              header: "border-b border-zinc-800 text-white",
-              closeButton: "hover:bg-white/10 text-white",
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
             }}
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="md"
+            size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Spent token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim has already been redeemed.
                 </div>
@@ -538,24 +772,25 @@ export default function ClaimButton({ token }: { token: string }) {
             backdrop="blur"
             isOpen={openRedemptionModal}
             onClose={() => setOpenRedemptionModal(false)}
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
-              base: "bg-[#161616] border border-zinc-800 rounded-2xl",
-              body: "py-8",
-              backdrop: "bg-black/80 backdrop-blur-sm",
-              header: "border-b border-zinc-800 text-white",
-              closeButton: "hover:bg-white/10 text-white",
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
             }}
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="md"
+            size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully redeemed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   Check your Lightning address ({lnurl}) for your sats.
                 </div>
@@ -569,24 +804,25 @@ export default function ClaimButton({ token }: { token: string }) {
             backdrop="blur"
             isOpen={openRedemptionModal}
             onClose={() => setOpenRedemptionModal(false)}
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
-              base: "bg-[#161616] border border-zinc-800 rounded-2xl",
-              body: "py-8",
-              backdrop: "bg-black/80 backdrop-blur-sm",
-              header: "border-b border-zinc-800 text-white",
-              closeButton: "hover:bg-white/10 text-white",
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
             }}
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="md"
+            size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Token redemption failed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   You are attempting to redeem a token that has already been
                   redeemed, is too small/large, or for which there were no
@@ -597,6 +833,36 @@ export default function ClaimButton({ token }: { token: string }) {
           </Modal>
         </>
       )}
+      {isRefunded ? (
+        <Modal
+          backdrop="blur"
+          isOpen={isRefunded}
+          onClose={() => setIsRefunded(false)}
+          classNames={{
+            body: "py-6",
+            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+            header: "border-b-[1px] border-[#292f46]",
+            footer: "border-t-[1px] border-[#292f46]",
+            closeButton: "hover:bg-black/5 active:bg-white/10",
+          }}
+          isDismissable={true}
+          scrollBehavior={"normal"}
+          placement={"center"}
+          size="2xl"
+        >
+          <ModalContent>
+            <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
+              <CheckCircleIcon className="h-6 w-6 text-green-500" />
+              <div className="ml-2">Refund successful!</div>
+            </ModalHeader>
+            <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
+              <div className="flex items-center justify-center">
+                Your funds have been returned to your Shopstr wallet.
+              </div>
+            </ModalBody>
+          </ModalContent>
+        </Modal>
+      ) : null}
     </div>
   );
 }

@@ -21,14 +21,16 @@ import {
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
-import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   Mint as CashuMint,
   Wallet as CashuWallet,
-  MintKeyset,
+  Keyset as MintKeyset,
   Proof,
 } from "@cashu/cashu-ts";
-import * as cashuCompat from "@/utils/cashu/compat";
+import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
+import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
 import { CashuWalletContext } from "../../utils/context/context";
 import {
@@ -78,13 +80,11 @@ const PayButton = () => {
     if (invoice && /^lnbc/.test(invoice)) {
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
-      const meltQuote = await cashuCompat.createMeltQuote(wallet, invoice);
+      await wallet.loadMint();
+      const meltQuote = await wallet?.createMeltQuoteBolt11(invoice);
       if (meltQuote) {
         setFeeReserveAmount(
-          formatWithCommas(
-            cashuCompat.amountToNumber(meltQuote.fee_reserve),
-            "sats"
-          )
+          formatWithCommas(meltQuote.fee_reserve.toNumber(), "sats")
         );
       } else {
         setFeeReserveAmount("");
@@ -101,28 +101,34 @@ const PayButton = () => {
     try {
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
-      const mintKeySetIds = await cashuCompat.getWalletKeysets(wallet);
+      await wallet.loadMint();
+      const mintKeySetIds = await wallet.keyChain.getKeysets();
       const filteredProofs = tokens.filter((p: Proof) =>
         mintKeySetIds.some((keyset: MintKeyset) => keyset.id === p.id)
-      );
-      const meltQuote = await cashuCompat.createMeltQuote(
-        wallet,
-        invoiceString
-      );
+      ) as Proof[];
+      const meltQuote = await wallet.createMeltQuoteBolt11(invoiceString);
       const meltQuoteTotal =
-        cashuCompat.amountToNumber(meltQuote.amount) +
-        cashuCompat.amountToNumber(meltQuote.fee_reserve);
-      const { keep, send } = await wallet.send(meltQuoteTotal, filteredProofs, {
-        includeFees: true,
-      });
+        meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
+      const swapOutcome = await safeSwap(
+        wallet,
+        meltQuoteTotal,
+        filteredProofs,
+        { sendConfig: { includeFees: true } }
+      );
+      if (swapOutcome.status !== "swapped") {
+        throw new Error(
+          swapOutcome.errorMessage ??
+            `Pre-melt swap did not complete (${swapOutcome.status})`
+        );
+      }
+      const { keep, send } = swapOutcome;
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
                 filteredProofs.some(
-                  (filteredProof) =>
-                    JSON.stringify(proof) === JSON.stringify(filteredProof)
+                  (filteredProof) => filteredProof.secret === proof.secret
                 )
               )
             )
@@ -130,41 +136,52 @@ const PayButton = () => {
           ...walletContext.proofEvents
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
-                keep.some(
-                  (keepProof) =>
-                    JSON.stringify(proof) === JSON.stringify(keepProof)
-                )
+                keep.some((keepProof) => keepProof.secret === proof.secret)
               )
             )
             .map((event) => event.id),
           ...walletContext.proofEvents
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
-                send.some(
-                  (sendProof) =>
-                    JSON.stringify(proof) === JSON.stringify(sendProof)
-                )
+                send.some((sendProof) => sendProof.secret === proof.secret)
               )
             )
             .map((event) => event.id),
         ]),
       ];
-      const meltResponse = await cashuCompat.meltProofs(
-        wallet,
-        meltQuote,
-        send
-      );
-      const changeProofs = [...keep, ...meltResponse.change];
+      const meltOutcome = await safeMeltProofs(wallet, meltQuote, send);
+      if (meltOutcome.status === "unpaid") {
+        // Mint never accepted the melt; original `send` proofs are unspent.
+        // Restore them to local storage and bail out.
+        throw new Error(
+          meltOutcome.errorMessage ?? "Melt failed; payment not sent"
+        );
+      }
+      if (
+        meltOutcome.status === "pending" ||
+        meltOutcome.status === "unknown"
+      ) {
+        // Mint may or may not pay. Quarantine the spent proofs locally
+        // (remove from balance) and surface an actionable error.
+        const remainingProofsAfterMelt = tokens.filter(
+          (p: Proof) =>
+            !mintKeySetIds?.some(
+              (keysetId: MintKeyset) => keysetId.id === p.id
+            ) || !send.some((s) => s.secret === p.secret)
+        ) as Proof[];
+        const quarantineProofArray = [...remainingProofsAfterMelt, ...keep];
+        localStorage.setItem("tokens", JSON.stringify(quarantineProofArray));
+        throw new Error(meltOutcome.errorMessage ?? "Melt outcome ambiguous");
+      }
+      const changeProofs = [...keep, ...meltOutcome.changeProofs];
       const changeAmount =
         Array.isArray(changeProofs) && changeProofs.length > 0
-          ? changeProofs.reduce(
-              (acc, current: Proof) => acc + cashuCompat.proofAmount(current),
-              0
-            )
+          ? sumProofAmounts(changeProofs)
           : 0;
-      const remainingProofs = tokens.filter((p: Proof) =>
-        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id)
-      );
+      const remainingProofs = tokens.filter(
+        (p: Proof) =>
+          !mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      ) as Proof[];
       let proofArray;
       if (changeAmount >= 1 && changeProofs) {
         proofArray = [...remainingProofs, ...changeProofs];
@@ -172,10 +189,7 @@ const PayButton = () => {
         proofArray = [...remainingProofs];
       }
       localStorage.setItem("tokens", JSON.stringify(proofArray));
-      const filteredTokenAmount = filteredProofs.reduce(
-        (acc, token: Proof) => acc + cashuCompat.proofAmount(token),
-        0
-      );
+      const filteredTokenAmount = sumProofAmounts(filteredProofs);
       const transactionAmount = filteredTokenAmount - changeAmount;
       localStorage.setItem(
         "history",
@@ -209,9 +223,11 @@ const PayButton = () => {
   return (
     <div>
       <Button
-        className={`${NEO_BTN} w-full py-6 text-sm font-black tracking-widest`}
+        className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
         onClick={() => setShowPayModal(!showPayModal)}
-        startContent={<BoltIcon className="h-5 w-5 stroke-2" />}
+        startContent={
+          <BoltIcon className="h-6 w-6 hover:text-yellow-500 dark:hover:text-purple-500" />
+        }
       >
         Pay
       </Button>
@@ -222,15 +238,16 @@ const PayButton = () => {
         classNames={{
           body: "py-6",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",
-          closeButton: "hover:bg-white/10 active:bg-white/20",
+          closeButton: "hover:bg-black/5 active:bg-white/10",
         }}
         scrollBehavior={"outside"}
-        size="md"
+        size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 text-white">
+          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
             Pay Lightning Invoice
           </ModalHeader>
           <form onSubmit={handlePaySubmit(onPaySubmit)}>
@@ -258,8 +275,7 @@ const PayButton = () => {
                   return (
                     <>
                       <Textarea
-                        className="text-white"
-                        classNames={{ input: "text-base" }} // Prevents iOS auto-zoom
+                        className="text-light-text dark:text-dark-text"
                         autoFocus
                         variant="bordered"
                         fullWidth={true}
@@ -280,18 +296,23 @@ const PayButton = () => {
                         value={value}
                       />
                       {feeReserveAmount && (
-                        <div className="mt-2 text-left text-white">
+                        <div className="text-light-text dark:text-dark-text mt-2 text-left">
                           Fee Reserve: {feeReserveAmount}
                         </div>
                       )}
+                      {/* {totalAmount && totalAmount >= 1 && (
+                        <div className="mt-2 text-right text-light-text dark:text-dark-text">
+                          Total Amount: {totalAmount} sats
+                        </div>
+                      )} */}
                     </>
                   );
                 }}
               />
               {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
-                  <InformationCircleIcon className="h-6 w-6 text-white" />
-                  <p className="ml-2 text-xs text-white">
+                  <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
+                  <p className="text-light-text dark:text-dark-text ml-2 text-xs">
                     If the invoice payment is taking a while to be confirmed,
                     make sure to check your bunker application to approve the
                     transaction events.
@@ -306,24 +327,25 @@ const PayButton = () => {
                   backdrop="blur"
                   isOpen={paymentFailed}
                   onClose={() => setPaymentFailed(false)}
+                  // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
                   classNames={{
                     body: "py-6 ",
                     backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
                     header: "border-b-[1px] border-[#292f46]",
                     footer: "border-t-[1px] border-[#292f46]",
-                    closeButton: "hover:bg-white/10 active:bg-white/20",
+                    closeButton: "hover:bg-black/5 active:bg-white/10",
                   }}
                   isDismissable={true}
                   scrollBehavior={"normal"}
                   placement={"center"}
-                  size="md"
+                  size="2xl"
                 >
                   <ModalContent>
-                    <ModalHeader className="flex items-center justify-center text-white">
+                    <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                       <XCircleIcon className="h-6 w-6 text-red-500" />
                       <div className="ml-2">Payment failed!</div>
                     </ModalHeader>
-                    <ModalBody className="flex flex-col overflow-hidden text-white">
+                    <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                       <div className="flex items-center justify-center">
                         No routes could be found, or you don&apos;t have enough
                         funds. Please try again with a new invoice, or change
@@ -341,24 +363,25 @@ const PayButton = () => {
                   backdrop="blur"
                   isOpen={isPaid}
                   onClose={() => setIsPaid(false)}
+                  // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
                   classNames={{
                     body: "py-6 ",
                     backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
                     header: "border-b-[1px] border-[#292f46]",
                     footer: "border-t-[1px] border-[#292f46]",
-                    closeButton: "hover:bg-white/10 active:bg-white/20",
+                    closeButton: "hover:bg-black/5 active:bg-white/10",
                   }}
                   isDismissable={true}
                   scrollBehavior={"normal"}
                   placement={"center"}
-                  size="md"
+                  size="2xl"
                 >
                   <ModalContent>
-                    <ModalHeader className="flex items-center justify-center text-white">
+                    <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                       <CheckCircleIcon className="h-6 w-6 text-green-500" />
                       <div className="ml-2">Invoice successfully paid!</div>
                     </ModalHeader>
-                    <ModalBody className="flex flex-col overflow-hidden text-white">
+                    <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                       <div className="flex items-center justify-center">
                         Check your external Lightning wallet for your sats.
                       </div>
@@ -377,7 +400,7 @@ const PayButton = () => {
                 Cancel
               </Button>
 
-              <Button className={NEO_BTN} type="submit">
+              <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
                 {isRedeeming ? (
                   <>
                     {theme === "dark" ? (

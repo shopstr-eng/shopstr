@@ -1,6 +1,7 @@
+import { nip19 } from "nostr-tools";
 import { useEffect, useState, useContext, useMemo } from "react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
-import { ProfileMapContext } from "@/utils/context/context";
+import { CashuWalletContext, ProfileMapContext } from "@/utils/context/context";
 import { useForm, Controller, SubmitHandler } from "react-hook-form";
 import {
   Button,
@@ -27,6 +28,53 @@ import { FileUploaderButton } from "@/components/utility-components/file-uploade
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import ProtectedRoute from "@/components/utility-components/protected-route";
+import {
+  normalizeCashuPubkey,
+  isP2pkEscrowFeatureEnabled,
+} from "@/utils/cashu/p2pk-checkout";
+
+function decodeNpubOrHexPubkey(value: string): string {
+  const cashuPubkey = normalizeCashuPubkey(value);
+  if (cashuPubkey) return cashuPubkey;
+
+  const decoded = nip19.decode(value);
+  if (decoded.type !== "npub") {
+    throw new Error("Must be npub");
+  }
+  const decodedCashuPubkey = normalizeCashuPubkey(decoded.data as string);
+  if (!decodedCashuPubkey) {
+    throw new Error("Must be Cashu-compatible pubkey");
+  }
+  return decodedCashuPubkey;
+}
+
+function profileContentToFormValues(content: Record<string, any>) {
+  const p2pk = content.p2pk as
+    | {
+        enabled?: boolean;
+        pubkey?: string;
+        refundDelayDays?: number;
+        locktime?: number;
+        reclaimKeys?: string[];
+      }
+    | undefined;
+
+  return {
+    ...content,
+    p2pkEnabled: p2pk?.enabled ?? content.p2pkEnabled ?? false,
+    p2pkPubkey: p2pk?.pubkey ?? content.p2pkPubkey ?? "",
+    refundDelayDays: String(
+      p2pk?.refundDelayDays ??
+        p2pk?.locktime ??
+        content.refundDelayDays ??
+        content.lockTime ??
+        ""
+    ),
+    reclaimPubKeys: Array.isArray(p2pk?.reclaimKeys)
+      ? p2pk.reclaimKeys.join(", ")
+      : (content.reclaimPubKeys ?? ""),
+  };
+}
 
 interface UserProfileFormData {
   banner: string;
@@ -40,6 +88,10 @@ interface UserProfileFormData {
   payment_preference: string;
   fiat_options: FiatOptionsType;
   shopstr_donation: number;
+  p2pkEnabled: boolean;
+  p2pkPubkey: string;
+  refundDelayDays: string;
+  reclaimPubKeys: string;
 }
 
 const UserProfilePage = () => {
@@ -57,7 +109,8 @@ const UserProfilePage = () => {
   const [viewState, setViewState] = useState<"shown" | "hidden">("hidden");
 
   const profileContext = useContext(ProfileMapContext);
-  const { handleSubmit, control, reset, watch, setValue } =
+  const { cashuPubkey } = useContext(CashuWalletContext);
+  const { handleSubmit, control, reset, watch, setValue, setError } =
     useForm<UserProfileFormData>({
       defaultValues: {
         banner: "",
@@ -71,11 +124,17 @@ const UserProfilePage = () => {
         payment_preference: "ecash",
         fiat_options: {} as FiatOptionsType,
         shopstr_donation: 2.1,
+        p2pkEnabled: false,
+        p2pkPubkey: "",
+        refundDelayDays: "",
+        reclaimPubKeys: "",
       },
     });
 
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
+  const watchP2pkEnabled = watch("p2pkEnabled");
+  const watchP2pkPubkey = watch("p2pkPubkey");
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
@@ -88,18 +147,88 @@ const UserProfilePage = () => {
       ? profileMap.get(userPubkey)
       : undefined;
     if (profile) {
-      reset(profile.content);
+      reset(profileContentToFormValues(profile.content));
     }
     setIsFetchingProfile(false);
   }, [profileContext, userPubkey, reset]);
 
+  useEffect(() => {
+    if (watchP2pkEnabled && cashuPubkey && !watchP2pkPubkey) {
+      setValue("p2pkPubkey", cashuPubkey);
+    }
+  }, [watchP2pkEnabled, cashuPubkey, watchP2pkPubkey, setValue]);
+
   const onSubmit: SubmitHandler<UserProfileFormData> = async (data) => {
     if (!userPubkey) throw new Error("pubkey is undefined");
     setIsUploadingProfile(true);
-    await createNostrProfileEvent(nostr!, signer!, JSON.stringify(data));
+
+    const updatedData: Record<string, any> = { ...data };
+    const reclaimArr: string[] = [];
+    const invalidReclaimKeys: string[] = [];
+
+    for (const key of (data.reclaimPubKeys ?? "").split(",")) {
+      const trimmed = key.trim();
+      if (!trimmed) continue;
+      try {
+        reclaimArr.push(decodeNpubOrHexPubkey(trimmed));
+      } catch {
+        invalidReclaimKeys.push(trimmed);
+      }
+    }
+
+    if (invalidReclaimKeys.length > 0) {
+      setError("reclaimPubKeys", {
+        message: `Invalid reclaim key(s): ${invalidReclaimKeys.join(", ")}`,
+      });
+      setIsUploadingProfile(false);
+      return;
+    }
+
+    if (data.p2pkEnabled) {
+      if (!data.p2pkPubkey) {
+        setError("p2pkPubkey", {
+          message:
+            "Cashu wallet key not yet available. Key management is coming soon.",
+        });
+        setIsUploadingProfile(false);
+        return;
+      }
+
+      let mainHex: string;
+      try {
+        mainHex = decodeNpubOrHexPubkey(data.p2pkPubkey);
+      } catch {
+        setError("p2pkPubkey", {
+          message: "Must be a Cashu-compatible pubkey",
+        });
+        setIsUploadingProfile(false);
+        return;
+      }
+
+      const refundDelayDays = parseInt(data.refundDelayDays, 10);
+      if (!refundDelayDays || refundDelayDays <= 0) {
+        setError("refundDelayDays", { message: "Required" });
+        setIsUploadingProfile(false);
+        return;
+      }
+
+      updatedData.p2pk = {
+        enabled: true,
+        pubkey: mainHex,
+        refundDelayDays,
+        ...(reclaimArr.length > 0 ? { reclaimKeys: reclaimArr } : {}),
+      };
+    } else {
+      updatedData.p2pk = {
+        enabled: false,
+        ...(reclaimArr.length > 0 ? { reclaimKeys: reclaimArr } : {}),
+      };
+    }
+
+    await createNostrProfileEvent(nostr!, signer!, JSON.stringify(updatedData));
     profileContext.updateProfileData({
       pubkey: userPubkey!,
-      content: data as any, // Cast purely for the context update if types slightly mismatch there
+      content: updatedData as any,
       created_at: 0,
     });
     setIsUploadingProfile(false);
@@ -621,6 +750,169 @@ const UserProfilePage = () => {
                       onChange={onChange}
                       onBlur={onBlur}
                       value={value.toString()}
+                    />
+                  )}
+                />
+
+                {isP2pkEscrowFeatureEnabled() && (
+                  <>
+                    <p className="mb-2 text-lg font-black tracking-tight text-white uppercase">
+                      P2PK escrow (for your shop)
+                    </p>
+                    <p className="mb-4 text-sm text-zinc-500">
+                      When enabled, Cashu payments to you are locked to your
+                      redeem pubkey for a delay period. Buyers can configure
+                      their own reclaim keys separately below.
+                    </p>
+                    <Controller
+                      name="p2pkEnabled"
+                      control={control}
+                      render={({ field: { onChange, value } }) => (
+                        <div className="pb-4">
+                          <label className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-[#1a1a1a] p-3 font-bold text-white">
+                            <input
+                              type="checkbox"
+                              checked={!!value}
+                              onChange={(e) => onChange(e.target.checked)}
+                              className="h-5 w-5 rounded border-zinc-700 bg-zinc-900 text-yellow-400 focus:ring-yellow-400"
+                            />
+                            Enable P2PK escrow on my listings
+                          </label>
+                        </div>
+                      )}
+                    />
+
+                    {watchP2pkEnabled && (
+                      <>
+                        <Controller
+                          name="p2pkPubkey"
+                          control={control}
+                          render={({
+                            field: { onChange, onBlur, value },
+                            fieldState: { error },
+                          }) => (
+                            <div>
+                              <Input
+                                className="pb-2"
+                                classNames={{
+                                  label:
+                                    "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                                  input: "text-white font-mono",
+                                  inputWrapper:
+                                    "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
+                                }}
+                                variant="bordered"
+                                fullWidth
+                                label="P2PK Redeem Pubkey (Cashu wallet key)"
+                                labelPlacement="outside"
+                                placeholder="Will be auto-filled from your Cashu wallet key"
+                                isInvalid={!!error}
+                                errorMessage={error?.message}
+                                onChange={onChange}
+                                onBlur={onBlur}
+                                value={value}
+                              />
+                              <p className="mb-4 text-xs text-zinc-500">
+                                Auto-filled from your Cashu wallet when
+                                available. This key is separate from your Nostr
+                                identity.
+                              </p>
+                            </div>
+                          )}
+                        />
+
+                        <Controller
+                          name="refundDelayDays"
+                          control={control}
+                          rules={{
+                            required: "Required",
+                            min: { value: 1, message: "Minimum 1 day" },
+                            max: { value: 365, message: "Maximum 365 days" },
+                          }}
+                          render={({
+                            field: { onChange, onBlur, value },
+                            fieldState: { error },
+                          }) => (
+                            <Input
+                              type="number"
+                              min={1}
+                              max={365}
+                              className="py-6"
+                              classNames={{
+                                label:
+                                  "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                                input: "text-white font-mono",
+                                inputWrapper:
+                                  "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
+                              }}
+                              variant="bordered"
+                              fullWidth
+                              label="Reclaim opens after (days)"
+                              labelPlacement="outside"
+                              placeholder="e.g. 7"
+                              isInvalid={!!error}
+                              errorMessage={error?.message}
+                              onChange={onChange}
+                              onBlur={onBlur}
+                              value={value}
+                            />
+                          )}
+                        />
+                      </>
+                    )}
+                  </>
+                )}
+
+                <p className="mt-6 mb-2 text-lg font-black tracking-tight text-white uppercase">
+                  Escrow reclaim keys (when you buy)
+                </p>
+                <p className="mb-4 text-sm text-zinc-500">
+                  Optional. Embedded into P2PK payments you make so you can
+                  manually reclaim after the seller&apos;s delay. Your current
+                  Cashu wallet pubkey is always included at checkout.
+                </p>
+                <Controller
+                  name="reclaimPubKeys"
+                  control={control}
+                  rules={{
+                    validate: (value: string) => {
+                      const keys = value
+                        .split(",")
+                        .map((key) => key.trim())
+                        .filter(Boolean);
+                      for (const key of keys) {
+                        try {
+                          decodeNpubOrHexPubkey(key);
+                        } catch {
+                          return `Invalid Cashu reclaim key: ${key}`;
+                        }
+                      }
+                      return true;
+                    },
+                  }}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => (
+                    <Textarea
+                      className="pb-4"
+                      classNames={{
+                        label:
+                          "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                        input: "text-white font-mono",
+                        inputWrapper:
+                          "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                      }}
+                      variant="bordered"
+                      fullWidth
+                      label="Reclaim pubkeys (comma separated, optional)"
+                      labelPlacement="outside"
+                      placeholder="Leave empty to use your Cashu wallet pubkey when paying"
+                      isInvalid={!!error}
+                      errorMessage={error?.message}
+                      onChange={onChange}
+                      onBlur={onBlur}
+                      value={value}
                     />
                   )}
                 />

@@ -44,6 +44,9 @@ export const NEO_BTN =
 
 export const SHOPSTRBUTTONCLASSNAMES = NEO_BTN;
 
+export const AVATARBADGEBUTTONCLASSNAMES =
+  "h-10 w-10 min-w-0 rounded-full border-2 border-white p-0 text-dark-text shadow-md bg-gradient-to-tr from-shopstr-purple via-shopstr-purple-light to-shopstr-purple dark:text-light-text dark:from-shopstr-yellow dark:via-shopstr-yellow-light dark:to-shopstr-yellow";
+
 export const WHITEBUTTONCLASSNAMES =
   "bg-white border-2 border-black text-black font-bold hover:bg-gray-100 transition-colors";
 

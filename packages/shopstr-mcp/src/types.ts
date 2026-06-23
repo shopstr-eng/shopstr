@@ -22,6 +22,17 @@ export type PricingBlock = {
 
 export type PriceStatus = "known" | "missing" | "invalid";
 
+export type ProductImage = {
+  url: string;
+  dimensions?: string;
+  order?: number;
+};
+
+export type ShippingOptionRef = {
+  reference: string;
+  extraCost?: number;
+};
+
 export type ProductResponse = {
   id: string;
   pubkey: string;
@@ -29,14 +40,19 @@ export type ProductResponse = {
   title: string;
   summary: string;
   publishedAt?: string;
-  images: string[];
+  images: ProductImage[];
   categories: string[];
   location: string;
   price?: number;
   currency?: string;
   priceStatus: PriceStatus;
+  productType?: "simple" | "variable" | "variation";
+  productFormat?: "digital" | "physical";
+  visibility?: "hidden" | "on-sale" | "pre-order";
   shippingType?: ShippingOptionsType;
   shippingCost?: number;
+  shippingOptions?: ShippingOptionRef[];
+  stock?: number;
   quantity?: number;
   condition?: string;
   status?: string;
@@ -63,6 +79,7 @@ export type ProfileResponse = {
   pubkey: string;
   kind: number;
   name: string;
+  displayName: string;
   about: string;
   picture: string;
   banner: string;

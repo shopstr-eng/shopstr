@@ -23,12 +23,22 @@ import {
 } from "../../utils/context/context";
 import { NostrMessageEvent } from "../../utils/types/types";
 import ShopstrSpinner from "../utility-components/shopstr-spinner";
+import FailureModal from "../utility-components/failure-modal";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import ClaimButton from "@/components/utility-components/claim-button";
 import DisplayProductModal from "@/components/display-product-modal";
+import AddressChangeModal from "@/components/utility-components/address-change-modal";
+import { getStoredBuyerP2pkEscrowRecords } from "@/utils/cashu/p2pk-escrow-records";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
+import {
+  buildOrderGroupingKey,
+  getOrderConsolidationKey,
+  getOrderStatusLookupKeys,
+  registerTaggedOrderGroupingKey,
+  resolveExplicitPaymentMethod,
+} from "@/utils/messages/order-message-utils";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -41,8 +51,9 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
-import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 import { getSatoshiValue } from "@getalby/lightning-tools";
 import currencySelection from "@/public/currencySelection.json";
 import {
@@ -69,6 +80,9 @@ ChartJS.register(
 
 interface OrderData {
   orderId: string;
+  orderTag?: string;
+  orderGroupKey: string;
+  statusLookupKeys: string[];
   buyerPubkey: string;
   productAddress: string;
   amount: number;
@@ -79,6 +93,8 @@ interface OrderData {
   pickupLocation?: string;
   selectedSize?: string;
   selectedVolume?: string;
+  selectedWeight?: string;
+  selectedBulkOption?: number;
   paymentToken?: string;
   paymentMethod?: string;
   productTitle?: string;
@@ -91,9 +107,22 @@ interface OrderData {
   currency?: string;
   donationAmount?: number;
   donationPercentage?: number;
+  sellerPubkey?: string;
+  isSubscription?: boolean;
+  subscriptionFrequency?: string;
+  subscriptionId?: string;
+  returnRequestSent?: boolean;
+  hasReturnRequest?: boolean;
+  returnRequestType?: string;
 }
 
-const OrdersDashboard = () => {
+const OrdersDashboard = ({
+  sellerOnly = false,
+  buyerOnly = false,
+}: {
+  sellerOnly?: boolean;
+  buyerOnly?: boolean;
+}) => {
   const chatsContext = useContext(ChatsContext);
   const productContext = useContext(ProductContext);
   const [orders, setOrders] = useState<OrderData[]>([]);
@@ -137,6 +166,23 @@ const OrdersDashboard = () => {
   const [currencyRates, setCurrencyRates] = useState<Record<string, number>>(
     {}
   );
+
+  const [showAddressChangeModal, setShowAddressChangeModal] = useState(false);
+  const [addressChangeOrder, setAddressChangeOrder] =
+    useState<OrderData | null>(null);
+  const [isSendingAddressChange, setIsSendingAddressChange] = useState(false);
+
+  const [showReturnRequestModal, setShowReturnRequestModal] = useState(false);
+  const [returnRequestOrder, setReturnRequestOrder] =
+    useState<OrderData | null>(null);
+  const [returnRequestType, setReturnRequestType] = useState<
+    "return" | "refund" | "exchange"
+  >("return");
+  const [returnRequestMessage, setReturnRequestMessage] = useState("");
+  const [isSendingReturnRequest, setIsSendingReturnRequest] = useState(false);
+
+  const [showFailureModal, setShowFailureModal] = useState(false);
+  const [failureText, setFailureText] = useState("");
 
   const {
     signer,
@@ -224,7 +270,11 @@ const OrdersDashboard = () => {
           const sats = await getSatoshiValue({ amount: 1, currency });
           return { currency: currency.toLowerCase(), rate: sats };
         } catch (err) {
-          console.error(`Failed to fetch rate for ${currency}:`, err);
+          // The third-party rate API 404s for some less-common currencies.
+          // Use console.warn (not console.error) so the Next.js dev
+          // overlay doesn't treat this benign, already-handled fallback
+          // as a Runtime Error popup.
+          console.warn(`Failed to fetch rate for ${currency}:`, err);
           return { currency: currency.toLowerCase(), rate: 0 };
         }
       });
@@ -251,12 +301,14 @@ const OrdersDashboard = () => {
     async function loadCachedStatuses() {
       if (!chatsContext || chatsContext.isLoading) return;
 
-      const orderIds: string[] = [];
+      const orderIdSet = new Set<string>();
       for (const entry of chatsContext.chatsMap) {
         const chat = entry[1] as NostrMessageEvent[];
         for (const messageEvent of chat) {
           const tagsMap = new Map(
-            messageEvent.tags.map((tag: string[]) => [tag[0], tag[1]])
+            messageEvent.tags
+              .filter((tag): tag is [string, string] => tag.length >= 2)
+              .map(([key, value]) => [key, value])
           );
           const subject = tagsMap.get("subject") || "";
           if (
@@ -265,20 +317,20 @@ const OrdersDashboard = () => {
             subject === "shipping-info" ||
             subject === "order-completed"
           ) {
-            const orderId = tagsMap.get("order") || messageEvent.id;
-            if (orderId && !orderIds.includes(orderId)) {
-              orderIds.push(orderId);
+            const orderStatusKeys = getOrderStatusLookupKeys(messageEvent);
+            for (const statusKey of orderStatusKeys) {
+              orderIdSet.add(statusKey);
             }
           }
         }
       }
 
-      if (orderIds.length > 0) {
+      if (orderIdSet.size > 0) {
         try {
           const response = await fetch("/api/db/get-order-statuses", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ orderIds }),
+            body: JSON.stringify({ orderIds: Array.from(orderIdSet) }),
           });
           if (response.ok) {
             const data = await response.json();
@@ -291,7 +343,6 @@ const OrdersDashboard = () => {
     }
 
     loadCachedStatuses();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatsContext?.isLoading, chatsContext?.chatsMap]);
 
   useEffect(() => {
@@ -323,7 +374,10 @@ const OrdersDashboard = () => {
             subject === "order-completed" ||
             subject === "zapsnag-order"
           ) {
-            const orderId = tagsMap.get("order") || messageEvent.id;
+            const orderTag = tagsMap.get("order") || "";
+            const orderGroupKey = buildOrderGroupingKey(messageEvent);
+            const statusLookupKeys = getOrderStatusLookupKeys(messageEvent);
+            const orderId = orderTag || messageEvent.id;
             const itemTag = messageEvent.tags.find((tag) => tag[0] === "item");
             const productAddress =
               tagsMap.get("a") || (itemTag ? itemTag[1] : "") || "";
@@ -336,6 +390,25 @@ const OrdersDashboard = () => {
             const pickupLocation = tagsMap.get("pickup");
             const selectedSize = tagsMap.get("size");
             const selectedVolume = tagsMap.get("volume");
+            const selectedWeight = tagsMap.get("weight");
+            const subscriptionTagArray = messageEvent.tags.find(
+              (tag: string[]) => tag[0] === "subscription"
+            );
+            const isSubscription =
+              subscriptionTagArray &&
+              (subscriptionTagArray[1] === "yes" ||
+                subscriptionTagArray[1] === "true");
+            const subscriptionFrequency =
+              subscriptionTagArray && subscriptionTagArray[2]
+                ? subscriptionTagArray[2]
+                : undefined;
+            const subscriptionId =
+              subscriptionTagArray && subscriptionTagArray[3]
+                ? subscriptionTagArray[3]
+                : undefined;
+            const bulkTag = messageEvent.tags.find((tag) => tag[0] === "bulk");
+            const selectedBulkOption =
+              bulkTag && bulkTag[1] ? parseInt(bulkTag[1]) : undefined;
 
             const donationTagArray = messageEvent.tags.find(
               (tag) => tag[0] === "donation_amount"
@@ -394,64 +467,13 @@ const OrdersDashboard = () => {
             }
             const finalAmount = amount > 0 ? amount : productPrice * quantity;
 
-            let paymentMethod = "Not specified";
-            if (paymentType) {
-              switch (paymentType.toLowerCase()) {
-                case "ecash":
-                  paymentMethod = "Cashu";
-                  break;
-                case "lightning":
-                  paymentMethod = "Lightning";
-                  break;
-                case "cashapp":
-                case "cash app":
-                  paymentMethod = "CashApp";
-                  break;
-                case "venmo":
-                  paymentMethod = "Venmo";
-                  break;
-                case "zelle":
-                  paymentMethod = "Zelle";
-                  break;
-                case "paypal":
-                  paymentMethod = "PayPal";
-                  break;
-                case "applepay":
-                case "apple pay":
-                  paymentMethod = "Apple Pay";
-                  break;
-                case "cash":
-                  paymentMethod = "Cash";
-                  break;
-                default:
-                  paymentMethod =
-                    paymentType.charAt(0).toUpperCase() + paymentType.slice(1);
-              }
-            } else if (messageEvent.content) {
-              const content = messageEvent.content.toLowerCase();
-              if (content.includes("cashapp") || content.includes("cash app")) {
-                paymentMethod = "CashApp";
-              } else if (
-                content.includes("lightning") ||
-                content.includes("lnurl")
-              ) {
-                paymentMethod = "Lightning";
-              } else if (
-                content.includes("cashu") ||
-                content.includes("ecash")
-              ) {
-                paymentMethod = "Cashu";
-              } else if (content.includes("cash")) {
-                paymentMethod = "Cash";
-              } else if (content.includes("venmo")) {
-                paymentMethod = "Venmo";
-              } else if (content.includes("paypal")) {
-                paymentMethod = "PayPal";
-              }
-            }
+            const paymentMethod = resolveExplicitPaymentMethod(paymentType);
 
             ordersList.push({
               orderId,
+              orderTag: orderTag || undefined,
+              orderGroupKey,
+              statusLookupKeys,
               buyerPubkey,
               productAddress,
               amount: finalAmount,
@@ -462,6 +484,8 @@ const OrdersDashboard = () => {
               pickupLocation,
               selectedSize,
               selectedVolume,
+              selectedWeight,
+              selectedBulkOption,
               paymentToken,
               paymentMethod,
               productTitle,
@@ -473,18 +497,38 @@ const OrdersDashboard = () => {
               currency: productCurrency,
               donationAmount,
               donationPercentage,
+              sellerPubkey: merchantPubkey || undefined,
+              isSubscription: !!isSubscription,
+              subscriptionFrequency,
+              subscriptionId,
             });
           }
         }
       }
 
       const consolidatedOrdersMap = new Map<string, OrderData>();
+      const taggedOrderGroupKeys = new Map<string, string | null>();
+
+      const getCachedStatusForOrder = (order: OrderData) => {
+        for (const lookupKey of order.statusLookupKeys) {
+          const cachedStatus = cachedStatuses[lookupKey];
+          if (cachedStatus) {
+            return cachedStatus;
+          }
+        }
+
+        return undefined;
+      };
 
       for (const order of ordersList) {
-        const existing = consolidatedOrdersMap.get(order.orderId);
+        const consolidationKey = getOrderConsolidationKey(
+          order,
+          taggedOrderGroupKeys
+        );
+        const existing = consolidatedOrdersMap.get(consolidationKey);
 
         if (!existing) {
-          const cachedStatus = cachedStatuses[order.orderId];
+          const cachedStatus = getCachedStatusForOrder(order);
           const statusPriorityInit: Record<string, number> = {
             canceled: 5,
             completed: 4,
@@ -496,13 +540,19 @@ const OrdersDashboard = () => {
             ? statusPriorityInit[cachedStatus] || 0
             : 0;
           const orderPriority = statusPriorityInit[order.status] || 0;
-          consolidatedOrdersMap.set(order.orderId, {
+          consolidatedOrdersMap.set(consolidationKey, {
             ...order,
+            orderId: order.orderTag || order.orderId,
             status:
               cachedPriority > orderPriority && cachedStatus
                 ? cachedStatus
                 : order.status,
           });
+          registerTaggedOrderGroupingKey(
+            order,
+            taggedOrderGroupKeys,
+            consolidationKey
+          );
         } else {
           const statusPriority: Record<string, number> = {
             canceled: 5,
@@ -513,7 +563,7 @@ const OrdersDashboard = () => {
           };
           const existingPriority = statusPriority[existing.status] || 0;
           const newPriority = statusPriority[order.status] || 0;
-          const cachedStatus = cachedStatuses[order.orderId];
+          const cachedStatus = getCachedStatusForOrder(order);
           const cachedPriority = cachedStatus
             ? statusPriority[cachedStatus] || 0
             : 0;
@@ -527,13 +577,23 @@ const OrdersDashboard = () => {
             finalStatus = cachedStatus;
           }
 
-          consolidatedOrdersMap.set(order.orderId, {
+          const mergedStatusLookupKeys = Array.from(
+            new Set([...existing.statusLookupKeys, ...order.statusLookupKeys])
+          );
+
+          consolidatedOrdersMap.set(consolidationKey, {
             ...existing,
+            orderTag: existing.orderTag || order.orderTag,
+            orderId: existing.orderTag || order.orderTag || existing.orderId,
+            statusLookupKeys: mergedStatusLookupKeys,
             status: finalStatus,
             address: order.address || existing.address,
             pickupLocation: order.pickupLocation || existing.pickupLocation,
             selectedSize: order.selectedSize || existing.selectedSize,
             selectedVolume: order.selectedVolume || existing.selectedVolume,
+            selectedWeight: order.selectedWeight || existing.selectedWeight,
+            selectedBulkOption:
+              order.selectedBulkOption || existing.selectedBulkOption,
             paymentToken: order.paymentToken || existing.paymentToken,
             paymentMethod:
               order.paymentMethod !== "Not specified"
@@ -562,15 +622,72 @@ const OrdersDashboard = () => {
             donationAmount: order.donationAmount ?? existing.donationAmount,
             donationPercentage:
               order.donationPercentage ?? existing.donationPercentage,
+            isSubscription: order.isSubscription || existing.isSubscription,
+            subscriptionFrequency:
+              order.subscriptionFrequency || existing.subscriptionFrequency,
+            subscriptionId: order.subscriptionId || existing.subscriptionId,
           });
+          registerTaggedOrderGroupingKey(
+            order,
+            taggedOrderGroupKeys,
+            consolidationKey
+          );
         }
       }
 
       const consolidatedOrders = Array.from(consolidatedOrdersMap.values());
+      const localEscrowRecords = await getStoredBuyerP2pkEscrowRecords(signer);
+      for (const escrowRecord of localEscrowRecords) {
+        const order = consolidatedOrders.find(
+          (item) => item.orderId === escrowRecord.orderId
+        );
+        if (order && !order.paymentToken) {
+          order.paymentToken = escrowRecord.token;
+          order.paymentMethod = order.paymentMethod || "ecash";
+        }
+      }
       consolidatedOrders.sort((a, b) => b.timestamp - a.timestamp);
 
-      setOrders(consolidatedOrders);
-      setTotalOrders(consolidatedOrders.length);
+      const returnRequestOrderIds = new Set<string>();
+      const returnRequestTypes = new Map<string, string>();
+      for (const entry of chatsContext.chatsMap) {
+        const chat = entry[1] as NostrMessageEvent[];
+        for (const messageEvent of chat) {
+          const tagsMap = new Map(
+            messageEvent.tags
+              .filter((tag): tag is [string, string] => tag.length === 2)
+              .map(([k, v]) => [k, v])
+          );
+          const subject = tagsMap.get("subject");
+          if (subject === "return-request") {
+            const orderId = tagsMap.get("order") || "";
+            if (orderId) {
+              returnRequestOrderIds.add(orderId);
+              const reqType = tagsMap.get("status") || "return";
+              returnRequestTypes.set(orderId, reqType);
+            }
+          }
+        }
+      }
+      for (const order of consolidatedOrders) {
+        if (returnRequestOrderIds.has(order.orderId)) {
+          order.hasReturnRequest = true;
+          order.returnRequestType =
+            returnRequestTypes.get(order.orderId) || "return";
+          if (!order.isSale) {
+            order.returnRequestSent = true;
+          }
+        }
+      }
+
+      const finalOrders = sellerOnly
+        ? consolidatedOrders.filter((o) => o.isSale)
+        : buyerOnly
+          ? consolidatedOrders.filter((o) => !o.isSale)
+          : consolidatedOrders;
+
+      setOrders(finalOrders);
+      setTotalOrders(finalOrders.length);
       setIsLoading(false);
 
       const statusPriorityForPersist: Record<string, number> = {
@@ -583,30 +700,44 @@ const OrdersDashboard = () => {
       for (const order of consolidatedOrders) {
         if (order.status && order.orderId) {
           const currentPriority = statusPriorityForPersist[order.status] || 0;
-          const cachedStatusValue = cachedStatuses[order.orderId];
+          const cachedStatusValue = order.statusLookupKeys
+            .map((lookupKey) => cachedStatuses[lookupKey])
+            .find((status): status is string => Boolean(status));
           const cachedPriority = cachedStatusValue
             ? statusPriorityForPersist[cachedStatusValue] || 0
             : 0;
           if (currentPriority > cachedPriority) {
-            fetch("/api/db/update-order-status", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                orderId: order.orderId,
-                status: order.status,
-                messageId: order.messageEvent?.id,
-              }),
-            }).catch((err) =>
-              console.error("Failed to save order status:", err)
-            );
+            const body = JSON.stringify({
+              orderId: order.orderId,
+              status: order.status,
+              messageId: order.messageEvent?.id,
+            });
+            createNip98AuthorizationHeader(
+              signer!,
+              `${window.location.origin}/api/db/update-order-status`,
+              "POST",
+              body
+            )
+              .then((authHeader) =>
+                fetch("/api/db/update-order-status", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: authHeader,
+                  },
+                  body,
+                })
+              )
+              .catch((err) =>
+                console.error("Failed to save order status:", err)
+              );
           }
         }
       }
     }
 
     loadOrders();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatsContext, productContext, cachedStatuses]);
+  }, [chatsContext, productContext, cachedStatuses, signer]);
 
   const convertToSats = (amount: number, currency: string): number => {
     const curr = currency?.toLowerCase() || "sats";
@@ -690,8 +821,8 @@ const OrdersDashboard = () => {
         {
           label: displayCurrency === "sats" ? "Satoshi Value" : "USD Value",
           data: sortedDates.map((date) => valueByDate[date]),
-          borderColor: "#6d28d9",
-          backgroundColor: "rgba(109, 40, 217, 0.2)",
+          borderColor: "rgb(147, 51, 234)",
+          backgroundColor: "rgba(147, 51, 234, 0.5)",
           tension: 0.3,
         },
       ],
@@ -704,7 +835,6 @@ const OrdersDashboard = () => {
     plugins: {
       legend: {
         position: "top" as const,
-        labels: { color: "#a1a1aa" },
       },
       title: {
         display: true,
@@ -712,18 +842,6 @@ const OrdersDashboard = () => {
           displayCurrency === "sats"
             ? "Total Satoshi Value Over Time"
             : "Total USD Value Over Time",
-        color: "#fff",
-        font: { weight: "bold" as const },
-      },
-    },
-    scales: {
-      y: {
-        grid: { color: "#27272a" },
-        ticks: { color: "#a1a1aa" },
-      },
-      x: {
-        grid: { color: "#27272a" },
-        ticks: { color: "#a1a1aa" },
       },
     },
   };
@@ -852,13 +970,24 @@ const OrdersDashboard = () => {
       );
 
       // Persist status to database
+      const body = JSON.stringify({
+        orderId: selectedOrder.orderId,
+        status: "shipped",
+      });
+      const authHeader = await createNip98AuthorizationHeader(
+        signer,
+        `${window.location.origin}/api/db/update-order-status`,
+        "POST",
+        body
+      );
+
       fetch("/api/db/update-order-status", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: selectedOrder.orderId,
-          status: "shipped",
-        }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+        body,
       }).catch((err) =>
         console.error("Failed to persist shipped status:", err)
       );
@@ -989,6 +1118,241 @@ const OrdersDashboard = () => {
     );
   };
 
+  const canShowReturnButton = (order: OrderData) => {
+    if (order.isSale) return false;
+    if (order.returnRequestSent) return false;
+    if (!order.productAddress || !order.productAddress.includes(":"))
+      return false;
+    const merchantPubkey = order.productAddress.split(":")[1];
+    if (merchantPubkey && merchantPubkey === userPubkey) return false;
+    return (
+      order.status === "completed" ||
+      order.status === "shipped" ||
+      order.status === "confirmed" ||
+      order.subject === "shipping-info" ||
+      order.subject === "order-receipt"
+    );
+  };
+
+  const getDefaultReturnMessage = (
+    type: "return" | "refund" | "exchange",
+    productTitle?: string
+  ) => {
+    const product = productTitle || "the product";
+    switch (type) {
+      case "return":
+        return `Hi, I would like to request a return for ${product}. Please let me know the return process and any details I need to follow.`;
+      case "refund":
+        return `Hi, I would like to request a refund for ${product}. Please let me know how to proceed.`;
+      case "exchange":
+        return `Hi, I would like to request an exchange for ${product}. Please let me know the available options and how to proceed.`;
+    }
+  };
+
+  const handleOpenReturnRequestModal = (order: OrderData) => {
+    setReturnRequestOrder(order);
+    setReturnRequestType("return");
+    setReturnRequestMessage(
+      getDefaultReturnMessage("return", order.productTitle)
+    );
+    setShowReturnRequestModal(true);
+  };
+
+  const handleCloseReturnRequestModal = () => {
+    setShowReturnRequestModal(false);
+    setReturnRequestOrder(null);
+    setReturnRequestType("return");
+    setReturnRequestMessage("");
+  };
+
+  const handleReturnRequestTypeChange = (
+    type: "return" | "refund" | "exchange"
+  ) => {
+    setReturnRequestType(type);
+    setReturnRequestMessage(
+      getDefaultReturnMessage(type, returnRequestOrder?.productTitle)
+    );
+  };
+
+  const handleSubmitReturnRequest = async () => {
+    if (
+      !returnRequestOrder ||
+      !signer ||
+      !nostr ||
+      !returnRequestMessage.trim()
+    )
+      return;
+
+    setIsSendingReturnRequest(true);
+
+    try {
+      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
+      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      const decodedRandomPubkeyForReceiver = nip19.decode(
+        randomNpubForReceiver
+      );
+      const decodedRandomPrivkeyForReceiver = nip19.decode(
+        randomNsecForReceiver
+      );
+
+      const sellerPubkey =
+        returnRequestOrder.sellerPubkey ||
+        returnRequestOrder.productAddress.split(":")[1];
+
+      if (!sellerPubkey) {
+        setFailureText("Could not determine seller for this order.");
+        setShowFailureModal(true);
+        return;
+      }
+
+      const typeLabel =
+        returnRequestType === "return"
+          ? "Return"
+          : returnRequestType === "refund"
+            ? "Refund"
+            : "Exchange";
+
+      const message = `${typeLabel} Request for order #${returnRequestOrder.orderId.slice(
+        0,
+        8
+      )}\nProduct: ${
+        returnRequestOrder.productTitle || "Unknown Product"
+      }\n\n${returnRequestMessage}`;
+
+      const giftWrappedMessageEvent = await constructGiftWrappedEvent(
+        decodedRandomPubkeyForSender.data as string,
+        sellerPubkey,
+        message,
+        "return-request",
+        {
+          productAddress: returnRequestOrder.productAddress,
+          type: 4,
+          isOrder: true,
+          orderId: returnRequestOrder.orderId,
+          buyerPubkey: userPubkey,
+          status: returnRequestType,
+        }
+      );
+
+      const sealedEvent = await constructMessageSeal(
+        signer,
+        giftWrappedMessageEvent,
+        decodedRandomPubkeyForSender.data as string,
+        sellerPubkey,
+        decodedRandomPrivkeyForSender.data as Uint8Array
+      );
+
+      const giftWrappedEvent = await constructMessageGiftWrap(
+        sealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        sellerPubkey
+      );
+
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
+
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.orderId === returnRequestOrder.orderId
+            ? { ...order, returnRequestSent: true, returnRequestType }
+            : order
+        )
+      );
+
+      handleCloseReturnRequestModal();
+    } catch (error) {
+      console.error("Error sending return request:", error);
+      setFailureText("Failed to send return request. Please try again.");
+      setShowFailureModal(true);
+    } finally {
+      setIsSendingReturnRequest(false);
+    }
+  };
+
+  const handleOpenAddressChangeModal = (order: OrderData) => {
+    setAddressChangeOrder(order);
+    setShowAddressChangeModal(true);
+  };
+
+  const handleCloseAddressChangeModal = () => {
+    setShowAddressChangeModal(false);
+    setAddressChangeOrder(null);
+  };
+
+  const onAddressChangeSubmit = async (newAddress: string) => {
+    if (!addressChangeOrder || !signer || !nostr) return;
+
+    setIsSendingAddressChange(true);
+
+    try {
+      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
+      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      const decodedRandomPubkeyForReceiver = nip19.decode(
+        randomNpubForReceiver
+      );
+      const decodedRandomPrivkeyForReceiver = nip19.decode(
+        randomNsecForReceiver
+      );
+
+      const sellerPubkey =
+        addressChangeOrder.sellerPubkey ||
+        addressChangeOrder.productAddress.split(":")[1];
+
+      if (!sellerPubkey) return;
+
+      const message =
+        `Address change request for order ${addressChangeOrder.orderId.substring(
+          0,
+          8
+        )}...` + `\n\nNew Address: ${newAddress}`;
+
+      const giftWrappedMessageEvent = await constructGiftWrappedEvent(
+        decodedRandomPubkeyForSender.data as string,
+        sellerPubkey,
+        message,
+        "address-change",
+        {
+          productAddress: addressChangeOrder.productAddress,
+          type: 4,
+          isOrder: true,
+          orderId: addressChangeOrder.orderId,
+          buyerPubkey: addressChangeOrder.buyerPubkey,
+        }
+      );
+
+      const sealedEvent = await constructMessageSeal(
+        signer,
+        giftWrappedMessageEvent,
+        decodedRandomPubkeyForSender.data as string,
+        sellerPubkey,
+        decodedRandomPrivkeyForSender.data as Uint8Array
+      );
+
+      const giftWrappedEvent = await constructMessageGiftWrap(
+        sealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        sellerPubkey
+      );
+
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
+
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.orderId === addressChangeOrder.orderId
+            ? { ...order, address: newAddress }
+            : order
+        )
+      );
+
+      handleCloseAddressChangeModal();
+    } catch (error) {
+      console.error("Error sending address change:", error);
+    } finally {
+      setIsSendingAddressChange(false);
+    }
+  };
+
   if (isLoading || !chatsContext || chatsContext.isLoading) {
     return (
       <div className="flex h-[66vh] items-center justify-center">
@@ -998,36 +1362,37 @@ const OrdersDashboard = () => {
   }
 
   return (
-    <div className="relative max-w-[98vw] min-w-0 bg-[#111] px-4 py-8 text-white selection:bg-yellow-400 selection:text-black sm:py-12">
-      {/* Background Grid Pattern */}
-      <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] bg-[size:24px_24px]"></div>
-
-      <div className="relative z-10 mx-auto w-full max-w-full min-w-0">
+    <div className="bg-light-bg dark:bg-dark-bg max-w-[98vw] min-w-0 px-4 py-4 sm:py-6">
+      <div className="mx-auto w-full max-w-full min-w-0">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-4xl font-black tracking-tighter text-white uppercase">
-            Orders Dashboard
+          <h1 className="text-light-text dark:text-dark-text text-3xl font-bold">
+            {sellerOnly
+              ? "Seller Orders Dashboard"
+              : buyerOnly
+                ? "My Purchases"
+                : "Orders Dashboard"}
           </h1>
           <div className="flex items-center gap-3">
-            <span className="text-xs font-bold tracking-wider text-zinc-500 uppercase">
-              Display:
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              Currency Displayed:
             </span>
-            <div className="inline-flex gap-2">
+            <div className="inline-flex rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
               <button
                 onClick={() => setDisplayCurrency("sats")}
-                className={`rounded-lg border-2 px-4 py-2 text-xs font-bold tracking-wider uppercase transition-all ${
+                className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                   displayCurrency === "sats"
-                    ? "border-yellow-400 bg-yellow-400 text-black shadow-[2px_2px_0px_0px_#ffffff]"
-                    : "border-zinc-800 bg-transparent text-zinc-400 hover:border-zinc-600 hover:text-white"
+                    ? "bg-purple-600 text-white shadow-sm"
+                    : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
                 }`}
               >
                 sats
               </button>
               <button
                 onClick={() => setDisplayCurrency("USD")}
-                className={`rounded-lg border-2 px-4 py-2 text-xs font-bold tracking-wider uppercase transition-all ${
+                className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                   displayCurrency === "USD"
-                    ? "border-yellow-400 bg-yellow-400 text-black shadow-[2px_2px_0px_0px_#ffffff]"
-                    : "border-zinc-800 bg-transparent text-zinc-400 hover:border-zinc-600 hover:text-white"
+                    ? "bg-purple-600 text-white shadow-sm"
+                    : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
                 }`}
               >
                 USD
@@ -1036,19 +1401,23 @@ const OrdersDashboard = () => {
           </div>
         </div>
 
-        <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
-          <div className="rounded-2xl border border-zinc-800 bg-[#161616] p-6">
-            <h3 className="mb-2 text-xs font-bold tracking-wider text-zinc-500 uppercase">
-              Total Orders
+        <div
+          className={`mb-8 grid grid-cols-1 gap-6 ${sellerOnly ? "md:grid-cols-4" : "md:grid-cols-3"}`}
+        >
+          <div className="rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
+            <h3 className="mb-2 text-sm font-medium text-gray-600 dark:text-gray-400">
+              {sellerOnly ? "Total Sales" : "Total Orders"}
             </h3>
-            <p className="text-4xl font-black text-white">{totalOrders}</p>
+            <p className="text-light-text dark:text-dark-text text-3xl font-bold">
+              {totalOrders}
+            </p>
           </div>
 
-          <div className="rounded-2xl border border-zinc-800 bg-[#161616] p-6">
-            <h3 className="mb-2 text-xs font-bold tracking-wider text-zinc-500 uppercase">
-              Total GMV
+          <div className="rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
+            <h3 className="mb-2 text-sm font-medium text-gray-600 dark:text-gray-400">
+              {sellerOnly ? "Total Revenue" : "Total GMV"}
             </h3>
-            <p className="text-4xl font-black text-white">
+            <p className="text-light-text dark:text-dark-text text-3xl font-bold">
               {displayCurrency === "sats"
                 ? `${getDisplayedGMV().toLocaleString()} sats`
                 : `$${getDisplayedGMV().toLocaleString(undefined, {
@@ -1058,11 +1427,11 @@ const OrdersDashboard = () => {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-zinc-800 bg-[#161616] p-6">
-            <h3 className="mb-2 text-xs font-bold tracking-wider text-zinc-500 uppercase">
+          <div className="rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
+            <h3 className="mb-2 text-sm font-medium text-gray-600 dark:text-gray-400">
               Average Order Size
             </h3>
-            <p className="text-4xl font-black text-white">
+            <p className="text-light-text dark:text-dark-text text-3xl font-bold">
               {displayCurrency === "sats"
                 ? `${getDisplayedAverage().toFixed(0)} sats`
                 : `$${getDisplayedAverage().toLocaleString(undefined, {
@@ -1071,65 +1440,88 @@ const OrdersDashboard = () => {
                   })}`}
             </p>
           </div>
+
+          {sellerOnly && (
+            <div className="rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
+              <h3 className="mb-2 text-sm font-medium text-gray-600 dark:text-gray-400">
+                Top Product
+              </h3>
+              <p className="text-light-text dark:text-dark-text truncate text-xl font-bold">
+                {(() => {
+                  const counts: Record<string, number> = {};
+                  orders.forEach((o) => {
+                    const title = o.productTitle || "Unknown";
+                    counts[title] = (counts[title] || 0) + 1;
+                  });
+                  const top = Object.entries(counts).sort(
+                    (a, b) => b[1] - a[1]
+                  )[0];
+                  return top ? `${top[0]} (×${top[1]})` : "—";
+                })()}
+              </p>
+            </div>
+          )}
         </div>
 
         {orders.length > 0 && (
-          <div className="mb-8 rounded-2xl border border-zinc-800 bg-[#161616] p-6">
+          <div className="mb-8 rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
             <div style={{ height: "300px" }}>
               <Line options={chartOptions} data={getChartData()} />
             </div>
           </div>
         )}
 
-        <div className="w-full overflow-hidden rounded-2xl border border-zinc-800 bg-[#161616]">
+        <div className="w-full overflow-hidden rounded-lg shadow-md">
           <div className="max-h-[70vh] overflow-x-auto">
-            <table className="min-w-full text-left text-sm text-zinc-400">
-              <thead className="border-b border-zinc-800 bg-[#111]">
+            <table className="min-w-full text-left text-sm text-gray-500 dark:text-gray-400">
+              <thead className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
                 <tr>
-                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Order ID
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
-                    Type
+                  {!sellerOnly && (
+                    <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
+                      Type
+                    </th>
+                  )}
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
+                    {sellerOnly ? "Customer" : "Buyer/Seller"}
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
-                    Buyer/Seller
-                  </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Amount
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Status
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Date
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Address
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Pickup Location
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Order Specs
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Payment
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Product
                   </th>
-                  <th className="px-4 py-4 text-left text-xs font-bold tracking-wider text-zinc-500 uppercase">
+                  <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-600 uppercase dark:text-gray-400">
                     Donation Amount
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800">
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {orders.length === 0 ? (
                   <tr>
                     <td
                       colSpan={13}
-                      className="px-6 py-8 text-center text-zinc-500"
+                      className="px-6 py-4 text-center text-gray-500 dark:text-gray-400"
                     >
                       No orders yet
                     </td>
@@ -1142,40 +1534,56 @@ const OrdersDashboard = () => {
                     return (
                       <tr
                         key={order.orderId}
-                        className={`transition-colors hover:bg-[#1a1a1a] ${
+                        className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
                           isNewOrder
-                            ? "border-l-4 border-l-yellow-400 bg-yellow-400/5"
+                            ? "border-l-shopstr-purple dark:border-l-shopstr-yellow border-l-4"
                             : ""
                         }`}
                       >
-                        <td className="px-4 py-4 text-sm font-medium whitespace-nowrap text-white">
+                        <td className="text-light-text dark:text-dark-text px-4 py-4 text-sm whitespace-nowrap">
                           <div className="flex flex-col gap-1">
                             <span>{order.orderId.substring(0, 8)}...</span>
                             {order.reviewRating !== undefined ? (
-                              <span className="text-xs text-yellow-400 underline">
+                              <span className="text-shopstr-purple-light dark:text-shopstr-yellow-light text-xs underline">
                                 Rating: {order.reviewRating.toFixed(1)}
                               </span>
                             ) : canShowReviewButton(order) ? (
                               <button
                                 onClick={() => handleOpenReviewModal(order)}
-                                className="cursor-pointer text-left text-xs text-yellow-400 underline hover:text-white"
+                                className="text-shopstr-purple-light hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow cursor-pointer text-left text-xs underline"
                               >
                                 Leave Review
                               </button>
                             ) : null}
+                            {order.returnRequestSent && !order.isSale ? (
+                              <span className="text-xs text-orange-500">
+                                Return Requested
+                              </span>
+                            ) : canShowReturnButton(order) ? (
+                              <button
+                                onClick={() =>
+                                  handleOpenReturnRequestModal(order)
+                                }
+                                className="cursor-pointer text-left text-xs text-orange-500 underline hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+                              >
+                                Request Return
+                              </button>
+                            ) : null}
                           </div>
                         </td>
-                        <td className="px-4 py-4 text-sm whitespace-nowrap">
-                          <span
-                            className={`bg-opacity-10 inline-flex rounded px-2 py-1 text-xs font-bold tracking-wider uppercase ${
-                              order.isSale
-                                ? "bg-[#6d28d9] text-[#6d28d9]"
-                                : "bg-orange-500 text-orange-500"
-                            }`}
-                          >
-                            {order.isSale ? "Sale" : "Purchase"}
-                          </span>
-                        </td>
+                        {!sellerOnly && (
+                          <td className="px-4 py-4 text-sm whitespace-nowrap">
+                            <span
+                              className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                                order.isSale
+                                  ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+                                  : "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+                              }`}
+                            >
+                              {order.isSale ? "Sale" : "Purchase"}
+                            </span>
+                          </td>
+                        )}
                         <td className="px-4 py-4 text-sm">
                           {(() => {
                             const displayPubkey = order.isSale
@@ -1189,13 +1597,13 @@ const OrdersDashboard = () => {
                                 nameClassname="block"
                               />
                             ) : (
-                              <span className="text-zinc-600">
+                              <span className="text-gray-500 dark:text-gray-400">
                                 Not available
                               </span>
                             );
                           })()}
                         </td>
-                        <td className="px-4 py-4 text-sm font-bold whitespace-nowrap text-white">
+                        <td className="text-light-text dark:text-dark-text px-4 py-4 text-sm whitespace-nowrap">
                           {order.amount > 0
                             ? displayCurrency === "sats"
                               ? `${getConvertedAmount(
@@ -1214,42 +1622,65 @@ const OrdersDashboard = () => {
                         <td className="px-4 py-4 text-sm whitespace-nowrap">
                           <div className="flex flex-col gap-1">
                             <span
-                              className={`bg-opacity-10 inline-flex rounded border px-2 py-1 text-xs font-bold tracking-wider uppercase ${
+                              className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
                                 order.status === "completed"
-                                  ? "border-blue-500/20 bg-blue-500 text-blue-500"
+                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
                                   : order.status === "shipped"
-                                    ? "border-green-500/20 bg-green-500 text-green-500"
+                                    ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
                                     : order.status === "pending"
-                                      ? "border-yellow-500/20 bg-yellow-500 text-yellow-500"
-                                      : "border-zinc-500/20 bg-zinc-500 text-zinc-500"
+                                      ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                                      : "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
                               }`}
                             >
                               {order.status}
                             </span>
-                            {order.status === "pending" && (
+                            {order.isSale && order.status === "pending" && (
                               <button
                                 onClick={() => handleOpenShippingModal(order)}
-                                className="cursor-pointer text-left text-xs text-yellow-400 underline hover:text-white"
+                                className="text-shopstr-purple-light hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow cursor-pointer text-left text-xs underline"
                               >
                                 Send Shipping Update
                               </button>
                             )}
+                            {order.hasReturnRequest && order.isSale && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+                                {(order.returnRequestType || "return")
+                                  .charAt(0)
+                                  .toUpperCase() +
+                                  (order.returnRequestType || "return").slice(
+                                    1
+                                  )}{" "}
+                                Request
+                              </span>
+                            )}
                           </div>
                         </td>
-                        <td className="px-4 py-4 text-sm whitespace-nowrap text-zinc-300">
+                        <td className="text-light-text dark:text-dark-text px-4 py-4 text-sm whitespace-nowrap">
                           {new Date(
                             order.timestamp * 1000
                           ).toLocaleDateString()}
                         </td>
-                        <td className="max-w-xs px-4 py-4 text-sm text-zinc-300">
-                          <div
-                            className="truncate"
-                            title={order.address || "N/A"}
-                          >
-                            {order.address || "N/A"}
+                        <td className="text-light-text dark:text-dark-text max-w-xs px-4 py-4 text-sm">
+                          <div className="flex flex-col gap-1">
+                            <div
+                              className="truncate"
+                              title={order.address || "N/A"}
+                            >
+                              {order.address || "N/A"}
+                            </div>
+                            {order.address && !order.isSale && (
+                              <button
+                                onClick={() =>
+                                  handleOpenAddressChangeModal(order)
+                                }
+                                className="text-shopstr-purple-light hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow cursor-pointer text-left text-xs underline"
+                              >
+                                Change Address
+                              </button>
+                            )}
                           </div>
                         </td>
-                        <td className="max-w-xs px-4 py-4 text-sm text-zinc-300">
+                        <td className="text-light-text dark:text-dark-text max-w-xs px-4 py-4 text-sm">
                           <div
                             className="truncate"
                             title={order.pickupLocation || "N/A"}
@@ -1257,42 +1688,51 @@ const OrdersDashboard = () => {
                             {order.pickupLocation || "N/A"}
                           </div>
                         </td>
-                        <td className="px-4 py-4 text-sm whitespace-nowrap text-zinc-300">
+                        <td className="text-light-text dark:text-dark-text px-4 py-4 text-sm whitespace-nowrap">
                           {(() => {
                             const specs = [];
                             if (order.selectedSize)
                               specs.push(`Size: ${order.selectedSize}`);
                             if (order.selectedVolume)
                               specs.push(`Volume: ${order.selectedVolume}`);
+                            if (order.selectedWeight)
+                              specs.push(`Weight: ${order.selectedWeight}`);
+                            if (order.selectedBulkOption)
+                              specs.push(
+                                `Bundle: ${order.selectedBulkOption} units`
+                              );
                             return specs.length > 0 ? specs.join(", ") : "N/A";
                           })()}
                         </td>
                         <td className="px-4 py-4 text-sm">
                           {order.subject === "order-receipt" ? (
-                            <span className="text-green-500">Payment Sent</span>
+                            <span className="text-green-600 dark:text-green-400">
+                              Payment Sent
+                            </span>
                           ) : order.paymentToken ? (
                             <ClaimButton token={order.paymentToken} />
                           ) : (
-                            <span className="text-zinc-500">
+                            <span className="text-gray-600 dark:text-gray-400">
                               {order.paymentMethod}
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-4 text-sm text-zinc-300">
+                        <td className="text-light-text dark:text-dark-text px-4 py-4 text-sm">
                           {order.productAddress ? (
                             <button
                               onClick={() =>
                                 handleProductClick(order.productAddress)
                               }
-                              className="cursor-pointer text-left underline hover:text-yellow-400"
+                              className="cursor-pointer text-left underline hover:text-purple-600 dark:hover:text-purple-400"
                             >
-                              {order.productTitle} x {order.quantity || 1}
+                              {order.productTitle} x{" "}
+                              {order.selectedBulkOption || order.quantity || 1}
                             </button>
                           ) : (
                             "N/A"
                           )}
                         </td>
-                        <td className="px-4 py-4 text-sm whitespace-nowrap text-zinc-300">
+                        <td className="text-light-text dark:text-dark-text px-4 py-4 text-sm whitespace-nowrap">
                           {order.donationAmount !== undefined &&
                           order.donationAmount > 0
                             ? displayCurrency === "sats"
@@ -1339,18 +1779,17 @@ const OrdersDashboard = () => {
         isOpen={showShippingModal}
         onClose={handleCloseShippingModal}
         classNames={{
-          base: "bg-[#161616] border border-zinc-800",
-          body: "py-6 text-zinc-300",
-          backdrop: "bg-black/80 backdrop-blur-sm",
-          header: "border-b border-zinc-800 text-white",
-          footer: "border-t border-zinc-800",
+          body: "py-6",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
           closeButton: "hover:bg-black/5 active:bg-white/10",
         }}
         scrollBehavior={"outside"}
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1">
+          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
             Enter Shipping Details
           </ModalHeader>
           <form onSubmit={handleShippingSubmit(onShippingSubmit)}>
@@ -1377,12 +1816,7 @@ const OrdersDashboard = () => {
                       variant="bordered"
                       isInvalid={isErrored}
                       errorMessage={errorMessage}
-                      classNames={{
-                        label: "text-zinc-500",
-                        input: "text-white",
-                        inputWrapper:
-                          "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
-                      }}
+                      className="text-light-text dark:text-dark-text"
                       type="number"
                       onChange={onChange}
                       onBlur={onBlur}
@@ -1412,12 +1846,7 @@ const OrdersDashboard = () => {
                       placeholder="Fedex, UPS, etc."
                       isInvalid={isErrored}
                       errorMessage={errorMessage}
-                      classNames={{
-                        label: "text-zinc-500",
-                        input: "text-white",
-                        inputWrapper:
-                          "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
-                      }}
+                      className="text-light-text dark:text-dark-text"
                       onChange={onChange}
                       onBlur={onBlur}
                       value={value}
@@ -1449,12 +1878,7 @@ const OrdersDashboard = () => {
                       variant="bordered"
                       isInvalid={isErrored}
                       errorMessage={errorMessage}
-                      classNames={{
-                        label: "text-zinc-500",
-                        input: "text-white",
-                        inputWrapper:
-                          "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
-                      }}
+                      className="text-light-text dark:text-dark-text"
                       onChange={onChange}
                       onBlur={onBlur}
                       value={value}
@@ -1472,7 +1896,7 @@ const OrdersDashboard = () => {
                 Cancel
               </Button>
               <Button
-                className={`${NEO_BTN} h-10 px-6 text-sm`}
+                className={SHOPSTRBUTTONCLASSNAMES}
                 type="submit"
                 isLoading={isSendingShipping}
               >
@@ -1487,32 +1911,31 @@ const OrdersDashboard = () => {
         isOpen={showReviewModal}
         onClose={handleCloseReviewModal}
         classNames={{
-          base: "bg-[#161616] border border-zinc-800",
-          body: "py-6 text-zinc-300",
-          backdrop: "bg-black/80 backdrop-blur-sm",
-          header: "border-b border-zinc-800 text-white",
-          footer: "border-t border-zinc-800",
+          body: "py-6",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
           closeButton: "hover:bg-black/5 active:bg-white/10",
         }}
         scrollBehavior={"outside"}
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1">
+          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
             Leave a Review
           </ModalHeader>
           <form onSubmit={handleReviewSubmit(onReviewSubmit)}>
             <ModalBody>
-              <div className="mb-4 flex flex-col items-center justify-center gap-6 sm:flex-row sm:gap-16">
+              <div className="mb-4 flex items-center justify-center gap-16">
                 <div className="flex items-center gap-3">
-                  <span className="font-bold tracking-wider text-white uppercase">
+                  <span className="text-light-text dark:text-dark-text">
                     Good Overall
                   </span>
                   <HandThumbUpIcon
                     className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
                       selectedThumb === "up"
                         ? "border-green-500 text-green-500"
-                        : "border-zinc-600 text-zinc-400 hover:border-green-500 hover:text-green-500"
+                        : "border-light-text text-light-text dark:border-dark-text dark:text-dark-text hover:border-green-500 hover:text-green-500"
                     }`}
                     onClick={() => setSelectedThumb("up")}
                   />
@@ -1522,11 +1945,11 @@ const OrdersDashboard = () => {
                     className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
                       selectedThumb === "down"
                         ? "border-red-500 text-red-500"
-                        : "border-zinc-600 text-zinc-400 hover:border-red-500 hover:text-red-500"
+                        : "border-light-text text-light-text dark:border-dark-text dark:text-dark-text hover:border-red-500 hover:text-red-500"
                     }`}
                     onClick={() => setSelectedThumb("down")}
                   />
-                  <span className="font-bold tracking-wider text-white uppercase">
+                  <span className="text-light-text dark:text-dark-text">
                     Bad Overall
                   </span>
                 </div>
@@ -1545,7 +1968,9 @@ const OrdersDashboard = () => {
                       })
                     }
                   />
-                  <span className="text-zinc-300">Good Value</span>
+                  <span className="text-light-text dark:text-dark-text">
+                    Good Value
+                  </span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -1559,7 +1984,9 @@ const OrdersDashboard = () => {
                       })
                     }
                   />
-                  <span className="text-zinc-300">Good Quality</span>
+                  <span className="text-light-text dark:text-dark-text">
+                    Good Quality
+                  </span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -1573,7 +2000,9 @@ const OrdersDashboard = () => {
                       })
                     }
                   />
-                  <span className="text-zinc-300">Quick Delivery</span>
+                  <span className="text-light-text dark:text-dark-text">
+                    Quick Delivery
+                  </span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -1587,7 +2016,9 @@ const OrdersDashboard = () => {
                       })
                     }
                   />
-                  <span className="text-zinc-300">Good Communication</span>
+                  <span className="text-light-text dark:text-dark-text">
+                    Good Communication
+                  </span>
                 </label>
               </div>
 
@@ -1599,7 +2030,7 @@ const OrdersDashboard = () => {
                   <div>
                     <textarea
                       {...field}
-                      className="w-full rounded-md border border-zinc-700 bg-[#111] p-2 text-white placeholder-zinc-500 focus:border-yellow-400 focus:outline-none"
+                      className="border-light-fg bg-light-bg text-light-text dark:border-dark-fg dark:bg-dark-bg dark:text-dark-text w-full rounded-md border-2 p-2"
                       rows={4}
                       placeholder="Write your review comment here..."
                     />
@@ -1617,7 +2048,7 @@ const OrdersDashboard = () => {
                 Cancel
               </Button>
               <Button
-                className={`${NEO_BTN} h-10 px-6 text-sm`}
+                className={SHOPSTRBUTTONCLASSNAMES}
                 type="submit"
                 isDisabled={!selectedThumb}
               >
@@ -1627,6 +2058,106 @@ const OrdersDashboard = () => {
           </form>
         </ModalContent>
       </Modal>
+      <Modal
+        backdrop="blur"
+        isOpen={showReturnRequestModal}
+        onClose={handleCloseReturnRequestModal}
+        classNames={{
+          body: "py-6",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
+          closeButton: "hover:bg-black/5 active:bg-white/10",
+        }}
+      >
+        <ModalContent>
+          <ModalHeader>
+            <span className="text-light-text dark:text-dark-text">
+              Request Return / Refund / Exchange
+            </span>
+          </ModalHeader>
+          <ModalBody>
+            <div className="flex flex-col gap-4">
+              <div>
+                <p className="text-light-text dark:text-dark-text mb-1 text-sm font-semibold">
+                  Order: {returnRequestOrder?.orderId?.substring(0, 8)}...
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Product: {returnRequestOrder?.productTitle || "Unknown"}
+                </p>
+              </div>
+              <div>
+                <label className="text-light-text dark:text-dark-text mb-2 block text-sm font-semibold">
+                  Request Type
+                </label>
+                <div className="flex gap-3">
+                  {(["return", "refund", "exchange"] as const).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => handleReturnRequestTypeChange(type)}
+                      className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                        returnRequestType === type
+                          ? "border-shopstr-purple bg-shopstr-purple/10 text-shopstr-purple dark:border-shopstr-yellow dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow"
+                          : "hover:border-shopstr-purple border-gray-300 bg-transparent text-gray-600 dark:border-gray-600 dark:text-gray-400"
+                      }`}
+                    >
+                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-light-text dark:text-dark-text mb-2 block text-sm font-semibold">
+                  Message to Seller
+                </label>
+                <textarea
+                  value={returnRequestMessage}
+                  onChange={(e) => setReturnRequestMessage(e.target.value)}
+                  rows={5}
+                  className="bg-light-bg text-light-text focus:border-shopstr-purple dark:bg-dark-bg dark:text-dark-text dark:focus:border-shopstr-yellow w-full rounded-md border border-gray-300 p-3 text-sm focus:outline-none dark:border-gray-600"
+                  placeholder="Describe the reason for your request..."
+                />
+              </div>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              color="danger"
+              variant="light"
+              onClick={handleCloseReturnRequestModal}
+            >
+              Cancel
+            </Button>
+            <Button
+              className={SHOPSTRBUTTONCLASSNAMES}
+              onClick={handleSubmitReturnRequest}
+              isLoading={isSendingReturnRequest}
+              isDisabled={
+                isSendingReturnRequest || !returnRequestMessage.trim()
+              }
+            >
+              Submit Request
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+      <AddressChangeModal
+        isOpen={showAddressChangeModal}
+        onClose={handleCloseAddressChangeModal}
+        onSubmit={onAddressChangeSubmit}
+        isLoading={isSendingAddressChange}
+        orderId={addressChangeOrder?.orderId}
+        productTitle={addressChangeOrder?.productTitle}
+        currentAddress={addressChangeOrder?.address}
+      />
+      <FailureModal
+        bodyText={failureText}
+        isOpen={showFailureModal}
+        onClose={() => {
+          setShowFailureModal(false);
+          setFailureText("");
+        }}
+      />
     </div>
   );
 };

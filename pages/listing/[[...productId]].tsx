@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useMemo } from "react";
 import { useRouter } from "next/router";
 import {
   Modal,
@@ -10,214 +10,504 @@ import {
   DropdownMenu,
   DropdownItem,
   Button,
+  useDisclosure,
 } from "@heroui/react";
-import {
-  CheckCircleIcon,
-  XCircleIcon,
-  EllipsisVerticalIcon,
-} from "@heroicons/react/24/outline";
+import { XCircleIcon, EllipsisVerticalIcon } from "@heroicons/react/24/outline";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
 import { parseZapsnagNote } from "@/utils/parsers/zapsnag-parser";
 import CheckoutCard from "../../components/utility-components/checkout-card";
 import ZapsnagButton from "../../components/ZapsnagButton";
-import { ProductContext } from "../../utils/context/context";
-import { Event, nip19 } from "nostr-tools";
+import { ProductContext, ProfileMapContext } from "../../utils/context/context";
+import { nip19 } from "nostr-tools";
 import {
   RawEventModal,
   EventIdModal,
 } from "../../components/utility-components/modals/event-modals";
+import { findProductBySlug, getListingSlug } from "@/utils/url-slugs";
+import {
+  eventMatchesListingIdentifier,
+  getListingRouteIdentifier,
+} from "@/utils/listing-identifiers";
+import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
+import { GetServerSideProps } from "next";
+import { OgMetaProps, DEFAULT_OG } from "@/components/og-head";
+import {
+  fetchProductByIdFromDb,
+  fetchProductByDTagAndPubkey,
+  fetchProductByListingSlug,
+} from "@/utils/db/db-service";
+import { NostrEvent } from "@/utils/types/types";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import SignInModal from "@/components/sign-in/SignInModal";
+import useReportEventFlow from "@/components/utility-components/use-report-event-flow";
+import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
-const Listing = () => {
+type ListingPageProps = {
+  ogMeta: OgMetaProps;
+  initialProductEvent: NostrEvent | null;
+};
+
+type ResolvedListingState = {
+  productData: ProductData;
+  rawEvent: NostrEvent;
+  isZapsnag: boolean;
+};
+
+function resolveListingStateFromEvent(
+  event: NostrEvent | null | undefined
+): ResolvedListingState | undefined {
+  if (!event) {
+    return;
+  }
+
+  if (event.kind === 1) {
+    const productData = parseZapsnagNote(event);
+    if (!productData) {
+      return;
+    }
+
+    return {
+      productData,
+      rawEvent: event,
+      isZapsnag: true,
+    };
+  }
+
+  const productData = parseTags(event);
+  if (!productData) {
+    return;
+  }
+
+  return {
+    productData,
+    rawEvent: event,
+    isZapsnag: false,
+  };
+}
+
+function eventToOgMeta(event: NostrEvent, urlPath: string): OgMetaProps {
+  const productData = parseTags(event);
+  if (productData) {
+    return {
+      title: productData.title || "Shopstr Listing",
+      description: productData.summary || "Check out this product on Shopstr!",
+      image: productData.images?.[0] || "/shopstr-2000x2000.png",
+      url: urlPath,
+    };
+  }
+  return {
+    ...DEFAULT_OG,
+    title: "Shopstr Listing",
+    description: "Check out this listing on Shopstr!",
+    url: urlPath,
+  };
+}
+
+const LISTING_FALLBACK: OgMetaProps = {
+  ...DEFAULT_OG,
+  title: "Shopstr Listing",
+  description: "Check out this listing on Shopstr!",
+};
+
+export const getServerSideProps: GetServerSideProps<ListingPageProps> = async (
+  context
+) => {
+  const { productId } = context.query;
+  const identifier = getListingRouteIdentifier(productId);
+
+  if (!identifier) {
+    return { props: { ogMeta: LISTING_FALLBACK, initialProductEvent: null } };
+  }
+
+  const urlPath = `/listing/${identifier}`;
+
+  try {
+    if (identifier.startsWith("naddr1")) {
+      try {
+        const decoded = nip19.decode(identifier);
+        if (decoded.type === "naddr") {
+          const event = await fetchProductByDTagAndPubkey(
+            decoded.data.identifier,
+            decoded.data.pubkey
+          );
+          if (event) {
+            return {
+              props: {
+                ogMeta: eventToOgMeta(event, urlPath),
+                initialProductEvent: event,
+              },
+            };
+          }
+        }
+      } catch {}
+      return {
+        props: {
+          ogMeta: { ...LISTING_FALLBACK, url: urlPath },
+          initialProductEvent: null,
+        },
+      };
+    }
+
+    const eventById = await fetchProductByIdFromDb(identifier);
+    if (eventById) {
+      return {
+        props: {
+          ogMeta: eventToOgMeta(eventById, urlPath),
+          initialProductEvent: eventById,
+        },
+      };
+    }
+
+    const eventBySlug = await fetchProductByListingSlug(identifier);
+    if (eventBySlug) {
+      return {
+        props: {
+          ogMeta: eventToOgMeta(eventBySlug, urlPath),
+          initialProductEvent: eventBySlug,
+        },
+      };
+    }
+  } catch (error) {
+    console.error("SSR OG fetch error for listing:", error);
+  }
+
+  return {
+    props: {
+      ogMeta: { ...LISTING_FALLBACK, url: urlPath },
+      initialProductEvent: null,
+    },
+  };
+};
+
+const Listing = ({ initialProductEvent }: ListingPageProps) => {
   const router = useRouter();
-  const [productData, setProductData] = useState<ProductData | undefined>(
-    undefined
+  const { pubkey: userPubkey } = useContext(SignerContext);
+  const seededListing = useMemo(
+    () => resolveListingStateFromEvent(initialProductEvent),
+    [initialProductEvent]
   );
-  const [isZapsnag, setIsZapsnag] = useState(false);
+  const [productData, setProductData] = useState<ProductData | undefined>(
+    seededListing?.productData
+  );
+
+  const [isZapsnag, setIsZapsnag] = useState(seededListing?.isZapsnag ?? false);
   const [productIdString, setProductIdString] = useState("");
-  const [rawEvent, setRawEvent] = useState<Event | undefined>(undefined);
+  const [rawEvent, setRawEvent] = useState<NostrEvent | undefined>(
+    seededListing?.rawEvent
+  );
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
+  const [sfSellerPubkey, setSfSellerPubkey] = useState("");
+  const [isListingNotFound, setIsListingNotFound] = useState(false);
 
-  const [fiatOrderIsPlaced, setFiatOrderIsPlaced] = useState(false);
-  const [fiatOrderFailed, setFiatOrderFailed] = useState(false);
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
   const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
   const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
+  const { isOpen, onOpen, onClose } = useDisclosure();
+
+  // Once payment lands, let the inline "Payment confirmed!" GIF play through
+  // once and then push straight to the order summary page. Avoids the prior
+  // friction of a "click X to dismiss" success modal.
+  useEffect(() => {
+    if (!invoiceIsPaid && !cashuPaymentSent) return;
+    const timer = setTimeout(() => {
+      setInvoiceIsPaid(false);
+      setCashuPaymentSent(false);
+      router.push("/order-summary");
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [invoiceIsPaid, cashuPaymentSent, router]);
 
   const productContext = useContext(ProductContext);
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "listing",
+    reportedPubkey: productData?.pubkey,
+    reportedEventId: productData?.id,
+    onRequireLogin: onOpen,
+  });
+  const profileMap = useContext(ProfileMapContext).profileData;
+
+  // seller pk before productData loads (SSR / raw event)
+  const sellerPubkey = useMemo(
+    () =>
+      productData?.pubkey ||
+      rawEvent?.pubkey ||
+      seededListing?.productData.pubkey ||
+      initialProductEvent?.pubkey ||
+      "",
+    [
+      productData?.pubkey,
+      rawEvent?.pubkey,
+      seededListing?.productData.pubkey,
+      initialProductEvent?.pubkey,
+    ]
+  );
+
+  const p2pk = useMemo(() => {
+    if (!sellerPubkey) return undefined;
+    return profileMap.get(sellerPubkey)?.content.p2pk;
+  }, [profileMap, sellerPubkey]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const pk =
+        sessionStorage.getItem("sf_seller_pubkey") ||
+        localStorage.getItem("sf_seller_pubkey");
+      if (pk) setSfSellerPubkey(pk);
+    }
+  }, []);
 
   useEffect(() => {
     if (router.isReady) {
       const { productId } = router.query;
-      const productIdString = productId ? productId[0] : "";
-      setProductIdString(productIdString!);
-      if (!productIdString) {
-        router.push("/marketplace"); // if there isn't a productId, redirect to home page
+      const resolvedProductId = getListingRouteIdentifier(productId);
+      setProductIdString(resolvedProductId);
+      if (!resolvedProductId) {
+        router.push("/marketplace");
       }
     }
-  }, [router]);
+  }, [router, router.isReady, router.query.productId]);
 
   useEffect(() => {
-    if (!productContext.isLoading && productContext.productEvents) {
-      const matchingEvent = productContext.productEvents.find(
-        (event: Event) => {
-          // check for matching naddr
-          const naddrMatch =
-            nip19.naddrEncode({
-              identifier:
-                event.tags.find((tag: string[]) => tag[0] === "d")?.[1] || "",
-              pubkey: event.pubkey,
-              kind: event.kind,
-            }) === productIdString;
+    if (seededListing) {
+      setProductData(seededListing.productData);
+      setRawEvent(seededListing.rawEvent);
+      setIsZapsnag(seededListing.isZapsnag);
+    } else {
+      setProductData(undefined);
+      setRawEvent(undefined);
+      setIsZapsnag(false);
+    }
+    setIsListingNotFound(false);
+  }, [seededListing]);
 
-          // Check for matching d tag
-          const dTagMatch =
-            event.tags.find((tag: string[]) => tag[0] === "d")?.[1] ===
-            productIdString;
-          // Check for matching event id
-          const idMatch = event.id === productIdString;
-          return naddrMatch || dTagMatch || idMatch;
-        }
-      );
+  useEffect(() => {
+    if (!router.isReady || !productIdString) {
+      return;
+    }
+
+    if (productContext.isLoading || !productContext.productEvents) {
+      setIsListingNotFound(false);
+      return;
+    }
+
+    if (!productContext.isLoading && productContext.productEvents) {
+      const allParsed = productContext.productEvents
+        .filter((e: NostrEvent) => e.kind !== 1)
+        .map((e: NostrEvent) => parseTags(e))
+        .filter((p: ProductData | undefined): p is ProductData => !!p);
+
+      let matchingEvent: NostrEvent | undefined;
+
+      const slugMatch = findProductBySlug(productIdString, allParsed);
+      if (slugMatch) {
+        matchingEvent = productContext.productEvents.find(
+          (e: NostrEvent) => e.id === slugMatch.id
+        );
+      }
+
+      if (!matchingEvent) {
+        matchingEvent = productContext.productEvents.find((event: NostrEvent) =>
+          eventMatchesListingIdentifier(event, productIdString)
+        );
+      }
 
       if (matchingEvent) {
-        setRawEvent(matchingEvent);
-        let parsed;
-        if (matchingEvent.kind === 1) {
-          parsed = parseZapsnagNote(matchingEvent);
-          setIsZapsnag(true);
-        } else {
-          parsed = parseTags(matchingEvent);
-          setIsZapsnag(false);
+        if (sfSellerPubkey && matchingEvent.pubkey !== sfSellerPubkey) {
+          setSfSellerPubkey("");
+          sessionStorage.removeItem("sf_seller_pubkey");
+          sessionStorage.removeItem("sf_shop_slug");
+          localStorage.removeItem("sf_seller_pubkey");
+          localStorage.removeItem("sf_shop_slug");
         }
-        setProductData(parsed);
+        const resolvedListing = resolveListingStateFromEvent(matchingEvent);
+        if (resolvedListing) {
+          setRawEvent(resolvedListing.rawEvent);
+          setProductData(resolvedListing.productData);
+          setIsZapsnag(resolvedListing.isZapsnag);
+          setIsListingNotFound(false);
+          return;
+        }
+
+        setRawEvent(matchingEvent);
+        setProductData(undefined);
+        setIsZapsnag(false);
+        setIsListingNotFound(!seededListing);
+      } else if (!seededListing && productContext.productEvents.length > 0) {
+        setRawEvent(undefined);
+        setProductData(undefined);
+        setIsZapsnag(false);
+        setIsListingNotFound(true);
       }
     }
-  }, [productContext.isLoading, productContext.productEvents, productIdString]);
+  }, [
+    productContext.isLoading,
+    productContext.productEvents,
+    productIdString,
+    router,
+    router.isReady,
+    seededListing,
+    sfSellerPubkey,
+  ]);
+
+  useEffect(() => {
+    if (
+      !router.isReady ||
+      !productIdString ||
+      !productData ||
+      isZapsnag ||
+      productContext.isLoading
+    ) {
+      return;
+    }
+
+    const allParsed = productContext.productEvents
+      .filter((event: NostrEvent) => event.kind !== 1)
+      .map((event: NostrEvent) => parseTags(event))
+      .filter(
+        (parsed: ProductData | undefined): parsed is ProductData => !!parsed
+      );
+
+    if (
+      rawEvent &&
+      rawEvent.kind !== 1 &&
+      !allParsed.some((parsed: ProductData) => parsed.id === rawEvent.id)
+    ) {
+      const parsedRawEvent = parseTags(rawEvent);
+      if (parsedRawEvent) {
+        allParsed.push(parsedRawEvent);
+      }
+    }
+
+    const canonicalSlug = getListingSlug(productData, allParsed);
+    if (canonicalSlug && productIdString !== canonicalSlug) {
+      router.replace(`/listing/${canonicalSlug}`, undefined, {
+        shallow: true,
+      });
+    }
+  }, [
+    productContext.isLoading,
+    productContext.productEvents,
+    productData,
+    productIdString,
+    rawEvent,
+    router,
+    router.isReady,
+    isZapsnag,
+  ]);
 
   return (
-    <>
-      <div className="flex h-full min-h-screen flex-col bg-[#111] pt-20">
-        {productData &&
-          (isZapsnag ? (
-            <div className="mx-auto w-full max-w-2xl p-4 md:p-6">
-              <div className="overflow-hidden rounded-xl border border-zinc-800 bg-[#161616]">
+    <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
+      <div className="bg-light-bg dark:bg-dark-bg flex h-full min-h-screen flex-col pt-20">
+        {productData ? (
+          isZapsnag ? (
+            <div className="mx-auto w-full max-w-2xl p-6">
+              <div className="overflow-hidden rounded-xl bg-white shadow-lg dark:bg-neutral-900">
                 <img
                   src={productData.images[0]}
-                  className="h-64 w-full object-cover md:h-96"
+                  className="h-96 w-full object-cover"
                 />
                 <div className="p-6">
                   <div className="mb-2 flex items-start justify-between">
-                    <h1 className="text-2xl font-black tracking-tighter text-white uppercase">
+                    <h1 className="text-light-text dark:text-dark-text text-2xl font-bold">
                       {productData.title}
                     </h1>
                     {rawEvent && (
-                      <Dropdown
-                        classNames={{
-                          content:
-                            "bg-[#161616] border border-zinc-800 rounded-xl",
-                        }}
-                      >
+                      <Dropdown>
                         <DropdownTrigger>
-                          <Button
-                            isIconOnly
-                            variant="light"
-                            size="sm"
-                            className="text-zinc-400 hover:text-white"
-                          >
-                            <EllipsisVerticalIcon className="h-6 w-6" />
+                          <Button isIconOnly variant="light" size="sm">
+                            <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
                           </Button>
                         </DropdownTrigger>
                         <DropdownMenu aria-label="Event Actions">
-                          <DropdownItem
-                            key="view-raw"
-                            onPress={() => setShowRawEventModal(true)}
-                          >
-                            View Raw Event
-                          </DropdownItem>
-                          <DropdownItem
-                            key="view-id"
-                            onPress={() => setShowEventIdModal(true)}
-                          >
-                            View Event ID
-                          </DropdownItem>
+                          {[
+                            <DropdownItem
+                              key="view-raw"
+                              onPress={() => setShowRawEventModal(true)}
+                            >
+                              View Raw Event
+                            </DropdownItem>,
+                            <DropdownItem
+                              key="view-id"
+                              onPress={() => setShowEventIdModal(true)}
+                            >
+                              View Event ID
+                            </DropdownItem>,
+                            ...(productData.pubkey !== userPubkey
+                              ? [
+                                  <DropdownItem
+                                    key="report-listing"
+                                    color="danger"
+                                    className="text-danger"
+                                    onPress={openReportFlow}
+                                  >
+                                    Report Listing
+                                  </DropdownItem>,
+                                ]
+                              : []),
+                          ]}
                         </DropdownMenu>
                       </Dropdown>
                     )}
                   </div>
-                  <p className="mb-6 whitespace-pre-wrap text-zinc-400">
+                  <p className="mb-6 whitespace-pre-wrap text-gray-600 dark:text-gray-300">
                     {productData.summary}
                   </p>
                   <ZapsnagButton product={productData} />
                 </div>
               </div>
 
-              {/* Raw Event Modal */}
               <RawEventModal
                 isOpen={showRawEventModal}
                 onClose={() => setShowRawEventModal(false)}
                 rawEvent={rawEvent}
               />
 
-              {/* Event ID Modal */}
               <EventIdModal
                 isOpen={showEventIdModal}
                 onClose={() => setShowEventIdModal(false)}
                 rawEvent={rawEvent}
               />
+              {reportFlowUi}
+              <SignInModal isOpen={isOpen} onClose={onClose} />
             </div>
           ) : (
             <CheckoutCard
+              key={productData.id}
               productData={productData}
-              setFiatOrderIsPlaced={setFiatOrderIsPlaced}
-              setFiatOrderFailed={setFiatOrderFailed}
               setInvoiceIsPaid={setInvoiceIsPaid}
               setInvoiceGenerationFailed={setInvoiceGenerationFailed}
               setCashuPaymentSent={setCashuPaymentSent}
               setCashuPaymentFailed={setCashuPaymentFailed}
               rawEvent={rawEvent}
+              p2pk={p2pk}
             />
-          ))}
-        {fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent ? (
-          <>
-            <Modal
-              backdrop="blur"
-              isOpen={fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent}
-              onClose={() => {
-                setFiatOrderIsPlaced(false);
-                setInvoiceIsPaid(false);
-                setCashuPaymentSent(false);
-                router.push("/orders");
-              }}
-              classNames={{
-                base: "bg-[#161616] border border-zinc-800 rounded-2xl",
-                body: "py-8",
-                backdrop: "bg-black/80 backdrop-blur-sm",
-                header: "border-b border-zinc-800 text-white",
-                closeButton: "hover:bg-white/10 text-white",
-              }}
-              isDismissable={true}
-              scrollBehavior={"normal"}
-              placement={"center"}
-              size="md"
+          )
+        ) : isListingNotFound ? (
+          <div className="flex min-h-[60vh] flex-col items-center justify-center px-6 text-center">
+            <h1 className="text-light-text dark:text-dark-text text-3xl font-bold">
+              Listing Not Found
+            </h1>
+            <p className="mt-4 max-w-lg text-gray-500 dark:text-gray-400">
+              This listing doesn&apos;t exist, hasn&apos;t synced yet, or is no
+              longer available from your current data sources.
+            </p>
+            <Button
+              className="mt-6"
+              color="secondary"
+              onPress={() => router.push("/marketplace")}
             >
-              <ModalContent>
-                <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
-                  <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                  <div className="ml-2">Order successful!</div>
-                </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
-                  <div className="flex items-center justify-center">
-                    The seller will receive a message with your order details.
-                  </div>
-                </ModalBody>
-              </ModalContent>
-            </Modal>
-          </>
-        ) : null}
+              View marketplace
+            </Button>
+          </div>
+        ) : (
+          <div className="flex min-h-[60vh] items-center justify-center">
+            <ShopstrSpinner />
+          </div>
+        )}
         {invoiceGenerationFailed ? (
           <>
             <Modal
@@ -225,23 +515,23 @@ const Listing = () => {
               isOpen={invoiceGenerationFailed}
               onClose={() => setInvoiceGenerationFailed(false)}
               classNames={{
-                base: "bg-[#161616] border border-zinc-800 rounded-2xl",
-                body: "py-8",
-                backdrop: "bg-black/80 backdrop-blur-sm",
-                header: "border-b border-zinc-800 text-white",
-                closeButton: "hover:bg-white/10 text-white",
+                body: "py-6 ",
+                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                header: "border-b-[1px] border-[#292f46]",
+                footer: "border-t-[1px] border-[#292f46]",
+                closeButton: "hover:bg-black/5 active:bg-white/10",
               }}
               isDismissable={true}
               scrollBehavior={"normal"}
               placement={"center"}
-              size="md"
+              size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
+                <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Invoice generation failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
+                <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                   <div className="flex items-center justify-center">
                     The price and/or currency set for this listing was invalid.
                   </div>
@@ -257,23 +547,23 @@ const Listing = () => {
               isOpen={cashuPaymentFailed}
               onClose={() => setCashuPaymentFailed(false)}
               classNames={{
-                base: "bg-[#161616] border border-zinc-800 rounded-2xl",
-                body: "py-8",
-                backdrop: "bg-black/80 backdrop-blur-sm",
-                header: "border-b border-zinc-800 text-white",
-                closeButton: "hover:bg-white/10 text-white",
+                body: "py-6 ",
+                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                header: "border-b-[1px] border-[#292f46]",
+                footer: "border-t-[1px] border-[#292f46]",
+                closeButton: "hover:bg-black/5 active:bg-white/10",
               }}
               isDismissable={true}
               scrollBehavior={"normal"}
               placement={"center"}
-              size="md"
+              size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
+                <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Purchase failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
+                <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                   <div className="flex items-center justify-center">
                     You didn&apos;t have enough balance in your wallet to pay.
                   </div>
@@ -282,41 +572,8 @@ const Listing = () => {
             </Modal>
           </>
         ) : null}
-        {fiatOrderFailed ? (
-          <>
-            <Modal
-              backdrop="blur"
-              isOpen={fiatOrderFailed}
-              onClose={() => setFiatOrderFailed(false)}
-              classNames={{
-                base: "bg-[#161616] border border-zinc-800 rounded-2xl",
-                body: "py-8",
-                backdrop: "bg-black/80 backdrop-blur-sm",
-                header: "border-b border-zinc-800 text-white",
-                closeButton: "hover:bg-white/10 text-white",
-              }}
-              isDismissable={true}
-              scrollBehavior={"normal"}
-              placement={"center"}
-              size="md"
-            >
-              <ModalContent>
-                <ModalHeader className="flex items-center justify-center font-black tracking-tighter uppercase">
-                  <XCircleIcon className="h-6 w-6 text-red-500" />
-                  <div className="ml-2">Order failed!</div>
-                </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
-                  <div className="flex items-center justify-center">
-                    Your order information was not delivered to the seller.
-                    Please try again.
-                  </div>
-                </ModalBody>
-              </ModalContent>
-            </Modal>
-          </>
-        ) : null}
       </div>
-    </>
+    </StorefrontThemeWrapper>
   );
 };
 

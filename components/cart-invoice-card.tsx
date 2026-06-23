@@ -1,21 +1,29 @@
-import { useContext, useState, useEffect, useMemo } from "react";
+import {
+  useCallback,
+  useContext,
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import {
   CashuWalletContext,
   ChatsContext,
   ProfileMapContext,
 } from "../utils/context/context";
 import { useForm } from "react-hook-form";
-import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import {
   Button,
   Card,
   CardHeader,
   CardBody,
+  Divider,
   Image,
   useDisclosure,
   Select,
   SelectItem,
   Input,
+  Checkbox,
 } from "@heroui/react";
 import {
   BanknotesIcon,
@@ -29,30 +37,39 @@ import {
   Wallet as CashuWallet,
   getEncodedToken,
   Proof,
-  MintKeyset,
+  Keyset as MintKeyset,
 } from "@cashu/cashu-ts";
-import * as cashuCompat from "@/utils/cashu/compat";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
+import {
+  isSellerP2pkEscrowActive,
+  resolveP2pkCheckoutOutputConfig,
+} from "@/utils/cashu/p2pk-checkout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import {
   recordPendingMintQuote,
   markMintQuoteClaimed,
   updatePendingMintQuote,
+  getPendingMintQuotes,
+  removePendingMintQuote,
 } from "@/utils/cashu/pending-mint-operations";
 import {
   recoverProofsToBuyerWallet,
   withDeadline,
   isTimeoutError,
 } from "@/utils/cashu/wallet-recovery";
+import { persistBuyerP2pkEscrowRecord } from "@/utils/cashu/p2pk-escrow-records";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
+  getSavedAddresses,
   sendGiftWrappedMessageEvent,
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
+  saveAddress,
 } from "@/utils/nostr/nostr-helper-functions";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
@@ -61,9 +78,11 @@ import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { NostrWebLNProvider } from "@getalby/sdk";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
 import FailureModal from "@/components/utility-components/failure-modal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
+import AddressPicker from "./utility-components/address-picker";
 import {
   NostrContext,
   SignerContext,
@@ -72,36 +91,25 @@ import {
   ShippingFormData,
   ContactFormData,
   CombinedFormData,
+  SavedAddress,
+  ShopProfile,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
-
-const SELLER_HANDOFF_TIMEOUT_MS = 90000;
-
-async function requireSafeSwap(
-  wallet: CashuWallet,
-  amount: number,
-  proofs: Proof[]
-): Promise<{ keep: Proof[]; send: Proof[] }> {
-  const swapOutcome = await safeSwap(wallet, amount, proofs, {
-    sendConfig: { includeFees: true },
-  });
-  if (swapOutcome.status !== "swapped") {
-    throw new Error(
-      swapOutcome.errorMessage ??
-        `Cashu swap did not complete (${swapOutcome.status})`
-    );
-  }
-  return { keep: swapOutcome.keep, send: swapOutcome.send };
-}
+import {
+  buildShippingAdjustedProductTotals,
+  ProductTotalsInSats,
+  sumProductTotalsInSats,
+} from "@/utils/cart-totals";
 
 export default function CartInvoiceCard({
   products,
   quantities,
   shippingTypes,
-  totalCostsInSats,
+  productTotalsInSats,
   subtotalCost,
   appliedDiscounts = {},
   discountCodes = {},
+  shopProfiles,
   onBackToCart,
   setInvoiceIsPaid,
   setInvoiceGenerationFailed,
@@ -111,18 +119,24 @@ export default function CartInvoiceCard({
   products: ProductData[];
   quantities: { [key: string]: number };
   shippingTypes: { [key: string]: string };
-  totalCostsInSats: { [key: string]: number };
+  productTotalsInSats: ProductTotalsInSats;
   subtotalCost: number;
   appliedDiscounts?: { [key: string]: number };
   discountCodes?: { [key: string]: string };
+  shopProfiles?: Map<string, ShopProfile>;
   onBackToCart?: () => void;
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
   setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
 }) {
-  const { mints, tokens, history } = getLocalStorageData();
-  const { isLoggedIn, signer } = useContext(SignerContext);
+  const { mints, tokens } = getLocalStorageData();
+  const {
+    isLoggedIn,
+    pubkey: userPubkey,
+    npub: userNPub,
+    signer,
+  } = useContext(SignerContext);
 
   // Check if there are tokens available for Cashu payment
   const hasTokensAvailable = tokens && tokens.length > 0;
@@ -135,12 +149,127 @@ export default function CartInvoiceCard({
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [saveDetails, setSaveDetails] = useState(false);
+  const [saveAddressLabel, setSaveAddressLabel] = useState("");
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState<
+    string | null
+  >(null);
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [invoice, setInvoice] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
+  // Tracks the in-flight invoice polling so a "Back" click or unmount can
+  // signal the polling loop to exit cleanly instead of letting it complete
+  // a payment the user has already abandoned.
+  const invoicePollRef = useRef<{
+    cancelled: boolean;
+    activeQuoteId: string | null;
+  }>({ cancelled: false, activeQuoteId: null });
+
+  // Cancels any in-flight invoice polling. If the quote is still awaiting
+  // payment we drop the durable record (no money has moved). If the mint
+  // has already moved to PAID, the durable record stays so MintRecoveryBoot
+  // can claim the proofs back to the buyer's wallet on next boot.
+  const cancelInvoicePolling = useCallback(() => {
+    const state = invoicePollRef.current;
+    state.cancelled = true;
+    const quoteId = state.activeQuoteId;
+    if (!quoteId) return;
+    const existing = getPendingMintQuotes().find((q) => q.quoteId === quoteId);
+    if (existing && existing.status === "awaiting_payment") {
+      removePendingMintQuote(quoteId);
+    }
+  }, []);
+
+  // Defensive: if the user navigates away mid-polling (route change, modal
+  // close), still signal cancellation so the loop doesn't keep working in
+  // the background.
+  useEffect(() => {
+    return () => {
+      cancelInvoicePolling();
+    };
+  }, [cancelInvoicePolling]);
+
   const [orderConfirmed, setOrderConfirmed] = useState(false);
 
+  const pendingOrderRef = useRef<{
+    orderId: string;
+    productTitle: string;
+    amount: string;
+    currency: string;
+    paymentMethod: string;
+    sellerPubkey: string;
+    shippingAddress?: string;
+    pickupLocation?: string;
+    selectedSize?: string;
+    selectedVolume?: string;
+    selectedWeight?: string;
+    selectedBulkOption?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (paymentConfirmed && pendingOrderRef.current) {
+      try {
+        const cartItems = products.map((p: any) => ({
+          title: p.title || p.productName,
+          image: p.images?.[0] || "",
+          amount: String(currentProductTotalsInSats[p.id] || 0),
+          currency: "sats",
+          quantity: quantities[p.id] || 1,
+          shipping: shippingTypes[p.id] || "",
+          pickupLocation: selectedPickupLocations[p.id] || undefined,
+          selectedSize: p.selectedSize || undefined,
+          selectedVolume: p.selectedVolume || undefined,
+          selectedWeight: p.selectedWeight || undefined,
+          selectedBulkOption: p.selectedBulkOption
+            ? String(p.selectedBulkOption)
+            : undefined,
+        }));
+        const anyFreeShipping = Object.values(sellerFreeShippingStatus).some(
+          (s) => s.qualifies
+        );
+        let originalShipping = 0;
+        if (anyFreeShipping) {
+          const sellersSeen = new Set<string>();
+          products.forEach((p) => {
+            if (sellersSeen.has(p.pubkey)) return;
+            sellersSeen.add(p.pubkey);
+            if (sellerFreeShippingStatus[p.pubkey]?.qualifies) {
+              const { highestShippingCost } = getConsolidatedShippingForSeller(
+                p.pubkey
+              );
+              originalShipping += highestShippingCost;
+            }
+          });
+        }
+        sessionStorage.setItem(
+          "orderSummary",
+          JSON.stringify({
+            productTitle: pendingOrderRef.current.productTitle,
+            productImage: products[0]?.images?.[0] || "",
+            amount: String(totalCost),
+            subtotal: String(subtotalCost),
+            currency: pendingOrderRef.current.currency,
+            paymentMethod: pendingOrderRef.current.paymentMethod,
+            orderId: pendingOrderRef.current.orderId,
+            shippingAddress: pendingOrderRef.current.shippingAddress,
+            sellerPubkey: pendingOrderRef.current.sellerPubkey,
+            isCart: true,
+            cartItems,
+            freeShippingApplied: anyFreeShipping,
+            originalShippingCost: anyFreeShipping
+              ? String(originalShipping)
+              : undefined,
+          })
+        );
+      } catch {}
+
+      pendingOrderRef.current = null;
+    }
+  }, [paymentConfirmed]);
+
   const walletContext = useContext(CashuWalletContext);
+  const { cashuPubkey } = walletContext;
 
   const { isOpen, onOpen, onClose } = useDisclosure();
 
@@ -149,6 +278,75 @@ export default function CartInvoiceCard({
   >(null);
   const [showOrderTypeSelection, setShowOrderTypeSelection] = useState(true);
 
+  const sellerFreeShippingStatus = useMemo(() => {
+    const statusMap: {
+      [pubkey: string]: {
+        qualifies: boolean;
+        threshold: number;
+        currency: string;
+        sellerSubtotal: number;
+        sellerName: string;
+      };
+    } = {};
+    const productsBySeller: { [pubkey: string]: ProductData[] } = {};
+    products.forEach((p) => {
+      if (!productsBySeller[p.pubkey]) productsBySeller[p.pubkey] = [];
+      productsBySeller[p.pubkey]!.push(p);
+    });
+
+    Object.entries(productsBySeller).forEach(([pubkey, sellerProducts]) => {
+      const profile = shopProfiles?.get(pubkey);
+      if (
+        !profile?.content?.freeShippingThreshold ||
+        profile.content.freeShippingThreshold <= 0
+      )
+        return;
+      let sellerSubtotal = 0;
+      sellerProducts.forEach((product) => {
+        const discount = appliedDiscounts[pubkey] || 0;
+        const basePrice =
+          product.bulkPrice !== undefined
+            ? product.bulkPrice
+            : product.volumePrice !== undefined
+              ? product.volumePrice
+              : product.weightPrice !== undefined
+                ? product.weightPrice
+                : product.price;
+        const qty = quantities[product.id] || 1;
+        const discountedPrice =
+          discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
+        sellerSubtotal += discountedPrice * qty;
+      });
+      statusMap[pubkey] = {
+        qualifies: sellerSubtotal >= profile.content.freeShippingThreshold,
+        threshold: profile.content.freeShippingThreshold,
+        currency: profile.content.freeShippingCurrency || "USD",
+        sellerSubtotal,
+        sellerName: profile.content.name || pubkey.substring(0, 8),
+      };
+    });
+    return statusMap;
+  }, [products, quantities, appliedDiscounts, shopProfiles]);
+
+  const getConsolidatedShippingForSeller = (
+    sellerPubkey: string
+  ): {
+    highestShippingProduct: ProductData | null;
+    highestShippingCost: number;
+  } => {
+    const sellerProducts = products.filter((p) => p.pubkey === sellerPubkey);
+    let highestShippingCost = 0;
+    let highestShippingProduct: ProductData | null = null;
+    sellerProducts.forEach((product) => {
+      const cost = product.shippingCost || 0;
+      if (cost > highestShippingCost) {
+        highestShippingCost = cost;
+        highestShippingProduct = product;
+      }
+    });
+    return { highestShippingProduct, highestShippingCost };
+  };
+
   const sendInquiryDM = async (sellerPubkey: string, productTitle: string) => {
     if (!signer || !nostr) return;
 
@@ -156,7 +354,7 @@ export default function CartInvoiceCard({
       const actualUserPubkey = await signer.getPubKey?.();
       if (!actualUserPubkey) return;
 
-      const inquiryMessage = `I just placed an order for your ${productTitle} listing on Shopstr! Please check your Shopstr DMs for any related order information.`;
+      const inquiryMessage = `I just placed an order for your ${productTitle} listing on Shopstr! Please check your Shopstr order dashboard for any relevant information.`;
 
       const { nsec: nsecForSellerReceiver, npub: npubForSellerReceiver } =
         await generateKeys();
@@ -239,6 +437,16 @@ export default function CartInvoiceCard({
     }
   };
 
+  const renderP2pkCartBadge = (sellerPubkey: string) => {
+    const p2pk = profileContext.profileData.get(sellerPubkey)?.content.p2pk;
+    if (!isSellerP2pkEscrowActive(p2pk)) return null;
+    return (
+      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-[11px] font-medium text-yellow-700 dark:text-yellow-300">
+        🔒 P2PK Escrow · {p2pk!.refundDelayDays}d reclaim opens
+      </div>
+    );
+  };
+
   const [showFailureModal, setShowFailureModal] = useState(false);
 
   // NWC State
@@ -247,7 +455,7 @@ export default function CartInvoiceCard({
   const [failureText, setFailureText] = useState("");
 
   const [isFormValid, setIsFormValid] = useState(false);
-  const [freePickupPreference, setFreePickupPreference] = useState<
+  const [shippingPickupPreference, setShippingPickupPreference] = useState<
     "shipping" | "contact"
   >("shipping");
   const [showFreePickupSelection, setShowFreePickupSelection] = useState(false);
@@ -255,12 +463,15 @@ export default function CartInvoiceCard({
     [productId: string]: string;
   }>({});
 
+  const [currentProductTotalsInSats, setCurrentProductTotalsInSats] =
+    useState<ProductTotalsInSats>(productTotalsInSats);
   const [totalCost, setTotalCost] = useState<number>(subtotalCost);
 
   const {
     handleSubmit: handleFormSubmit,
     control: formControl,
     watch,
+    setValue,
   } = useForm();
 
   // Watch form values to validate completion
@@ -270,15 +481,30 @@ export default function CartInvoiceCard({
     return Array.from(new Set(Object.values(shippingTypes)));
   }, [shippingTypes]);
 
-  const hasFreePickupProducts = useMemo(() => {
-    return Object.values(shippingTypes).includes("Free/Pickup");
+  const hasShippingPickupProducts = useMemo(() => {
+    return (
+      Object.values(shippingTypes).includes("Free/Pickup") ||
+      Object.values(shippingTypes).includes("Added Cost/Pickup")
+    );
   }, [shippingTypes]);
 
-  const hasMixedShippingWithFreePickup = useMemo(() => {
-    return uniqueShippingTypes.length > 1 && hasFreePickupProducts;
-  }, [uniqueShippingTypes, hasFreePickupProducts]);
+  const hasMixedShippingWithPickup = useMemo(() => {
+    return uniqueShippingTypes.length > 1 && hasShippingPickupProducts;
+  }, [uniqueShippingTypes, hasShippingPickupProducts]);
 
   const [requiredInfo, setRequiredInfo] = useState("");
+  const defaultSavedAddress = useMemo(
+    () =>
+      savedAddresses.find((address) => address.isDefault) ||
+      savedAddresses[0] ||
+      null,
+    [savedAddresses]
+  );
+
+  useEffect(() => {
+    setCurrentProductTotalsInSats(productTotalsInSats);
+    setTotalCost(subtotalCost);
+  }, [productTotalsInSats, subtotalCost]);
 
   useEffect(() => {
     if (products && products.length > 0) {
@@ -289,6 +515,19 @@ export default function CartInvoiceCard({
       setRequiredInfo(requiredFields);
     }
   }, [products]);
+
+  useEffect(() => {
+    const loadSavedAddresses = () => {
+      setSavedAddresses(getSavedAddresses());
+    };
+
+    loadSavedAddresses();
+    window.addEventListener("storage", loadSavedAddresses);
+
+    return () => {
+      window.removeEventListener("storage", loadSavedAddresses);
+    };
+  }, []);
 
   // Check if any products have pickup locations
   const productsWithPickupLocations = useMemo(() => {
@@ -336,7 +575,7 @@ export default function CartInvoiceCard({
     const pickupLocationValid = productsWithPickupLocations.every((product) => {
       const shouldCheckPickup =
         formType === "contact" ||
-        (formType === "combined" && freePickupPreference === "contact");
+        (formType === "combined" && shippingPickupPreference === "contact");
 
       if (shouldCheckPickup) {
         return watchedValues[`pickupLocation_${product.id}`]?.trim();
@@ -352,6 +591,7 @@ export default function CartInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
+        (!saveDetails || saveAddressLabel.trim()) &&
         (!requiredInfo || watchedValues.Required?.trim()) &&
         pickupLocationValid
       );
@@ -365,6 +605,7 @@ export default function CartInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
+        (!saveDetails || saveAddressLabel.trim()) &&
         (!requiredInfo || watchedValues.Required?.trim()) &&
         pickupLocationValid
       );
@@ -376,7 +617,9 @@ export default function CartInvoiceCard({
     formType,
     requiredInfo,
     productsWithPickupLocations,
-    freePickupPreference,
+    shippingPickupPreference,
+    saveDetails,
+    saveAddressLabel,
   ]);
 
   const generateNewKeys = async () => {
@@ -413,7 +656,8 @@ export default function CartInvoiceCard({
     address?: string,
     pickup?: string,
     donationAmountValue?: number,
-    donationPercentageValue?: number
+    donationPercentageValue?: number,
+    retryCount: number = 3
   ) => {
     const newKeys = await generateNewKeys();
     if (!newKeys) {
@@ -422,26 +666,48 @@ export default function CartInvoiceCard({
       return;
     }
 
-    return await sendPaymentAndContactMessageWithKeys(
-      pubkeyToReceiveMessage,
-      message,
-      product,
-      isPayment,
-      isReceipt,
-      isDonation,
-      orderId,
-      paymentType,
-      paymentReference,
-      paymentProof,
-      messageAmount,
-      productQuantity,
-      newKeys,
-      contact,
-      address,
-      pickup,
-      donationAmountValue,
-      donationPercentageValue
-    );
+    for (let attempt = 0; attempt < retryCount; attempt++) {
+      try {
+        await sendPaymentAndContactMessageWithKeys(
+          pubkeyToReceiveMessage,
+          message,
+          product,
+          isPayment,
+          isReceipt,
+          isDonation,
+          orderId,
+          paymentType,
+          paymentReference,
+          paymentProof,
+          messageAmount,
+          productQuantity,
+          newKeys,
+          contact,
+          address,
+          pickup,
+          donationAmountValue,
+          donationPercentageValue
+        );
+        // If we get here, the message was sent successfully
+        return;
+      } catch (error) {
+        console.warn(
+          `Attempt ${attempt + 1} failed for message sending:`,
+          error
+        );
+
+        if (attempt === retryCount - 1) {
+          // This was the last attempt, log the error but don't throw
+          console.error("Failed to send message after all retries:", error);
+          return; // Continue with the flow instead of breaking it
+        }
+
+        // Wait before retrying (exponential backoff)
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.pow(2, attempt) * 1000)
+        );
+      }
+    }
   };
 
   const sendPaymentAndContactMessageWithKeys = async (
@@ -475,18 +741,15 @@ export default function CartInvoiceCard({
       return;
     }
 
-    if (!isLoggedIn) {
-      setFailureText("User is not logged in!");
-      setShowFailureModal(true);
-      return;
-    }
-
     const decodedRandomPubkeyForSender = nip19.decode(keys.senderNpub);
     const decodedRandomPrivkeyForSender = nip19.decode(keys.senderNsec);
     const decodedRandomPubkeyForReceiver = nip19.decode(keys.receiverNpub);
     const decodedRandomPrivkeyForReceiver = nip19.decode(keys.receiverNsec);
 
-    const buyerPubkey = await signer?.getPubKey?.();
+    let buyerPubkey = await signer?.getPubKey?.();
+    if (!buyerPubkey) {
+      buyerPubkey = decodedRandomPubkeyForSender.data as string;
+    }
 
     let messageSubject = "";
     let messageOptions: any = {};
@@ -508,6 +771,8 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedWeight: product.selectedWeight,
+        selectedBulkOption: product.selectedBulkOption,
       };
     } else if (isReceipt) {
       messageSubject = "order-receipt";
@@ -528,6 +793,8 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedWeight: product.selectedWeight,
+        selectedBulkOption: product.selectedBulkOption,
       };
     } else if (isDonation) {
       messageSubject = "donation";
@@ -548,6 +815,8 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedWeight: product.selectedWeight,
+        selectedBulkOption: product.selectedBulkOption,
       };
     }
 
@@ -559,7 +828,7 @@ export default function CartInvoiceCard({
       messageOptions
     );
     const sealedEvent = await constructMessageSeal(
-      signer!,
+      signer || ({} as any),
       giftWrappedMessageEvent,
       decodedRandomPubkeyForSender.data as string,
       pubkeyToReceiveMessage,
@@ -650,7 +919,6 @@ export default function CartInvoiceCard({
       if (price < 1) {
         throw new Error("Total price is less than 1 sat.");
       }
-
       const commonData = {
         additionalInfo: data["Required"],
       };
@@ -681,6 +949,63 @@ export default function CartInvoiceCard({
         };
       }
 
+      if (
+        saveDetails &&
+        (formType === "shipping" || formType === "combined") &&
+        paymentData.shippingName &&
+        paymentData.shippingAddress
+      ) {
+        saveAddress({
+          id: selectedSavedAddressId || undefined,
+          name: paymentData.shippingName,
+          address: paymentData.shippingAddress,
+          unit: paymentData.shippingUnitNo || "",
+          city: paymentData.shippingCity,
+          state: paymentData.shippingState,
+          zip: paymentData.shippingPostalCode,
+          country: paymentData.shippingCountry,
+          label: saveAddressLabel.trim(),
+          isDefault: false,
+        });
+      }
+
+      const addressTag =
+        paymentData.shippingName && paymentData.shippingAddress
+          ? `${paymentData.shippingName}, ${paymentData.shippingAddress}, ${
+              paymentData.shippingCity || ""
+            }, ${paymentData.shippingState || ""}, ${
+              paymentData.shippingPostalCode || ""
+            }, ${paymentData.shippingCountry || ""}`
+          : undefined;
+      const productTitles = products
+        .map((p: any) => {
+          const parts = [p.title || p.productName];
+          if (p.selectedSize) parts.push(`Size: ${p.selectedSize}`);
+          if (p.selectedVolume) parts.push(`Volume: ${p.selectedVolume}`);
+          if (p.selectedWeight) parts.push(`Weight: ${p.selectedWeight}`);
+          if (p.selectedBulkOption)
+            parts.push(`Bundle: ${p.selectedBulkOption} units`);
+          const qty = quantities[p.id];
+          if (qty && qty > 1) parts.push(`Qty: ${qty}`);
+          return parts.join(" - ");
+        })
+        .join("; ");
+      const pickupSummary = products
+        .map((p: any) => selectedPickupLocations[p.id])
+        .filter(Boolean)
+        .join(", ");
+
+      pendingOrderRef.current = {
+        orderId: "",
+        productTitle: productTitles,
+        amount: String(price),
+        currency: "sats",
+        paymentMethod: paymentType || "lightning",
+        sellerPubkey: products[0]?.pubkey || "",
+        shippingAddress: addressTag,
+        pickupLocation: pickupSummary || undefined,
+      };
+
       if (paymentType === "cashu") {
         await handleCashuPayment(price, paymentData);
       } else if (paymentType === "nwc") {
@@ -694,43 +1019,70 @@ export default function CartInvoiceCard({
     }
   };
 
-  const handleOrderTypeSelection = (selectedOrderType: string) => {
+  const resetCurrentProductTotals = () => {
+    setCurrentProductTotalsInSats(productTotalsInSats);
+    setTotalCost(subtotalCost);
+  };
+
+  const buildShippingCostsInSats = async () => {
+    const shippingCostsInSats: { [productId: string]: number } = {};
+
+    for (const product of products) {
+      shippingCostsInSats[product.id] = await convertShippingToSats(product);
+    }
+
+    return shippingCostsInSats;
+  };
+
+  const applyCurrentProductTotals = async (
+    shouldAddShipping: (shippingType?: string) => boolean
+  ) => {
+    try {
+      const shippingCostsInSats = await buildShippingCostsInSats();
+      const updatedProductTotalsInSats = buildShippingAdjustedProductTotals({
+        products,
+        baseProductTotalsInSats: productTotalsInSats,
+        quantities,
+        shippingTypes,
+        shippingCostsInSats,
+        sellerFreeShippingStatus,
+        shouldAddShipping,
+      });
+
+      setCurrentProductTotalsInSats(updatedProductTotalsInSats);
+      setTotalCost(sumProductTotalsInSats(updatedProductTotalsInSats));
+
+      return true;
+    } catch (err) {
+      handleShippingConversionError(err);
+      return false;
+    }
+  };
+
+  const handleOrderTypeSelection = async (selectedOrderType: string) => {
     setShowOrderTypeSelection(false);
 
     if (selectedOrderType === "shipping") {
       setFormType("shipping");
-      // Calculate total with shipping
-      let shippingTotal = 0;
-      products.forEach((product) => {
-        const shippingCost = product.shippingCost || 0;
-        const quantity = quantities[product.id] || 1;
-        shippingTotal += Math.ceil(shippingCost * quantity);
-      });
-      setTotalCost(subtotalCost + shippingTotal);
+      if (!(await applyCurrentProductTotals(() => true))) return;
     } else if (selectedOrderType === "contact") {
       setFormType("contact");
       setIsFormValid(true);
-      setTotalCost(subtotalCost);
+      resetCurrentProductTotals();
     } else if (selectedOrderType === "combined") {
       setFormType("combined");
-      // Show Free/Pickup preference selection if we have mixed shipping with Free/Pickup
-      if (hasMixedShippingWithFreePickup) {
+      if (hasMixedShippingWithPickup) {
         setShowFreePickupSelection(true);
+        resetCurrentProductTotals();
       } else {
-        // Calculate shipping for combined non-Free/Pickup items
-        let shippingTotal = 0;
-        products.forEach((product) => {
-          const productShippingType = shippingTypes[product.id];
-          if (
-            productShippingType === "Added Cost" ||
-            productShippingType === "Free"
-          ) {
-            const shippingCost = product.shippingCost || 0;
-            const quantity = quantities[product.id] || 1;
-            shippingTotal += Math.ceil(shippingCost * quantity);
-          }
-        });
-        setTotalCost(subtotalCost + shippingTotal);
+        if (
+          !(await applyCurrentProductTotals(
+            (shippingType) =>
+              shippingType === "Added Cost" || shippingType === "Free"
+          ))
+        ) {
+          return;
+        }
       }
     }
   };
@@ -773,8 +1125,10 @@ export default function CartInvoiceCard({
       validatePaymentData(convertedPrice, data);
 
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
-      const { request: pr, quote: hash } = await withMintRetry(() =>
-        cashuCompat.createMintQuote(wallet, convertedPrice)
+      await wallet.loadMint();
+      const { request: pr, quote: hash } = await withMintRetry(
+        () => wallet.createMintQuoteBolt11(convertedPrice),
+        { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
       );
       recordPendingMintQuote({
         quoteId: hash,
@@ -782,6 +1136,7 @@ export default function CartInvoiceCard({
         amount: convertedPrice,
         invoice: pr,
       });
+      invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
 
       const { nwcString } = getLocalStorageData();
       if (!nwcString) throw new Error("NWC connection not found.");
@@ -805,9 +1160,11 @@ export default function CartInvoiceCard({
 
       setShowInvoiceCard(true);
       const wallet = new CashuWallet(new CashuMint(mints[0]!));
+      await wallet.loadMint();
 
-      const { request: pr, quote: hash } = await withMintRetry(() =>
-        cashuCompat.createMintQuote(wallet, convertedPrice)
+      const { request: pr, quote: hash } = await withMintRetry(
+        () => wallet.createMintQuoteBolt11(convertedPrice),
+        { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
       );
       recordPendingMintQuote({
         quoteId: hash,
@@ -815,6 +1172,7 @@ export default function CartInvoiceCard({
         amount: convertedPrice,
         invoice: pr,
       });
+      invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
 
       setInvoice(pr);
 
@@ -870,25 +1228,92 @@ export default function CartInvoiceCard({
     const maxRetries = 30; // Maximum 30 retries (about 1 minute)
 
     while (retryCount < maxRetries) {
+      // Honor any cancellation signal from the Back button or component
+      // unmount. If we haven't seen PAID yet, leave the loop and let the
+      // cancel handler drop the durable record.
+      if (invoicePollRef.current.cancelled) {
+        return;
+      }
       try {
-        // First check if the quote has been paid
-        const quoteState = await withMintRetry(() =>
-          cashuCompat.checkMintQuote(wallet, hash)
+        // First check if the quote has been paid (bounded retry on transient
+        // failures so a single network blip doesn't abandon the polling loop).
+        const quoteState = await withMintRetry(
+          () => wallet.checkMintQuoteBolt11(hash),
+          { maxAttempts: 3, perAttemptTimeoutMs: 10000, totalTimeoutMs: 25000 }
         );
 
         if (quoteState.state === "PAID") {
-          // Quote is paid, try to mint proofs
+          // Money is on the mint. Mark durable record before claiming so that
+          // a tab close / network drop here triggers boot-time recovery.
+          // Use the upsert form so that a Back-button cancellation racing
+          // with this transition (which would have removed the
+          // awaiting_payment record) cannot leave us without a durable
+          // safety net for the proofs we're about to mint.
+          const existing = getPendingMintQuotes().find(
+            (q) => q.quoteId === hash
+          );
+          recordPendingMintQuote({
+            quoteId: hash,
+            mintUrl: mints[0]!,
+            amount: convertedPrice,
+            invoice: existing?.invoice ?? "",
+            status: "paid_unclaimed",
+          });
           try {
-            updatePendingMintQuote(hash, { status: "paid_unclaimed" });
-            const proofs = await withMintRetry(() =>
-              cashuCompat.mintProofs(wallet, convertedPrice, hash)
+            const proofs = await withMintRetry(
+              () => wallet.mintProofsBolt11(convertedPrice, hash),
+              {
+                maxAttempts: 5,
+                perAttemptTimeoutMs: 15000,
+                totalTimeoutMs: 60000,
+              }
             );
             if (proofs && proofs.length > 0) {
+              // If the user clicked Back between PAID and the claim
+              // returning, do not forward the order to the seller. Instead
+              // credit the freshly-minted proofs to the buyer's wallet so
+              // their sats are recoverable.
+              if (invoicePollRef.current.cancelled) {
+                // Defensive: if nostr/signer were torn down between cancel
+                // and now, leave the durable record so MintRecoveryBoot
+                // claims to wallet on the next boot rather than dropping
+                // the proofs on the floor.
+                if (!nostr || !signer) {
+                  setShowInvoiceCard(false);
+                  setInvoice("");
+                  setQrCodeUrl(null);
+                  setFailureText(
+                    "Order cancelled. Your sats will be credited to your wallet automatically the next time you open Shopstr."
+                  );
+                  setShowFailureModal(true);
+                  return;
+                }
+                await recoverProofsToBuyerWallet(
+                  nostr,
+                  signer,
+                  mints[0]!,
+                  proofs,
+                  convertedPrice
+                );
+                markMintQuoteClaimed(hash);
+                setShowInvoiceCard(false);
+                setInvoice("");
+                setQrCodeUrl(null);
+                setFailureText(
+                  "Your invoice was paid right as you cancelled. The sats have been credited to your wallet — no order was sent to the seller."
+                );
+                setShowFailureModal(true);
+                return;
+              }
+              // Bound the seller hand-off so a hung relay / signing step
+              // can't strand the buyer indefinitely. On failure or timeout,
+              // the freshly-minted proofs are credited to the buyer's local
+              // wallet so they keep their sats and can retry.
               try {
                 await withDeadline(
                   () => sendTokens(wallet, proofs, data),
-                  SELLER_HANDOFF_TIMEOUT_MS,
-                  "seller hand-off"
+                  45000,
+                  "seller payment hand-off"
                 );
                 markMintQuoteClaimed(hash);
                 localStorage.setItem("cart", JSON.stringify([]));
@@ -896,6 +1321,8 @@ export default function CartInvoiceCard({
                 if (setInvoiceIsPaid) {
                   setInvoiceIsPaid(true);
                 }
+                setQrCodeUrl(null);
+                break;
               } catch (handoffError) {
                 await recoverProofsToBuyerWallet(
                   nostr!,
@@ -905,29 +1332,36 @@ export default function CartInvoiceCard({
                   convertedPrice
                 );
                 markMintQuoteClaimed(hash);
-                setPaymentConfirmed(true);
+                setShowInvoiceCard(false);
+                setInvoice("");
+                setQrCodeUrl(null);
                 setFailureText(
                   isTimeoutError(handoffError)
-                    ? "Your payment was received but delivery to the seller timed out. Your sats have been credited to your wallet - please try the order again."
-                    : "Your payment was received but couldn't be delivered to the seller. Your sats have been credited to your wallet - please try the order again."
+                    ? "Your payment was received but delivery to the seller timed out. Your sats have been credited to your wallet — please try the order again."
+                    : "Your payment was received but couldn't be delivered to the seller. Your sats have been credited to your wallet — please try the order again."
                 );
                 setShowFailureModal(true);
+                console.warn(
+                  "[cart-invoice-card] seller hand-off failed; proofs recovered to buyer wallet:",
+                  handoffError
+                );
+                break;
               }
-              setQrCodeUrl(null);
-              break;
             }
           } catch (mintError) {
-            // If minting fails but quote is paid, it might be already issued
-            if (
-              mintError instanceof Error &&
-              mintError.message.includes("issued")
-            ) {
+            const message =
+              mintError instanceof Error
+                ? mintError.message
+                : String(mintError);
+            // If minting fails because mint reports already-issued, the proofs
+            // exist on the mint side but were lost client-side and cannot be
+            // recovered. Mark terminal so boot recovery does not retry forever.
+            if (message.toLowerCase().includes("issued")) {
               updatePendingMintQuote(hash, {
                 status: "failed_terminal",
                 lastErrorMessage:
                   "Mint reports quote ISSUED before local claim recorded proofs",
               });
-              // Quote was already processed, consider it successful
               localStorage.setItem("cart", JSON.stringify([]));
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
@@ -945,11 +1379,12 @@ export default function CartInvoiceCard({
           await new Promise((resolve) => setTimeout(resolve, 2100));
           continue;
         } else if (quoteState.state === "ISSUED") {
+          // Quote was already processed successfully but we never saw the
+          // proofs locally. Mark terminal so boot recovery doesn't loop on it.
           updatePendingMintQuote(hash, {
             status: "failed_terminal",
             lastErrorMessage: "Quote ISSUED before local claim recorded proofs",
           });
-          // Quote was already processed successfully
           localStorage.setItem("cart", JSON.stringify([]));
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
@@ -1003,8 +1438,6 @@ export default function CartInvoiceCard({
     proofs: Proof[],
     data: any
   ) => {
-    const userPubkey = await signer?.getPubKey?.();
-    const userNPub = userPubkey ? nip19.npubEncode(userPubkey) : undefined;
     let remainingProofs = proofs;
 
     // Construct address tag early so it can be passed to all messages
@@ -1024,16 +1457,30 @@ export default function CartInvoiceCard({
       const title = product.title;
       const pubkey = product.pubkey;
       const required = product.required;
-      const tokenAmount = totalCostsInSats[pubkey];
+      const tokenAmount = currentProductTotalsInSats[product.id] || 0;
+      if (tokenAmount < 1) {
+        throw new Error("Failed to calculate cart totals for payment.");
+      }
       let sellerToken;
       let donationToken;
       const sellerProfile = profileContext.profileData.get(pubkey);
+      const buyerProfile = userPubkey
+        ? profileContext.profileData.get(userPubkey)
+        : undefined;
+      const sellerP2pk = sellerProfile?.content?.p2pk;
+      const p2pkOutputConfig = await resolveP2pkCheckoutOutputConfig({
+        sellerP2pk,
+        amountSats: tokenAmount,
+        mintUrl: mints[0],
+        buyerContent: buyerProfile?.content,
+        buyerCashuPubkey: cashuPubkey,
+      });
       const donationPercentage =
-        sellerProfile?.content?.shopstr_donation || 2.1;
+        sellerProfile?.content?.shopstr_donation ?? 2.1;
       const donationAmount = Math.ceil(
-        (tokenAmount! * donationPercentage) / 100
+        (tokenAmount * donationPercentage) / 100
       );
-      const sellerAmount = tokenAmount! - donationAmount;
+      const sellerAmount = tokenAmount - donationAmount;
       let sellerProofs: Proof[] = [];
 
       let shippingData = data; // Assume data contains shipping info
@@ -1061,12 +1508,14 @@ export default function CartInvoiceCard({
 
       const orderId = uuidv4();
 
+      if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
+        pendingOrderRef.current.orderId = orderId;
+      }
+
       // Generate keys once per order to ensure consistent sender pubkey
       const orderKeys = await generateNewKeys();
       if (!orderKeys) {
-        setFailureText("Failed to generate new keys for messages!");
-        setShowFailureModal(true);
-        return;
+        throw new Error("Failed to generate new keys for messages!");
       }
       const paymentPreference =
         sellerProfile?.content?.payment_preference || "ecash";
@@ -1098,9 +1547,7 @@ export default function CartInvoiceCard({
       if (addressString) {
         orderInfoTags.push(["address", addressString]);
       }
-      if (tokenAmount) {
-        orderInfoTags.push(["amount", tokenAmount.toString()]);
-      }
+      orderInfoTags.push(["amount", tokenAmount.toString()]);
       if (donationAmount > 0) {
         orderInfoTags.push([
           "donation_amount",
@@ -1115,11 +1562,22 @@ export default function CartInvoiceCard({
       let paymentTags;
 
       if (sellerAmount > 0) {
-        const { keep, send } = await requireSafeSwap(
+        const swapOutcome = await safeSwap(
           wallet,
           sellerAmount,
-          remainingProofs
+          remainingProofs,
+          {
+            sendConfig: { includeFees: true },
+            outputConfig: p2pkOutputConfig,
+          }
         );
+        if (swapOutcome.status !== "swapped") {
+          throw new Error(
+            swapOutcome.errorMessage ??
+              `Seller-payout swap did not complete (${swapOutcome.status})`
+          );
+        }
+        const { keep, send } = swapOutcome;
         sellerProofs = send;
         sellerToken = getEncodedToken({
           mint: mints[0]!,
@@ -1155,11 +1613,19 @@ export default function CartInvoiceCard({
 
       // Handle donation if applicable
       if (donationAmount > 0) {
-        const { keep, send } = await requireSafeSwap(
+        const swapOutcome = await safeSwap(
           wallet,
           donationAmount,
-          remainingProofs
+          remainingProofs,
+          { sendConfig: { includeFees: true } }
         );
+        if (swapOutcome.status !== "swapped") {
+          throw new Error(
+            swapOutcome.errorMessage ??
+              `Donation swap did not complete (${swapOutcome.status})`
+          );
+        }
+        const { keep, send } = swapOutcome;
         donationToken = getEncodedToken({
           mint: mints[0]!,
           proofs: send,
@@ -1167,8 +1633,22 @@ export default function CartInvoiceCard({
         remainingProofs = keep;
       }
 
+      if (p2pkOutputConfig && sellerToken) {
+        await persistBuyerP2pkEscrowRecord(nostr, signer, {
+          orderId,
+          mint: mints[0]!,
+          token: sellerToken,
+          amount: sellerAmount,
+          sellerPubkey: p2pkOutputConfig.send.options.pubkey,
+          locktime: p2pkOutputConfig.send.options.locktime,
+          refundKeys: p2pkOutputConfig.send.options.refundKeys,
+          createdAt: Math.floor(Date.now() / 1000),
+        });
+      }
+
       // Step 1: Send payment message (if applicable)
       if (
+        !isSellerP2pkEscrowActive(sellerProfile?.content?.p2pk) &&
         paymentPreference === "lightning" &&
         lnurl &&
         lnurl !== "" &&
@@ -1181,19 +1661,25 @@ export default function CartInvoiceCard({
         await ln.fetch();
         const invoice = await ln.requestInvoice({ satoshi: newAmount });
         const invoicePaymentRequest = invoice.paymentRequest;
-        const meltQuote = await cashuCompat.createMeltQuote(
-          wallet,
+        const meltQuote = await wallet.createMeltQuoteBolt11(
           invoicePaymentRequest
         );
         if (meltQuote) {
           const meltQuoteTotal =
-            cashuCompat.amountToNumber(meltQuote.amount) +
-            cashuCompat.amountToNumber(meltQuote.fee_reserve);
-          const { keep, send } = await requireSafeSwap(
+            meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
+          const swapOutcome = await safeSwap(
             wallet,
             meltQuoteTotal,
-            sellerProofs
+            sellerProofs,
+            { sendConfig: { includeFees: true } }
           );
+          if (swapOutcome.status !== "swapped") {
+            throw new Error(
+              swapOutcome.errorMessage ??
+                `Pre-melt swap did not complete (${swapOutcome.status})`
+            );
+          }
+          const { keep, send } = swapOutcome;
           const meltOutcome = await safeMeltProofs(wallet, meltQuote, send);
           if (meltOutcome.status !== "paid") {
             throw new Error(
@@ -1201,22 +1687,12 @@ export default function CartInvoiceCard({
                 `Melt did not complete (${meltOutcome.status})`
             );
           }
-          const meltResponse = {
-            quote: meltOutcome.meltQuote,
-            change: meltOutcome.changeProofs,
-          };
-          if (meltResponse.quote) {
-            const meltAmount = cashuCompat.amountToNumber(
-              meltResponse.quote.amount
-            );
-            const changeProofs = [...keep, ...meltResponse.change];
+          if (meltOutcome.meltQuote) {
+            const meltAmount = meltOutcome.meltQuote.amount.toNumber();
+            const changeProofs = [...keep, ...meltOutcome.changeProofs];
             const changeAmount =
               Array.isArray(changeProofs) && changeProofs.length > 0
-                ? changeProofs.reduce(
-                    (acc, current: Proof) =>
-                      acc + cashuCompat.proofAmount(current),
-                    0
-                  )
+                ? sumProofAmounts(changeProofs)
                 : 0;
             let productDetails = "";
             if (product.selectedSize) {
@@ -1227,6 +1703,22 @@ export default function CartInvoiceCard({
                 productDetails += " and a " + product.selectedVolume;
               } else {
                 productDetails += " in a " + product.selectedVolume;
+              }
+            }
+            if (product.selectedWeight) {
+              if (productDetails) {
+                productDetails += " and " + product.selectedWeight;
+              } else {
+                productDetails += " in " + product.selectedWeight;
+              }
+            }
+            if (product.selectedBulkOption) {
+              if (productDetails) {
+                productDetails +=
+                  " (bulk: " + product.selectedBulkOption + " units)";
+              } else {
+                productDetails +=
+                  " (bulk: " + product.selectedBulkOption + " units)";
               }
             }
 
@@ -1246,25 +1738,25 @@ export default function CartInvoiceCard({
             if (quantities[product.id] && quantities[product.id]! > 1) {
               paymentMessage =
                 "You have received a payment from " +
-                userNPub +
+                (userNPub || "a guest buyer") +
                 " for " +
                 quantities[product.id] +
                 " of your " +
                 title +
                 " listing" +
                 productDetails +
-                " on Shopstr! Check your Lightning address (" +
+                " on shopstr.market! Check your Lightning address (" +
                 lnurl +
                 ") for your sats.";
             } else {
               paymentMessage =
                 "You have received a payment from " +
-                userNPub +
+                (userNPub || "a guest buyer") +
                 " for your " +
                 title +
                 " listing" +
                 productDetails +
-                " on Shopstr! Check your Lightning address (" +
+                " on shopstr.market! Check your Lightning address (" +
                 lnurl +
                 ") for your sats.";
             }
@@ -1293,6 +1785,9 @@ export default function CartInvoiceCard({
             );
 
             if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
+              // Add delay between messages to prevent browser throttling
+              await new Promise((resolve) => setTimeout(resolve, 500));
+
               const encodedChange = getEncodedToken({
                 mint: mints[0]!,
                 proofs: changeProofs,
@@ -1320,14 +1815,14 @@ export default function CartInvoiceCard({
               }
             }
           } else {
-            const unusedProofs = [...keep, ...send, ...meltResponse.change];
+            const unusedProofs = [
+              ...keep,
+              ...send,
+              ...meltOutcome.changeProofs,
+            ];
             const unusedAmount =
               Array.isArray(unusedProofs) && unusedProofs.length > 0
-                ? unusedProofs.reduce(
-                    (acc, current: Proof) =>
-                      acc + cashuCompat.proofAmount(current),
-                    0
-                  )
+                ? sumProofAmounts(unusedProofs)
                 : 0;
             const unusedToken = getEncodedToken({
               mint: mints[0]!,
@@ -1342,6 +1837,22 @@ export default function CartInvoiceCard({
                 productDetails += " and a " + product.selectedVolume;
               } else {
                 productDetails += " in a " + product.selectedVolume;
+              }
+            }
+            if (product.selectedWeight) {
+              if (productDetails) {
+                productDetails += " and " + product.selectedWeight;
+              } else {
+                productDetails += " in " + product.selectedWeight;
+              }
+            }
+            if (product.selectedBulkOption) {
+              if (productDetails) {
+                productDetails +=
+                  " (bulk: " + product.selectedBulkOption + " units)";
+              } else {
+                productDetails +=
+                  " (bulk: " + product.selectedBulkOption + " units)";
               }
             }
 
@@ -1362,24 +1873,24 @@ export default function CartInvoiceCard({
               if (quantities[product.id] && quantities[product.id]! > 1) {
                 paymentMessage =
                   "This is a Cashu token payment from " +
-                  userNPub +
+                  (userNPub || "a guest buyer") +
                   " for " +
                   quantities[product.id] +
                   " of your " +
                   title +
                   " listing" +
                   productDetails +
-                  " on Shopstr: " +
+                  " on shopstr.market: " +
                   unusedToken;
               } else {
                 paymentMessage =
                   "This is a Cashu token payment from " +
-                  userNPub +
+                  (userNPub || "a guest buyer") +
                   " for your " +
                   title +
                   " listing" +
                   productDetails +
-                  " on Shopstr: " +
+                  " on shopstr.market: " +
                   unusedToken;
               }
               await sendPaymentAndContactMessageWithKeys(
@@ -1417,6 +1928,22 @@ export default function CartInvoiceCard({
             productDetails += " in a " + product.selectedVolume;
           }
         }
+        if (product.selectedWeight) {
+          if (productDetails) {
+            productDetails += " and " + product.selectedWeight;
+          } else {
+            productDetails += " in " + product.selectedWeight;
+          }
+        }
+        if (product.selectedBulkOption) {
+          if (productDetails) {
+            productDetails +=
+              " (bulk: " + product.selectedBulkOption + " units)";
+          } else {
+            productDetails +=
+              " (bulk: " + product.selectedBulkOption + " units)";
+          }
+        }
 
         // Add pickup location if available for this specific product
         const pickupLocation =
@@ -1435,24 +1962,24 @@ export default function CartInvoiceCard({
           if (quantities[product.id] && quantities[product.id]! > 1) {
             paymentMessage =
               "This is a Cashu token payment from " +
-              userNPub +
+              (userNPub || "a guest buyer") +
               " for " +
               quantities[product.id] +
               " of your " +
               title +
               " listing" +
               productDetails +
-              " on Shopstr: " +
+              " on shopstr.market: " +
               sellerToken;
           } else {
             paymentMessage =
               "This is a Cashu token payment from " +
-              userNPub +
+              (userNPub || "a guest buyer") +
               " for your " +
               title +
               " listing" +
               productDetails +
-              " on Shopstr: " +
+              " on shopstr.market: " +
               sellerToken;
           }
           await sendPaymentAndContactMessageWithKeys(
@@ -1498,6 +2025,9 @@ export default function CartInvoiceCard({
 
       // Step 3: Send additional info message
       if (required && required !== "" && data.additionalInfo) {
+        // Add delay before additional info message
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
         const additionalMessage =
           "Additional customer information: " + data.additionalInfo;
         try {
@@ -1533,16 +2063,18 @@ export default function CartInvoiceCard({
         formType === "shipping" ||
         (formType === "combined" &&
           (productShippingType !== "Free/Pickup" ||
-            (productShippingType === "Free/Pickup" &&
-              freePickupPreference === "shipping")));
+            ((productShippingType === "Free/Pickup" ||
+              productShippingType === "Added Cost/Pickup") &&
+              shippingPickupPreference === "shipping")));
 
       const shouldUseContact =
         formType === "contact" ||
         (formType === "combined" &&
           (productShippingType === "N/A" ||
             productShippingType === "Pickup" ||
-            (productShippingType === "Free/Pickup" &&
-              freePickupPreference === "contact")));
+            ((productShippingType === "Free/Pickup" ||
+              productShippingType === "Added Cost/Pickup") &&
+              shippingPickupPreference === "contact")));
 
       if (
         shouldUseShipping &&
@@ -1557,7 +2089,8 @@ export default function CartInvoiceCard({
         if (
           productShippingType === "Added Cost" ||
           productShippingType === "Free" ||
-          productShippingType === "Free/Pickup"
+          productShippingType === "Free/Pickup" ||
+          productShippingType === "Added Cost/Pickup"
         ) {
           let productDetails = "";
           if (product.selectedSize) {
@@ -1568,6 +2101,22 @@ export default function CartInvoiceCard({
               productDetails += " and a " + product.selectedVolume;
             } else {
               productDetails += " in a " + product.selectedVolume;
+            }
+          }
+          if (product.selectedWeight) {
+            if (productDetails) {
+              productDetails += " and " + product.selectedWeight;
+            } else {
+              productDetails += " in " + product.selectedWeight;
+            }
+          }
+          if (product.selectedBulkOption) {
+            if (productDetails) {
+              productDetails +=
+                " (bulk: " + product.selectedBulkOption + " units)";
+            } else {
+              productDetails +=
+                " (bulk: " + product.selectedBulkOption + " units)";
             }
           }
 
@@ -1653,6 +2202,10 @@ export default function CartInvoiceCard({
               " was processed successfully! If applicable, you should be receiving delivery information from " +
               nip19.npubEncode(product.pubkey) +
               " as soon as they review your order.";
+
+            // Add delay between messages
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
             await sendPaymentAndContactMessageWithKeys(
               userPubkey,
               receiptMessage,
@@ -1679,7 +2232,8 @@ export default function CartInvoiceCard({
         shouldUseContact &&
         (productShippingType === "N/A" ||
           productShippingType === "Pickup" ||
-          productShippingType === "Free/Pickup")
+          productShippingType === "Free/Pickup" ||
+          productShippingType === "Added Cost/Pickup")
       ) {
         await sendInquiryDM(pubkey, title);
 
@@ -1692,6 +2246,22 @@ export default function CartInvoiceCard({
             productDetails += " and a " + product.selectedVolume;
           } else {
             productDetails += " in a " + product.selectedVolume;
+          }
+        }
+        if (product.selectedWeight) {
+          if (productDetails) {
+            productDetails += " and " + product.selectedWeight;
+          } else {
+            productDetails += " in " + product.selectedWeight;
+          }
+        }
+        if (product.selectedBulkOption) {
+          if (productDetails) {
+            productDetails +=
+              " (bulk: " + product.selectedBulkOption + " units)";
+          } else {
+            productDetails +=
+              " (bulk: " + product.selectedBulkOption + " units)";
           }
         }
 
@@ -1714,6 +2284,10 @@ export default function CartInvoiceCard({
             " was processed successfully! If applicable, you should be receiving delivery information from " +
             nip19.npubEncode(product.pubkey) +
             " as soon as they review your order.";
+
+          // Add delay between messages
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
           await sendPaymentAndContactMessageWithKeys(
             userPubkey,
             receiptMessage,
@@ -1735,7 +2309,7 @@ export default function CartInvoiceCard({
             donationPercentage
           );
         }
-      } else if (userPubkey) {
+      } else {
         // Step 5: Always send final receipt message
         let productDetails = "";
         if (product.selectedSize) {
@@ -1746,6 +2320,22 @@ export default function CartInvoiceCard({
             productDetails += " and a " + product.selectedVolume;
           } else {
             productDetails += " in a " + product.selectedVolume;
+          }
+        }
+        if (product.selectedWeight) {
+          if (productDetails) {
+            productDetails += " and " + product.selectedWeight;
+          } else {
+            productDetails += " in " + product.selectedWeight;
+          }
+        }
+        if (product.selectedBulkOption) {
+          if (productDetails) {
+            productDetails +=
+              " (bulk: " + product.selectedBulkOption + " units)";
+          } else {
+            productDetails +=
+              " (bulk: " + product.selectedBulkOption + " units)";
           }
         }
 
@@ -1769,7 +2359,7 @@ export default function CartInvoiceCard({
           nip19.npubEncode(product.pubkey) +
           ".";
         await sendPaymentAndContactMessageWithKeys(
-          userPubkey,
+          userPubkey!,
           receiptMessage,
           product,
           false,
@@ -1790,6 +2380,8 @@ export default function CartInvoiceCard({
         );
       }
     }
+
+    return remainingProofs;
   };
 
   const handleCopyInvoice = () => {
@@ -1798,6 +2390,54 @@ export default function CartInvoiceCard({
     setTimeout(() => {
       setCopiedToClipboard(false);
     }, 2100);
+  };
+
+  const convertShippingToSats = async (
+    product: ProductData
+  ): Promise<number> => {
+    const shippingCost = product.shippingCost || 0;
+
+    if (
+      product.currency.toLowerCase() === "sats" ||
+      product.currency.toLowerCase() === "sat"
+    ) {
+      return shippingCost;
+    }
+
+    if (product.currency.toLowerCase() === "btc") {
+      return shippingCost * 100000000;
+    }
+
+    try {
+      const currencyData = {
+        amount: shippingCost,
+        currency: product.currency,
+      };
+      const { getSatoshiValue } = await import("@getalby/lightning-tools");
+      const numSats = await getSatoshiValue(currencyData);
+      return Math.round(numSats);
+    } catch (err) {
+      // Use console.warn so the Next.js dev overlay doesn't escalate
+      // this. Re-throw so callers can show a real failure modal —
+      // silently returning 0 would let the buyer pay 0-sats shipping
+      // on a non-zero shipping cost.
+      console.warn("Failed to convert shipping cost to sats:", err);
+      throw new Error(
+        `Could not look up the current ${product.currency} → sats exchange rate for shipping. Please try again in a moment.`
+      );
+    }
+  };
+
+  // Small helper so every async callsite that calls convertShippingToSats
+  // surfaces the same friendly failure modal instead of crashing as an
+  // unhandled rejection.
+  const handleShippingConversionError = (err: unknown) => {
+    const message =
+      err instanceof Error && err.message
+        ? err.message
+        : "Could not calculate shipping right now. Please try again in a moment.";
+    setFailureText(message);
+    setShowFailureModal(true);
   };
 
   const formattedTotalCost = formatWithCommas(totalCost, "sats");
@@ -1816,14 +2456,12 @@ export default function CartInvoiceCard({
 
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
-      const mintKeySetIds = await cashuCompat.getWalletKeysets(wallet);
-      const filteredProofs = tokens.filter((p: Proof) =>
+      await wallet.loadMint();
+      const mintKeySetIds = await wallet.keyChain.getKeysets();
+      const { tokens: currentTokens, history: currentHistory } =
+        getLocalStorageData();
+      const filteredProofs = (currentTokens as Proof[]).filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      );
-      const { keep, send } = await requireSafeSwap(
-        wallet,
-        price,
-        filteredProofs
       );
       const deletedEventIds = [
         ...new Set([
@@ -1831,38 +2469,17 @@ export default function CartInvoiceCard({
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
                 filteredProofs.some(
-                  (filteredProof) =>
-                    JSON.stringify(proof) === JSON.stringify(filteredProof)
-                )
-              )
-            )
-            .map((event) => event.id),
-          ...walletContext.proofEvents
-            .filter((event) =>
-              event.proofs.some((proof: Proof) =>
-                keep.some(
-                  (keepProof) =>
-                    JSON.stringify(proof) === JSON.stringify(keepProof)
-                )
-              )
-            )
-            .map((event) => event.id),
-          ...walletContext.proofEvents
-            .filter((event) =>
-              event.proofs.some((proof: Proof) =>
-                send.some(
-                  (sendProof) =>
-                    JSON.stringify(proof) === JSON.stringify(sendProof)
+                  (filteredProof) => filteredProof.secret === proof.secret
                 )
               )
             )
             .map((event) => event.id),
         ]),
       ];
-      await sendTokens(wallet, send, data);
-      const changeProofs = keep;
-      const remainingProofs = tokens.filter((p: Proof) =>
-        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id)
+      const changeProofs = await sendTokens(wallet, filteredProofs, data);
+      const remainingProofs = (currentTokens as Proof[]).filter(
+        (p: Proof) =>
+          !mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {
@@ -1875,7 +2492,7 @@ export default function CartInvoiceCard({
         "history",
         JSON.stringify([
           { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
-          ...history,
+          ...currentHistory,
         ])
       );
       await publishProofEvent(
@@ -1889,6 +2506,7 @@ export default function CartInvoiceCard({
       );
       localStorage.setItem("cart", JSON.stringify([]));
       setOrderConfirmed(true);
+      setPaymentConfirmed(true);
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
       }
@@ -1902,6 +2520,39 @@ export default function CartInvoiceCard({
     }
   };
 
+  const applySavedAddress = (addr: SavedAddress) => {
+    setSelectedSavedAddressId(addr.id);
+    setSaveAddressLabel(addr.label);
+    setValue("Name", addr.name, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Address", addr.address, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Unit", addr.unit || "", {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("City", addr.city, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("State/Province", addr.state, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Postal Code", addr.zip, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("Country", addr.country, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+  };
+
   const renderContactForm = () => {
     if (!formType) return null;
 
@@ -1913,6 +2564,12 @@ export default function CartInvoiceCard({
       <div className="space-y-4">
         {(formType === "shipping" || formType === "combined") && (
           <>
+            <AddressPicker
+              autoSelect={false}
+              compact
+              allowInlineAdd={false}
+              onSelect={applySavedAddress}
+            />
             <Controller
               name="Name"
               control={formControl}
@@ -1928,7 +2585,6 @@ export default function CartInvoiceCard({
                 fieldState: { error },
               }) => (
                 <Input
-                  classNames={{ input: "text-base" }}
                   variant="bordered"
                   fullWidth={true}
                   label={
@@ -1961,7 +2617,6 @@ export default function CartInvoiceCard({
                 fieldState: { error },
               }) => (
                 <Input
-                  classNames={{ input: "text-base" }}
                   variant="bordered"
                   fullWidth={true}
                   label={
@@ -1993,7 +2648,6 @@ export default function CartInvoiceCard({
                 fieldState: { error },
               }) => (
                 <Input
-                  classNames={{ input: "text-base" }}
                   variant="bordered"
                   fullWidth={true}
                   label="Apt, suite, unit, etc."
@@ -2007,134 +2661,178 @@ export default function CartInvoiceCard({
               )}
             />
 
-            <Controller
-              name="City"
-              control={formControl}
-              rules={{
-                required: "A city is required.",
-                maxLength: {
-                  value: 50,
-                  message: "This input exceed maxLength of 50.",
-                },
-              }}
-              render={({
-                field: { onChange, onBlur, value },
-                fieldState: { error },
-              }) => (
-                <Input
-                  classNames={{ input: "text-base" }}
-                  variant="bordered"
-                  fullWidth={true}
-                  label={
-                    <span>
-                      City <span className="text-red-500">*</span>
-                    </span>
-                  }
-                  labelPlacement="inside"
-                  isInvalid={!!error}
-                  errorMessage={error?.message}
-                  onChange={onChange}
-                  onBlur={onBlur}
-                  value={value || ""}
-                />
-              )}
-            />
+            {/* Two-column layout for City and State/Province */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Controller
+                name="City"
+                control={formControl}
+                rules={{
+                  required: "A city is required.",
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => (
+                  <Input
+                    variant="bordered"
+                    fullWidth={true}
+                    label={
+                      <span>
+                        City <span className="text-red-500">*</span>
+                      </span>
+                    }
+                    labelPlacement="inside"
+                    isInvalid={!!error}
+                    errorMessage={error?.message}
+                    onChange={onChange}
+                    onBlur={onBlur}
+                    value={value || ""}
+                  />
+                )}
+              />
 
-            <Controller
-              name="State/Province"
-              control={formControl}
-              rules={{ required: "A state/province is required." }}
-              render={({
-                field: { onChange, onBlur, value },
-                fieldState: { error },
-              }) => (
-                <Input
-                  classNames={{ input: "text-base" }}
-                  variant="bordered"
-                  fullWidth={true}
-                  label={
-                    <span>
-                      State/Province <span className="text-red-500">*</span>
-                    </span>
-                  }
-                  labelPlacement="inside"
-                  isInvalid={!!error}
-                  errorMessage={error?.message}
-                  onChange={onChange}
-                  onBlur={onBlur}
-                  value={value || ""}
-                />
-              )}
-            />
+              <Controller
+                name="State/Province"
+                control={formControl}
+                rules={{ required: "A state/province is required." }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => (
+                  <Input
+                    variant="bordered"
+                    fullWidth={true}
+                    label={
+                      <span>
+                        State/Province <span className="text-red-500">*</span>
+                      </span>
+                    }
+                    labelPlacement="inside"
+                    isInvalid={!!error}
+                    errorMessage={error?.message}
+                    onChange={onChange}
+                    onBlur={onBlur}
+                    value={value || ""}
+                  />
+                )}
+              />
+            </div>
 
-            <Controller
-              name="Postal Code"
-              control={formControl}
-              rules={{
-                required: "A postal code is required.",
-                maxLength: {
-                  value: 50,
-                  message: "This input exceed maxLength of 50.",
-                },
-              }}
-              render={({
-                field: { onChange, onBlur, value },
-                fieldState: { error },
-              }) => (
-                <Input
-                  classNames={{ input: "text-base" }}
-                  variant="bordered"
-                  fullWidth={true}
-                  label={
-                    <span>
-                      Postal code <span className="text-red-500">*</span>
-                    </span>
-                  }
-                  labelPlacement="inside"
-                  isInvalid={!!error}
-                  errorMessage={error?.message}
-                  onChange={onChange}
-                  onBlur={onBlur}
-                  value={value || ""}
-                />
-              )}
-            />
+            {/* Two-column layout for Postal Code and Country */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Controller
+                name="Postal Code"
+                control={formControl}
+                rules={{
+                  required: "A postal code is required.",
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => (
+                  <Input
+                    variant="bordered"
+                    fullWidth={true}
+                    label={
+                      <span>
+                        Postal code <span className="text-red-500">*</span>
+                      </span>
+                    }
+                    labelPlacement="inside"
+                    isInvalid={!!error}
+                    errorMessage={error?.message}
+                    onChange={onChange}
+                    onBlur={onBlur}
+                    value={value || ""}
+                  />
+                )}
+              />
 
-            <Controller
-              name="Country"
-              control={formControl}
-              rules={{ required: "A country is required." }}
-              render={({
-                field: { onChange, onBlur, value },
-                fieldState: { error },
-              }) => (
-                <CountryDropdown
-                  classNames={{ input: "text-base" }}
-                  variant="bordered"
-                  aria-label="Select Country"
-                  label={
-                    <span>
-                      Country <span className="text-red-500">*</span>
-                    </span>
+              <Controller
+                name="Country"
+                control={formControl}
+                rules={{ required: "A country is required." }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => (
+                  <CountryDropdown
+                    variant="bordered"
+                    aria-label="Select Country"
+                    label={
+                      <span>
+                        Country <span className="text-red-500">*</span>
+                      </span>
+                    }
+                    labelPlacement="inside"
+                    isInvalid={!!error}
+                    errorMessage={error?.message}
+                    onChange={onChange}
+                    onBlur={onBlur}
+                    value={value || ""}
+                  />
+                )}
+              />
+            </div>
+
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <Checkbox
+                isSelected={saveDetails}
+                onValueChange={setSaveDetails}
+                classNames={{
+                  base: "mt-0",
+                  label: "text-sm",
+                }}
+              >
+                Save this address for future use
+              </Checkbox>
+
+              <Button
+                size="sm"
+                variant="flat"
+                onClick={() => {
+                  if (defaultSavedAddress) {
+                    applySavedAddress(defaultSavedAddress);
                   }
-                  labelPlacement="inside"
-                  isInvalid={!!error}
-                  errorMessage={error?.message}
-                  onChange={onChange}
-                  onBlur={onBlur}
-                  value={value || ""}
-                />
-              )}
-            />
+                }}
+                isDisabled={!defaultSavedAddress}
+              >
+                Use default address
+              </Button>
+            </div>
+
+            {saveDetails && (
+              <Input
+                variant="bordered"
+                fullWidth={true}
+                label={
+                  <span>
+                    Save address as <span className="text-red-500">*</span>
+                  </span>
+                }
+                labelPlacement="inside"
+                placeholder="e.g. Home, Office"
+                value={saveAddressLabel}
+                onChange={(e) => setSaveAddressLabel(e.target.value)}
+              />
+            )}
           </>
         )}
 
         {/* Pickup location selectors for products with pickup locations */}
         {productsWithPickupLocations.length > 0 &&
           formType === "combined" &&
-          freePickupPreference === "contact" && (
+          shippingPickupPreference === "contact" && (
             <div className="space-y-4">
-              <h4 className="font-medium text-zinc-300">
+              <h4 className="font-medium text-gray-700 dark:text-gray-300">
                 Select Pickup Locations
               </h4>
               {productsWithPickupLocations.map((product) => (
@@ -2211,14 +2909,12 @@ export default function CartInvoiceCard({
 
   if (showInvoiceCard) {
     return (
-      <div className="flex min-h-screen w-full bg-[#111] text-white">
+      <div className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex min-h-screen w-full">
         <div className="mx-auto flex w-full flex-col lg:flex-row">
           {/* Order Summary - Full width on mobile, half on desktop */}
-          <div className="w-full border-b border-zinc-800 bg-[#161616] p-6 lg:w-1/2 lg:border-r lg:border-b-0">
+          <div className="w-full bg-gray-50 p-6 lg:w-1/2 dark:bg-gray-800">
             <div className="sticky top-6">
-              <h2 className="mb-6 text-2xl font-black tracking-tighter text-white uppercase">
-                Order Summary
-              </h2>
+              <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
               <div className="mb-6 space-y-4">
                 {products.map((product) => (
@@ -2226,40 +2922,55 @@ export default function CartInvoiceCard({
                     <Image
                       src={product.images[0]}
                       alt={product.title}
-                      className="h-16 w-16 rounded-lg border border-zinc-700 object-cover"
+                      className="h-16 w-16 rounded-lg object-cover"
                     />
                     <div className="flex-1">
                       <h3 className="font-medium">{product.title}</h3>
                       {product.selectedSize && (
-                        <p className="text-sm text-zinc-400">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           Size: {product.selectedSize}
                         </p>
                       )}
                       {product.selectedVolume && (
-                        <p className="text-sm text-zinc-400">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           Volume: {product.selectedVolume}
                         </p>
                       )}
-                      <p className="text-sm font-medium text-zinc-400">
+                      {product.selectedWeight && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Weight: {product.selectedWeight}
+                        </p>
+                      )}
+                      {product.selectedBulkOption && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Bundle: {product.selectedBulkOption} units
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         Quantity: {quantities[product.id] || 1}
                       </p>
+                      {renderP2pkCartBadge(product.pubkey)}
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="border-t border-zinc-700 pt-4">
+              <div className="border-t pt-4">
                 <div className="space-y-3">
-                  <h4 className="font-bold tracking-wider text-zinc-400 uppercase">
+                  <h4 className="font-semibold text-gray-700 dark:text-gray-300">
                     Cost Breakdown
                   </h4>
                   <div className="space-y-3">
                     {products.map((product) => {
                       const discount = appliedDiscounts[product.pubkey] || 0;
                       const basePrice =
-                        (product.volumePrice !== undefined
-                          ? product.volumePrice
-                          : product.price) * (quantities[product.id] || 1);
+                        (product.bulkPrice !== undefined
+                          ? product.bulkPrice
+                          : product.volumePrice !== undefined
+                            ? product.volumePrice
+                            : product.weightPrice !== undefined
+                              ? product.weightPrice
+                              : product.price) * (quantities[product.id] || 1);
                       const discountedPrice =
                         discount > 0
                           ? basePrice * (1 - discount / 100)
@@ -2268,7 +2979,7 @@ export default function CartInvoiceCard({
                       return (
                         <div
                           key={product.id}
-                          className="space-y-2 border-l-2 border-zinc-700 pl-3"
+                          className="space-y-2 border-l-2 border-gray-200 pl-3 dark:border-gray-600"
                         >
                           <div className="text-sm font-medium">
                             {product.title}{" "}
@@ -2288,7 +2999,7 @@ export default function CartInvoiceCard({
                           </div>
                           {discount > 0 && (
                             <>
-                              <div className="flex justify-between text-sm font-bold text-green-400">
+                              <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
                                 <span className="ml-2">
                                   {(discountCodes &&
                                     discountCodes[product.pubkey]) ||
@@ -2305,7 +3016,7 @@ export default function CartInvoiceCard({
                                   )}
                                 </span>
                               </div>
-                              <div className="flex justify-between text-sm font-bold text-white">
+                              <div className="flex justify-between text-sm font-medium">
                                 <span className="ml-2">Discounted price:</span>
                                 <span>
                                   {formatWithCommas(
@@ -2316,22 +3027,25 @@ export default function CartInvoiceCard({
                               </div>
                             </>
                           )}
-                          {product.shippingCost! > 0 && (
-                            <div className="flex justify-between text-sm text-zinc-300">
-                              <span className="ml-2">Shipping cost:</span>
-                              <span>
-                                {formatWithCommas(
-                                  product.shippingCost!,
-                                  product.currency
-                                )}
-                              </span>
-                            </div>
-                          )}
+                          {product.shippingCost! > 0 &&
+                            ((formType === "combined" &&
+                              shippingPickupPreference === "shipping") ||
+                              formType === "shipping") && (
+                              <div className="flex justify-between text-sm">
+                                <span className="ml-2">Shipping cost:</span>
+                                <span>
+                                  {formatWithCommas(
+                                    product.shippingCost!,
+                                    product.currency
+                                  )}
+                                </span>
+                              </div>
+                            )}
                         </div>
                       );
                     })}
                   </div>
-                  <div className="flex justify-between border-t border-zinc-700 pt-2 text-lg font-black text-yellow-400 uppercase">
+                  <div className="flex justify-between border-t pt-2 font-semibold">
                     <span>Total:</span>
                     <span>{formatWithCommas(totalCost, "sats")}</span>
                   </div>
@@ -2339,8 +3053,11 @@ export default function CartInvoiceCard({
               </div>
 
               <button
-                onClick={() => onBackToCart?.()}
-                className="mt-4 text-sm font-bold tracking-wider text-zinc-500 uppercase hover:text-white"
+                onClick={() => {
+                  cancelInvoicePolling();
+                  onBackToCart?.();
+                }}
+                className="text-shopstr-purple hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light mt-4 underline"
               >
                 ← Back to cart
               </button>
@@ -2348,32 +3065,31 @@ export default function CartInvoiceCard({
           </div>
 
           {/* Divider */}
-          <div className="hidden"></div>
+          <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px dark:bg-gray-600"></div>
 
           {/* Right Side - Lightning Invoice - maintain consistent width */}
-          <div className="w-full bg-[#111] p-6 lg:w-1/2">
-            <Card className="w-full border border-zinc-800 bg-[#161616]">
-              <CardHeader className="flex justify-center border-b border-zinc-800 pb-4">
-                <span className="text-xl font-black tracking-tighter text-white uppercase">
-                  Lightning Invoice
-                </span>
+          <div className="w-full p-6 lg:w-1/2">
+            <Card className="w-full">
+              <CardHeader className="flex justify-center gap-3">
+                <span className="text-xl font-bold">Lightning Invoice</span>
               </CardHeader>
+              <Divider />
               <CardBody className="flex flex-col items-center">
                 {!paymentConfirmed ? (
                   <div className="flex flex-col items-center justify-center">
                     {qrCodeUrl ? (
                       <>
-                        <h3 className="mt-3 mb-4 text-center text-lg font-bold text-white">
+                        <h3 className="text-light-text dark:text-dark-text mt-3 text-center text-lg leading-6 font-medium text-gray-900">
                           Don&apos;t refresh or close the page until the payment
                           has been confirmed!
                         </h3>
                         <Image
                           alt="Lightning invoice"
-                          className="rounded-xl bg-white object-cover p-2"
+                          className="object-cover"
                           src={qrCodeUrl}
                         />
                         <div className="flex items-center justify-center">
-                          <p className="mt-4 text-center font-mono text-zinc-400">
+                          <p className="text-center">
                             {invoice.length > 30
                               ? `${invoice.substring(
                                   0,
@@ -2386,12 +3102,12 @@ export default function CartInvoiceCard({
                           </p>
                           <ClipboardIcon
                             onClick={handleCopyInvoice}
-                            className={`mt-4 ml-2 h-5 w-5 cursor-pointer text-zinc-400 hover:text-white ${
+                            className={`text-light-text dark:text-dark-text ml-2 h-4 w-4 cursor-pointer ${
                               copiedToClipboard ? "hidden" : ""
                             }`}
                           />
                           <CheckIcon
-                            className={`mt-4 ml-2 h-5 w-5 text-green-500 ${
+                            className={`text-light-text dark:text-dark-text ml-2 h-4 w-4 cursor-pointer ${
                               copiedToClipboard ? "" : "hidden"
                             }`}
                           />
@@ -2399,15 +3115,13 @@ export default function CartInvoiceCard({
                       </>
                     ) : (
                       <div>
-                        <p className="animate-pulse text-zinc-500">
-                          Waiting for lightning invoice...
-                        </p>
+                        <p>Waiting for lightning invoice...</p>
                       </div>
                     )}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center">
-                    <h3 className="mt-3 text-center text-lg font-bold text-white">
+                    <h3 className="mt-3 text-center text-lg leading-6 font-medium text-gray-900">
                       Payment confirmed!
                     </h3>
                     <Image
@@ -2427,14 +3141,12 @@ export default function CartInvoiceCard({
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-[#111] text-white">
+    <div className="bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text flex min-h-screen w-full">
       <div className="mx-auto flex w-full flex-col lg:flex-row">
         {/* Order Summary - Full width on mobile, half on desktop */}
-        <div className="w-full border-b border-zinc-800 bg-[#161616] p-6 lg:w-1/2 lg:border-r lg:border-b-0">
+        <div className="w-full bg-gray-50 p-6 lg:w-1/2 dark:bg-gray-800">
           <div className="sticky top-6">
-            <h2 className="mb-6 text-2xl font-black tracking-tighter text-white uppercase">
-              Order Summary
-            </h2>
+            <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
             <div className="mb-6 space-y-4">
               {products.map((product) => (
@@ -2442,40 +3154,55 @@ export default function CartInvoiceCard({
                   <Image
                     src={product.images[0]}
                     alt={product.title}
-                    className="h-16 w-16 rounded-lg border border-zinc-700 object-cover"
+                    className="h-16 w-16 rounded-lg object-cover"
                   />
                   <div className="flex-1">
-                    <h3 className="font-bold text-white">{product.title}</h3>
+                    <h3 className="font-medium">{product.title}</h3>
                     {product.selectedSize && (
-                      <p className="text-sm font-medium text-zinc-400">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         Size: {product.selectedSize}
                       </p>
                     )}
                     {product.selectedVolume && (
-                      <p className="text-sm font-medium text-zinc-400">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         Volume: {product.selectedVolume}
                       </p>
                     )}
-                    <p className="text-sm font-medium text-zinc-400">
+                    {product.selectedWeight && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Weight: {product.selectedWeight}
+                      </p>
+                    )}
+                    {product.selectedBulkOption && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Bundle: {product.selectedBulkOption} units
+                      </p>
+                    )}
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
                       Quantity: {quantities[product.id] || 1}
                     </p>
+                    {renderP2pkCartBadge(product.pubkey)}
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="border-t border-zinc-700 pt-4">
+            <div className="border-t pt-4">
               <div className="space-y-3">
-                <h4 className="font-bold tracking-wider text-zinc-400 uppercase">
+                <h4 className="font-semibold text-gray-700 dark:text-gray-300">
                   Cost Breakdown
                 </h4>
                 <div className="space-y-3">
                   {products.map((product) => {
                     const discount = appliedDiscounts[product.pubkey] || 0;
                     const originalPrice =
-                      product.volumePrice !== undefined
-                        ? product.volumePrice
-                        : product.price;
+                      product.bulkPrice !== undefined
+                        ? product.bulkPrice
+                        : product.volumePrice !== undefined
+                          ? product.volumePrice
+                          : product.weightPrice !== undefined
+                            ? product.weightPrice
+                            : product.price;
                     const basePrice =
                       originalPrice * (quantities[product.id] || 1);
                     const discountedPrice =
@@ -2491,21 +3218,21 @@ export default function CartInvoiceCard({
                         (productShippingType === "Added Cost" ||
                           productShippingType === "Free" ||
                           (productShippingType === "Free/Pickup" &&
-                            freePickupPreference === "shipping")));
+                            shippingPickupPreference === "shipping")));
 
                     return (
                       <div
                         key={product.id}
-                        className="space-y-2 border-l-2 border-zinc-700 pl-3"
+                        className="space-y-2 border-l-2 border-gray-200 pl-3 dark:border-gray-600"
                       >
-                        <div className="text-sm font-bold text-white">
+                        <div className="text-sm font-medium">
                           {product.title}{" "}
                           {quantities[product.id] &&
                             quantities[product.id]! > 1 &&
                             `(x${quantities[product.id]})`}
                         </div>
-                        <div className="flex justify-between text-sm text-zinc-400">
-                          <span className="ml-2">Original price:</span>
+                        <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                          <span className="ml-2">Price:</span>
                           <span>
                             {formatWithCommas(originalPrice, product.currency)}
                           </span>
@@ -2517,11 +3244,11 @@ export default function CartInvoiceCard({
                                 Base cost ({quantities[product.id]}x):
                               </span>
                               <span
-                                className={`text-zinc-300 ${
+                                className={
                                   discount > 0
-                                    ? "text-zinc-500 line-through"
+                                    ? "text-gray-500 line-through"
                                     : ""
-                                }`}
+                                }
                               >
                                 {formatWithCommas(basePrice, product.currency)}
                               </span>
@@ -2529,7 +3256,7 @@ export default function CartInvoiceCard({
                           )}
                         {discount > 0 && (
                           <>
-                            <div className="flex justify-between text-sm font-bold text-green-400">
+                            <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
                               <span className="ml-2">
                                 {(discountCodes &&
                                   discountCodes[product.pubkey]) ||
@@ -2546,7 +3273,7 @@ export default function CartInvoiceCard({
                                 )}
                               </span>
                             </div>
-                            <div className="flex justify-between text-sm font-bold text-white">
+                            <div className="flex justify-between text-sm font-medium">
                               <span className="ml-2">Discounted price:</span>
                               <span>
                                 {formatWithCommas(
@@ -2557,23 +3284,27 @@ export default function CartInvoiceCard({
                             </div>
                           </>
                         )}
-                        {shouldShowShipping && product.shippingCost! > 0 && (
-                          <div className="flex justify-between text-sm text-zinc-300">
-                            <span className="ml-2">Shipping cost:</span>
-                            <span>
-                              {formatWithCommas(
-                                product.shippingCost! *
-                                  (quantities[product.id] || 1),
-                                product.currency
-                              )}
-                            </span>
-                          </div>
-                        )}
+                        {shouldShowShipping &&
+                          product.shippingCost! > 0 &&
+                          ((formType === "combined" &&
+                            shippingPickupPreference === "shipping") ||
+                            formType === "shipping") && (
+                            <div className="flex justify-between text-sm">
+                              <span className="ml-2">Shipping cost:</span>
+                              <span>
+                                {formatWithCommas(
+                                  product.shippingCost! *
+                                    (quantities[product.id] || 1),
+                                  product.currency
+                                )}
+                              </span>
+                            </div>
+                          )}
                       </div>
                     );
                   })}
                 </div>
-                <div className="flex justify-between border-t border-zinc-700 pt-2 text-lg font-black text-yellow-400 uppercase">
+                <div className="flex justify-between border-t pt-2 font-semibold">
                   <span>Total:</span>
                   <span>{formatWithCommas(totalCost, "sats")}</span>
                 </div>
@@ -2581,8 +3312,11 @@ export default function CartInvoiceCard({
             </div>
 
             <button
-              onClick={() => onBackToCart?.()}
-              className="mt-4 text-sm font-bold tracking-wider text-zinc-500 uppercase hover:text-white"
+              onClick={() => {
+                cancelInvoicePolling();
+                onBackToCart?.();
+              }}
+              className="text-shopstr-purple hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light mt-4 underline"
             >
               ← Back to cart
             </button>
@@ -2590,16 +3324,14 @@ export default function CartInvoiceCard({
         </div>
 
         {/* Divider */}
-        <div className="hidden"></div>
+        <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px dark:bg-gray-600"></div>
 
         {/* Right Side - Order Type Selection, Forms, and Payment */}
-        <div className="w-full bg-[#111] p-6 lg:w-1/2">
+        <div className="w-full p-6 lg:w-1/2">
           {/* Order Type Selection */}
           {showOrderTypeSelection && (
             <>
-              <h2 className="mb-6 text-2xl font-black tracking-tighter text-white uppercase">
-                Select Order Type
-              </h2>
+              <h2 className="mb-6 text-2xl font-bold">Select Order Type</h2>
               <div className="space-y-4">
                 {/* Check if we have mixed shipping types or all products are Free/Pickup */}
                 {uniqueShippingTypes.length > 1 ? (
@@ -2607,41 +3339,36 @@ export default function CartInvoiceCard({
                     {/* Mixed shipping types - only show combined */}
                     <button
                       onClick={() => handleOrderTypeSelection("combined")}
-                      className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
+                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                     >
-                      <div className="font-bold tracking-wide text-white uppercase">
-                        Mixed delivery
-                      </div>
-                      <div className="text-sm font-medium text-zinc-500">
-                        {hasFreePickupProducts
+                      <div className="font-medium">Mixed delivery</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {hasShippingPickupProducts
                           ? "Products require different delivery methods (includes flexible shipping/pickup options)"
                           : "Products require different delivery methods"}
                       </div>
                     </button>
                   </>
                 ) : uniqueShippingTypes.length === 1 &&
-                  uniqueShippingTypes[0] === "Free/Pickup" ? (
+                  (uniqueShippingTypes[0] === "Free/Pickup" ||
+                    uniqueShippingTypes[0] === "Added Cost/Pickup") ? (
                   <>
                     {/* All products have Free/Pickup - show shipping and contact options */}
                     <button
                       onClick={() => handleOrderTypeSelection("shipping")}
-                      className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
+                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                     >
-                      <div className="font-bold tracking-wide text-white uppercase">
-                        Free shipping
-                      </div>
-                      <div className="text-sm font-medium text-zinc-500">
+                      <div className="font-medium">Free shipping</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
                         Get products shipped to your address
                       </div>
                     </button>
                     <button
                       onClick={() => handleOrderTypeSelection("contact")}
-                      className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
+                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                     >
-                      <div className="font-bold tracking-wide text-white uppercase">
-                        Pickup
-                      </div>
-                      <div className="text-sm font-medium text-zinc-500">
+                      <div className="font-medium">Pickup</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
                         Arrange pickup with seller
                       </div>
                     </button>
@@ -2650,24 +3377,22 @@ export default function CartInvoiceCard({
                   uniqueShippingTypes.includes("Added Cost") ? (
                   <button
                     onClick={() => handleOrderTypeSelection("shipping")}
-                    className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
+                    className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                   >
-                    <div className="font-bold tracking-wide text-white uppercase">
+                    <div className="font-medium">
                       Online order with shipping
                     </div>
-                    <div className="text-sm font-medium text-zinc-500">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
                       Get products shipped to your address
                     </div>
                   </button>
                 ) : (
                   <button
                     onClick={() => handleOrderTypeSelection("contact")}
-                    className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
+                    className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                   >
-                    <div className="font-bold tracking-wide text-white uppercase">
-                      Online order
-                    </div>
-                    <div className="text-sm font-medium text-zinc-500">
+                    <div className="font-medium">Online order</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
                       Digital or pickup delivery
                     </div>
                   </button>
@@ -2679,76 +3404,62 @@ export default function CartInvoiceCard({
           {/* Free/Pickup Preference Selection */}
           {showFreePickupSelection && (
             <>
-              <h2 className="mb-6 text-2xl font-black tracking-tighter text-white uppercase">
-                Free/Pickup Products Preference
+              <h2 className="mb-6 text-2xl font-bold">
+                Shipping/Pickup Products Preference
               </h2>
-              <p className="mb-4 text-zinc-400">
-                Some products offer both free shipping and pickup options. How
-                would you like to handle these products?
+              <p className="mb-4 text-gray-600 dark:text-gray-400">
+                Some products offer both shipping and pickup options. How would
+                you like to handle these products?
               </p>
               <div className="mb-6 space-y-4">
                 <button
-                  onClick={() => {
-                    setFreePickupPreference("shipping");
+                  onClick={async () => {
+                    setShippingPickupPreference("shipping");
                     setShowFreePickupSelection(false);
-                    // Calculate total with all applicable shipping
-                    let shippingTotal = 0;
-                    products.forEach((product) => {
-                      const productShippingType = shippingTypes[product.id];
-                      if (
-                        productShippingType === "Added Cost" ||
-                        productShippingType === "Free" ||
-                        productShippingType === "Free/Pickup"
-                      ) {
-                        const shippingCost = product.shippingCost || 0;
-                        const quantity = quantities[product.id] || 1;
-                        shippingTotal += Math.ceil(shippingCost * quantity);
-                      }
-                    });
-                    setTotalCost(subtotalCost + shippingTotal);
+                    if (
+                      !(await applyCurrentProductTotals(
+                        (shippingType) =>
+                          shippingType === "Added Cost" ||
+                          shippingType === "Free" ||
+                          shippingType === "Free/Pickup"
+                      ))
+                    ) {
+                      return;
+                    }
                   }}
-                  className={`w-full rounded-xl border p-4 text-left transition-colors hover:bg-zinc-900 ${
-                    freePickupPreference === "shipping"
-                      ? "border-yellow-400 bg-yellow-400/5"
-                      : "border-zinc-800 bg-[#161616]"
+                  className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
+                    shippingPickupPreference === "shipping"
+                      ? "border-shopstr-purple dark:border-shopstr-yellow bg-purple-50 dark:bg-yellow-50"
+                      : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
                   }`}
                 >
-                  <div className="font-bold tracking-wide text-white uppercase">
-                    Free shipping
-                  </div>
-                  <div className="text-sm font-medium text-zinc-500">
+                  <div className="font-medium">Free shipping</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
                     Use free shipping for products that offer it
                   </div>
                 </button>
                 <button
-                  onClick={() => {
-                    setFreePickupPreference("contact");
+                  onClick={async () => {
+                    setShippingPickupPreference("contact");
                     setShowFreePickupSelection(false);
-                    // Calculate shipping for non-Free/Pickup items only
-                    let shippingTotal = 0;
-                    products.forEach((product) => {
-                      const productShippingType = shippingTypes[product.id];
-                      if (
-                        productShippingType === "Added Cost" ||
-                        productShippingType === "Free"
-                      ) {
-                        const shippingCost = product.shippingCost || 0;
-                        const quantity = quantities[product.id] || 1;
-                        shippingTotal += Math.ceil(shippingCost * quantity);
-                      }
-                    });
-                    setTotalCost(subtotalCost + shippingTotal);
+                    if (
+                      !(await applyCurrentProductTotals(
+                        (shippingType) =>
+                          shippingType === "Added Cost" ||
+                          shippingType === "Free"
+                      ))
+                    ) {
+                      return;
+                    }
                   }}
-                  className={`w-full rounded-xl border p-4 text-left transition-colors hover:bg-zinc-900 ${
-                    freePickupPreference === "contact"
-                      ? "border-yellow-400 bg-yellow-400/5"
-                      : "border-zinc-800 bg-[#161616]"
+                  className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
+                    shippingPickupPreference === "contact"
+                      ? "border-shopstr-purple dark:border-shopstr-yellow bg-purple-50 dark:bg-yellow-50"
+                      : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
                   }`}
                 >
-                  <div className="font-bold tracking-wide text-white uppercase">
-                    Pickup
-                  </div>
-                  <div className="text-sm font-medium text-zinc-500">
+                  <div className="font-medium">Pickup</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
                     Arrange pickup for products that offer it
                   </div>
                 </button>
@@ -2756,29 +3467,17 @@ export default function CartInvoiceCard({
 
               {/* Show pickup location selection for products with pickup locations */}
               {productsWithPickupLocations.length > 0 &&
-                freePickupPreference === "contact" && (
+                shippingPickupPreference === "contact" && (
                   <div className="space-y-6">
-                    <h3 className="text-lg font-bold text-zinc-400 uppercase">
+                    <h3 className="text-lg font-semibold">
                       Select Pickup Locations
                     </h3>
                     {productsWithPickupLocations.map((product) => (
                       <div key={product.id} className="space-y-2">
-                        <h4 className="font-bold text-white">
-                          {product.title}
-                        </h4>
+                        <h4 className="font-medium">{product.title}</h4>
                         <Select
                           variant="bordered"
-                          label="PICKUP LOCATION"
-                          labelPlacement="outside"
-                          classNames={{
-                            label:
-                              "text-zinc-500 font-bold uppercase tracking-wider text-xs",
-                            trigger:
-                              "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 data-[focus=true]:border-yellow-400 rounded-xl min-h-[56px]",
-                            value: "text-white font-bold text-base",
-                            popoverContent:
-                              "bg-[#161616] border border-zinc-800 rounded-xl p-1",
-                          }}
+                          label="Select pickup location"
                           placeholder="Choose a pickup location"
                           value={selectedPickupLocations[product.id] || ""}
                           onChange={(e) => {
@@ -2789,12 +3488,7 @@ export default function CartInvoiceCard({
                           }}
                         >
                           {(product.pickupLocations || []).map((location) => (
-                            <SelectItem
-                              key={location}
-                              className="rounded-lg text-zinc-300 data-[hover=true]:bg-zinc-800 data-[hover=true]:text-white"
-                            >
-                              {location}
-                            </SelectItem>
+                            <SelectItem key={location}>{location}</SelectItem>
                           ))}
                         </Select>
                       </div>
@@ -2808,17 +3502,15 @@ export default function CartInvoiceCard({
           {formType && !showFreePickupSelection && (
             <>
               {formType === "shipping" && (
-                <h2 className="mb-6 text-2xl font-black tracking-tighter text-white uppercase">
+                <h2 className="mb-6 text-2xl font-bold">
                   Shipping Information
                 </h2>
               )}
               {formType === "contact" && (
-                <h2 className="mb-6 text-2xl font-black tracking-tighter text-white uppercase">
-                  Payment Method
-                </h2>
+                <h2 className="mb-6 text-2xl font-bold">Payment Method</h2>
               )}
               {formType === "combined" && (
-                <h2 className="mb-6 text-2xl font-black tracking-tighter text-white uppercase">
+                <h2 className="mb-6 text-2xl font-bold">
                   Shipping Information
                 </h2>
               )}
@@ -2831,19 +3523,17 @@ export default function CartInvoiceCard({
 
                 <div
                   className={`space-y-4 ${
-                    formType !== "contact"
-                      ? "border-t border-zinc-800 pt-6"
-                      : ""
+                    formType !== "contact" ? "border-t pt-6" : ""
                   }`}
                 >
                   {formType !== "contact" && (
-                    <h3 className="mb-4 text-lg font-black tracking-wide text-white uppercase">
+                    <h3 className="mb-4 text-lg font-semibold">
                       Payment Method
                     </h3>
                   )}
 
                   <Button
-                    className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${
+                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                       !isFormValid ? "cursor-not-allowed opacity-50" : ""
                     }`}
                     disabled={!isFormValid}
@@ -2863,7 +3553,7 @@ export default function CartInvoiceCard({
 
                   {hasTokensAvailable && (
                     <Button
-                      className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${
+                      className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                         !isFormValid ? "cursor-not-allowed opacity-50" : ""
                       }`}
                       disabled={!isFormValid}
@@ -2885,7 +3575,7 @@ export default function CartInvoiceCard({
                   {/* NWC Button */}
                   {nwcInfo && (
                     <Button
-                      className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${
+                      className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                         !isFormValid ? "cursor-not-allowed opacity-50" : ""
                       }`}
                       disabled={!isFormValid || isNwcLoading}
@@ -2908,7 +3598,7 @@ export default function CartInvoiceCard({
           )}
           {orderConfirmed && (
             <div className="flex flex-col items-center justify-center">
-              <h3 className="mt-3 text-center text-lg font-bold text-white">
+              <h3 className="mt-3 text-center text-lg leading-6 font-medium text-gray-900">
                 Order confirmed!
               </h3>
               <Image

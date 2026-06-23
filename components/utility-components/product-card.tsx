@@ -21,6 +21,12 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import { ProfileMapContext } from "@/utils/context/context";
+import { ProfileData } from "@/utils/types/types";
+import {
+  isSellerP2pkEscrowActive,
+  isP2pkEscrowFeatureEnabled,
+} from "@/utils/cashu/p2pk-checkout";
 
 export default function ProductCard({
   productData,
@@ -44,6 +50,33 @@ export default function ProductCard({
   const isExpired = productData.expiration
     ? Date.now() / 1000 > productData.expiration
     : false;
+
+  const profileMap = useContext(ProfileMapContext).profileData;
+  const sellerProfile: ProfileData | undefined = profileMap.get(
+    productData.pubkey
+  );
+  const p2pk = sellerProfile?.content.p2pk;
+
+  const p2pkIndicator = () => {
+    if (!isP2pkEscrowFeatureEnabled() || !isSellerP2pkEscrowActive(p2pk)) {
+      return null;
+    }
+
+    return (
+      <div className="mb-3 flex items-center gap-2">
+        <Chip
+          size="sm"
+          classNames={{
+            base: "border border-yellow-400/60 bg-yellow-400/10",
+            content:
+              "text-[10px] font-bold uppercase tracking-wider text-yellow-300",
+          }}
+        >
+          P2PK Escrow · {p2pk!.refundDelayDays}d reclaim opens
+        </Chip>
+      </div>
+    );
+  };
 
   const handleNjumpClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -167,6 +200,8 @@ export default function ProductCard({
                 }
               />
             </div>
+
+            {p2pkIndicator()}
 
             <div className="mt-auto flex items-center justify-between gap-3">
               {productData.location && (

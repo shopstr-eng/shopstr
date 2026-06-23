@@ -6,6 +6,7 @@ import {
   ProductContext,
   ProfileMapContext,
   FollowsContext,
+  RelaysContext,
 } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
@@ -22,9 +23,20 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
+import {
+  dedupeProductEvents,
+  fetchNip50ProductSearch,
+} from "@/utils/nostr/fetch-service";
 
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const isNip19SearchQuery = (search: string) => {
+  const normalizedSearch = search.trim();
+  return (
+    normalizedSearch.includes("naddr1") || normalizedSearch.includes("npub1")
+  );
+};
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -49,9 +61,14 @@ const DisplayProducts = ({
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
+  const [nip50ProductEvents, setNip50ProductEvents] = useState<NostrEvent[]>(
+    []
+  );
+  const [isNip50SearchLoading, setIsNip50SearchLoading] = useState(false);
   const productEventContext = useContext(ProductContext);
   const profileMapContext = useContext(ProfileMapContext);
   const followsContext = useContext(FollowsContext);
+  const relaysContext = useContext(RelaysContext);
   const [focusedProduct, setFocusedProduct] = useState<ProductData>();
   const [showModal, setShowModal] = useState(false);
 
@@ -65,6 +82,15 @@ const DisplayProducts = ({
 
   const { nostr } = useContext(NostrContext);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
+
+  const searchRelaysKey = Array.from(
+    new Set([
+      ...(relaysContext.relayList || []),
+      ...(relaysContext.readRelayList || []),
+    ])
+  )
+    .filter(Boolean)
+    .join("|");
 
   // Load saved page from session storage on mount
   useEffect(() => {
@@ -84,16 +110,67 @@ const DisplayProducts = ({
   }, [focusedPubkey]);
 
   useEffect(() => {
+    const normalizedSearch = selectedSearch.trim();
+
+    if (
+      !normalizedSearch ||
+      isNip19SearchQuery(normalizedSearch) ||
+      !nostr ||
+      typeof nostr.fetch !== "function"
+    ) {
+      setNip50ProductEvents([]);
+      setIsNip50SearchLoading(false);
+      return;
+    }
+
+    const relaysToSearch = searchRelaysKey ? searchRelaysKey.split("|") : [];
+
+    let didCancel = false;
+    setIsNip50SearchLoading(true);
+
+    fetchNip50ProductSearch(nostr, relaysToSearch, normalizedSearch, {
+      authors: focusedPubkey ? [focusedPubkey] : undefined,
+    })
+      .then(({ productEvents }) => {
+        if (didCancel) return;
+        setNip50ProductEvents(productEvents);
+      })
+      .catch((error) => {
+        if (didCancel) return;
+        setNip50ProductEvents([]);
+        console.error("Failed to search products with NIP-50:", error);
+      })
+      .finally(() => {
+        if (didCancel) return;
+        setIsNip50SearchLoading(false);
+      });
+
+    return () => {
+      didCancel = true;
+    };
+  }, [selectedSearch, focusedPubkey, nostr, searchRelaysKey]);
+
+  useEffect(() => {
     if (!productEventContext) return;
-    if (!productEventContext.isLoading && productEventContext.productEvents) {
-      setIsProductLoading(true);
-      const sortedProductEvents = [
-        ...productEventContext.productEvents.sort(
-          (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
-        ),
-      ];
+    const hasProducts =
+      productEventContext.productEvents &&
+      productEventContext.productEvents.length > 0;
+    const hasNip50Products = nip50ProductEvents.length > 0;
+    const sourceProductEvents =
+      selectedSearch.trim() && !isNip19SearchQuery(selectedSearch)
+        ? dedupeProductEvents([
+            ...nip50ProductEvents,
+            ...[...(productEventContext.productEvents || [])].sort(
+              (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
+            ),
+          ])
+        : [...(productEventContext.productEvents || [])].sort(
+            (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
+          );
+
+    if (hasProducts || hasNip50Products) {
       const parsedProductData: ProductData[] = [];
-      sortedProductEvents.forEach((event) => {
+      sourceProductEvents.forEach((event) => {
         if (wotFilter) {
           if (!followsContext.isLoading && followsContext.followList) {
             const followList = followsContext.followList;
@@ -121,9 +198,17 @@ const DisplayProducts = ({
         }
       });
       setProductEvents(parsedProductData);
+      if (
+        parsedProductData.length >= itemsPerPage ||
+        !productEventContext.isLoading
+      ) {
+        setIsProductLoading(false);
+      }
+    } else if (!productEventContext.isLoading) {
+      setProductEvents([]);
       setIsProductLoading(false);
     }
-  }, [productEventContext, wotFilter]);
+  }, [productEventContext, wotFilter, nip50ProductEvents, selectedSearch]);
 
   useEffect(() => {
     if (focusedPubkey && setCategories) {
@@ -370,7 +455,8 @@ const DisplayProducts = ({
         {!isMyListings &&
         (profileMapContext.isLoading ||
           productEventContext.isLoading ||
-          isProductsLoading) ? (
+          isProductsLoading ||
+          isNip50SearchLoading) ? (
           <div className="mt-6 mb-6 flex items-center justify-center">
             <ShopstrSpinner />
           </div>
@@ -418,15 +504,20 @@ const DisplayProducts = ({
             </div>
           </>
         ) : (
-          wotFilter &&
-          !isProductsLoading && (
+          !isMyListings &&
+          !profileMapContext.isLoading &&
+          !productEventContext.isLoading &&
+          !isProductsLoading &&
+          !isNip50SearchLoading && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
               <div className="w-full max-w-lg rounded-lg border border-zinc-800 bg-[#161616] p-8 text-center shadow-lg">
                 <p className="text-3xl font-semibold text-white">
                   No products found...
                 </p>
                 <p className="mt-4 text-lg text-white">
-                  Try turning off the trust filter!
+                  {wotFilter
+                    ? "Try turning off the trust filter!"
+                    : "Try changing your search or clearing some filters."}
                 </p>
               </div>
             </div>

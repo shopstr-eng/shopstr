@@ -221,6 +221,13 @@ export interface ProfileData {
     payment_preference?: string;
     fiat_options?: string[];
     shopstr_donation?: number;
+
+    p2pk?: {
+      enabled: boolean;
+      pubkey?: string; // seller redeem while locked
+      refundDelayDays?: number; // days; locktime unix set at checkout
+      reclaimKeys?: string[]; // buyer reclaim after lock (optional)
+    };
   };
   created_at: number;
 }
@@ -266,6 +273,37 @@ export interface CombinedFormData {
   Instructions: string;
   Required?: string;
 }
+
+export interface SavedAddress {
+  id: string;
+  label: string;
+  name: string;
+  address: string;
+  unit?: string;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+  isDefault: boolean;
+}
+
+export interface ParsedP2PK {
+  pubkey: string;
+  locktime: number;
+  refundKeys: string[];
+  expired: boolean;
+  rawTags: any[];
+  proofCount?: number;
+}
+
+export type WalletConfig = string[][];
+
+export type TemporaryWalletConfigV1 = {
+  version: 1;
+  cashuPubkey: string;
+  cashuPrivkey: string;
+  mints: string[];
+};
 
 declare global {
   interface Window {

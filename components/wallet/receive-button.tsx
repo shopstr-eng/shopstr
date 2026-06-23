@@ -15,23 +15,29 @@ import {
   Button,
   Textarea,
 } from "@heroui/react";
-import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
+  publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   Mint as CashuMint,
   Wallet as CashuWallet,
-  getDecodedToken,
+  getTokenMetadata,
   Proof,
 } from "@cashu/cashu-ts";
-import * as cashuCompat from "@/utils/cashu/compat";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
+import { CashuWalletContext } from "@/utils/context/context";
+import {
+  checkMintP2pkSupport,
+  parseP2PKProofSet,
+} from "@/utils/cashu/p2pk-checkout";
 
 const ReceiveButton = () => {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
@@ -42,6 +48,7 @@ const ReceiveButton = () => {
 
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
+  const { cashuPubkey, cashuPrivkey } = useContext(CashuWalletContext);
   const { mints, tokens, history } = getLocalStorageData();
 
   const {
@@ -64,16 +71,95 @@ const ReceiveButton = () => {
     await handleReceive(tokenString!);
   };
 
+  const storeReceivedProofs = async (
+    tokenMint: string,
+    receivedProofs: Proof[],
+    transactionAmount: number
+  ) => {
+    const uniqueProofs = receivedProofs.filter(
+      (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C)
+    );
+    if (JSON.stringify(uniqueProofs) != JSON.stringify(receivedProofs)) {
+      setIsDuplicateToken(true);
+      return false;
+    }
+
+    const tokenArray = [...tokens, ...uniqueProofs];
+    localStorage.setItem("tokens", JSON.stringify(tokenArray));
+    if (!mints.includes(tokenMint)) {
+      const updatedMints = [...mints, tokenMint];
+      localStorage.setItem("mints", JSON.stringify(updatedMints));
+      if (cashuPrivkey) {
+        await publishWalletEvent(
+          nostr!,
+          signer!,
+          { cashuPubkey, cashuPrivkey },
+          { mints: updatedMints }
+        );
+      }
+    }
+    setIsClaimed(true);
+    handleToggleReceiveModal();
+    localStorage.setItem(
+      "history",
+      JSON.stringify([
+        {
+          type: 1,
+          amount: transactionAmount,
+          date: Math.floor(Date.now() / 1000),
+        },
+        ...history,
+      ])
+    );
+    await publishProofEvent(
+      nostr!,
+      signer!,
+      tokenMint,
+      uniqueProofs,
+      "in",
+      transactionAmount.toString()
+    );
+    return true;
+  };
+
   const handleReceive = async (tokenString: string) => {
     setIsDuplicateToken(false);
     setIsClaimed(false);
     setIsSpent(false);
     setIsInvalidToken(false);
     try {
-      const token = getDecodedToken(tokenString, []);
+      const tokenMetadata = getTokenMetadata(tokenString);
+      const wallet = new CashuWallet(new CashuMint(tokenMetadata.mint), {
+        unit: tokenMetadata.unit,
+      });
+      await wallet.loadMint();
+      const token = wallet.decodeToken(tokenString);
       const tokenMint = token.mint;
       const tokenProofs = token.proofs;
-      const wallet = new CashuWallet(new CashuMint(tokenMint));
+      const transactionAmount = sumProofAmounts(tokenProofs);
+      const parsedP2pk = parseP2PKProofSet(tokenProofs);
+      if (parsedP2pk.invalidReason) {
+        setIsInvalidToken(true);
+        return;
+      }
+
+      if (parsedP2pk.p2pk) {
+        if (!cashuPrivkey) {
+          setIsInvalidToken(true);
+          return;
+        }
+        const mintSupport = await checkMintP2pkSupport(tokenMint);
+        if (!mintSupport.supported) {
+          setIsInvalidToken(true);
+          return;
+        }
+        const freshProofs = await wallet.receive(tokenProofs, {
+          privkey: cashuPrivkey,
+        });
+        await storeReceivedProofs(tokenMint, freshProofs, transactionAmount);
+        return;
+      }
+
       const proofsStates = await wallet.checkProofsStates(tokenProofs);
       const spentYs = new Set(
         proofsStates
@@ -81,44 +167,7 @@ const ReceiveButton = () => {
           .map((state) => state.Y)
       );
       if (spentYs.size === 0) {
-        const uniqueProofs = tokenProofs.filter(
-          (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C)
-        );
-        if (JSON.stringify(uniqueProofs) != JSON.stringify(tokenProofs)) {
-          setIsDuplicateToken(true);
-          return;
-        }
-        const tokenArray = [...tokens, ...uniqueProofs];
-        localStorage.setItem("tokens", JSON.stringify(tokenArray));
-        if (!mints.includes(tokenMint)) {
-          const updatedMints = [...mints, tokenMint];
-          localStorage.setItem("mints", JSON.stringify(updatedMints));
-        }
-        setIsClaimed(true);
-        handleToggleReceiveModal();
-        const transactionAmount = tokenProofs.reduce(
-          (acc, token: Proof) => acc + cashuCompat.proofAmount(token),
-          0
-        );
-        localStorage.setItem(
-          "history",
-          JSON.stringify([
-            {
-              type: 1,
-              amount: transactionAmount,
-              date: Math.floor(Date.now() / 1000),
-            },
-            ...history,
-          ])
-        );
-        await publishProofEvent(
-          nostr!,
-          signer!,
-          tokenMint,
-          uniqueProofs,
-          "in",
-          transactionAmount.toString()
-        );
+        await storeReceivedProofs(tokenMint, tokenProofs, transactionAmount);
       } else {
         setIsSpent(true);
       }
@@ -131,9 +180,11 @@ const ReceiveButton = () => {
     <>
       <div>
         <Button
-          className={`${NEO_BTN} w-full py-6 text-sm font-black tracking-widest`}
+          className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
           onClick={() => setShowReceiveModal(!showReceiveModal)}
-          startContent={<ArrowDownTrayIcon className="h-5 w-5 stroke-2" />}
+          startContent={
+            <ArrowDownTrayIcon className="h-6 w-6 hover:text-yellow-500 dark:hover:text-purple-500" />
+          }
         >
           Receive
         </Button>
@@ -147,13 +198,13 @@ const ReceiveButton = () => {
             // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
             header: "border-b-[1px] border-[#292f46]",
             footer: "border-t-[1px] border-[#292f46]",
-            closeButton: "hover:bg-white/10 active:bg-white/20",
+            closeButton: "hover:bg-black/5 active:bg-white/10",
           }}
           scrollBehavior={"outside"}
-          size="md"
+          size="2xl"
         >
           <ModalContent>
-            <ModalHeader className="flex flex-col gap-1 text-white">
+            <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
               Receive Token
             </ModalHeader>
             <form onSubmit={handleReceiveSubmit(onReceiveSubmit)}>
@@ -179,8 +230,7 @@ const ReceiveButton = () => {
                       : "";
                     return (
                       <Textarea
-                        className="text-white"
-                        classNames={{ input: "text-base" }}
+                        className="text-light-text dark:text-dark-text"
                         autoFocus
                         variant="bordered"
                         fullWidth={true}
@@ -198,8 +248,8 @@ const ReceiveButton = () => {
                 />
                 {signer instanceof NostrNIP46Signer && (
                   <div className="mx-4 my-2 flex items-center justify-center text-center">
-                    <InformationCircleIcon className="h-6 w-6 text-white" />
-                    <p className="ml-2 text-xs text-white">
+                    <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
+                    <p className="text-light-text dark:text-dark-text ml-2 text-xs">
                       If the token is taking a while to be received, make sure
                       to check your bunker application to approve the
                       transaction events.
@@ -217,7 +267,7 @@ const ReceiveButton = () => {
                   Cancel
                 </Button>
 
-                <Button className={NEO_BTN} type="submit">
+                <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
                   Receive
                 </Button>
               </ModalFooter>
@@ -231,25 +281,25 @@ const ReceiveButton = () => {
             backdrop="blur"
             isOpen={isClaimed}
             onClose={() => setIsClaimed(false)}
-            // className="border border-zinc-800 bg-[#161616] text-black dark:text-white"
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-white/10 active:bg-white/20",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
             }}
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="md"
+            size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-white">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully claimed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-white">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   Your Shopstr wallet balance should now be updated.
                 </div>
@@ -264,25 +314,25 @@ const ReceiveButton = () => {
             backdrop="blur"
             isOpen={isDuplicateToken}
             onClose={() => setIsDuplicateToken(false)}
-            // className="border border-zinc-800 bg-[#161616] text-black dark:text-white"
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-white/10 active:bg-white/20",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
             }}
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="md"
+            size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-white">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Duplicate token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-white">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim is already in your Shopstr
                   wallet.
@@ -298,25 +348,25 @@ const ReceiveButton = () => {
             backdrop="blur"
             isOpen={isInvalidToken}
             onClose={() => setIsInvalidToken(false)}
-            // className="border border-zinc-800 bg-[#161616] text-black dark:text-white"
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-white/10 active:bg-white/20",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
             }}
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="md"
+            size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-white">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Invalid token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-white">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim is not a valid Cashu string.
                 </div>
@@ -331,25 +381,25 @@ const ReceiveButton = () => {
             backdrop="blur"
             isOpen={isSpent}
             onClose={() => setIsSpent(false)}
-            // className="border border-zinc-800 bg-[#161616] text-black dark:text-white"
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-white/10 active:bg-white/20",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
             }}
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="md"
+            size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-white">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Spent token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-white">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim has already been redeemed.
                 </div>

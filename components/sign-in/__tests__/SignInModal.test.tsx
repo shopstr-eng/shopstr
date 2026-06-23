@@ -58,11 +58,8 @@ function renderModal(open = true) {
   return { user, push, onClose };
 }
 
-async function openSignInOptions(user: ReturnType<typeof userEvent.setup>) {
-  const signInButtons = screen.queryAllByRole("button", { name: /sign in/i });
-  if (signInButtons.length > 0) {
-    await user.click(signInButtons[0]!);
-  }
+async function openSignInOptions(_user: ReturnType<typeof userEvent.setup>) {
+  // The revamp modal renders sign-in options immediately.
 }
 
 describe("SignInModal", () => {
@@ -97,7 +94,14 @@ describe("SignInModal", () => {
         screen.getByRole("button", { name: /extension sign-in/i })
       );
       await waitFor(() => {
+        expect(mockNewSigner).toHaveBeenCalledWith("nip07", {});
         expect(signer.getPubKey).toHaveBeenCalled();
+        expect(helpers.setLocalStorageDataOnSignIn).toHaveBeenCalledWith({
+          signer,
+          relays: mockRelays.relayList,
+          readRelays: mockRelays.readRelayList,
+          writeRelays: mockRelays.writeRelayList,
+        });
         expect(push).toHaveBeenCalledWith("/onboarding/user-profile");
       });
     });
@@ -148,9 +152,20 @@ describe("SignInModal", () => {
       await user.type(input, "bunker://valid-token");
 
       await user.click(screen.getByTestId("bunker-submit-btn"));
-      await waitFor(() =>
-        expect(push).toHaveBeenCalledWith("/onboarding/user-profile")
-      );
+      await waitFor(() => {
+        expect(mockNewSigner).toHaveBeenCalledWith("nip46", {
+          bunker: "bunker://valid-token",
+        });
+        expect(signer.connect).toHaveBeenCalled();
+        expect(signer.getPubKey).toHaveBeenCalled();
+        expect(helpers.setLocalStorageDataOnSignIn).toHaveBeenCalledWith({
+          signer,
+          relays: mockRelays.relayList,
+          readRelays: mockRelays.readRelayList,
+          writeRelays: mockRelays.writeRelayList,
+        });
+        expect(push).toHaveBeenCalledWith("/onboarding/user-profile");
+      });
     });
 
     it("shows a failure modal on connection error", async () => {
@@ -209,9 +224,20 @@ describe("SignInModal", () => {
 
       act(() => jest.runAllTimers());
 
-      await waitFor(() =>
-        expect(push).toHaveBeenCalledWith("/onboarding/user-profile")
-      );
+      await waitFor(() => {
+        expect(mockNewSigner).toHaveBeenCalledWith("nsec", {
+          encryptedPrivKey: "encrypted-key",
+          pubkey: "test-pubkey",
+        });
+        expect(signer.getPubKey).toHaveBeenCalled();
+        expect(helpers.setLocalStorageDataOnSignIn).toHaveBeenCalledWith({
+          signer,
+          relays: mockRelays.relayList,
+          readRelays: mockRelays.readRelayList,
+          writeRelays: mockRelays.writeRelayList,
+        });
+        expect(push).toHaveBeenCalledWith("/onboarding/user-profile");
+      });
     });
 
     it("shows a failure modal if passphrase is empty", async () => {

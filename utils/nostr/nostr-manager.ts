@@ -14,6 +14,7 @@ import {
 } from "@/utils/nostr/signers/nostr-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
+import { newPromiseWithTimeout } from "../timeout";
 
 export type NostrRelay = {
   url: string;
@@ -145,6 +146,7 @@ export class NostrManager {
     const relays = relayUrls
       ? this.relays.filter((r) => relayUrls.includes(r.url))
       : this.relays;
+    await this.keepAlive(relays);
     const requests = relays.flatMap((r) =>
       filters.map((f) => ({ url: r.url, filter: f }))
     );
@@ -169,76 +171,61 @@ export class NostrManager {
   public async fetch(
     filters: NostrFilter[],
     params?: SubscribeManyParams,
-    relayUrls?: string[]
+    relayUrls?: string[],
+    timeout?: number
   ): Promise<NostrEvent[]> {
-    if (!params) {
-      params = {};
-    }
+    return await newPromiseWithTimeout(
+      async (resolve, _reject, abortSignal) => {
+        if (!params) {
+          params = {};
+        }
 
-    if (!params.onevent) {
-      params.onevent = () => {};
-    }
+        if (!params.onevent) {
+          params.onevent = () => {};
+        }
 
-    if (!params.oneose) {
-      params.oneose = () => {};
-    }
+        if (!params.oneose) {
+          params.oneose = () => {};
+        }
 
-    const onEvent = params.onevent;
-    const onEose = params.oneose;
-    const fetchedEvents: Array<NostrEvent> = [];
-    let sub: NostrSub | undefined;
-    let didCloseSub = false;
-    let didResolve = false;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        const onEvent = params.onevent;
+        const onEose = params.oneose;
+        const fetchedEvents: Array<NostrEvent> = [];
+        let sub: NostrSub | undefined;
+        let didCloseSub = false;
+        let didResolve = false;
 
-    const closeSubIfNeeded = async () => {
-      if (!sub || didCloseSub) return;
-      didCloseSub = true;
-      await sub.close();
-    };
+        const closeSubIfNeeded = async () => {
+          if (!sub || didCloseSub) return;
+          didCloseSub = true;
+          await sub.close();
+        };
 
-    return await new Promise<NostrEvent[]>((resolve, reject) => {
-      const resolveOnce = () => {
-        if (didResolve) return;
-        didResolve = true;
-        if (timeoutId) clearTimeout(timeoutId);
-        closeSubIfNeeded().catch(console.error);
-        resolve(fetchedEvents);
-      };
-
-      timeoutId = setTimeout(
-        resolveOnce,
-        this.params.connectionTimeout ?? 60000
-      );
-
-      params.onevent = (event: NostrEvent) => {
-        fetchedEvents.push(event);
-        return onEvent!(event);
-      };
-
-      params.oneose = () => {
-        resolveOnce();
-        return onEose!();
-      };
-
-      this.subscribe(filters, params, relayUrls)
-        .then((createdSub) => {
-          if (didResolve) {
-            createdSub.close().catch(console.error);
-            return;
-          }
-          sub = createdSub;
-        })
-        .catch((error) => {
-          if (timeoutId) clearTimeout(timeoutId);
-          if (didResolve) {
-            console.error(error);
-            return;
-          }
-          didResolve = true;
-          reject(error);
+        abortSignal.addEventListener("abort", () => {
+          closeSubIfNeeded().catch(console.error);
         });
-    });
+
+        params.onevent = (event: NostrEvent) => {
+          fetchedEvents.push(event);
+          return onEvent!(event);
+        };
+
+        params.oneose = () => {
+          closeSubIfNeeded().catch(console.error);
+          if (!didResolve) {
+            didResolve = true;
+            resolve(fetchedEvents);
+          }
+          return onEose!();
+        };
+
+        sub = await this.subscribe(filters, params, relayUrls);
+        if (abortSignal.aborted) {
+          await closeSubIfNeeded();
+        }
+      },
+      { timeout }
+    );
   }
 
   public async publish(event: NostrEvent, relayUrls?: string[]): Promise<void> {

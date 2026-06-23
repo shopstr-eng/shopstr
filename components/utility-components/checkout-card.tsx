@@ -1,6 +1,5 @@
-/* eslint-disable @next/next/no-img-element */
-
 import { useContext, useEffect, useRef, useState } from "react";
+import { isP2pkEscrowFeatureEnabled } from "@/utils/cashu/p2pk-checkout";
 import { Event, nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
@@ -48,6 +47,7 @@ export default function CheckoutCard({
   setCashuPaymentFailed,
   uniqueKey,
   rawEvent,
+  p2pk,
 }: {
   productData: ProductData;
   setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
@@ -58,6 +58,11 @@ export default function CheckoutCard({
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
   uniqueKey?: string;
   rawEvent?: Event;
+  p2pk?: {
+    enabled: boolean;
+    refundDelayDays?: number;
+    reclaimKeys?: string[];
+  };
 }) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -116,6 +121,45 @@ export default function CheckoutCard({
       setCurrentPrice(productData.price);
     }
   }, [selectedVolume, productData.price, productData.volumePrices]);
+
+  const p2pkIndicator = () => {
+    if (!isP2pkEscrowFeatureEnabled() || !p2pk?.enabled) return null;
+
+    const days = p2pk.refundDelayDays;
+
+    if (!days || days <= 0) return null;
+
+    const reclaimOpensAfter = new Date(
+      Date.now() + days * 24 * 60 * 60 * 1000
+    ).toLocaleDateString(undefined, {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    return (
+      <div className="mb-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-yellow-700 dark:text-yellow-300">
+          <span>🔒</span>
+          <span>P2PK Escrow Enabled</span>
+        </div>
+
+        <p className="mt-1 text-xs leading-relaxed text-gray-700 dark:text-gray-300">
+          Payment ecash is locked to the seller&apos;s pubkey while the lock is
+          active. After{" "}
+          <span className="font-semibold">
+            {days} day{days > 1 ? "s" : ""}
+          </span>
+          , you gain an additional reclaim spend path (manual wallet action).
+          The seller may still be able to claim under Cashu rules.
+        </p>
+
+        <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+          Reclaim path opens after {reclaimOpensAfter}
+        </p>
+      </div>
+    );
+  };
 
   const toggleExpand = () => {
     setIsExpanded(!isExpanded);
@@ -688,6 +732,7 @@ export default function CheckoutCard({
                           {productData.location}
                         </Chip>
                       </div>
+                      {p2pkIndicator()}
                       {renderSizeGrid()}
                       <div className="flex w-full flex-col gap-4 pt-2">
                         <div className="flex flex-wrap items-center gap-2">

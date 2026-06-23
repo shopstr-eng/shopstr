@@ -9,7 +9,7 @@ const config = loadConfig();
 const logger = createLogger(config.logLevel);
 let isShuttingDown = false;
 
-const server = createMcpServer(config);
+const server = createMcpServer(config, { logger });
 
 async function shutdown(reason: string): Promise<void> {
   if (isShuttingDown) return;
