@@ -4,6 +4,7 @@ import {
   DEFAULT_NIP50_SEARCH_RELAYS,
   dedupeProductEvents,
   fetchNip50ProductSearch,
+  getProductEventKey,
   NIP50_SEARCH_TIMEOUT_MS,
 } from "../fetch-service";
 
@@ -41,6 +42,33 @@ const expectNip50RelayFetches = (
     );
   });
 };
+
+describe("getProductEventKey", () => {
+  it("returns kind:pubkey:dTag for kind-30402 events with a d-tag (line 96)", () => {
+    const event = makeBaseEvent({
+      kind: 30402,
+      id: "e1",
+      pubkey: "pk1",
+      tags: [["d", "listing-slug"]],
+    });
+    expect(getProductEventKey(event as any)).toBe("30402:pk1:listing-slug");
+  });
+
+  it("falls back to kind:id for kind-30402 events without a d-tag", () => {
+    const event = makeBaseEvent({
+      kind: 30402,
+      id: "e2",
+      pubkey: "pk2",
+      tags: [],
+    });
+    expect(getProductEventKey(event as any)).toBe("30402:e2");
+  });
+
+  it("falls back to kind:id for non-30402 events", () => {
+    const event = makeBaseEvent({ kind: 1, id: "e3", pubkey: "pk3", tags: [] });
+    expect(getProductEventKey(event as any)).toBe("1:e3");
+  });
+});
 
 describe("fetchAllPosts - NIP-99 and relay merge behavior", () => {
   beforeEach(() => {
@@ -1781,6 +1809,34 @@ describe("fetchReports", () => {
 
     consoleErrorSpy.mockRestore();
   });
+
+  it("rejects when nostr.fetch throws during the relay report fetch (line 501)", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchReports } = await import("../fetch-service");
+
+    const fetchError = new Error("reports relay down");
+    const aProduct = makeProductEvent({
+      id: "prod-501",
+      pubkey: "seller-501",
+      created_at: 1,
+      tags: [["d", "item-501"]],
+      sig: "sig-501",
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockRejectedValue(fetchError) } as any;
+
+    await expect(
+      fetchReports(nostr, ["wss://relay.example"], [aProduct] as any, jest.fn())
+    ).rejects.toThrow("reports relay down");
+  });
 });
 
 describe("fetchProfile", () => {
@@ -2278,6 +2334,177 @@ describe("fetchProfile", () => {
 
     consoleErrorSpy.mockRestore();
   });
+
+  it("skips a relay profile event whose content is a non-string (line 253 parseJsonSafely)", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn().mockResolvedValue(false),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchProfile } = await import("../fetch-service");
+
+    const nullContentEvent = makeProfileEvent({
+      id: "null-content-profile",
+      pubkey,
+      created_at: 100,
+      kind: 0,
+      tags: [],
+      content: null as any,
+      sig: "sig-null-content",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([nullContentEvent]),
+    } as any;
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+
+    const { profileMap } = await fetchProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      jest.fn(),
+      new Map()
+    );
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Skipping invalid profile JSON")
+    );
+    expect(profileMap.get(pubkey)).toBeFalsy();
+    consoleWarnSpy.mockRestore();
+  });
+
+  it("skips a relay profile event whose content is an empty string (line 258 parseJsonSafely)", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn().mockResolvedValue(false),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchProfile } = await import("../fetch-service");
+
+    const emptyContentEvent = makeProfileEvent({
+      id: "empty-content-profile",
+      pubkey,
+      created_at: 100,
+      kind: 0,
+      tags: [],
+      content: "   ",
+      sig: "sig-empty-content",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([emptyContentEvent]),
+    } as any;
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+
+    const { profileMap } = await fetchProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      jest.fn(),
+      new Map()
+    );
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Skipping invalid profile JSON")
+    );
+    expect(profileMap.get(pubkey)).toBeFalsy();
+    consoleWarnSpy.mockRestore();
+  });
+
+  it("logs cache rejection for valid relay profile events (line 881)", async () => {
+    const cacheError = new Error("profile cache failed");
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn().mockResolvedValue(false),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockRejectedValue(cacheError),
+    }));
+
+    const { fetchProfile } = await import("../fetch-service");
+
+    const relayProfile = makeProfileEvent({
+      id: "relay-profile-cache-fail",
+      pubkey,
+      created_at: 100,
+      kind: 0,
+      tags: [],
+      content: JSON.stringify({ display_name: "Cache Fail" }),
+      sig: "sig-cache-fail",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayProfile]) } as any;
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await fetchProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      jest.fn(),
+      new Map()
+    );
+
+    await Promise.resolve();
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to cache profiles to database:",
+      cacheError
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("rejects when nostr.fetch throws during the relay profile fetch (line 889)", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn().mockResolvedValue(false),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchProfile } = await import("../fetch-service");
+
+    const fetchError = new Error("profile relay down");
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = { fetch: jest.fn().mockRejectedValue(fetchError) } as any;
+
+    await expect(
+      fetchProfile(
+        nostr,
+        ["wss://relay.example"],
+        [pubkey],
+        jest.fn(),
+        new Map()
+      )
+    ).rejects.toThrow("profile relay down");
+  });
 });
 
 describe("fetchAllFollows", () => {
@@ -2675,6 +2902,50 @@ describe("fetchAllFollows", () => {
     expect(nostr.fetch).toHaveBeenCalledTimes(1);
     expect(result.followList).toEqual([]);
     expect(editFollowsContext).toHaveBeenCalledWith([], 0, false);
+  });
+
+  it("returns existing latestEvent when a subsequent kind 3 event has an older timestamp (line 1330)", async () => {
+    const { fetchAllFollows } = await import("../fetch-service");
+    const editFollowsContext = jest.fn();
+
+    // newerFirst processed first: !null → line 1328 (returns it)
+    // olderSecond processed second: 100 > 200 is false → line 1330 (returns existing latestEvent)
+    const newerFirst = {
+      id: "newer-cl",
+      pubkey: userPubkey,
+      created_at: 200,
+      kind: 3,
+      tags: [["p", latestFollowPubkey]],
+      content: "",
+      sig: "sig-newer",
+    };
+    const olderSecond = {
+      id: "older-cl",
+      pubkey: userPubkey,
+      created_at: 100,
+      kind: 3,
+      tags: [["p", olderFollowPubkey]],
+      content: "",
+      sig: "sig-older",
+    };
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([newerFirst, olderSecond])
+        .mockResolvedValueOnce([]),
+    } as any;
+
+    const result = await fetchAllFollows(
+      nostr,
+      ["wss://relay.example"],
+      editFollowsContext,
+      userPubkey
+    );
+
+    // latestContactListEvent = newerFirst (olderSecond lost in the reduce)
+    expect(result.followList).toContain(latestFollowPubkey);
+    expect(result.followList).not.toContain(olderFollowPubkey);
   });
 });
 
@@ -3210,6 +3481,27 @@ describe("fetchAllPosts", () => {
     );
 
     consoleErrorSpy.mockRestore();
+  });
+
+  it("rejects when nostr.fetch throws during the relay product fetch (line 375)", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllPosts } = await import("../fetch-service");
+
+    const fetchError = new Error("relay down");
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockRejectedValue(fetchError) } as any;
+
+    await expect(
+      fetchAllPosts(nostr, ["wss://relay.example"], jest.fn())
+    ).rejects.toThrow("relay down");
   });
 });
 
@@ -3933,6 +4225,401 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
       expect.stringContaining("Failed to fetch messages from database")
     );
     consoleErrorSpy.mockRestore();
+  });
+
+  it("logs when the DB messages fetch throws inside the signer try-block (line 953)", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const dbError = new Error("sign throws");
+    const signer = {
+      sign: jest.fn().mockRejectedValue(dbError),
+      decrypt: jest.fn(),
+    };
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    global.fetch = jest.fn() as typeof global.fetch;
+
+    await fetchGiftWrappedChatsAndMessages(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      jest.fn(),
+      "user-pk-953"
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to fetch messages from database: ",
+      dbError
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("pushes a second message to the same chat entry (line 968)", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pk-968";
+    const senderPubkey = "sender-pk-968";
+
+    const makeWrap = (id: string, ts: number) => ({
+      id,
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: ts,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    });
+    const makeMsg = (ts: number) => ({
+      kind: 14,
+      pubkey: senderPubkey,
+      content: "hi",
+      created_at: ts,
+      tags: [
+        ["p", userPubkey],
+        ["subject", "listing-inquiry"],
+      ],
+    });
+    const makeSeal = () => ({
+      kind: 13,
+      pubkey: senderPubkey,
+      content: "enc",
+      created_at: 0,
+      tags: [],
+    });
+
+    const wrap1 = makeWrap("w1", 100);
+    const wrap2 = makeWrap("w2", 200);
+    const msg1 = makeMsg(100);
+    const msg2 = makeMsg(200);
+    const seal = makeSeal();
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrap1, wrap2]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(seal))
+        .mockResolvedValueOnce(JSON.stringify(msg1))
+        .mockResolvedValueOnce(JSON.stringify(seal))
+        .mockResolvedValueOnce(JSON.stringify(msg2)),
+    };
+
+    const result = await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      jest.fn(),
+      userPubkey
+    );
+
+    // Both messages from senderPubkey are in the same chat entry (line 968 push executed)
+    expect(result.profileSetFromChats).toContain(senderPubkey);
+  });
+
+  it("logs error and alert when a message event has no p-tag (lines 1030-1038)", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pk-1030";
+    // Message with a valid subject but NO "p" tag → recipientPubkey = null → lines 1030-1038
+    const msgEvent = {
+      kind: 14,
+      pubkey: userPubkey,
+      content: "outgoing",
+      created_at: 100,
+      tags: [["subject", "listing-inquiry"]], // no "p" tag
+    };
+    const sealEvent = {
+      kind: 13,
+      pubkey: userPubkey,
+      content: "enc",
+      created_at: 0,
+      tags: [],
+    };
+    const wrapEvent = {
+      id: "wrap-1030",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: 100,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrapEvent]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(sealEvent))
+        .mockResolvedValueOnce(JSON.stringify(msgEvent)),
+    };
+
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const alertMock = jest.spyOn(window, "alert").mockImplementation(() => {});
+
+    // Do NOT await — the Promise never resolves because `return` exits the executor
+    fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      jest.fn(),
+      userPubkey
+    );
+
+    // Wait for all nested awaits inside the function to complete
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("fetchAllOutgoingChats")
+    );
+    expect(alertMock).toHaveBeenCalledWith(
+      expect.stringContaining("fetchAllOutgoingChats")
+    );
+    consoleErrorSpy.mockRestore();
+    alertMock.mockRestore();
+  });
+
+  it("sort comparator runs when a chat has two messages (line 1067)", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pk-1067";
+    const senderPubkey = "sender-pk-1067";
+
+    const makeWrap = (id: string, ts: number) => ({
+      id,
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: ts,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    });
+    const makeSeal = () => ({
+      kind: 13,
+      pubkey: senderPubkey,
+      content: "enc",
+      created_at: 0,
+      tags: [],
+    });
+    const makeMsg = (ts: number) => ({
+      kind: 14,
+      pubkey: senderPubkey,
+      content: "msg",
+      created_at: ts,
+      tags: [
+        ["p", userPubkey],
+        ["subject", "order-info"],
+      ],
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValue([makeWrap("w1", 200), makeWrap("w2", 100)]),
+    };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "p",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(makeSeal()))
+        .mockResolvedValueOnce(JSON.stringify(makeMsg(200)))
+        .mockResolvedValueOnce(JSON.stringify(makeSeal()))
+        .mockResolvedValueOnce(JSON.stringify(makeMsg(100))),
+    };
+    const editChatContext = jest.fn();
+
+    await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    const [chatMap] = editChatContext.mock.calls[0];
+    const msgs = chatMap.get(senderPubkey);
+    // sort is ascending by created_at (line 1067)
+    expect(msgs[0].created_at).toBeLessThanOrEqual(msgs[1].created_at);
+  });
+
+  it("logs cache rejection for valid relay message events (line 1078)", async () => {
+    const cacheError = new Error("message cache failed");
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockRejectedValue(cacheError),
+    }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pk-1078";
+    const senderPubkey = "sender-pk-1078";
+    const wrapEvent = {
+      id: "wrap-1078",
+      kind: 1059,
+      pubkey: "eph",
+      content: "enc-seal",
+      created_at: 100,
+      sig: "sig-1078",
+      tags: [["p", userPubkey]],
+    };
+    const sealEvent = {
+      kind: 13,
+      pubkey: senderPubkey,
+      content: "enc",
+      created_at: 0,
+      tags: [],
+    };
+    const msgEvent = {
+      kind: 14,
+      pubkey: senderPubkey,
+      content: "hi",
+      created_at: 100,
+      tags: [
+        ["p", userPubkey],
+        ["subject", "order-payment"],
+      ],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrapEvent]) };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "p",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(sealEvent))
+        .mockResolvedValueOnce(JSON.stringify(msgEvent)),
+    };
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      jest.fn(),
+      userPubkey
+    );
+    await Promise.resolve();
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to cache messages to database:",
+      cacheError
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("rejects when nostr.fetch throws during the relay message fetch (line 1084)", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const fetchError = new Error("messages relay down");
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "p",
+        sig: "s",
+        pubkey: "user-pk-1084",
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest.fn(),
+    };
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+    const nostr = { fetch: jest.fn().mockRejectedValue(fetchError) } as any;
+
+    await expect(
+      fetchGiftWrappedChatsAndMessages(
+        nostr,
+        signer as any,
+        ["wss://relay.example"],
+        jest.fn(),
+        "user-pk-1084"
+      )
+    ).rejects.toThrow("messages relay down");
   });
 });
 
@@ -4947,6 +5634,991 @@ describe("fetchCashuWallet", () => {
     expect(result.cashuMints).toEqual(expectedMints);
     expect(result.cashuProofs).toEqual(expect.arrayContaining(expectedProofs));
   });
+
+  // ── DB 7375 adds a new mint (lines 1756-1757) ──────────────────────────────
+  it("adds a new mint from a DB kind-7375 proof event when it is not yet in cashuMintSet", async () => {
+    const userPubkey = "a".repeat(64);
+    const mintUrl = "https://db-7375-new-mint.example";
+    const proof = { id: "p-new", secret: "s-new", C: "C-new", amount: 2 };
+
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const checkProofsStates = jest
+      .fn()
+      .mockResolvedValue([{ state: "UNSPENT", Y: `Y-s-new` }]);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({ loadMint, checkProofsStates })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const db7375Event = makeBaseEvent({
+      id: "db-7375-event",
+      kind: 7375,
+      pubkey: userPubkey,
+      content: "encrypted-db-7375",
+      sig: "sig-db-7375",
+      created_at: 100,
+    });
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest
+        .fn()
+        .mockResolvedValue(JSON.stringify({ mint: mintUrl, proofs: [proof] })),
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [db7375Event],
+    }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(result.cashuMints).toContain(mintUrl);
+  });
+
+  // ── DB global.fetch throws → logged at line 1797 ───────────────────────────
+  it("logs and continues when the wallet DB fetch throws", async () => {
+    const userPubkey = "b".repeat(64);
+    const dbError = new Error("DB connection refused");
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    global.fetch = jest.fn().mockRejectedValue(dbError) as typeof global.fetch;
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn(),
+    };
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const editCashuWalletContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to fetch wallet events from database: ",
+      dbError
+    );
+    expect(result.cashuMints).toEqual([]);
+    expect(result.cashuProofs).toEqual([]);
+    consoleErrorSpy.mockRestore();
+  });
+
+  // ── cacheEventsToDatabase rejects for relay 17375/37375 events (line 1819)
+  // ── AND relay 37375 mint tag added to cashuMints (lines 1885-1886) ─────────
+  it("logs cache rejection for relay wallet config events and adds mints from 37375 relay tags", async () => {
+    const userPubkey = "c".repeat(64);
+    const mintFromRelayTag = "https://relay-37375-tag-mint.example";
+    const cacheError = new Error("wallet config cache failed");
+
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const checkProofsStates = jest.fn().mockResolvedValue([]);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({ loadMint, checkProofsStates })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    const cacheEventsToDatabase = jest.fn().mockRejectedValue(cacheError);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    // 37375 relay event with a mint tag that's not in the set yet
+    const relay37375Event = makeBaseEvent({
+      id: "relay-37375-with-mint-tag",
+      kind: 37375,
+      pubkey: userPubkey,
+      tags: [["mint", mintFromRelayTag]],
+      content: "",
+      sig: "sig-relay-37375",
+      created_at: 200,
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue("[]"),
+    };
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([relay37375Event]) // hEvents
+        .mockResolvedValueOnce([]), // proofEvents_raw
+    } as any;
+    const editCashuWalletContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    await Promise.resolve(); // flush fire-and-forget .catch
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to cache wallet config events to database:",
+      cacheError
+    );
+    // mint from 37375 relay event tags was added (lines 1885-1886)
+    expect(result.cashuMints).toContain(mintFromRelayTag);
+    consoleErrorSpy.mockRestore();
+  });
+
+  // ── signer.decrypt throws for relay 17375 event (line 1846) ───────────────
+  it("logs decrypt error for a relay kind-17375 event and continues", async () => {
+    const userPubkey = "d".repeat(64);
+    const decryptError = new Error("decrypt failed");
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const relay17375Event = makeBaseEvent({
+      id: "relay-17375-bad-decrypt",
+      kind: 17375,
+      pubkey: userPubkey,
+      content: "bad-content",
+      sig: "sig-17375",
+      created_at: 100,
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockRejectedValue(decryptError),
+    };
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([relay17375Event])
+        .mockResolvedValueOnce([]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      `Failed to decrypt wallet config event relay-17375-bad-decrypt:`,
+      decryptError
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  // ── outer catch in hEvents loop for 37375 event (line 1861) ────────────────
+  it("logs outer catch when a 37375 event throws on created_at access during relay processing", async () => {
+    const userPubkey = "e".repeat(64);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    // First 37375 sets mostRecentWalletEvent; second has a getter that throws on created_at
+    const normalEvent = makeBaseEvent({
+      id: "normal-37375",
+      kind: 37375,
+      pubkey: userPubkey,
+      tags: [],
+      sig: "sig-normal-37375",
+      created_at: 100,
+    });
+    const weirdEvent = {
+      id: "weird-37375",
+      sig: "sig-weird",
+      pubkey: userPubkey,
+      kind: 37375,
+      content: "",
+      tags: [],
+    };
+    Object.defineProperty(weirdEvent, "created_at", {
+      get() {
+        throw new Error("bad event data");
+      },
+      configurable: true,
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue("[]"),
+    };
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([normalEvent, weirdEvent as any])
+        .mockResolvedValueOnce([]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      `Failed to process wallet config event weird-37375:`,
+      expect.any(Error)
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  // ── mostRecentWalletEvent.tags is null → catch at line 1890 ───────────────
+  it("logs catch when mostRecentWalletEvent has null tags during relay mint extraction", async () => {
+    const userPubkey = "f".repeat(64);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    // 37375 event with null tags so tags.filter() throws
+    const nullTagsEvent = {
+      id: "null-tags-37375",
+      sig: "sig-null-tags",
+      pubkey: userPubkey,
+      kind: 37375,
+      content: "",
+      tags: null as any,
+      created_at: 100,
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue("[]"),
+    };
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([nullTagsEvent as any])
+        .mockResolvedValueOnce([]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to process most recent wallet event:",
+      expect.any(TypeError)
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  // ── cacheEventsToDatabase rejects for proofEvents_raw (line 1915) ──────────
+  it("logs cache rejection for relay wallet proof events", async () => {
+    const userPubkey = "a".repeat(64);
+    const proofCacheError = new Error("proof cache failed");
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    const cacheEventsToDatabase = jest.fn().mockRejectedValue(proofCacheError);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const relay7375Event = makeBaseEvent({
+      id: "relay-7375-for-cache",
+      kind: 7375,
+      pubkey: userPubkey,
+      content: "encrypted-relay-proof",
+      sig: "sig-relay-7375-cache",
+      created_at: 100,
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      // Return content without .mint so proof processing is a no-op
+      decrypt: jest.fn().mockResolvedValue(JSON.stringify({ notMint: true })),
+    };
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([]) // hEvents
+        .mockResolvedValueOnce([relay7375Event]), // proofEvents_raw
+    } as any;
+    const editCashuWalletContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    await Promise.resolve();
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to cache wallet proof events to database:",
+      proofCacheError
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  // ── signer.decrypt returns null for relay proof event (lines 1927-1928) ────
+  it("warns and skips relay proof event when decrypt returns null", async () => {
+    const userPubkey = "b".repeat(64);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const relay7375NullDecrypt = makeBaseEvent({
+      id: "relay-7375-null-decrypt",
+      kind: 7375,
+      pubkey: userPubkey,
+      content: "content-that-decrypts-to-null",
+      sig: "sig-null-decrypt",
+      created_at: 100,
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(null),
+    };
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([relay7375NullDecrypt]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+
+    await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      `Failed to decrypt event content for relay-7375-null-decrypt`
+    );
+    consoleWarnSpy.mockRestore();
+  });
+
+  // ── signer.decrypt throws in relay proof loop → catch at line 1963 ─────────
+  it("logs and continues when decrypt throws for a relay proof event", async () => {
+    const userPubkey = "c".repeat(64);
+    const proofDecryptError = new Error("proof decrypt error");
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const relay7375ThrowsDecrypt = makeBaseEvent({
+      id: "relay-7375-throws-decrypt",
+      kind: 7375,
+      pubkey: userPubkey,
+      content: "throws-on-decrypt",
+      sig: "sig-throws",
+      created_at: 100,
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockRejectedValue(proofDecryptError),
+    };
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([relay7375ThrowsDecrypt]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      `Failed to process wallet event relay-7375-throws-decrypt:`,
+      proofDecryptError
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  // ── return true for proof not in mintProofs (line 2006) ────────────────────
+  it("passes through proofs from other mints unchanged when filtering spent proofs for a specific mint", async () => {
+    const userPubkey = "d".repeat(64);
+    const mintA = "https://mint-a.example";
+    const mintB = "https://mint-b.example";
+    const proofA = { id: "pa", secret: "sa", C: "Ca", amount: 1 };
+    const proofB = { id: "pb", secret: "sb", C: "Cb", amount: 1 };
+
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const checkProofsStates = jest.fn().mockResolvedValue([
+      { state: "UNSPENT", Y: "Y-sa" },
+      { state: "UNSPENT", Y: "Y-sb" },
+    ]);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({ loadMint, checkProofsStates })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const relay7375A = makeBaseEvent({
+      id: "relay-pe-a",
+      kind: 7375,
+      pubkey: userPubkey,
+      content: "content-a",
+      sig: "sig-a",
+      created_at: 100,
+    });
+    const relay7375B = makeBaseEvent({
+      id: "relay-pe-b",
+      kind: 7375,
+      pubkey: userPubkey,
+      content: "content-b",
+      sig: "sig-b",
+      created_at: 100,
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const decryptMap: Record<string, string> = {
+      "content-a": JSON.stringify({ mint: mintA, proofs: [proofA] }),
+      "content-b": JSON.stringify({ mint: mintB, proofs: [proofB] }),
+    };
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest
+        .fn()
+        .mockImplementation(
+          async (_pk: string, c: string) => decryptMap[c] ?? null
+        ),
+    };
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([]) // hEvents
+        .mockResolvedValueOnce([relay7375A, relay7375B]), // proofEvents_raw
+    } as any;
+    const editCashuWalletContext = jest.fn();
+
+    const result = await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    // Both proofs survived because both are UNSPENT
+    expect(result.cashuProofs).toHaveLength(2);
+    expect(result.cashuMints).toEqual(expect.arrayContaining([mintA, mintB]));
+  });
+
+  // ── checkProofsStates throws → caught at line 2023 ─────────────────────────
+  it("logs and continues when checkProofsStates throws for a mint", async () => {
+    const userPubkey = "e".repeat(64);
+    const mintUrl = "https://check-throws.example";
+    const proof = { id: "px", secret: "sx", C: "Cx", amount: 1 };
+    const checkError = new Error("mint unreachable");
+
+    const loadMint = jest.fn().mockResolvedValue(undefined);
+    const checkProofsStates = jest.fn().mockRejectedValue(checkError);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({ loadMint, checkProofsStates })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    const relay7375 = makeBaseEvent({
+      id: "relay-7375-check-throws",
+      kind: 7375,
+      pubkey: userPubkey,
+      content: "content-check-throws",
+      sig: "sig-check-throws",
+      created_at: 100,
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest
+        .fn()
+        .mockResolvedValue(JSON.stringify({ mint: mintUrl, proofs: [proof] })),
+    };
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([relay7375]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      `Failed to check proofs for mint ${mintUrl}:`,
+      checkError
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  // ── spending history processing throws (line 2081) ─────────────────────────
+  it("logs catch when spending history contains non-array data", async () => {
+    const userPubkey = "f".repeat(64);
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockResolvedValue(undefined),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    // A 7376 event whose decrypted content is a plain object (not an array)
+    // → pushed to incomingSpendingHistory → eventTags.some() throws TypeError
+    const relay7376Bad = makeBaseEvent({
+      id: "relay-7376-bad-history",
+      kind: 7376,
+      pubkey: userPubkey,
+      content: "content-bad-history",
+      sig: "sig-bad-history",
+      created_at: 100,
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest
+        .fn()
+        // Returns an object instead of an array, causing eventTags.some() to throw
+        .mockResolvedValue(JSON.stringify({ notAnArray: true })),
+    };
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([relay7376Bad]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to process spending history:",
+      expect.any(TypeError)
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  // ── deleteEvent throws → caught at line 2093 ───────────────────────────────
+  it("logs catch when deleteEvent throws for spent proof events", async () => {
+    const userPubkey = "a".repeat(64);
+    const deleteError = new Error("delete event failed");
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({
+        loadMint: jest.fn().mockResolvedValue(undefined),
+        checkProofsStates: jest.fn().mockResolvedValue([]),
+      })),
+      hashToCurve: jest.fn((bytes: Uint8Array) => ({
+        toHex: () => `Y-${Buffer.from(bytes).toString("utf8")}`,
+      })),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn().mockRejectedValue(deleteError),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    // Spending history with direction:out → eventsToDelete non-empty → deleteEvent called
+    const spendingHistory = [
+      ["direction", "out"],
+      ["e", "proof-event-to-delete", "", "destroyed"],
+    ];
+    const relay7376 = makeBaseEvent({
+      id: "relay-7376-delete",
+      kind: 7376,
+      pubkey: userPubkey,
+      content: "content-delete",
+      sig: "sig-7376-delete",
+      created_at: 100,
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn().mockResolvedValue(JSON.stringify(spendingHistory)),
+    };
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([relay7376]),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await fetchCashuWallet(
+      nostr,
+      signer as any,
+      ["wss://relay.example"],
+      editCashuWalletContext
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to delete spent events:",
+      deleteError
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  // ── fatal outer catch (lines 2108-2110) ────────────────────────────────────
+  it("calls editCashuWalletContext with empty arrays and rejects when nostr.fetch throws", async () => {
+    const userPubkey = "b".repeat(64);
+    const fatalError = new Error("relay connection refused");
+
+    jest.doMock("@cashu/cashu-ts", () => ({
+      Mint: jest.fn(),
+      Wallet: jest.fn(() => ({
+        loadMint: jest.fn(),
+        checkProofsStates: jest.fn(),
+      })),
+      hashToCurve: jest.fn(),
+    }));
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ tokens: [] })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCashuWallet } = await import("../fetch-service");
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const signer = { getPubKey: jest.fn().mockResolvedValue(userPubkey) };
+    const nostr = {
+      fetch: jest.fn().mockRejectedValue(fatalError),
+    } as any;
+    const editCashuWalletContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await expect(
+      fetchCashuWallet(
+        nostr,
+        signer as any,
+        ["wss://relay.example"],
+        editCashuWalletContext
+      )
+    ).rejects.toThrow("relay connection refused");
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Fatal error in fetchCashuWallet:",
+      fatalError
+    );
+    expect(editCashuWalletContext).toHaveBeenCalledWith([], [], [], false);
+    consoleErrorSpy.mockRestore();
+  });
 });
 
 describe("fetchShopProfile", () => {
@@ -5259,6 +6931,135 @@ describe("fetchShopProfile", () => {
 
     expect(cacheEventsToDatabase).toHaveBeenCalledTimes(1);
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([validShopEvent]);
+  });
+
+  it("sort comparator runs when DB returns multiple events for the same pubkey (line 627)", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchShopProfile } = await import("../fetch-service");
+
+    const pubkey = "multi-db-shop-pk";
+    const olderDbEvent = makeShopEvent({
+      id: "shop-db-older",
+      pubkey,
+      created_at: 50,
+      content: JSON.stringify({ name: "Old Shop" }),
+      sig: "sig-shop-db-older",
+    });
+    const newerDbEvent = makeShopEvent({
+      id: "shop-db-newer",
+      pubkey,
+      created_at: 200,
+      content: JSON.stringify({ name: "New Shop" }),
+      sig: "sig-shop-db-newer",
+    });
+
+    // Return two DB events for the same pubkey — sort runs to pick the newer one
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(
+        makeDbPayload([olderDbEvent, newerDbEvent])
+      ) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const editShopContext = jest.fn();
+
+    const { shopProfileMap } = await fetchShopProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      editShopContext
+    );
+
+    expect(shopProfileMap.get(pubkey)?.created_at).toBe(200);
+  });
+
+  it("logs and continues when the shop profiles DB fetch throws (line 659)", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchShopProfile } = await import("../fetch-service");
+
+    const dbError = new Error("shop DB down");
+    global.fetch = jest.fn().mockRejectedValue(dbError) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+    const editShopContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await fetchShopProfile(
+      nostr,
+      ["wss://relay.example"],
+      ["some-shop-pk"],
+      editShopContext
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to fetch shop profiles from database: ",
+      dbError
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("logs cache rejection for valid relay shop events (line 704)", async () => {
+    const cacheError = new Error("shop cache failed");
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockRejectedValue(cacheError),
+    }));
+
+    const { fetchShopProfile } = await import("../fetch-service");
+
+    const pubkey = "shop-cache-reject-pk";
+    const relayShopEvent = makeShopEvent({
+      id: "relay-shop-cache-reject",
+      pubkey,
+      created_at: 100,
+      content: JSON.stringify({ name: "Cache Reject Shop" }),
+      sig: "sig-shop-cache-reject",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayShopEvent]),
+    } as any;
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await fetchShopProfile(nostr, ["wss://relay.example"], [pubkey], jest.fn());
+
+    await Promise.resolve();
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to cache shop profiles to database:",
+      cacheError
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("rejects when nostr.fetch throws during the relay shop profile fetch (line 714)", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchShopProfile } = await import("../fetch-service");
+
+    const fetchError = new Error("shop relay down");
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = { fetch: jest.fn().mockRejectedValue(fetchError) } as any;
+
+    await expect(
+      fetchShopProfile(nostr, ["wss://relay.example"], ["some-pk"], jest.fn())
+    ).rejects.toThrow("shop relay down");
   });
 });
 
@@ -5598,6 +7399,25 @@ describe("fetchCart", () => {
     expect(editCartContext).toHaveBeenCalledTimes(1);
     expect(editCartContext).toHaveBeenCalledWith(addressArray, false);
   });
+
+  it("rejects when nostr.fetch throws during the relay cart fetch (line 585)", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCart } = await import("../fetch-service");
+
+    const fetchError = new Error("cart relay down");
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      decrypt: jest.fn(),
+    };
+    const nostr = { fetch: jest.fn().mockRejectedValue(fetchError) } as any;
+
+    await expect(
+      fetchCart(nostr, signer as any, ["wss://relay.example"], jest.fn(), [])
+    ).rejects.toThrow("cart relay down");
+  });
 });
 
 describe("fetchPendingPosts", () => {
@@ -5766,6 +7586,45 @@ describe("fetchPendingPosts", () => {
       "post-mid",
       "post-old",
     ]);
+  });
+
+  it("rejects and logs when nostr.fetch throws during the pending post fetch (lines 2354-2355)", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ relays: [] })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn(),
+    }));
+
+    const { fetchPendingPosts } = await import("../fetch-service");
+
+    const fetchError = new Error("relay fetch error for pending");
+    // nostr.fetch always throws — fetchCommunityPosts (called inside) returns []
+    // then nostr.fetch for pending post requests also throws
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([]) // fetchCommunityPosts: approval fetch → empty
+        // second call: fetchPendingPosts' own nostr.fetch throws
+        .mockRejectedValueOnce(fetchError),
+    } as any;
+
+    const community = makeCommunity();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await expect(fetchPendingPosts(nostr, community)).rejects.toThrow(
+      "relay fetch error for pending"
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to fetch pending posts:",
+      fetchError
+    );
+    consoleErrorSpy.mockRestore();
   });
 });
 
@@ -6119,6 +7978,121 @@ describe("fetchReviews", () => {
 
     consoleErrorSpy.mockRestore();
   });
+
+  it("updates existing review's created_at via map() when a newer relay review supersedes it (lines 1175-1178)", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReviews } = await import("../fetch-service");
+
+    // Two relay reviews from the SAME reviewer: first at 200, second at 300.
+    // After first relay review, productReviews["reviewer-1"] has a created_at entry.
+    // When second relay review (300 > 200) is processed, existingReview is truthy
+    // → takes the truthy branch → calls existingReview.map() → lines 1175-1178.
+    const firstRelayReview = makeReviewEvent({
+      id: "first-relay-review",
+      pubkey: "reviewer-1",
+      created_at: 200,
+      tags: [
+        ["d", productAddress],
+        ["rating", "3", "overall"],
+      ],
+      sig: "sig-first-relay",
+    });
+    const secondRelayReview = makeReviewEvent({
+      id: "second-relay-review",
+      pubkey: "reviewer-1",
+      created_at: 300,
+      tags: [
+        ["d", productAddress],
+        ["rating", "5", "overall"],
+      ],
+      sig: "sig-second-relay",
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([firstRelayReview, secondRelayReview]),
+    };
+    const editReviewsContext = jest.fn();
+
+    const result = await fetchReviews(
+      nostr as any,
+      ["wss://relay.example"],
+      [product as any],
+      editReviewsContext
+    );
+
+    // Only the newer review's score (5 → 2.5) survives
+    expect(result.merchantScoresMap.get("seller-a")).toEqual([2.5]);
+  });
+
+  it("logs cache rejection for valid relay reviews and still resolves (line 1276)", async () => {
+    const cacheError = new Error("review cache failed");
+    const cacheEventsToDatabase = jest.fn().mockRejectedValue(cacheError);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReviews } = await import("../fetch-service");
+
+    const relayReview = makeReviewEvent({ id: "cache-fail-review" });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayReview]) };
+    const editReviewsContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const result = await fetchReviews(
+      nostr as any,
+      ["wss://relay.example"],
+      [product as any],
+      editReviewsContext
+    );
+
+    await Promise.resolve();
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to cache reviews to database:",
+      cacheError
+    );
+    expect(result.merchantScoresMap).toBeInstanceOf(Map);
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("rejects when nostr.fetch throws in the relay review fetch (line 1282)", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchReviews } = await import("../fetch-service");
+
+    const fetchError = new Error("relay fetch failed for reviews");
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockRejectedValue(fetchError) };
+    const editReviewsContext = jest.fn();
+
+    await expect(
+      fetchReviews(
+        nostr as any,
+        ["wss://relay.example"],
+        [product as any],
+        editReviewsContext
+      )
+    ).rejects.toThrow("relay fetch failed for reviews");
+  });
 });
 
 describe("fetchAllRelays", () => {
@@ -6465,6 +8439,72 @@ describe("fetchAllRelays", () => {
 
     consoleErrorSpy.mockRestore();
   });
+
+  it("logs cache rejection for relay config events and still resolves (line 1511)", async () => {
+    const cacheError = new Error("relay config cache failed");
+    const cacheEventsToDatabase = jest.fn().mockRejectedValue(cacheError);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchAllRelays } = await import("../fetch-service");
+
+    const relayEvent = makeRelayEvent({
+      id: "relay-event-cache-fail",
+      sig: "sig-cache-fail",
+      tags: [["r", "wss://cache-fail.example"]],
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayEvent]) } as any;
+    const editRelaysContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const result = await fetchAllRelays(
+      nostr,
+      makeSigner(userPubkey) as any,
+      ["wss://relay.example"],
+      editRelaysContext
+    );
+
+    await Promise.resolve();
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to cache relay config events to database:",
+      cacheError
+    );
+    expect(result.relayList).toContain("wss://cache-fail.example");
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("rejects when nostr.fetch throws in the relay config fetch (line 1559)", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllRelays } = await import("../fetch-service");
+
+    const fetchError = new Error("relay fetch threw for relays");
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockRejectedValue(fetchError) } as any;
+    const editRelaysContext = jest.fn();
+
+    await expect(
+      fetchAllRelays(
+        nostr,
+        makeSigner(userPubkey) as any,
+        ["wss://relay.example"],
+        editRelaysContext
+      )
+    ).rejects.toThrow("relay fetch threw for relays");
+  });
 });
 
 describe("fetchAllBlossomServers", () => {
@@ -6767,6 +8807,74 @@ describe("fetchAllBlossomServers", () => {
     );
 
     consoleErrorSpy.mockRestore();
+  });
+
+  it("logs cache rejection for relay blossom config events and still resolves (line 1631)", async () => {
+    const cacheError = new Error("blossom cache failed");
+    const cacheEventsToDatabase = jest.fn().mockRejectedValue(cacheError);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchAllBlossomServers } = await import("../fetch-service");
+
+    const blossomEvent = makeBlossomEvent({
+      id: "blossom-cache-fail",
+      sig: "sig-blossom-cache-fail",
+      tags: [["server", "https://blossom-cache-fail.example"]],
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([blossomEvent]) } as any;
+    const editBlossomContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const result = await fetchAllBlossomServers(
+      nostr,
+      makeSigner(userPubkey) as any,
+      ["wss://relay.example"],
+      editBlossomContext
+    );
+
+    await Promise.resolve();
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to cache blossom config events to database:",
+      cacheError
+    );
+    expect(result.blossomServers).toContain(
+      "https://blossom-cache-fail.example"
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("rejects when nostr.fetch throws in the blossom server fetch (line 1655)", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllBlossomServers } = await import("../fetch-service");
+
+    const fetchError = new Error("blossom relay fetch failed");
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockRejectedValue(fetchError) } as any;
+    const editBlossomContext = jest.fn();
+
+    await expect(
+      fetchAllBlossomServers(
+        nostr,
+        makeSigner(userPubkey) as any,
+        ["wss://relay.example"],
+        editBlossomContext
+      )
+    ).rejects.toThrow("blossom relay fetch failed");
   });
 });
 
@@ -7082,6 +9190,464 @@ describe("fetchAllCommunities", () => {
     expect(nostr.fetch).toHaveBeenCalledTimes(1);
     expect(result.has("relay-after-db-throw")).toBe(true);
 
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("logs cache rejection for relay community events and still resolves (line 2173)", async () => {
+    const cacheError = new Error("community cache failed");
+    const cacheEventsToDatabase = jest.fn().mockRejectedValue(cacheError);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchAllCommunities } = await import("../fetch-service");
+
+    const relayEvent = makeCommunityEvent({
+      id: "community-cache-fail",
+      sig: "sig-community-cache-fail",
+      created_at: 100,
+      tags: [["d", "community-cache-fail"]],
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayEvent]) } as any;
+    const editCommunityContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const result = await fetchAllCommunities(
+      nostr,
+      ["wss://relay.example"],
+      editCommunityContext
+    );
+
+    await Promise.resolve();
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to cache communities to database:",
+      cacheError
+    );
+    expect(result.has("community-cache-fail")).toBe(true);
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("rejects when nostr.fetch throws during community relay fetch (line 2179)", async () => {
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchAllCommunities } = await import("../fetch-service");
+
+    const fetchError = new Error("communities relay fetch failed");
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = { fetch: jest.fn().mockRejectedValue(fetchError) } as any;
+    const editCommunityContext = jest.fn();
+
+    await expect(
+      fetchAllCommunities(nostr, ["wss://relay.example"], editCommunityContext)
+    ).rejects.toThrow("communities relay fetch failed");
+  });
+});
+
+describe("fetchCommunityPosts", () => {
+  const makeCommunity = (overrides: Record<string, any> = {}) => ({
+    id: "community-id",
+    kind: 34550,
+    pubkey: "moderator-pk",
+    createdAt: 100,
+    d: "test-community",
+    name: "Test Community",
+    description: "",
+    image: "https://robohash.org/community-id",
+    moderators: ["moderator-pk"],
+    relays: {
+      approvals: [],
+      requests: [],
+      metadata: [],
+      all: ["wss://community-relay.example"],
+    },
+    relaysList: ["wss://community-relay.example"],
+    ...overrides,
+  });
+
+  const makeApprovalEvent = (overrides: Record<string, any> = {}) =>
+    makeBaseEvent({
+      kind: 4550,
+      pubkey: "moderator-pk",
+      ...overrides,
+    });
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  it("returns empty array without fetching when community is null or falsy", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn().mockReturnValue({ relays: [] }),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCommunityPosts } = await import("../fetch-service");
+
+    const nostr = { fetch: jest.fn() } as any;
+
+    await expect(fetchCommunityPosts(nostr, null as any)).resolves.toEqual([]);
+
+    expect(nostr.fetch).not.toHaveBeenCalled();
+  });
+
+  it("returns empty array without fetching when combined relay set is empty", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn().mockReturnValue({ relays: [] }),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCommunityPosts } = await import("../fetch-service");
+
+    const nostr = { fetch: jest.fn() } as any;
+    const community = makeCommunity({
+      relays: { approvals: [], requests: [], metadata: [], all: [] },
+      relaysList: undefined,
+    });
+
+    await expect(fetchCommunityPosts(nostr, community as any)).resolves.toEqual(
+      []
+    );
+
+    expect(nostr.fetch).not.toHaveBeenCalled();
+  });
+
+  it("filters out approval events from non-moderator pubkeys", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn().mockReturnValue({ relays: [] }),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCommunityPosts } = await import("../fetch-service");
+
+    const nonModApproval = makeApprovalEvent({
+      id: "non-mod-approval",
+      pubkey: "stranger-pk",
+      tags: [["e", "post-to-approve"]],
+      created_at: 100,
+    });
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValueOnce([nonModApproval]),
+    } as any;
+
+    const result = await fetchCommunityPosts(nostr, makeCommunity() as any);
+
+    expect(result).toEqual([]);
+    // Approval fetch ran but produced no valid IDs → no post fetch
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps only the latest approval for a given post when multiple approvals reference it", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn().mockReturnValue({ relays: [] }),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCommunityPosts } = await import("../fetch-service");
+
+    const earlierApproval = makeApprovalEvent({
+      id: "approval-early",
+      tags: [["e", "shared-post-id"]],
+      created_at: 100,
+    });
+    const laterApproval = makeApprovalEvent({
+      id: "approval-late",
+      tags: [["e", "shared-post-id"]],
+      created_at: 200,
+    });
+    const post = makeBaseEvent({
+      id: "shared-post-id",
+      kind: 1111,
+      created_at: 50,
+      sig: "sig-shared-post",
+    });
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([earlierApproval, laterApproval])
+        .mockResolvedValueOnce([post]),
+    } as any;
+
+    const result = await fetchCommunityPosts(nostr, makeCommunity() as any);
+
+    expect(result[0]).toMatchObject({
+      id: "shared-post-id",
+      approved: true,
+      approvalEventId: "approval-late",
+    });
+  });
+
+  it("returns empty array when no valid approved event IDs exist after filtering approvals", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn().mockReturnValue({ relays: [] }),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCommunityPosts } = await import("../fetch-service");
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValueOnce([]),
+    } as any;
+
+    const result = await fetchCommunityPosts(nostr, makeCommunity() as any);
+
+    expect(result).toEqual([]);
+    // Only the approval fetch ran
+    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("batches approved event IDs into groups of 50 for post fetching", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn().mockReturnValue({ relays: [] }),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCommunityPosts } = await import("../fetch-service");
+
+    // One approval event approving 55 distinct posts
+    const eTags = Array.from({ length: 55 }, (_, i) => [
+      "e",
+      `batch-post-${i}`,
+    ]);
+    const bigApproval = makeApprovalEvent({
+      id: "big-approval",
+      tags: eTags,
+      created_at: 100,
+    });
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([bigApproval])
+        .mockResolvedValue([]),
+    } as any;
+
+    await fetchCommunityPosts(nostr, makeCommunity() as any);
+
+    // 1 approval fetch + 2 batch fetches (50 + 5) = 3 total
+    expect(nostr.fetch).toHaveBeenCalledTimes(3);
+    const secondCallIds = nostr.fetch.mock.calls[1][0][0].ids as string[];
+    const thirdCallIds = nostr.fetch.mock.calls[2][0][0].ids as string[];
+    expect(secondCallIds).toHaveLength(50);
+    expect(thirdCallIds).toHaveLength(5);
+  });
+
+  it("annotates approved posts with approval metadata and sets approved: false for unapproved posts", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn().mockReturnValue({ relays: [] }),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCommunityPosts } = await import("../fetch-service");
+
+    const approval = makeApprovalEvent({
+      id: "approval-annotate",
+      tags: [["e", "approved-post-id"]],
+      created_at: 100,
+    });
+    const approvedPost = makeBaseEvent({
+      id: "approved-post-id",
+      kind: 1111,
+      created_at: 200,
+      sig: "sig-approved",
+    });
+    // Post returned by relay but not referenced by any approval
+    const unapprovedPost = makeBaseEvent({
+      id: "unapproved-post-id",
+      kind: 1111,
+      created_at: 100,
+      sig: "sig-unapproved",
+    });
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([approval])
+        .mockResolvedValueOnce([approvedPost, unapprovedPost]),
+    } as any;
+
+    const result = await fetchCommunityPosts(nostr, makeCommunity() as any);
+
+    const approvedResult = result.find(
+      (p) => p.id === "approved-post-id"
+    ) as any;
+    const unapprovedResult = result.find(
+      (p) => p.id === "unapproved-post-id"
+    ) as any;
+
+    expect(approvedResult).toMatchObject({
+      id: "approved-post-id",
+      approved: true,
+      approvalEventId: "approval-annotate",
+      approvedBy: "moderator-pk",
+    });
+    expect(unapprovedResult).toMatchObject({
+      id: "unapproved-post-id",
+      approved: false,
+    });
+    expect(unapprovedResult.approvalEventId).toBeUndefined();
+  });
+
+  it("sorts returned posts newest-first by created_at", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn().mockReturnValue({ relays: [] }),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCommunityPosts } = await import("../fetch-service");
+
+    const approval = makeApprovalEvent({
+      id: "sort-approval",
+      tags: [
+        ["e", "post-x"],
+        ["e", "post-y"],
+        ["e", "post-z"],
+      ],
+      created_at: 100,
+    });
+    const postX = makeBaseEvent({
+      id: "post-x",
+      kind: 1111,
+      created_at: 300,
+      sig: "sig-x",
+    });
+    const postY = makeBaseEvent({
+      id: "post-y",
+      kind: 1111,
+      created_at: 100,
+      sig: "sig-y",
+    });
+    const postZ = makeBaseEvent({
+      id: "post-z",
+      kind: 1111,
+      created_at: 200,
+      sig: "sig-z",
+    });
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([approval])
+        .mockResolvedValueOnce([postX, postY, postZ]),
+    } as any;
+
+    const result = await fetchCommunityPosts(nostr, makeCommunity() as any);
+
+    expect(result.map((p) => p.id)).toEqual(["post-x", "post-z", "post-y"]);
+  });
+
+  it("falls back to combinedRelays for approval fetching when community has no explicit approval relays", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn().mockReturnValue({ relays: [] }),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCommunityPosts } = await import("../fetch-service");
+
+    const community = makeCommunity({
+      relays: {
+        approvals: [],
+        requests: [],
+        metadata: [],
+        all: ["wss://all-relay.example"],
+      },
+    });
+
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
+
+    await fetchCommunityPosts(nostr, community as any);
+
+    // First fetch is for approvals — should use combinedRelays (= all + empty userRelays)
+    expect(nostr.fetch).toHaveBeenNthCalledWith(
+      1,
+      [expect.objectContaining({ kinds: [4550] })],
+      {},
+      ["wss://all-relay.example"]
+    );
+  });
+
+  it("rejects and logs when nostr.fetch throws during the community posts fetch (lines 2301-2302)", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn().mockReturnValue({ relays: [] }),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchCommunityPosts } = await import("../fetch-service");
+
+    const fetchError = new Error("approval fetch threw");
+    const nostr = {
+      fetch: jest.fn().mockRejectedValue(fetchError),
+    } as any;
+
+    const community = makeCommunity();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await expect(fetchCommunityPosts(nostr, community as any)).rejects.toThrow(
+      "approval fetch threw"
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to fetch community posts:",
+      fetchError
+    );
     consoleErrorSpy.mockRestore();
   });
 });
