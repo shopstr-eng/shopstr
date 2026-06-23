@@ -3659,7 +3659,7 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
         tags: [],
         created_at: 0,
       }),
-      decrypt: jest.fn().mockResolvedValue(""), // falsy → continue
+      decrypt: jest.fn().mockResolvedValue(""),
     };
     const editChatContext = jest.fn();
 
@@ -3719,8 +3719,8 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
       }),
       decrypt: jest
         .fn()
-        .mockResolvedValueOnce(JSON.stringify(sealEvent)) // outer → ok
-        .mockResolvedValueOnce(""), // inner → falsy → continue
+        .mockResolvedValueOnce(JSON.stringify(sealEvent))
+        .mockResolvedValueOnce(""),
     };
     const editChatContext = jest.fn();
 
@@ -3903,7 +3903,7 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     const senderPubkey = "other-person-pubkey";
     const messageEvent = {
       kind: 14,
-      pubkey: senderPubkey, // sender ≠ userPubkey → incoming
+      pubkey: senderPubkey,
       content: "Hi from them",
       created_at: 1000,
       tags: [
@@ -3975,7 +3975,7 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     const recipientPubkey = "recipient-pubkey";
     const messageEvent = {
       kind: 14,
-      pubkey: userPubkey, // sender = userPubkey → outgoing
+      pubkey: userPubkey,
       content: "Hi from me",
       created_at: 1000,
       tags: [
@@ -4055,7 +4055,7 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
       created_at: 1000,
       sig: "sig",
       tags: [],
-      is_read: true, // ← already read in DB
+      is_read: true,
     };
     const wrapEvent = {
       id: wrapId,
@@ -4144,7 +4144,7 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
       pubkey: "eph",
       content: "enc",
       created_at: 1000,
-      sig: "", // empty sig → invalid
+      sig: "",
       tags: [["p", userPubkey]],
     };
 
@@ -4166,7 +4166,7 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
         tags: [],
         created_at: 0,
       }),
-      decrypt: jest.fn().mockResolvedValue(""), // all events skipped in loop
+      decrypt: jest.fn().mockResolvedValue(""),
     };
     const editChatContext = jest.fn();
 
@@ -4338,7 +4338,6 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
       userPubkey
     );
 
-    // Both messages from senderPubkey are in the same chat entry (line 968 push executed)
     expect(result.profileSetFromChats).toContain(senderPubkey);
   });
 
@@ -4351,13 +4350,12 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
       await import("../fetch-service");
 
     const userPubkey = "user-pk-1030";
-    // Message with a valid subject but NO "p" tag → recipientPubkey = null → lines 1030-1038
     const msgEvent = {
       kind: 14,
       pubkey: userPubkey,
       content: "outgoing",
       created_at: 100,
-      tags: [["subject", "listing-inquiry"]], // no "p" tag
+      tags: [["subject", "listing-inquiry"]],
     };
     const sealEvent = {
       kind: 13,
@@ -4403,7 +4401,6 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
       .mockImplementation(() => {});
     const alertMock = jest.spyOn(window, "alert").mockImplementation(() => {});
 
-    // Do NOT await — the Promise never resolves because `return` exits the executor
     fetchGiftWrappedChatsAndMessages(
       nostr as any,
       signer as any,
@@ -4502,7 +4499,6 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
 
     const [chatMap] = editChatContext.mock.calls[0];
     const msgs = chatMap.get(senderPubkey);
-    // sort is ascending by created_at (line 1067)
     expect(msgs[0].created_at).toBeLessThanOrEqual(msgs[1].created_at);
   });
 
@@ -4870,7 +4866,6 @@ describe("fetchCashuWallet", () => {
       editCashuWalletContext
     );
 
-    // Second nostr.fetch call (for proof events) must use the cashu relay
     expect(nostr.fetch).toHaveBeenCalledTimes(2);
     expect(nostr.fetch).toHaveBeenNthCalledWith(2, expect.anything(), {}, [
       cashuRelay,
@@ -4939,9 +4934,7 @@ describe("fetchCashuWallet", () => {
     const nostr = {
       fetch: jest
         .fn()
-        // First call: config events (17375 / 37375)
         .mockResolvedValueOnce([relay17375, relay37375])
-        // Second call: proof events
         .mockResolvedValueOnce([]),
     } as any;
     const editCashuWalletContext = jest.fn();
@@ -5030,9 +5023,7 @@ describe("fetchCashuWallet", () => {
     const nostr = {
       fetch: jest
         .fn()
-        // First call: config events — none
         .mockResolvedValueOnce([])
-        // Second call: proof events
         .mockResolvedValueOnce([relay7375, relay7376]),
     } as any;
     const editCashuWalletContext = jest.fn();
@@ -5635,7 +5626,6 @@ describe("fetchCashuWallet", () => {
     expect(result.cashuProofs).toEqual(expect.arrayContaining(expectedProofs));
   });
 
-  // ── DB 7375 adds a new mint (lines 1756-1757) ──────────────────────────────
   it("adds a new mint from a DB kind-7375 proof event when it is not yet in cashuMintSet", async () => {
     const userPubkey = "a".repeat(64);
     const mintUrl = "https://db-7375-new-mint.example";
@@ -5700,7 +5690,6 @@ describe("fetchCashuWallet", () => {
     expect(result.cashuMints).toContain(mintUrl);
   });
 
-  // ── DB global.fetch throws → logged at line 1797 ───────────────────────────
   it("logs and continues when the wallet DB fetch throws", async () => {
     const userPubkey = "b".repeat(64);
     const dbError = new Error("DB connection refused");
@@ -5754,8 +5743,6 @@ describe("fetchCashuWallet", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  // ── cacheEventsToDatabase rejects for relay 17375/37375 events (line 1819)
-  // ── AND relay 37375 mint tag added to cashuMints (lines 1885-1886) ─────────
   it("logs cache rejection for relay wallet config events and adds mints from 37375 relay tags", async () => {
     const userPubkey = "c".repeat(64);
     const mintFromRelayTag = "https://relay-37375-tag-mint.example";
@@ -5804,8 +5791,8 @@ describe("fetchCashuWallet", () => {
     const nostr = {
       fetch: jest
         .fn()
-        .mockResolvedValueOnce([relay37375Event]) // hEvents
-        .mockResolvedValueOnce([]), // proofEvents_raw
+        .mockResolvedValueOnce([relay37375Event])
+        .mockResolvedValueOnce([]),
     } as any;
     const editCashuWalletContext = jest.fn();
     const consoleErrorSpy = jest
@@ -5825,12 +5812,10 @@ describe("fetchCashuWallet", () => {
       "Failed to cache wallet config events to database:",
       cacheError
     );
-    // mint from 37375 relay event tags was added (lines 1885-1886)
     expect(result.cashuMints).toContain(mintFromRelayTag);
     consoleErrorSpy.mockRestore();
   });
 
-  // ── signer.decrypt throws for relay 17375 event (line 1846) ───────────────
   it("logs decrypt error for a relay kind-17375 event and continues", async () => {
     const userPubkey = "d".repeat(64);
     const decryptError = new Error("decrypt failed");
@@ -5899,7 +5884,6 @@ describe("fetchCashuWallet", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  // ── outer catch in hEvents loop for 37375 event (line 1861) ────────────────
   it("logs outer catch when a 37375 event throws on created_at access during relay processing", async () => {
     const userPubkey = "e".repeat(64);
 
@@ -5924,7 +5908,6 @@ describe("fetchCashuWallet", () => {
 
     const { fetchCashuWallet } = await import("../fetch-service");
 
-    // First 37375 sets mostRecentWalletEvent; second has a getter that throws on created_at
     const normalEvent = makeBaseEvent({
       id: "normal-37375",
       kind: 37375,
@@ -5982,7 +5965,6 @@ describe("fetchCashuWallet", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  // ── mostRecentWalletEvent.tags is null → catch at line 1890 ───────────────
   it("logs catch when mostRecentWalletEvent has null tags during relay mint extraction", async () => {
     const userPubkey = "f".repeat(64);
 
@@ -6052,7 +6034,6 @@ describe("fetchCashuWallet", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  // ── cacheEventsToDatabase rejects for proofEvents_raw (line 1915) ──────────
   it("logs cache rejection for relay wallet proof events", async () => {
     const userPubkey = "a".repeat(64);
     const proofCacheError = new Error("proof cache failed");
@@ -6123,7 +6104,6 @@ describe("fetchCashuWallet", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  // ── signer.decrypt returns null for relay proof event (lines 1927-1928) ────
   it("warns and skips relay proof event when decrypt returns null", async () => {
     const userPubkey = "b".repeat(64);
 
@@ -6190,7 +6170,6 @@ describe("fetchCashuWallet", () => {
     consoleWarnSpy.mockRestore();
   });
 
-  // ── signer.decrypt throws in relay proof loop → catch at line 1963 ─────────
   it("logs and continues when decrypt throws for a relay proof event", async () => {
     const userPubkey = "c".repeat(64);
     const proofDecryptError = new Error("proof decrypt error");
@@ -6259,7 +6238,6 @@ describe("fetchCashuWallet", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  // ── return true for proof not in mintProofs (line 2006) ────────────────────
   it("passes through proofs from other mints unchanged when filtering spent proofs for a specific mint", async () => {
     const userPubkey = "d".repeat(64);
     const mintA = "https://mint-a.example";
@@ -6345,7 +6323,6 @@ describe("fetchCashuWallet", () => {
     expect(result.cashuMints).toEqual(expect.arrayContaining([mintA, mintB]));
   });
 
-  // ── checkProofsStates throws → caught at line 2023 ─────────────────────────
   it("logs and continues when checkProofsStates throws for a mint", async () => {
     const userPubkey = "e".repeat(64);
     const mintUrl = "https://check-throws.example";
@@ -6418,7 +6395,6 @@ describe("fetchCashuWallet", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  // ── spending history processing throws (line 2081) ─────────────────────────
   it("logs catch when spending history contains non-array data", async () => {
     const userPubkey = "f".repeat(64);
 
@@ -6443,8 +6419,6 @@ describe("fetchCashuWallet", () => {
 
     const { fetchCashuWallet } = await import("../fetch-service");
 
-    // A 7376 event whose decrypted content is a plain object (not an array)
-    // → pushed to incomingSpendingHistory → eventTags.some() throws TypeError
     const relay7376Bad = makeBaseEvent({
       id: "relay-7376-bad-history",
       kind: 7376,
@@ -6491,7 +6465,6 @@ describe("fetchCashuWallet", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  // ── deleteEvent throws → caught at line 2093 ───────────────────────────────
   it("logs catch when deleteEvent throws for spent proof events", async () => {
     const userPubkey = "a".repeat(64);
     const deleteError = new Error("delete event failed");
@@ -6517,7 +6490,6 @@ describe("fetchCashuWallet", () => {
 
     const { fetchCashuWallet } = await import("../fetch-service");
 
-    // Spending history with direction:out → eventsToDelete non-empty → deleteEvent called
     const spendingHistory = [
       ["direction", "out"],
       ["e", "proof-event-to-delete", "", "destroyed"],
@@ -6565,7 +6537,6 @@ describe("fetchCashuWallet", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  // ── fatal outer catch (lines 2108-2110) ────────────────────────────────────
   it("calls editCashuWalletContext with empty arrays and rejects when nostr.fetch throws", async () => {
     const userPubkey = "b".repeat(64);
     const fatalError = new Error("relay connection refused");
@@ -6956,7 +6927,6 @@ describe("fetchShopProfile", () => {
       sig: "sig-shop-db-newer",
     });
 
-    // Return two DB events for the same pubkey — sort runs to pick the newer one
     global.fetch = jest
       .fn()
       .mockResolvedValue(
@@ -7814,7 +7784,6 @@ describe("fetchReviews", () => {
 
     const { fetchReviews } = await import("../fetch-service");
 
-    // "rating","4","overall" with no thumb: score = 4 * 0.5 = 2
     const review = makeReviewEvent({
       id: "score-review",
       tags: [
@@ -7985,10 +7954,6 @@ describe("fetchReviews", () => {
 
     const { fetchReviews } = await import("../fetch-service");
 
-    // Two relay reviews from the SAME reviewer: first at 200, second at 300.
-    // After first relay review, productReviews["reviewer-1"] has a created_at entry.
-    // When second relay review (300 > 200) is processed, existingReview is truthy
-    // → takes the truthy branch → calls existingReview.map() → lines 1175-1178.
     const firstRelayReview = makeReviewEvent({
       id: "first-relay-review",
       pubkey: "reviewer-1",
@@ -8027,7 +7992,6 @@ describe("fetchReviews", () => {
       editReviewsContext
     );
 
-    // Only the newer review's score (5 → 2.5) survives
     expect(result.merchantScoresMap.get("seller-a")).toEqual([2.5]);
   });
 
@@ -9360,7 +9324,6 @@ describe("fetchCommunityPosts", () => {
     const result = await fetchCommunityPosts(nostr, makeCommunity() as any);
 
     expect(result).toEqual([]);
-    // Approval fetch ran but produced no valid IDs → no post fetch
     expect(nostr.fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -9464,7 +9427,6 @@ describe("fetchCommunityPosts", () => {
 
     await fetchCommunityPosts(nostr, makeCommunity() as any);
 
-    // 1 approval fetch + 2 batch fetches (50 + 5) = 3 total
     expect(nostr.fetch).toHaveBeenCalledTimes(3);
     const secondCallIds = nostr.fetch.mock.calls[1][0][0].ids as string[];
     const thirdCallIds = nostr.fetch.mock.calls[2][0][0].ids as string[];
@@ -9495,7 +9457,6 @@ describe("fetchCommunityPosts", () => {
       created_at: 200,
       sig: "sig-approved",
     });
-    // Post returned by relay but not referenced by any approval
     const unapprovedPost = makeBaseEvent({
       id: "unapproved-post-id",
       kind: 1111,
@@ -9609,7 +9570,6 @@ describe("fetchCommunityPosts", () => {
 
     await fetchCommunityPosts(nostr, community as any);
 
-    // First fetch is for approvals — should use combinedRelays (= all + empty userRelays)
     expect(nostr.fetch).toHaveBeenNthCalledWith(
       1,
       [expect.objectContaining({ kinds: [4550] })],
