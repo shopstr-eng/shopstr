@@ -30,6 +30,7 @@ import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wra
 import ProtectedRoute from "@/components/utility-components/protected-route";
 import { getLocalStorageJson } from "@/utils/safe-json";
 import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
+import { isSellerP2pkEscrowActive } from "@/utils/cashu/p2pk-checkout";
 
 interface QuantitySelectorProps {
   value: number;
@@ -82,6 +83,16 @@ function QuantitySelector({
 export default function Component() {
   const shopContext = useContext(ShopMapContext);
   const profileContext = useContext(ProfileMapContext);
+
+  const renderP2pkCartBadge = (sellerPubkey: string) => {
+    const p2pk = profileContext.profileData.get(sellerPubkey)?.content.p2pk;
+    if (!isSellerP2pkEscrowActive(p2pk)) return null;
+    return (
+      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-[11px] font-medium text-yellow-700 dark:text-yellow-300">
+        🔒 P2PK Escrow · {p2pk!.refundDelayDays}d reclaim opens
+      </div>
+    );
+  };
 
   const [products, setProducts] = useState<ProductData[]>([]);
   const [satPrices, setSatPrices] = useState<{ [key: string]: number | null }>(
@@ -729,6 +740,7 @@ export default function Component() {
                                       )}
                                     </div>
                                   )}
+                                  {renderP2pkCartBadge(product.pubkey)}
                                 </div>
                               </div>
                               <div className="mt-4 flex md:mt-0 md:items-center">

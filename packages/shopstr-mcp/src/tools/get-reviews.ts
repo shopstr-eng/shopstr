@@ -12,7 +12,6 @@ import type { NostrEvent, NostrFilter } from "../types.js";
 import { reviewsInputSchema } from "../validation.js";
 import {
   PRODUCT_KIND,
-  REVIEW_KIND,
   REVIEW_RESPONSE_BUDGET,
   allRelaysFailed,
   buildToolMeta,
@@ -21,6 +20,12 @@ import {
   getDataFreshness,
 } from "./utils/common.js";
 import type { CoreToolContext } from "./utils/context.js";
+import {
+  createReviewFilter,
+  eventReferencesSeller,
+  hasProductAddress,
+  hasTag,
+} from "./utils/review-helpers.js";
 
 export const getReviewsInputSchema = {
   productId: z
@@ -36,10 +41,6 @@ export const getReviewsInputSchema = {
     .optional()
     .describe("Seller public key as hex or npub"),
 };
-
-function hasTag(event: NostrEvent, key: string, value: string): boolean {
-  return event.tags.some((tag) => tag[0] === key && tag[1] === value);
-}
 
 function reviewMatchesTarget(
   event: NostrEvent,
@@ -74,36 +75,6 @@ function reviewMatchesTarget(
     return false;
   }
   return true;
-}
-
-function hasProductAddress(event: NostrEvent, productAddress: string): boolean {
-  return (
-    hasTag(event, "d", `a:${productAddress}`) ||
-    hasTag(event, "d", productAddress) ||
-    hasTag(event, "a", productAddress)
-  );
-}
-
-function eventReferencesSeller(
-  event: NostrEvent,
-  sellerPubkey: string
-): boolean {
-  return event.tags.some((tag) => {
-    const [key, value] = tag;
-    return (
-      typeof value === "string" &&
-      (key === "d" || key === "a") &&
-      value.includes(sellerPubkey)
-    );
-  });
-}
-
-function createReviewFilter(fields: Partial<NostrFilter>): NostrFilter {
-  return {
-    kinds: [REVIEW_KIND],
-    limit: 500,
-    ...fields,
-  };
 }
 
 function buildReviewFilters(

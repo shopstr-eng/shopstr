@@ -19,7 +19,7 @@ import parseTags, {
 import { parseZapsnagNote } from "@/utils/parsers/zapsnag-parser";
 import CheckoutCard from "../../components/utility-components/checkout-card";
 import ZapsnagButton from "../../components/ZapsnagButton";
-import { ProductContext } from "../../utils/context/context";
+import { ProductContext, ProfileMapContext } from "../../utils/context/context";
 import { nip19 } from "nostr-tools";
 import {
   RawEventModal,
@@ -191,6 +191,7 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
   const [productData, setProductData] = useState<ProductData | undefined>(
     seededListing?.productData
   );
+
   const [isZapsnag, setIsZapsnag] = useState(seededListing?.isZapsnag ?? false);
   const [productIdString, setProductIdString] = useState("");
   const [rawEvent, setRawEvent] = useState<NostrEvent | undefined>(
@@ -227,6 +228,28 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
     reportedEventId: productData?.id,
     onRequireLogin: onOpen,
   });
+  const profileMap = useContext(ProfileMapContext).profileData;
+
+  // seller pk before productData loads (SSR / raw event)
+  const sellerPubkey = useMemo(
+    () =>
+      productData?.pubkey ||
+      rawEvent?.pubkey ||
+      seededListing?.productData.pubkey ||
+      initialProductEvent?.pubkey ||
+      "",
+    [
+      productData?.pubkey,
+      rawEvent?.pubkey,
+      seededListing?.productData.pubkey,
+      initialProductEvent?.pubkey,
+    ]
+  );
+
+  const p2pk = useMemo(() => {
+    if (!sellerPubkey) return undefined;
+    return profileMap.get(sellerPubkey)?.content.p2pk;
+  }, [profileMap, sellerPubkey]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -460,6 +483,7 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
               setCashuPaymentSent={setCashuPaymentSent}
               setCashuPaymentFailed={setCashuPaymentFailed}
               rawEvent={rawEvent}
+              p2pk={p2pk}
             />
           )
         ) : isListingNotFound ? (

@@ -350,6 +350,28 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
 
       <form onSubmit={handleSubmit(onSubmit as any)}>
         <Controller
+          name="picture"
+          control={control}
+          render={({ field: { onChange, onBlur, value } }) => (
+            <Input
+              type="url"
+              className="text-light-text dark:text-dark-text pb-4"
+              classNames={{
+                label: "text-light-text dark:text-dark-text text-lg",
+              }}
+              variant="bordered"
+              fullWidth
+              label="Profile image URL"
+              labelPlacement="outside"
+              placeholder="https://..."
+              onChange={onChange}
+              onBlur={onBlur}
+              value={value || ""}
+            />
+          )}
+        />
+
+        <Controller
           name="display_name"
           control={control}
           render={({

@@ -12,6 +12,7 @@ describe("cache event policy", () => {
     expect(isCacheableKind(1984)).toBe(true);
     expect(isCacheableKind(7375)).toBe(true);
     expect(isCacheableKind(7376)).toBe(true);
+    expect(isCacheableKind(30406)).toBe(true);
   });
 
   it("rejects unknown kinds and malformed event shapes", () => {

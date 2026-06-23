@@ -30,6 +30,11 @@ import {
 } from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
+import {
+  isSellerP2pkEscrowActive,
+  resolveP2pkCheckoutOutputConfig,
+} from "@/utils/cashu/p2pk-checkout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import {
   recordPendingMintQuote,
@@ -43,6 +48,7 @@ import {
   withDeadline,
   isTimeoutError,
 } from "@/utils/cashu/wallet-recovery";
+import { persistBuyerP2pkEscrowRecord } from "@/utils/cashu/p2pk-escrow-records";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -108,7 +114,7 @@ export default function ProductInvoiceCard({
   discountPercentage?: number;
   originalPrice?: number;
 }) {
-  const { mints, history } = getLocalStorageData();
+  const { mints } = getLocalStorageData();
   const tokens = getCachedCashuProofs();
   const {
     pubkey: userPubkey,
@@ -179,6 +185,7 @@ export default function ProductInvoiceCard({
   } | null>(null);
 
   const walletContext = useContext(CashuWalletContext);
+  const { cashuPubkey } = walletContext;
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
@@ -1208,8 +1215,19 @@ export default function ProductInvoiceCard({
     let remainingProofs = proofs;
     let sellerToken;
     let donationToken;
+
     const sellerProfile = profileContext.profileData.get(productData.pubkey);
-    const donationPercentage = sellerProfile?.content?.shopstr_donation || 2.1;
+    const buyerProfile = profileContext.profileData.get(userPubkey!);
+    const sellerP2pk = sellerProfile?.content?.p2pk;
+    const p2pkOutputConfig = await resolveP2pkCheckoutOutputConfig({
+      sellerP2pk,
+      amountSats: totalPrice,
+      mintUrl: mints[0],
+      buyerContent: buyerProfile?.content,
+      buyerCashuPubkey: cashuPubkey,
+    });
+
+    const donationPercentage = sellerProfile?.content?.shopstr_donation ?? 2.1;
     const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
     const sellerAmount = totalPrice - donationAmount;
     let sellerProofs: Proof[] = [];
@@ -1219,8 +1237,12 @@ export default function ProductInvoiceCard({
         wallet,
         sellerAmount,
         remainingProofs,
-        { sendConfig: { includeFees: true } }
+        {
+          sendConfig: { includeFees: true },
+          outputConfig: p2pkOutputConfig,
+        }
       );
+
       if (swapOutcome.status !== "swapped") {
         throw new Error(
           swapOutcome.errorMessage ??
@@ -1263,12 +1285,26 @@ export default function ProductInvoiceCard({
       pendingOrderRef.current.orderId = orderId;
     }
 
+    if (p2pkOutputConfig && sellerToken) {
+      await persistBuyerP2pkEscrowRecord(nostr, signer, {
+        orderId,
+        mint: mints[0]!,
+        token: sellerToken,
+        amount: sellerAmount,
+        sellerPubkey: p2pkOutputConfig.send.options.pubkey,
+        locktime: p2pkOutputConfig.send.options.locktime,
+        refundKeys: p2pkOutputConfig.send.options.refundKeys,
+        createdAt: Math.floor(Date.now() / 1000),
+      });
+    }
+
     const paymentPreference =
       sellerProfile?.content?.payment_preference || "ecash";
     const lnurl = sellerProfile?.content?.lud16 || "";
 
     // Step 1: Send payment message
     if (
+      !isSellerP2pkEscrowActive(sellerProfile?.content?.p2pk) &&
       paymentPreference === "lightning" &&
       lnurl &&
       lnurl !== "" &&
@@ -1312,10 +1348,7 @@ export default function ProductInvoiceCard({
           const changeProofs = [...keep, ...meltOutcome.changeProofs];
           const changeAmount =
             Array.isArray(changeProofs) && changeProofs.length > 0
-              ? changeProofs.reduce(
-                  (acc, current: Proof) => acc + current.amount.toNumber(),
-                  0
-                )
+              ? sumProofAmounts(changeProofs)
               : 0;
           let productDetails = "";
           if (selectedSize) {
@@ -1407,10 +1440,7 @@ export default function ProductInvoiceCard({
           const unusedProofs = [...keep, ...send, ...meltOutcome.changeProofs];
           const unusedAmount =
             Array.isArray(unusedProofs) && unusedProofs.length > 0
-              ? unusedProofs.reduce(
-                  (acc, current: Proof) => acc + current.amount.toNumber(),
-                  0
-                )
+              ? sumProofAmounts(unusedProofs)
               : 0;
           const unusedToken = getEncodedToken({
             mint: mints[0]!,
@@ -1857,6 +1887,8 @@ export default function ProductInvoiceCard({
         donationPercentage
       );
     }
+
+    return remainingProofs;
   };
 
   const handleCopyInvoice = () => {
@@ -1915,19 +1947,11 @@ export default function ProductInvoiceCard({
       const wallet = new CashuWallet(mint);
       await wallet.loadMint();
       const mintKeySetIds = await wallet.keyChain.getKeysets();
-      const filteredProofs = tokens.filter((p: Proof) =>
+      const { tokens: currentTokens, history: currentHistory } =
+        getLocalStorageData();
+      const filteredProofs = (currentTokens as Proof[]).filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      ) as Proof[];
-      const swapOutcome = await safeSwap(wallet, price, filteredProofs, {
-        sendConfig: { includeFees: true },
-      });
-      if (swapOutcome.status !== "swapped") {
-        throw new Error(
-          swapOutcome.errorMessage ??
-            `Product payment swap did not complete (${swapOutcome.status})`
-        );
-      }
-      const { keep, send } = swapOutcome;
+      );
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
@@ -1939,26 +1963,12 @@ export default function ProductInvoiceCard({
               )
             )
             .map((event) => event.id),
-          ...walletContext.proofEvents
-            .filter((event) =>
-              event.proofs.some((proof: Proof) =>
-                keep.some((keepProof) => keepProof.secret === proof.secret)
-              )
-            )
-            .map((event) => event.id),
-          ...walletContext.proofEvents
-            .filter((event) =>
-              event.proofs.some((proof: Proof) =>
-                send.some((sendProof) => sendProof.secret === proof.secret)
-              )
-            )
-            .map((event) => event.id),
         ]),
       ];
 
-      await sendTokens(
+      const changeProofs = await sendTokens(
         wallet,
-        send,
+        filteredProofs,
         price,
         data.shippingName ? data.shippingName : undefined,
         data.shippingAddress ? data.shippingAddress : undefined,
@@ -1969,11 +1979,10 @@ export default function ProductInvoiceCard({
         data.shippingCountry ? data.shippingCountry : undefined,
         data.additionalInfo ? data.additionalInfo : undefined
       );
-      const changeProofs = keep;
-      const remainingProofs = tokens.filter(
+      const remainingProofs = (currentTokens as Proof[]).filter(
         (p: Proof) =>
           !mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      ) as Proof[];
+      );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {
         proofArray = [...remainingProofs, ...changeProofs];
@@ -1984,7 +1993,7 @@ export default function ProductInvoiceCard({
         "history",
         JSON.stringify([
           { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
-          ...history,
+          ...currentHistory,
         ])
       );
       await publishProofEvent(

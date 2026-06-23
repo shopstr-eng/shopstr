@@ -16,6 +16,7 @@ import {
   getLocalStorageData,
   deleteEvent,
   verifyNip05Identifier,
+  publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   ProductData,
@@ -28,6 +29,17 @@ import { hashToCurve } from "@cashu/cashu-ts";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
+import {
+  applyWalletConfigContent,
+  generateCashuWalletKeypair,
+  LatestWalletKeypair,
+} from "@/utils/cashu/wallet-config";
+import {
+  BUYER_P2PK_ESCROW_EVENT_KIND,
+  BuyerP2pkEscrowRecord,
+  isBuyerP2pkEscrowRecord,
+  restoreEncryptedEscrowRecordLocally,
+} from "@/utils/cashu/p2pk-escrow-records";
 import {
   buildMessagesListProof,
   buildSignedHttpRequestProofTemplate,
@@ -247,6 +259,23 @@ export function getUniqueProofs(proofs: Proof[]): Proof[] {
 
 export function isHexString(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
+}
+
+function parseJsonSafely<T>(input: unknown): T | null {
+  if (typeof input !== "string") {
+    return null;
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    return null;
+  }
 }
 
 export const fetchAllPosts = async (
@@ -785,22 +814,20 @@ export const fetchProfile = async (
           }
 
           for (const [pubkey, event] of latestDbEvents.entries()) {
-            try {
-              const content = JSON.parse(event.content);
-              const profile: NipProfile = {
-                pubkey: event.pubkey,
-                created_at: event.created_at,
-                content,
-                nip05Verified: false,
-              };
-              dbProfileMap.set(pubkey, profile);
-              updateProfileIfNewer(profile);
-            } catch (error) {
-              console.error(
-                `Failed to parse profile from DB: ${pubkey}`,
-                error
-              );
+            const content = parseJsonSafely<Record<string, any>>(event.content);
+            if (!content) {
+              console.warn(`Skipping invalid profile JSON from DB: ${pubkey}`);
+              continue;
             }
+
+            const profile: NipProfile = {
+              pubkey: event.pubkey,
+              created_at: event.created_at,
+              content,
+              nip05Verified: false,
+            };
+            dbProfileMap.set(pubkey, profile);
+            updateProfileIfNewer(profile);
           }
 
           if (dbProfileMap.size > 0) {
@@ -836,23 +863,23 @@ export const fetchProfile = async (
           !existing ||
           event.created_at > existing.created_at
         ) {
-          try {
-            const content = JSON.parse(event.content);
-            const profile: NipProfile = {
-              pubkey: event.pubkey,
-              created_at: event.created_at,
-              content,
-              nip05Verified: false,
-            };
-            profileMap.set(event.pubkey, profile);
-            updatedProfiles.set(event.pubkey, profile);
-            updateProfileIfNewer(profile);
-          } catch (error) {
-            console.error(
-              `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
-              error
+          const content = parseJsonSafely<Record<string, any>>(event.content);
+          if (!content) {
+            console.warn(
+              `Skipping invalid profile JSON for pubkey: ${event.pubkey}`
             );
+            continue;
           }
+
+          const profile: NipProfile = {
+            pubkey: event.pubkey,
+            created_at: event.created_at,
+            content,
+            nip05Verified: false,
+          };
+          profileMap.set(event.pubkey, profile);
+          updatedProfiles.set(event.pubkey, profile);
+          updateProfileIfNewer(profile);
         }
       }
 
@@ -1643,6 +1670,70 @@ export const fetchAllBlossomServers = async (
   });
 };
 
+export const fetchEscrowRecords = async (
+  nostr: NostrManager,
+  signer: NostrSigner | undefined,
+  relays: string[]
+): Promise<void> => {
+  const userPubkey = await signer?.getPubKey?.();
+  if (!userPubkey) return;
+
+  const restoreEncryptedRecordFromEvent = async (event: NostrEvent) => {
+    const decrypted = await signer!.decrypt(userPubkey, event.content);
+    const record = parseJsonSafely<BuyerP2pkEscrowRecord>(decrypted);
+    if (!isBuyerP2pkEscrowRecord(record)) return;
+
+    restoreEncryptedEscrowRecordLocally({
+      orderId: record.orderId,
+      createdAt: record.createdAt,
+      content: event.content,
+    });
+  };
+
+  // DB-first: restore from server-side cache so the orders dashboard has records
+  // even before the Nostr relay fetch completes
+  try {
+    const dbRes = await fetch(`/api/db/fetch-escrow?pubkey=${userPubkey}`);
+    const dbEvents: NostrEvent[] = dbRes.ok ? await dbRes.json() : [];
+    for (const event of dbEvents) {
+      if (event.kind !== BUYER_P2PK_ESCROW_EVENT_KIND) continue;
+      try {
+        await restoreEncryptedRecordFromEvent(event);
+      } catch {
+        // skip malformed cached events
+      }
+    }
+  } catch (error) {
+    console.error("Failed to restore escrow records from database:", error);
+  }
+
+  // Relay fetch: pick up records missing from the DB cache (e.g. first login on this server)
+  const escrowEvents: NostrEvent[] = await nostr.fetch(
+    [{ kinds: [BUYER_P2PK_ESCROW_EVENT_KIND], authors: [userPubkey] }],
+    {},
+    relays
+  );
+
+  const validEscrowEvents = escrowEvents.filter(
+    (e) => e.id && e.sig && e.pubkey && e.kind === BUYER_P2PK_ESCROW_EVENT_KIND
+  );
+  if (validEscrowEvents.length > 0) {
+    cacheEventsToDatabase(validEscrowEvents).catch((err) =>
+      console.error("Failed to cache escrow events to database:", err)
+    );
+  }
+
+  // restoreEncryptedEscrowRecordLocally deduplicates by orderId, so it is safe
+  // to call for the same record from DB and relay without creating duplicates.
+  for (const event of validEscrowEvents) {
+    try {
+      await restoreEncryptedRecordFromEvent(event);
+    } catch (error) {
+      console.error(`Failed to decrypt escrow record ${event.id}:`, error);
+    }
+  }
+};
+
 export const fetchCashuWallet = async (
   nostr: NostrManager,
   signer: NostrSigner | undefined,
@@ -1651,12 +1742,19 @@ export const fetchCashuWallet = async (
     proofEvents: any[],
     cashuMints: string[],
     cashuProofs: Proof[],
-    isLoading: boolean
+    isLoading: boolean,
+    keys?: {
+      cashuPubkey?: string;
+      cashuPrivkey?: string;
+      walletIdentityUnavailable?: boolean;
+    }
   ) => void
 ): Promise<{
   proofEvents: any[];
   cashuMints: string[];
   cashuProofs: Proof[];
+  cashuPubkey?: string;
+  cashuPrivkey?: string;
 }> => {
   return new Promise(async function (resolve, reject) {
     const tokens = getCachedCashuProofs();
@@ -1678,6 +1776,7 @@ export const fetchCashuWallet = async (
       const cashuRelays: string[] = [];
       const cashuMints: string[] = [];
       const cashuMintSet: Set<string> = new Set();
+      let latestKeypair: LatestWalletKeypair | null = null;
       let cashuProofs: Proof[] = [...tokens]; // Start with existing tokens
       const incomingSpendingHistory: [][] = [];
 
@@ -1696,15 +1795,13 @@ export const fetchCashuWallet = async (
                 userPubkey,
                 event.content
               );
-              const walletContent: string[][] = JSON.parse(decrypted);
-              walletContent
-                .filter((entry) => entry[0] === "mint")
-                .forEach((entry) => {
-                  if (entry[1] && !cashuMintSet.has(entry[1])) {
-                    cashuMintSet.add(entry[1]);
-                    cashuMints.push(entry[1]);
-                  }
-                });
+              latestKeypair = applyWalletConfigContent(
+                decrypted,
+                event.created_at,
+                cashuMintSet,
+                cashuMints,
+                latestKeypair
+              );
             } catch (error) {
               console.error(
                 `Failed to decrypt wallet config event from DB ${event.id}:`,
@@ -1789,11 +1886,17 @@ export const fetchCashuWallet = async (
         authors: [userPubkey],
       };
 
-      const hEvents: NostrEvent[] = await nostr.fetch(
-        [walletConfigFilter],
-        {},
-        relays
-      );
+      let walletRelayFetchSucceeded = false;
+      let hEvents: NostrEvent[] = [];
+      try {
+        hEvents = await nostr.fetch([walletConfigFilter], {}, relays);
+        walletRelayFetchSucceeded = true;
+      } catch (fetchError) {
+        console.error(
+          "Failed to fetch wallet config events from relay:",
+          fetchError
+        );
+      }
 
       // Cache wallet config events to database
       const validWalletConfigEvents = hEvents.filter(
@@ -1819,15 +1922,13 @@ export const fetchCashuWallet = async (
                 userPubkey,
                 event.content
               );
-              const walletContent: string[][] = JSON.parse(decrypted);
-              walletContent
-                .filter((entry) => entry[0] === "mint")
-                .forEach((entry) => {
-                  if (entry[1] && !cashuMintSet.has(entry[1])) {
-                    cashuMintSet.add(entry[1]);
-                    cashuMints.push(entry[1]);
-                  }
-                });
+              latestKeypair = applyWalletConfigContent(
+                decrypted,
+                event.created_at,
+                cashuMintSet,
+                cashuMints,
+                latestKeypair
+              );
             } catch (decryptError) {
               console.error(
                 `Failed to decrypt wallet config event ${event.id}:`,
@@ -1875,6 +1976,37 @@ export const fetchCashuWallet = async (
         } catch (error) {
           console.error("Failed to process most recent wallet event:", error);
         }
+      }
+
+      // Generate a new wallet identity only when the relay fetch definitively
+      // returned (even if empty). A failed relay fetch means we cannot confirm
+      // that no identity exists — generating one would silently replace a real
+      // identity on a broken relay.
+      const hasExistingKeypair =
+        latestKeypair?.cashuPubkey !== undefined &&
+        latestKeypair?.cashuPrivkey !== undefined;
+
+      if (!hasExistingKeypair && walletRelayFetchSucceeded && signer) {
+        try {
+          const { cashuPubkey, cashuPrivkey } = generateCashuWalletKeypair();
+          await publishWalletEvent(
+            nostr,
+            signer,
+            { cashuPubkey, cashuPrivkey },
+            { mints: cashuMints }
+          );
+          latestKeypair = {
+            createdAt: Math.floor(Date.now() / 1000),
+            cashuPubkey,
+            cashuPrivkey,
+          };
+        } catch (error) {
+          console.error("Failed to generate Cashu wallet identity:", error);
+        }
+      } else if (!hasExistingKeypair && !walletRelayFetchSucceeded) {
+        console.warn(
+          "Wallet identity unavailable: relay fetch failed. Skipping identity generation to avoid overwriting an existing identity."
+        );
       }
 
       // Use cashu-specific relays if available, otherwise use default relays
@@ -2083,12 +2215,32 @@ export const fetchCashuWallet = async (
       // Final deduplication
       cashuProofs = getUniqueProofs(cashuProofs);
 
-      editCashuWalletContext(proofEvents, cashuMints, cashuProofs, false);
+      const walletKeys = {
+        cashuPubkey: latestKeypair?.cashuPubkey,
+        cashuPrivkey: latestKeypair?.cashuPrivkey,
+        walletIdentityUnavailable:
+          !hasExistingKeypair && !walletRelayFetchSucceeded ? true : undefined,
+      };
+
+      editCashuWalletContext(
+        proofEvents,
+        cashuMints,
+        cashuProofs,
+        false,
+        walletKeys
+      );
 
       resolve({
         proofEvents: proofEvents,
         cashuMints: cashuMints,
         cashuProofs: cashuProofs,
+        ...(latestKeypair?.cashuPubkey !== undefined &&
+        latestKeypair?.cashuPrivkey !== undefined
+          ? {
+              cashuPubkey: latestKeypair.cashuPubkey,
+              cashuPrivkey: latestKeypair.cashuPrivkey,
+            }
+          : {}),
       });
     } catch (error) {
       console.error("Fatal error in fetchCashuWallet:", error);

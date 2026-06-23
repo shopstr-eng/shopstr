@@ -17,6 +17,7 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import { useRouter } from "next/router";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 
 interface StorefrontWalletProps {
   colors: StorefrontColorScheme;
@@ -48,6 +49,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
   useEffect(() => {
     const fetchLocalKeySet = async () => {
       if (wallet) {
+        await wallet.loadMint();
         const mintKeySetIdsArray = await wallet.keyChain.getKeysets();
         if (mintKeySetIdsArray) {
           setMintKeySetIds(mintKeySetIdsArray);
@@ -68,22 +70,11 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
 
   useEffect(() => {
     if (tokens) {
-      const tokensTotal =
-        tokens.length >= 1
-          ? tokens.reduce(
-              (acc: number, token: Proof) => acc + token.amount.toNumber(),
-              0
-            )
-          : 0;
+      const tokensTotal = tokens.length >= 1 ? sumProofAmounts(tokens) : 0;
       setTotalBalance(tokensTotal);
     }
     const walletTotal =
-      filteredProofs.length >= 1
-        ? filteredProofs.reduce(
-            (acc: number, p: Proof) => acc + p.amount.toNumber(),
-            0
-          )
-        : 0;
+      filteredProofs.length >= 1 ? sumProofAmounts(filteredProofs) : 0;
     setWalletBalance(walletTotal);
   }, [tokens, filteredProofs]);
 
@@ -92,12 +83,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
       const newTokens = getCachedCashuProofs();
       if (newTokens) {
         const tokensTotal =
-          newTokens.length >= 1
-            ? newTokens.reduce(
-                (acc: number, token: Proof) => acc + token.amount.toNumber(),
-                0
-              )
-            : 0;
+          newTokens.length >= 1 ? sumProofAmounts(newTokens as Proof[]) : 0;
         setTotalBalance(tokensTotal);
         if (mintKeySetIds) {
           const newFilteredProofs = newTokens.filter((p: Proof) =>
@@ -105,10 +91,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
           );
           const newWalletTotal =
             newFilteredProofs.length >= 1
-              ? newFilteredProofs.reduce(
-                  (acc: number, p: Proof) => acc + p.amount.toNumber(),
-                  0
-                )
+              ? sumProofAmounts(newFilteredProofs)
               : 0;
           setWalletBalance(newWalletTotal);
         }

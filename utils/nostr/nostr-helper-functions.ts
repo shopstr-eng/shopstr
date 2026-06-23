@@ -30,6 +30,7 @@ import {
 } from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
+import { buildWalletConfigV1 } from "@/utils/cashu/wallet-config";
 
 export const REPORT_TYPES = [
   "nudity",
@@ -746,20 +747,20 @@ export async function publishSavedForLaterEvent(
 
 export async function publishWalletEvent(
   nostr: NostrManager,
-  signer: NostrSigner
+  signer: NostrSigner,
+  keys: { cashuPubkey?: string; cashuPrivkey?: string },
+  options?: { mints?: string[] }
 ) {
   try {
-    const { mints } = getLocalStorageData();
+    if (!keys.cashuPrivkey) return;
+
     const userPubkey = await signer.getPubKey();
 
     const mintTagsSet = new Set<string>();
 
-    let walletMints = [];
-
-    mints.forEach((mint) => mintTagsSet.add(mint));
-    walletMints = Array.from(mintTagsSet);
-    const mintTags = walletMints.map((mint) => ["mint", mint]);
-    const walletContent = [...mintTags];
+    options?.mints?.forEach((mint) => mintTagsSet.add(mint));
+    const walletMints = Array.from(mintTagsSet);
+    const walletContent = buildWalletConfigV1(keys.cashuPrivkey, walletMints);
     const cashuWalletEvent: EventTemplate = {
       kind: 17375,
       tags: [],

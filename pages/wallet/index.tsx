@@ -16,6 +16,7 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import ProtectedRoute from "@/components/utility-components/protected-route";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
@@ -39,6 +40,7 @@ const Wallet = () => {
   useEffect(() => {
     const fetchLocalKeySet = async () => {
       if (wallet) {
+        await wallet.loadMint();
         const mintKeySetIdsArray = await wallet.keyChain.getKeysets();
         if (mintKeySetIdsArray) {
           setMintKeySetIds(mintKeySetIdsArray);
@@ -59,20 +61,12 @@ const Wallet = () => {
 
   useEffect(() => {
     if (tokens) {
-      const tokensTotal =
-        tokens.length >= 1
-          ? tokens.reduce(
-              (acc, token: Proof) => acc + token.amount.toNumber(),
-              0
-            )
-          : 0;
+      const tokensTotal = tokens.length >= 1 ? sumProofAmounts(tokens) : 0;
       setTotalBalance(tokensTotal);
     }
 
     const walletTotal =
-      filteredProofs.length >= 1
-        ? filteredProofs.reduce((acc, p: Proof) => acc + p.amount.toNumber(), 0)
-        : 0;
+      filteredProofs.length >= 1 ? sumProofAmounts(filteredProofs) : 0;
     setWalletBalance(walletTotal);
   }, [tokens, filteredProofs]);
 
@@ -81,12 +75,7 @@ const Wallet = () => {
       const newTokens = getCachedCashuProofs();
       if (newTokens) {
         const tokensTotal =
-          newTokens.length >= 1
-            ? newTokens.reduce(
-                (acc: number, token: Proof) => acc + token.amount.toNumber(),
-                0
-              )
-            : 0;
+          newTokens.length >= 1 ? sumProofAmounts(newTokens as Proof[]) : 0;
         setTotalBalance(tokensTotal);
 
         if (mintKeySetIds) {
@@ -95,10 +84,7 @@ const Wallet = () => {
           );
           const newWalletTotal =
             newFilteredProofs.length >= 1
-              ? newFilteredProofs.reduce(
-                  (acc: number, p: Proof) => acc + p.amount.toNumber(),
-                  0
-                )
+              ? sumProofAmounts(newFilteredProofs)
               : 0;
           setWalletBalance(newWalletTotal);
         }

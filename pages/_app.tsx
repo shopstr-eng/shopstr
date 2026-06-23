@@ -44,6 +44,7 @@ import {
   fetchAllRelays,
   fetchAllBlossomServers,
   fetchCashuWallet,
+  fetchEscrowRecords,
   fetchAllCommunities,
   fetchGiftWrappedChatsAndMessages,
   fetchReports,
@@ -561,13 +562,21 @@ function Shopstr({ props }: { props: AppProps }) {
     proofEvents: any[],
     cashuMints: string[],
     cashuProofs: Proof[],
-    isLoading: boolean
+    isLoading: boolean,
+    keys?: {
+      cashuPubkey?: string;
+      cashuPrivkey?: string;
+      walletIdentityUnavailable?: boolean;
+    }
   ) => {
     setCashuWalletContext({
       proofEvents,
       cashuMints,
       cashuProofs,
       isLoading,
+      cashuPubkey: keys?.cashuPubkey,
+      cashuPrivkey: keys?.cashuPrivkey,
+      walletIdentityUnavailable: keys?.walletIdentityUnavailable,
     });
   };
 
@@ -747,6 +756,12 @@ function Shopstr({ props }: { props: AppProps }) {
             )
           : Promise.resolve(undefined);
 
+        const escrowPromise = isLoggedIn
+          ? runTask("fetching escrow records", () =>
+              fetchEscrowRecords(nostr!, signer!, allRelays)
+            )
+          : Promise.resolve(undefined);
+
         const followsPromise = runTask(
           "fetching follows",
           () =>
@@ -895,6 +910,7 @@ function Shopstr({ props }: { props: AppProps }) {
           walletPromise,
           followsPromise,
           communitiesPromise,
+          escrowPromise,
         ]);
 
         if (!isCurrentRun()) return;
