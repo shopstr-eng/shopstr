@@ -15,17 +15,30 @@ import {
   getLocalStorageData,
   deleteEvent,
   verifyNip05Identifier,
+  publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   ProductData,
   parseTags,
 } from "@/utils/parsers/product-parser-functions";
+import { productSatisfiesSearchFilter } from "@/utils/parsers/product-filter-helpers";
 import { parseCommunityEvent } from "../parsers/community-parser-functions";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { hashToCurve } from "@cashu/cashu-ts";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
+import {
+  applyWalletConfigContent,
+  generateCashuWalletKeypair,
+  LatestWalletKeypair,
+} from "@/utils/cashu/wallet-config";
+import {
+  BUYER_P2PK_ESCROW_EVENT_KIND,
+  BuyerP2pkEscrowRecord,
+  isBuyerP2pkEscrowRecord,
+  restoreEncryptedEscrowRecordLocally,
+} from "@/utils/cashu/p2pk-escrow-records";
 import {
   buildMessagesListProof,
   buildSignedHttpRequestProofTemplate,
@@ -37,6 +50,199 @@ interface NipProfile {
   created_at: number;
   content: { nip05?: string; [key: string]: any };
   nip05Verified: boolean;
+}
+
+type SearchFilter = Filter & { search: string };
+
+const PRODUCT_SEARCH_LIMIT = 100;
+export const NIP50_SEARCH_TIMEOUT_MS = 10_000;
+export const DEFAULT_NIP50_SEARCH_RELAYS = [
+  "wss://relay.nostr.band",
+  "wss://nostr.wine",
+  "wss://relay.noswhere.com",
+  "wss://search.nos.today",
+  "wss://antiprimal.net",
+  "wss://relay.ditto.pub",
+];
+
+function normalizeRelayUrl(relay: string): string {
+  const trimmedRelay = relay.trim();
+  if (!trimmedRelay) return "";
+
+  const relayWithProtocol = /^wss?:\/\//i.test(trimmedRelay)
+    ? trimmedRelay
+    : `wss://${trimmedRelay}`;
+
+  return relayWithProtocol.replace(/\/+$/, "");
+}
+
+function getUniqueRelayUrls(relays: string[]): string[] {
+  const relayMap = new Map<string, string>();
+
+  for (const relay of relays) {
+    const normalizedRelay = normalizeRelayUrl(relay);
+    if (!normalizedRelay) continue;
+    relayMap.set(normalizedRelay.toLowerCase(), normalizedRelay);
+  }
+
+  return Array.from(relayMap.values());
+}
+
+function getNip50SearchRelays(relays: string[]): string[] {
+  const knownSearchRelaySet = new Set(
+    DEFAULT_NIP50_SEARCH_RELAYS.map((relay) => relay.toLowerCase())
+  );
+  const selectedSearchRelays = getUniqueRelayUrls(relays).filter((relay) =>
+    knownSearchRelaySet.has(relay.toLowerCase())
+  );
+  const selectedSearchRelaySet = new Set(
+    selectedSearchRelays.map((relay) => relay.toLowerCase())
+  );
+  const backupSearchRelays = DEFAULT_NIP50_SEARCH_RELAYS.filter(
+    (relay) => !selectedSearchRelaySet.has(relay.toLowerCase())
+  );
+
+  return [...selectedSearchRelays, ...backupSearchRelays];
+}
+
+export function getProductEventKey(event: NostrEvent): string {
+  if (event.kind === 30402) {
+    const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
+    if (dTag) return `${event.kind}:${event.pubkey}:${dTag}`;
+  }
+
+  return `${event.kind}:${event.id}`;
+}
+
+export function dedupeProductEvents(events: NostrEvent[]): NostrEvent[] {
+  const eventMap = new Map<string, NostrEvent>();
+  const orderedKeys: string[] = [];
+
+  for (const event of events) {
+    if (!event?.id) continue;
+
+    const key = getProductEventKey(event);
+    const existing = eventMap.get(key);
+
+    if (!existing) {
+      orderedKeys.push(key);
+      eventMap.set(key, event);
+      continue;
+    }
+
+    if ((event.created_at ?? 0) >= (existing.created_at ?? 0)) {
+      eventMap.set(key, event);
+    }
+  }
+
+  return orderedKeys
+    .map((key) => eventMap.get(key))
+    .filter((event): event is NostrEvent => !!event);
+}
+
+export function buildNip50ProductSearchFilters(
+  searchQuery: string,
+  options: { authors?: string[]; limit?: number } = {}
+): SearchFilter[] {
+  const search = searchQuery.trim().replace(/\s+/g, " ");
+  if (!search) return [];
+
+  const limit = options.limit ?? PRODUCT_SEARCH_LIMIT;
+  const baseFilter = {
+    search,
+    limit,
+    ...(options.authors?.length ? { authors: options.authors } : {}),
+  };
+
+  return [
+    {
+      ...baseFilter,
+      kinds: [30402],
+    },
+  ];
+}
+
+function eventMatchesProductSearch(
+  event: NostrEvent,
+  searchQuery: string
+): boolean {
+  if (event.kind === 30402) {
+    const parsedProduct = parseTags(event);
+    return (
+      !!parsedProduct &&
+      productSatisfiesSearchFilter(parsedProduct, searchQuery)
+    );
+  }
+
+  return false;
+}
+
+export async function fetchNip50ProductSearch(
+  nostr: NostrManager,
+  relays: string[],
+  searchQuery: string,
+  options: { authors?: string[]; limit?: number } = {}
+): Promise<{
+  productEvents: NostrEvent[];
+}> {
+  const filters = buildNip50ProductSearchFilters(searchQuery, options);
+  if (!filters.length) {
+    return { productEvents: [] };
+  }
+
+  const searchRelays = getNip50SearchRelays(relays);
+
+  const fetchSearchEvents = async (targetRelays: string[]) => {
+    if (targetRelays.length === 0) return Promise.resolve([]);
+
+    const relayResults = await Promise.all(
+      targetRelays.map((relay) =>
+        nostr
+          .fetch(filters, {}, [relay], NIP50_SEARCH_TIMEOUT_MS)
+          .catch((error) => {
+            console.warn(
+              `Failed to search products with NIP-50 relay ${relay}:`,
+              error
+            );
+            return [];
+          })
+      )
+    );
+
+    return relayResults.flat();
+  };
+
+  const filterSearchProductEvents = (events: NostrEvent[]) =>
+    events.filter(
+      (event) => event.id && event.sig && event.pubkey && event.kind === 30402
+    );
+
+  let searchProductEvents = filterSearchProductEvents(
+    await fetchSearchEvents(searchRelays)
+  );
+  let relevantSearchProductEvents = searchProductEvents.filter((event) =>
+    eventMatchesProductSearch(event, searchQuery)
+  );
+
+  const dedupedSearchProductEvents = dedupeProductEvents(
+    relevantSearchProductEvents
+  );
+
+  const cacheableProductEvents = dedupedSearchProductEvents.filter(
+    (event) => event.kind === 30402
+  );
+
+  if (cacheableProductEvents.length > 0) {
+    try {
+      await cacheEventsToDatabase(cacheableProductEvents);
+    } catch (error) {
+      console.error("Failed to cache NIP-50 product search events:", error);
+    }
+  }
+
+  return {
+    productEvents: dedupedSearchProductEvents,
+  };
 }
 
 export function getUniqueProofs(proofs: Proof[]): Proof[] {
@@ -54,6 +260,23 @@ export function isHexString(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
 }
 
+function parseJsonSafely<T>(input: unknown): T | null {
+  if (typeof input !== "string") {
+    return null;
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    return null;
+  }
+}
+
 export const fetchAllPosts = async (
   nostr: NostrManager,
   relays: string[],
@@ -69,11 +292,7 @@ export const fetchAllPosts = async (
       const dbProductsMap = new Map<string, NostrEvent>();
 
       const getEventKey = (event: NostrEvent): string => {
-        if (event.kind === 30402) {
-          const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
-          if (dTag) return `${event.pubkey}:${dTag}`;
-        }
-        return event.id;
+        return getProductEventKey(event);
       };
       const isValidProductRelayEvent = (
         event: NostrEvent | null | undefined
@@ -135,7 +354,10 @@ export const fetchAllPosts = async (
       }
 
       // Cache valid product events to database
-      const validProductEvents = fetchedEvents.filter(isValidProductRelayEvent);
+      const validProductEvents = fetchedEvents.filter(
+        (event): event is NostrEvent =>
+          isValidProductRelayEvent(event) && event.kind === 30402
+      );
       if (validProductEvents.length > 0) {
         cacheEventsToDatabase(validProductEvents).catch((error) =>
           console.error("Failed to cache products to database:", error)
@@ -591,22 +813,20 @@ export const fetchProfile = async (
           }
 
           for (const [pubkey, event] of latestDbEvents.entries()) {
-            try {
-              const content = JSON.parse(event.content);
-              const profile: NipProfile = {
-                pubkey: event.pubkey,
-                created_at: event.created_at,
-                content,
-                nip05Verified: false,
-              };
-              dbProfileMap.set(pubkey, profile);
-              updateProfileIfNewer(profile);
-            } catch (error) {
-              console.error(
-                `Failed to parse profile from DB: ${pubkey}`,
-                error
-              );
+            const content = parseJsonSafely<Record<string, any>>(event.content);
+            if (!content) {
+              console.warn(`Skipping invalid profile JSON from DB: ${pubkey}`);
+              continue;
             }
+
+            const profile: NipProfile = {
+              pubkey: event.pubkey,
+              created_at: event.created_at,
+              content,
+              nip05Verified: false,
+            };
+            dbProfileMap.set(pubkey, profile);
+            updateProfileIfNewer(profile);
           }
 
           if (dbProfileMap.size > 0) {
@@ -642,23 +862,23 @@ export const fetchProfile = async (
           !existing ||
           event.created_at > existing.created_at
         ) {
-          try {
-            const content = JSON.parse(event.content);
-            const profile: NipProfile = {
-              pubkey: event.pubkey,
-              created_at: event.created_at,
-              content,
-              nip05Verified: false,
-            };
-            profileMap.set(event.pubkey, profile);
-            updatedProfiles.set(event.pubkey, profile);
-            updateProfileIfNewer(profile);
-          } catch (error) {
-            console.error(
-              `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
-              error
+          const content = parseJsonSafely<Record<string, any>>(event.content);
+          if (!content) {
+            console.warn(
+              `Skipping invalid profile JSON for pubkey: ${event.pubkey}`
             );
+            continue;
           }
+
+          const profile: NipProfile = {
+            pubkey: event.pubkey,
+            created_at: event.created_at,
+            content,
+            nip05Verified: false,
+          };
+          profileMap.set(event.pubkey, profile);
+          updatedProfiles.set(event.pubkey, profile);
+          updateProfileIfNewer(profile);
         }
       }
 
@@ -1449,6 +1669,70 @@ export const fetchAllBlossomServers = async (
   });
 };
 
+export const fetchEscrowRecords = async (
+  nostr: NostrManager,
+  signer: NostrSigner | undefined,
+  relays: string[]
+): Promise<void> => {
+  const userPubkey = await signer?.getPubKey?.();
+  if (!userPubkey) return;
+
+  const restoreEncryptedRecordFromEvent = async (event: NostrEvent) => {
+    const decrypted = await signer!.decrypt(userPubkey, event.content);
+    const record = parseJsonSafely<BuyerP2pkEscrowRecord>(decrypted);
+    if (!isBuyerP2pkEscrowRecord(record)) return;
+
+    restoreEncryptedEscrowRecordLocally({
+      orderId: record.orderId,
+      createdAt: record.createdAt,
+      content: event.content,
+    });
+  };
+
+  // DB-first: restore from server-side cache so the orders dashboard has records
+  // even before the Nostr relay fetch completes
+  try {
+    const dbRes = await fetch(`/api/db/fetch-escrow?pubkey=${userPubkey}`);
+    const dbEvents: NostrEvent[] = dbRes.ok ? await dbRes.json() : [];
+    for (const event of dbEvents) {
+      if (event.kind !== BUYER_P2PK_ESCROW_EVENT_KIND) continue;
+      try {
+        await restoreEncryptedRecordFromEvent(event);
+      } catch {
+        // skip malformed cached events
+      }
+    }
+  } catch (error) {
+    console.error("Failed to restore escrow records from database:", error);
+  }
+
+  // Relay fetch: pick up records missing from the DB cache (e.g. first login on this server)
+  const escrowEvents: NostrEvent[] = await nostr.fetch(
+    [{ kinds: [BUYER_P2PK_ESCROW_EVENT_KIND], authors: [userPubkey] }],
+    {},
+    relays
+  );
+
+  const validEscrowEvents = escrowEvents.filter(
+    (e) => e.id && e.sig && e.pubkey && e.kind === BUYER_P2PK_ESCROW_EVENT_KIND
+  );
+  if (validEscrowEvents.length > 0) {
+    cacheEventsToDatabase(validEscrowEvents).catch((err) =>
+      console.error("Failed to cache escrow events to database:", err)
+    );
+  }
+
+  // restoreEncryptedEscrowRecordLocally deduplicates by orderId, so it is safe
+  // to call for the same record from DB and relay without creating duplicates.
+  for (const event of validEscrowEvents) {
+    try {
+      await restoreEncryptedRecordFromEvent(event);
+    } catch (error) {
+      console.error(`Failed to decrypt escrow record ${event.id}:`, error);
+    }
+  }
+};
+
 export const fetchCashuWallet = async (
   nostr: NostrManager,
   signer: NostrSigner | undefined,
@@ -1457,12 +1741,19 @@ export const fetchCashuWallet = async (
     proofEvents: any[],
     cashuMints: string[],
     cashuProofs: Proof[],
-    isLoading: boolean
+    isLoading: boolean,
+    keys?: {
+      cashuPubkey?: string;
+      cashuPrivkey?: string;
+      walletIdentityUnavailable?: boolean;
+    }
   ) => void
 ): Promise<{
   proofEvents: any[];
   cashuMints: string[];
   cashuProofs: Proof[];
+  cashuPubkey?: string;
+  cashuPrivkey?: string;
 }> => {
   return new Promise(async function (resolve, reject) {
     const { tokens } = getLocalStorageData();
@@ -1484,6 +1775,7 @@ export const fetchCashuWallet = async (
       const cashuRelays: string[] = [];
       const cashuMints: string[] = [];
       const cashuMintSet: Set<string> = new Set();
+      let latestKeypair: LatestWalletKeypair | null = null;
       let cashuProofs: Proof[] = [...tokens]; // Start with existing tokens
       const incomingSpendingHistory: [][] = [];
 
@@ -1502,15 +1794,13 @@ export const fetchCashuWallet = async (
                 userPubkey,
                 event.content
               );
-              const walletContent: string[][] = JSON.parse(decrypted);
-              walletContent
-                .filter((entry) => entry[0] === "mint")
-                .forEach((entry) => {
-                  if (entry[1] && !cashuMintSet.has(entry[1])) {
-                    cashuMintSet.add(entry[1]);
-                    cashuMints.push(entry[1]);
-                  }
-                });
+              latestKeypair = applyWalletConfigContent(
+                decrypted,
+                event.created_at,
+                cashuMintSet,
+                cashuMints,
+                latestKeypair
+              );
             } catch (error) {
               console.error(
                 `Failed to decrypt wallet config event from DB ${event.id}:`,
@@ -1595,11 +1885,17 @@ export const fetchCashuWallet = async (
         authors: [userPubkey],
       };
 
-      const hEvents: NostrEvent[] = await nostr.fetch(
-        [walletConfigFilter],
-        {},
-        relays
-      );
+      let walletRelayFetchSucceeded = false;
+      let hEvents: NostrEvent[] = [];
+      try {
+        hEvents = await nostr.fetch([walletConfigFilter], {}, relays);
+        walletRelayFetchSucceeded = true;
+      } catch (fetchError) {
+        console.error(
+          "Failed to fetch wallet config events from relay:",
+          fetchError
+        );
+      }
 
       // Cache wallet config events to database
       const validWalletConfigEvents = hEvents.filter(
@@ -1625,15 +1921,13 @@ export const fetchCashuWallet = async (
                 userPubkey,
                 event.content
               );
-              const walletContent: string[][] = JSON.parse(decrypted);
-              walletContent
-                .filter((entry) => entry[0] === "mint")
-                .forEach((entry) => {
-                  if (entry[1] && !cashuMintSet.has(entry[1])) {
-                    cashuMintSet.add(entry[1]);
-                    cashuMints.push(entry[1]);
-                  }
-                });
+              latestKeypair = applyWalletConfigContent(
+                decrypted,
+                event.created_at,
+                cashuMintSet,
+                cashuMints,
+                latestKeypair
+              );
             } catch (decryptError) {
               console.error(
                 `Failed to decrypt wallet config event ${event.id}:`,
@@ -1681,6 +1975,37 @@ export const fetchCashuWallet = async (
         } catch (error) {
           console.error("Failed to process most recent wallet event:", error);
         }
+      }
+
+      // Generate a new wallet identity only when the relay fetch definitively
+      // returned (even if empty). A failed relay fetch means we cannot confirm
+      // that no identity exists — generating one would silently replace a real
+      // identity on a broken relay.
+      const hasExistingKeypair =
+        latestKeypair?.cashuPubkey !== undefined &&
+        latestKeypair?.cashuPrivkey !== undefined;
+
+      if (!hasExistingKeypair && walletRelayFetchSucceeded && signer) {
+        try {
+          const { cashuPubkey, cashuPrivkey } = generateCashuWalletKeypair();
+          await publishWalletEvent(
+            nostr,
+            signer,
+            { cashuPubkey, cashuPrivkey },
+            { mints: cashuMints }
+          );
+          latestKeypair = {
+            createdAt: Math.floor(Date.now() / 1000),
+            cashuPubkey,
+            cashuPrivkey,
+          };
+        } catch (error) {
+          console.error("Failed to generate Cashu wallet identity:", error);
+        }
+      } else if (!hasExistingKeypair && !walletRelayFetchSucceeded) {
+        console.warn(
+          "Wallet identity unavailable: relay fetch failed. Skipping identity generation to avoid overwriting an existing identity."
+        );
       }
 
       // Use cashu-specific relays if available, otherwise use default relays
@@ -1889,12 +2214,32 @@ export const fetchCashuWallet = async (
       // Final deduplication
       cashuProofs = getUniqueProofs(cashuProofs);
 
-      editCashuWalletContext(proofEvents, cashuMints, cashuProofs, false);
+      const walletKeys = {
+        cashuPubkey: latestKeypair?.cashuPubkey,
+        cashuPrivkey: latestKeypair?.cashuPrivkey,
+        walletIdentityUnavailable:
+          !hasExistingKeypair && !walletRelayFetchSucceeded ? true : undefined,
+      };
+
+      editCashuWalletContext(
+        proofEvents,
+        cashuMints,
+        cashuProofs,
+        false,
+        walletKeys
+      );
 
       resolve({
         proofEvents: proofEvents,
         cashuMints: cashuMints,
         cashuProofs: cashuProofs,
+        ...(latestKeypair?.cashuPubkey !== undefined &&
+        latestKeypair?.cashuPrivkey !== undefined
+          ? {
+              cashuPubkey: latestKeypair.cashuPubkey,
+              cashuPrivkey: latestKeypair.cashuPrivkey,
+            }
+          : {}),
       });
     } catch (error) {
       console.error("Fatal error in fetchCashuWallet:", error);

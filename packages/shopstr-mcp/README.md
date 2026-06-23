@@ -3,9 +3,9 @@
 Standalone read-only MCP server package for Shopstr marketplace data.
 
 This package currently contains the standalone MCP shell, shared read-only
-infrastructure, and the first relay-backed read tools for public Shopstr
-marketplace data. Seller, storefront, reputation, prompt, and resource features
-will be added in follow-up PRs.
+infrastructure, relay-backed product/review tools, and relay-backed
+seller/storefront/reputation tools for public Shopstr marketplace data. Prompt
+and resource features will be added in follow-up PRs.
 
 ## Current Scope
 
@@ -13,13 +13,15 @@ will be added in follow-up PRs.
 - Reads relay, timeout, cache, and log-level settings from environment
   variables.
 - Starts an MCP server over stdio for local MCP-compatible clients.
-- Registers relay-backed core read tools:
-  `search_products`, `get_product_details`, and `get_reviews`.
+- Registers relay-backed read tools:
+  `search_products`, `get_product_details`, `get_reviews`,
+  `list_companies`, `get_company_details`, `get_storefront`,
+  and `get_seller_reputation`.
 - Registers disabled resource and prompt placeholders so `resources/list` and
   `prompts/list` return valid empty lists until those features are added.
 - Provides reusable infrastructure modules for upcoming tools:
   `nostr-manager`, `relay-fetch`, `parse-tags`, `dedup`, `validation`,
-  `errors`, `timeout`, and `audit-log`.
+  `errors`, `timeout`, `audit-log`, and `cache`.
 
 ## Tools
 
@@ -41,6 +43,16 @@ will be added in follow-up PRs.
   product address when possible and keeps a legacy `#e` fallback. Seller review
   lookups first derive the seller's product addresses, query Gamma/standard
   product review targets, and keep legacy `#p` as a fallback.
+- `list_companies`: list public seller shop profiles from kind `30019` shop
+  metadata. Responses are capped at 50 sellers and cache returned shop profiles
+  for follow-up seller detail calls.
+- `get_company_details`: fetch a seller's kind `0` profile, kind `30019` shop
+  metadata, public products, reviews, and payment summary by pubkey or npub.
+- `get_storefront`: fetch pubkey-based storefront configuration, seller
+  profiles, products, and payment summary. Slug lookup is not supported since this is relay based MCP.
+- `get_seller_reputation`: summarize public kind `31555` seller/product reviews
+  into review counts, rating breakdowns, recent reviews, and a transparent
+  trust-level snapshot.
 
 Product responses expose Gamma-compatible fields where available, including
 structured image objects, `productType`, `productFormat`, `visibility`
@@ -51,6 +63,11 @@ embedded `shipping`, and subscription tags as fallback data when present.
 Tool responses include relay degradation metadata in `_meta`, including queried
 relays, successful relays, failed relays, coverage, response time, hints, and
 truncation flags when response budgeting applies.
+
+Seller/profile tools receive a process-local in-memory profile cache through
+the shared tool context. The cache stores parsed public profile/shop responses
+by pubkey and event kind, expires entries by TTL, and surfaces per-kind cache
+hits in `_meta.cached`.
 
 ## Usage
 
@@ -73,6 +90,9 @@ or process manager should provide.
   milliseconds.
 - `SHOPSTR_MCP_RESOURCE_CACHE_TTL_MS`: future resource cache TTL in
   milliseconds.
+- `SHOPSTR_MCP_PROFILE_CACHE_TTL_MS`: in-memory parsed profile/shop cache TTL in
+  milliseconds. Defaults to `SHOPSTR_MCP_RESOURCE_CACHE_TTL_MS` when unset or
+  invalid.
 
 Invalid or missing values fall back to safe defaults.
 

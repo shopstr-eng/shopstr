@@ -12,15 +12,20 @@ import type { NostrEvent, NostrFilter } from "../types.js";
 import { reviewsInputSchema } from "../validation.js";
 import {
   PRODUCT_KIND,
-  REVIEW_KIND,
   REVIEW_RESPONSE_BUDGET,
   allRelaysFailed,
   buildToolMeta,
   createRelayUnavailableResponse,
   createValidationErrorResponse,
   getDataFreshness,
-} from "./common.js";
-import type { CoreToolContext } from "./context.js";
+} from "./utils/common.js";
+import type { CoreToolContext } from "./utils/context.js";
+import {
+  createReviewFilter,
+  eventReferencesSeller,
+  hasProductAddress,
+  hasTag,
+} from "./utils/review-helpers.js";
 
 export const getReviewsInputSchema = {
   productId: z
@@ -36,10 +41,6 @@ export const getReviewsInputSchema = {
     .optional()
     .describe("Seller public key as hex or npub"),
 };
-
-function hasTag(event: NostrEvent, key: string, value: string): boolean {
-  return event.tags.some((tag) => tag[0] === key && tag[1] === value);
-}
 
 function reviewMatchesTarget(
   event: NostrEvent,
@@ -74,36 +75,6 @@ function reviewMatchesTarget(
     return false;
   }
   return true;
-}
-
-function hasProductAddress(event: NostrEvent, productAddress: string): boolean {
-  return (
-    hasTag(event, "d", `a:${productAddress}`) ||
-    hasTag(event, "d", productAddress) ||
-    hasTag(event, "a", productAddress)
-  );
-}
-
-function eventReferencesSeller(
-  event: NostrEvent,
-  sellerPubkey: string
-): boolean {
-  return event.tags.some((tag) => {
-    const [key, value] = tag;
-    return (
-      typeof value === "string" &&
-      (key === "d" || key === "a") &&
-      value.includes(sellerPubkey)
-    );
-  });
-}
-
-function createReviewFilter(fields: Partial<NostrFilter>): NostrFilter {
-  return {
-    kinds: [REVIEW_KIND],
-    limit: 500,
-    ...fields,
-  };
 }
 
 function buildReviewFilters(
@@ -244,15 +215,33 @@ export async function handleGetReviews(
   }
 
   if (sellerPubkey) {
-    const resolved = await resolveProductAddressesFromSellerPubkey(
-      sellerPubkey,
-      context
-    );
-    if (resolved.errorResponse) return resolved.errorResponse;
-    for (const address of resolved.addresses) {
+    // Cache the seller's product addresses to avoid repeated relay lookups.
+    // Uses a synthetic kind to name the cache key separately since cache key is built from kind+pubkey.
+    const SELLER_PRODUCTS_CACHE_KIND = 0x7e570000;
+    const cacheKey = { pubkey: sellerPubkey, kind: SELLER_PRODUCTS_CACHE_KIND };
+    const cached = context.cache.get<string[]>(cacheKey);
+
+    let resolvedAddresses: string[];
+
+    if (cached) {
+      resolvedAddresses = cached.value;
+    } else {
+      const resolved = await resolveProductAddressesFromSellerPubkey(
+        sellerPubkey,
+        context
+      );
+      if (resolved.errorResponse) return resolved.errorResponse;
+      resolvedAddresses = resolved.addresses;
+      if (resolvedAddresses.length > 0) {
+        context.cache.set(cacheKey, resolvedAddresses);
+      }
+    }
+
+    for (const address of resolvedAddresses) {
       productAddresses.add(address);
     }
-    if (resolved.addresses.length === 0) {
+
+    if (resolvedAddresses.length === 0) {
       addressResolutionHint =
         addressResolutionHint ??
         "Could not resolve seller products to review addresses; used legacy #p review lookup only.";

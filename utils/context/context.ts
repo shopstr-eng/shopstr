@@ -166,6 +166,9 @@ export interface CashuWalletContextInterface {
   cashuMints: string[];
   cashuProofs: Proof[];
   isLoading: boolean;
+  cashuPubkey?: string;
+  cashuPrivkey?: string;
+  walletIdentityUnavailable?: boolean;
 }
 
 export const CashuWalletContext = createContext({
@@ -173,6 +176,9 @@ export const CashuWalletContext = createContext({
   cashuMints: [],
   cashuProofs: [],
   isLoading: true,
+  cashuPubkey: undefined,
+  cashuPrivkey: undefined,
+  walletIdentityUnavailable: undefined,
 } as CashuWalletContextInterface);
 
 export interface CommunityContextInterface {

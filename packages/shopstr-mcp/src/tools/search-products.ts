@@ -14,8 +14,8 @@ import {
   createRelayUnavailableResponse,
   createValidationErrorResponse,
   getDataFreshness,
-} from "./common.js";
-import type { CoreToolContext } from "./context.js";
+} from "./utils/common.js";
+import type { CoreToolContext } from "./utils/context.js";
 
 export const searchProductsInputSchema = {
   keyword: z
@@ -127,8 +127,9 @@ function buildSearchFilters(filters: SearchProductsInput): {
   primary: NostrFilter;
   fallback: NostrFilter | undefined;
 } {
-  const base: NostrFilter = { kinds: [PRODUCT_KIND], limit: 500 };
-
+  const effectiveLimit = Math.min(filters.limit, PRODUCT_RESPONSE_BUDGET);
+  const relayLimit = Math.min(500, effectiveLimit * 5);
+  const base: NostrFilter = { kinds: [PRODUCT_KIND], limit: relayLimit };
   if (filters.category) {
     const variants = new Set([
       filters.category,
@@ -186,7 +187,7 @@ export async function handleSearchProducts(
     }
   }
 
-  const requestedLimit = filters.limit ?? PRODUCT_RESPONSE_BUDGET;
+  const requestedLimit = filters.limit;
   const responseLimit = Math.min(requestedLimit, PRODUCT_RESPONSE_BUDGET);
   const returnedProducts = products.slice(0, responseLimit);
   const truncated = returnedProducts.length < products.length;
