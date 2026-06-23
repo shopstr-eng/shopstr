@@ -49,7 +49,7 @@ describe("getLocalStorageData", () => {
 
   it("falls back to signInMethod signer when stored signer shape is invalid", () => {
     localStorage.setItem("signInMethod", "extension");
-    localStorage.setItem("signer", JSON.stringify({ type: "nip46" }));
+    localStorage.setItem("signer", JSON.stringify({ type: "bad" }));
 
     const data = getLocalStorageData();
 
@@ -73,7 +73,38 @@ describe("getLocalStorageData", () => {
     });
   });
 
-  it("keeps bunker signer data in runtime memory only", () => {
+  it("accepts a marker-only nip46 stored signer", () => {
+    localStorage.setItem("signer", JSON.stringify({ type: "nip46" }));
+
+    const data = getLocalStorageData();
+
+    expect(data.signer).toEqual({ type: "nip46" });
+    expect(localStorage.getItem("signer")).toBe(
+      JSON.stringify({ type: "nip46" })
+    );
+  });
+
+  it("reconstructs a marker-only nip46 signer from separate bunker keys", () => {
+    localStorage.setItem("signer", JSON.stringify({ type: "nip46" }));
+    localStorage.setItem("clientPrivkey", "client-private-key");
+    localStorage.setItem("bunkerRemotePubkey", "remote-pubkey");
+    localStorage.setItem("bunkerRelays", JSON.stringify(["wss://relay.one"]));
+    localStorage.setItem("bunkerSecret", "stored-secret");
+
+    const data = getLocalStorageData();
+
+    expect(data.signer).toEqual({
+      type: "nip46",
+      bunker:
+        "bunker://remote-pubkey?secret=stored-secret&relay=wss://relay.one",
+      appPrivKey: "client-private-key",
+    });
+    expect(localStorage.getItem("signer")).toBe(
+      JSON.stringify({ type: "nip46" })
+    );
+  });
+
+  it("stores only a safe nip46 signer marker while keeping runtime signer data", () => {
     setLocalStorageDataOnSignIn({
       signer: {
         toJSON: () => ({
@@ -91,10 +122,12 @@ describe("getLocalStorageData", () => {
       bunker: "bunker://pubkey?secret=supersecret",
       appPrivKey: "app-private-key",
     });
-    expect(localStorage.getItem("signer")).toBeNull();
+    expect(localStorage.getItem("signer")).toBe(
+      JSON.stringify({ type: "nip46" })
+    );
   });
 
-  it("removes legacy persisted bunker signer data on read", () => {
+  it("migrates legacy persisted bunker signer data to a safe marker on read", () => {
     localStorage.setItem(
       "signer",
       JSON.stringify({
@@ -103,10 +136,21 @@ describe("getLocalStorageData", () => {
         appPrivKey: "legacy-app-privkey",
       })
     );
+    localStorage.setItem("clientPrivkey", "client-private-key");
+    localStorage.setItem("bunkerRemotePubkey", "remote-pubkey");
+    localStorage.setItem("bunkerRelays", JSON.stringify(["wss://relay.one"]));
+    localStorage.setItem("bunkerSecret", "stored-secret");
 
     const data = getLocalStorageData();
 
-    expect(data.signer).toBeUndefined();
-    expect(localStorage.getItem("signer")).toBeNull();
+    expect(data.signer).toEqual({
+      type: "nip46",
+      bunker:
+        "bunker://remote-pubkey?secret=stored-secret&relay=wss://relay.one",
+      appPrivKey: "client-private-key",
+    });
+    expect(localStorage.getItem("signer")).toBe(
+      JSON.stringify({ type: "nip46" })
+    );
   });
 });

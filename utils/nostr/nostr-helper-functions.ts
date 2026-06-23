@@ -1263,13 +1263,47 @@ const LOCALSTORAGECONSTANTS = {
 
 export type StoredSignerData =
   | { type: "nip07" }
-  | { type: "nip46"; bunker: string; appPrivKey?: string }
+  | { type: "nip46"; bunker?: string; appPrivKey?: string }
   | { type: "nsec"; encryptedPrivKey: string; pubkey?: string };
 
 let runtimeSignerData: StoredSignerData | undefined;
 
-function shouldPersistSignerData(signerData: StoredSignerData): boolean {
-  return signerData.type !== "nip46";
+export function getPersistableSignerData(
+  signerData: StoredSignerData
+): StoredSignerData {
+  if (signerData.type === "nip46") {
+    return { type: "nip46" };
+  }
+  return signerData;
+}
+
+function buildNip46SignerData({
+  clientPrivkey,
+  bunkerRemotePubkey,
+  bunkerRelays,
+  bunkerSecret,
+}: {
+  clientPrivkey?: string;
+  bunkerRemotePubkey?: string;
+  bunkerRelays?: string[];
+  bunkerSecret?: string;
+}): StoredSignerData | undefined {
+  if (!clientPrivkey || !bunkerRemotePubkey) return undefined;
+
+  const bunkerParams = [
+    ...(bunkerSecret ? [`secret=${bunkerSecret}`] : []),
+    ...(bunkerRelays ?? []).map((relay) => `relay=${relay}`),
+  ];
+  const bunker =
+    "bunker://" +
+    bunkerRemotePubkey +
+    (bunkerParams.length > 0 ? `?${bunkerParams.join("&")}` : "");
+
+  return {
+    type: "nip46",
+    bunker,
+    appPrivKey: clientPrivkey,
+  };
 }
 
 export const setLocalStorageDataOnSignIn = ({
@@ -1360,15 +1394,10 @@ export const setLocalStorageDataOnSignIn = ({
   if (signer) {
     const signerData = signer.toJSON() as StoredSignerData;
     runtimeSignerData = signerData;
-
-    if (shouldPersistSignerData(signerData)) {
-      localStorage.setItem(
-        LOCALSTORAGECONSTANTS.signer,
-        JSON.stringify(signerData)
-      );
-    } else {
-      localStorage.removeItem(LOCALSTORAGECONSTANTS.signer);
-    }
+    localStorage.setItem(
+      LOCALSTORAGECONSTANTS.signer,
+      JSON.stringify(getPersistableSignerData(signerData))
+    );
   }
 
   if (migrationComplete) {
@@ -1402,9 +1431,7 @@ export interface LocalStorageInterface {
   migrationComplete?: boolean;
 }
 
-function isStoredSignerData(
-  value: unknown
-): value is StoredSignerData {
+function isStoredSignerData(value: unknown): value is StoredSignerData {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
@@ -1423,7 +1450,8 @@ function isStoredSignerData(
 
   if (candidate.type === "nip46") {
     return (
-      typeof candidate.bunker === "string" &&
+      (candidate.bunker === undefined ||
+        typeof candidate.bunker === "string") &&
       (candidate.appPrivKey === undefined ||
         typeof candidate.appPrivKey === "string")
     );
@@ -1603,7 +1631,34 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       }
     );
     if (persistedSigner?.type === "nip46") {
-      localStorage.removeItem(LOCALSTORAGECONSTANTS.signer);
+      const persistableSigner = getPersistableSignerData(persistedSigner);
+      const serializedPersistableSigner = JSON.stringify(persistableSigner);
+      if (
+        localStorage.getItem(LOCALSTORAGECONSTANTS.signer) !==
+        serializedPersistableSigner
+      ) {
+        localStorage.setItem(
+          LOCALSTORAGECONSTANTS.signer,
+          serializedPersistableSigner
+        );
+      }
+
+      const reconstructedSigner = buildNip46SignerData({
+        clientPrivkey:
+          typeof clientPrivkey === "string" ? clientPrivkey : undefined,
+        bunkerRemotePubkey:
+          typeof bunkerRemotePubkey === "string"
+            ? bunkerRemotePubkey
+            : undefined,
+        bunkerRelays,
+        bunkerSecret:
+          typeof bunkerSecret === "string" ? bunkerSecret : undefined,
+      });
+      if (reconstructedSigner) {
+        signer = reconstructedSigner;
+      } else if (!signer && (!signInMethod || signInMethod === "bunker")) {
+        signer = persistableSigner;
+      }
     } else if (persistedSigner) {
       signer = persistedSigner;
     }
@@ -1616,17 +1671,17 @@ export const getLocalStorageData = (): LocalStorageInterface => {
           };
           break;
         case "bunker":
-          let bunker =
-            "bunker://" + bunkerRemotePubkey + "?secret=" + bunkerSecret;
-          for (const relay of bunkerRelays) {
-            bunker += "&relay=" + relay;
-          }
-          signer = {
-            type: "nip46",
-            bunker: bunker,
-            appPrivKey:
+          signer = buildNip46SignerData({
+            clientPrivkey:
               typeof clientPrivkey === "string" ? clientPrivkey : undefined,
-          };
+            bunkerRemotePubkey:
+              typeof bunkerRemotePubkey === "string"
+                ? bunkerRemotePubkey
+                : undefined,
+            bunkerRelays,
+            bunkerSecret:
+              typeof bunkerSecret === "string" ? bunkerSecret : undefined,
+          });
           break;
         case "nsec":
           if (typeof encryptedPrivateKey === "string") {
