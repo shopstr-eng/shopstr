@@ -100,6 +100,9 @@ import {
   ProductTotalsInSats,
   sumProductTotalsInSats,
 } from "@/utils/cart-totals";
+import { mapWithConcurrency } from "@/utils/concurrency";
+
+const CART_SHIPPING_CONVERSION_CONCURRENCY = 6;
 
 export default function CartInvoiceCard({
   products,
@@ -1025,13 +1028,13 @@ export default function CartInvoiceCard({
   };
 
   const buildShippingCostsInSats = async () => {
-    const shippingCostsInSats: { [productId: string]: number } = {};
-
-    for (const product of products) {
-      shippingCostsInSats[product.id] = await convertShippingToSats(product);
-    }
-
-    return shippingCostsInSats;
+    const entries = await mapWithConcurrency(
+      products,
+      CART_SHIPPING_CONVERSION_CONCURRENCY,
+      async (product) =>
+        [product.id, await convertShippingToSats(product)] as const
+    );
+    return Object.fromEntries(entries);
   };
 
   const applyCurrentProductTotals = async (

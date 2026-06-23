@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { XMarkIcon, TruckIcon } from "@heroicons/react/24/outline";
 import { ShopProfile } from "@/utils/types/types";
@@ -25,12 +25,8 @@ export default function FreeShippingNotification({
   shopData: Map<string, ShopProfile>;
   cart: ProductData[];
 }) {
-  const [sellerProgresses, setSellerProgresses] = useState<SellerProgress[]>(
-    []
-  );
-
-  useEffect(() => {
-    if (!isVisible) return;
+  const sellerProgresses = useMemo(() => {
+    if (!isVisible) return [];
 
     const sellerTotals = new Map<string, number>();
     for (const item of cart) {
@@ -64,7 +60,7 @@ export default function FreeShippingNotification({
       }
     }
 
-    setSellerProgresses(progresses);
+    return progresses;
   }, [isVisible, shopData, cart]);
 
   useEffect(() => {

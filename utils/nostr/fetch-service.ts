@@ -28,6 +28,7 @@ import { hashToCurve } from "@cashu/cashu-ts";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
+import { mapWithConcurrency } from "@/utils/concurrency";
 import {
   applyWalletConfigContent,
   generateCashuWalletKeypair,
@@ -56,6 +57,7 @@ type SearchFilter = Filter & { search: string };
 
 const PRODUCT_SEARCH_LIMIT = 100;
 export const NIP50_SEARCH_TIMEOUT_MS = 10_000;
+const COMMUNITY_POST_BATCH_CONCURRENCY = 4;
 export const DEFAULT_NIP50_SEARCH_RELAYS = [
   "wss://relay.nostr.band",
   "wss://nostr.wine",
@@ -2401,20 +2403,24 @@ export const fetchCommunityPosts = async (
         : combinedRelays;
       const batchSize = 50;
       const postEvents: NostrEvent[] = [];
+      const batches: string[][] = [];
       for (let i = 0; i < approvedEventIds.length; i += batchSize) {
         const batchIds = approvedEventIds.slice(i, i + batchSize);
-        if (batchIds.length > 0) {
+        if (batchIds.length > 0) batches.push(batchIds);
+      }
+      const batchResults = await mapWithConcurrency(
+        batches,
+        COMMUNITY_POST_BATCH_CONCURRENCY,
+        async (batchIds) => {
           const postsFilter: Filter = {
             kinds: [1111],
             ids: batchIds,
           };
-          const batchEvents = await nostr.fetch(
-            [postsFilter],
-            {},
-            requestRelays
-          );
-          postEvents.push(...batchEvents);
+          return nostr.fetch([postsFilter], {}, requestRelays);
         }
+      );
+      for (const batchEvents of batchResults) {
+        postEvents.push(...batchEvents);
       }
 
       // Annotate posts with approval metadata where available

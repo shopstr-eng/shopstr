@@ -184,12 +184,10 @@ export default function ProductInvoiceCard({
   const walletContext = useContext(CashuWalletContext);
   const { cashuPubkey } = walletContext;
 
-  const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
-  const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
-  const [randomNpubForReceiver, setRandomNpubForReceiver] =
-    useState<string>("");
-  const [randomNsecForReceiver, setRandomNsecForReceiver] =
-    useState<string>("");
+  const randomNpubForSenderRef = useRef<string>("");
+  const randomNsecForSenderRef = useRef<string>("");
+  const randomNpubForReceiverRef = useRef<string>("");
+  const randomNsecForReceiverRef = useRef<string>("");
 
   const { isOpen, onOpen, onClose } = useDisclosure();
 
@@ -359,12 +357,12 @@ export default function ProductInvoiceCard({
   useEffect(() => {
     const fetchKeys = async () => {
       const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
-      setRandomNpubForSender(npubForSender);
-      setRandomNsecForSender(nsecForSender);
+      randomNpubForSenderRef.current = npubForSender;
+      randomNsecForSenderRef.current = nsecForSender;
       const { nsec: nsecForReceiver, npub: npubForReceiver } =
         await generateKeys();
-      setRandomNpubForReceiver(npubForReceiver);
-      setRandomNsecForReceiver(nsecForReceiver);
+      randomNpubForReceiverRef.current = npubForReceiver;
+      randomNsecForReceiverRef.current = nsecForReceiver;
     };
 
     fetchKeys();
@@ -456,10 +454,18 @@ export default function ProductInvoiceCard({
     donationPercentageValue?: number,
     retryCount: number = 3
   ) => {
-    const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
-    const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
-    const decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
-    const decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
+    const decodedRandomPubkeyForSender = nip19.decode(
+      randomNpubForSenderRef.current
+    );
+    const decodedRandomPrivkeyForSender = nip19.decode(
+      randomNsecForSenderRef.current
+    );
+    const decodedRandomPubkeyForReceiver = nip19.decode(
+      randomNpubForReceiverRef.current
+    );
+    const decodedRandomPrivkeyForReceiver = nip19.decode(
+      randomNsecForReceiverRef.current
+    );
 
     const buyerPubkey = signer
       ? await signer.getPubKey?.()
