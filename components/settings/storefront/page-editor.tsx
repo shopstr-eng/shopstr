@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Input } from "@nextui-org/react";
+import { Input } from "@heroui/react";
 import { ChevronRightIcon, TrashIcon } from "@heroicons/react/24/outline";
 import {
   StorefrontPage,
@@ -92,13 +92,13 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
 
   return (
     <div>
-      <label className="mb-2 block text-base font-bold text-light-text dark:text-dark-text">
+      <label className="text-light-text dark:text-dark-text mb-2 block text-base font-bold">
         Custom Pages
       </label>
       <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
         Add custom pages to your storefront (e.g. About, FAQ, Contact). Each
         page gets its own URL at{" "}
-        <code className="rounded bg-light-bg px-1 text-xs dark:bg-dark-bg">
+        <code className="bg-light-bg dark:bg-dark-bg rounded px-1 text-xs">
           /shop/[slug]/[page-slug]
         </code>
         .
@@ -107,7 +107,7 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
         {pages.map((page, i) => (
           <div
             key={page.id}
-            className="rounded-lg border-2 border-gray-400 bg-light-fg dark:border-gray-500 dark:bg-dark-fg"
+            className="bg-light-fg dark:bg-dark-fg rounded-lg border-2 border-gray-400 dark:border-gray-500"
           >
             <div className="flex items-center gap-2 p-3">
               <button
@@ -116,11 +116,11 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
                 className="flex flex-1 items-center gap-2 text-left"
               >
                 <ChevronRightIcon
-                  className={`h-4 w-4 flex-shrink-0 text-light-text transition-transform dark:text-dark-text ${
+                  className={`text-light-text dark:text-dark-text h-4 w-4 flex-shrink-0 transition-transform ${
                     expandedIdx === i ? "rotate-90" : ""
                   }`}
                 />
-                <span className="text-sm font-bold text-light-text dark:text-dark-text">
+                <span className="text-light-text dark:text-dark-text text-sm font-bold">
                   {page.title || "(Untitled Page)"}
                 </span>
                 {page.slug && (
@@ -144,7 +144,7 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
               </button>
             </div>
             {expandedIdx === i && (
-              <div className="space-y-4 border-t-2 border-gray-200 p-3 dark:border-dark-fg">
+              <div className="dark:border-dark-fg space-y-4 border-t-2 border-gray-200 p-3">
                 <Input
                   variant="bordered"
                   size="sm"
@@ -175,7 +175,7 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
                 />
 
                 <div>
-                  <p className="mb-2 text-xs font-semibold text-light-text dark:text-dark-text">
+                  <p className="text-light-text dark:text-dark-text mb-2 text-xs font-semibold">
                     Page Sections
                   </p>
                   <div className="space-y-2">
@@ -200,7 +200,7 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
                         key={st.type}
                         type="button"
                         onClick={() => addSectionToPage(i, st.type)}
-                        className="rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600 hover:border-shopstr-purple hover:text-shopstr-purple dark:border-gray-600 dark:text-gray-400 dark:hover:border-shopstr-yellow dark:hover:text-shopstr-yellow"
+                        className="hover:border-shopstr-purple hover:text-shopstr-purple dark:hover:border-shopstr-yellow dark:hover:text-shopstr-yellow rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600 dark:border-gray-600 dark:text-gray-400"
                       >
                         + {st.label}
                       </button>

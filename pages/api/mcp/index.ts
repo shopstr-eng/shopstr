@@ -1,6 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { randomUUID } from "crypto";
 import { z } from "zod/v4";
+import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ZodRawShapeCompat } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpServer } from "@/mcp/server";
 import {
@@ -11,6 +13,14 @@ import {
 } from "@/utils/mcp/auth";
 import { recordRequest } from "@/utils/mcp/metrics";
 import { registerWriteTools } from "@/mcp/tools/write-tools";
+import { applyRateLimit } from "@/utils/rate-limit";
+import { wrapWithAudit, type ToolCb } from "@/mcp/audit-log";
+
+// MCP protocol entry — high per-IP cap for legitimate session traffic, with
+// a tighter per-key cap so a single compromised credential cannot exhaust
+// the connection pool.
+const RATE_LIMIT = { limit: 600, windowMs: 60 * 1000 };
+const PER_KEY_LIMIT = { limit: 300, windowMs: 60 * 1000 };
 
 let tablesReady = false;
 
@@ -21,10 +31,48 @@ async function ensureTables() {
   }
 }
 
-const sessions = new Map<
-  string,
-  { transport: StreamableHTTPServerTransport; apiKey: ApiKeyRecord }
->();
+const SESSION_TTL_MS = 30 * 60 * 1000;
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+
+interface McpSession {
+  transport: StreamableHTTPServerTransport;
+  apiKey: ApiKeyRecord;
+  createdAt: number;
+  lastActivityAt: number;
+}
+
+const sessions = new Map<string, McpSession>();
+
+function rejectSessionMismatch(res: NextApiResponse) {
+  return res.status(403).json({
+    jsonrpc: "2.0",
+    error: { code: -32000, message: "Session belongs to a different API key" },
+    id: null,
+  });
+}
+
+function evictIfExpired(sessionId: string, session: McpSession): boolean {
+  if (Date.now() - session.lastActivityAt > SESSION_TTL_MS) {
+    try {
+      session.transport.close?.();
+    } catch {}
+    sessions.delete(sessionId);
+    return true;
+  }
+  return false;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [sid, session] of sessions) {
+    if (now - session.lastActivityAt > SESSION_TTL_MS) {
+      try {
+        session.transport.close?.();
+      } catch {}
+      sessions.delete(sid);
+    }
+  }
+}, SWEEP_INTERVAL_MS);
 
 export const config = {
   api: {
@@ -38,6 +86,20 @@ function registerPurchaseTools(
   token: string
 ) {
   const baseUrl = `http://localhost:${process.env.PORT || 5000}`;
+  const auditContext = { apiKeyId: apiKey.id, pubkey: apiKey.pubkey };
+  function reg<Args extends ZodRawShapeCompat>(
+    name: string,
+    description: string,
+    schema: Args,
+    cb: ToolCallback<Args>
+  ) {
+    return server.tool(
+      name,
+      description,
+      schema,
+      wrapWithAudit(name, cb as ToolCb, auditContext) as ToolCallback<Args>
+    );
+  }
 
   function permissionError() {
     return {
@@ -54,7 +116,7 @@ function registerPurchaseTools(
     };
   }
 
-  server.tool(
+  reg(
     "create_order",
     "Place an order for a product. Supports Bitcoin payment methods: lightning (Bitcoin Lightning invoice) or cashu (ecash tokens). Supports selecting product specifications (size, volume, weight, bulk bundle) and providing a shipping address. Requires read_write API key permission.",
     {
@@ -188,7 +250,7 @@ function registerPurchaseTools(
     }
   );
 
-  server.tool(
+  reg(
     "get_order_status",
     "Check the status of an existing order. Requires read_write API key permission.",
     {
@@ -241,7 +303,7 @@ function registerPurchaseTools(
     }
   );
 
-  server.tool(
+  reg(
     "list_orders",
     "List your orders. Requires read_write API key permission.",
     {
@@ -303,7 +365,7 @@ function registerPurchaseTools(
     }
   );
 
-  server.tool(
+  reg(
     "verify_payment",
     "Verify the payment status of a Lightning invoice for an order. Use after paying a Lightning invoice to confirm the order. Requires read_write API key permission.",
     {
@@ -359,7 +421,7 @@ function registerPurchaseTools(
     }
   );
 
-  server.tool(
+  reg(
     "get_payment_methods",
     "Get available payment methods for a specific seller. Shows which Bitcoin payment options (lightning, cashu) the seller accepts, along with any payment method discounts.",
     {
@@ -369,9 +431,8 @@ function registerPurchaseTools(
       const startTime = Date.now();
 
       try {
-        const { fetchAllProfilesFromDb } = await import(
-          "@/utils/db/db-service"
-        );
+        const { fetchAllProfilesFromDb } =
+          await import("@/utils/db/db-service");
         const profiles = await fetchAllProfilesFromDb();
         const profile = profiles.find(
           (p: any) =>
@@ -464,7 +525,7 @@ function registerPurchaseTools(
       }
     }
   );
-  server.tool(
+  reg(
     "get_notifications",
     "Check for new activity: unread message count, recent orders as buyer, and recent orders as seller. Use this to detect new inquiries, order updates, and address changes that need attention.",
     {
@@ -561,7 +622,7 @@ function registerPurchaseTools(
     }
   );
 
-  server.tool(
+  reg(
     "list_seller_orders",
     "List orders where you are the seller. Shows incoming purchases from buyers with payment status, order status, quantities, and shipping addresses.",
     {
@@ -589,9 +650,8 @@ function registerPurchaseTools(
         return permissionError();
 
       try {
-        const { listMcpOrdersAsSeller, formatOrderForResponse } = await import(
-          "@/mcp/tools/purchase-tools"
-        );
+        const { listMcpOrdersAsSeller, formatOrderForResponse } =
+          await import("@/mcp/tools/purchase-tools");
 
         let orders = await listMcpOrdersAsSeller(
           apiKey.pubkey,
@@ -648,6 +708,12 @@ export default async function handler(
   res: NextApiResponse
 ) {
   const requestStart = Date.now();
+
+  if (!applyRateLimit(req, res, "mcp-protocol:ip", RATE_LIMIT)) {
+    recordRequest(Date.now() - requestStart, false);
+    return;
+  }
+
   await ensureTables();
 
   const token = extractBearerToken(req);
@@ -673,6 +739,19 @@ export default async function handler(
     });
   }
 
+  if (
+    !applyRateLimit(
+      req,
+      res,
+      "mcp-protocol:key",
+      PER_KEY_LIMIT,
+      String(apiKey.id)
+    )
+  ) {
+    recordRequest(Date.now() - requestStart, false);
+    return;
+  }
+
   res.setHeader("X-Response-Time-Start", requestStart.toString());
 
   const originalEnd = res.end.bind(res);
@@ -688,6 +767,15 @@ export default async function handler(
 
     if (sessionId && sessions.has(sessionId)) {
       const session = sessions.get(sessionId)!;
+      if (evictIfExpired(sessionId, session)) {
+        return res.status(404).json({
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Session expired" },
+          id: null,
+        });
+      }
+      if (apiKey.id !== session.apiKey.id) return rejectSessionMismatch(res);
+      session.lastActivityAt = Date.now();
       await session.transport.handleRequest(req as any, res as any, req.body);
       return;
     }
@@ -700,11 +788,20 @@ export default async function handler(
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (sid) => {
-          sessions.set(sid, { transport, apiKey });
+          const now = Date.now();
+          sessions.set(sid, {
+            transport,
+            apiKey,
+            createdAt: now,
+            lastActivityAt: now,
+          });
         },
       });
 
-      const server = createMcpServer();
+      const server = createMcpServer({
+        apiKeyId: apiKey.id,
+        pubkey: apiKey.pubkey,
+      });
       registerPurchaseTools(server, apiKey, token);
       if (apiKey.permissions === "full_access") {
         registerWriteTools(server, apiKey);
@@ -729,6 +826,15 @@ export default async function handler(
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     if (sessionId && sessions.has(sessionId)) {
       const session = sessions.get(sessionId)!;
+      if (evictIfExpired(sessionId, session)) {
+        return res.status(404).json({
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Session expired" },
+          id: null,
+        });
+      }
+      if (apiKey.id !== session.apiKey.id) return rejectSessionMismatch(res);
+      session.lastActivityAt = Date.now();
       await session.transport.handleRequest(req as any, res as any);
       return;
     }
@@ -746,6 +852,14 @@ export default async function handler(
     const sessionId = req.headers["mcp-session-id"] as string | undefined;
     if (sessionId && sessions.has(sessionId)) {
       const session = sessions.get(sessionId)!;
+      if (evictIfExpired(sessionId, session)) {
+        return res.status(404).json({
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Session expired" },
+          id: null,
+        });
+      }
+      if (apiKey.id !== session.apiKey.id) return rejectSessionMismatch(res);
       await session.transport.handleRequest(req as any, res as any);
       sessions.delete(sessionId);
       return;

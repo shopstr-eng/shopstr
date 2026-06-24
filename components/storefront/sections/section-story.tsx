@@ -18,7 +18,7 @@ export default function SectionStory({ section, colors }: SectionStoryProps) {
         </h2>
       )}
       {section.body && (
-        <p className="font-body mx-auto mb-12 max-w-2xl whitespace-pre-line text-center text-lg opacity-70">
+        <p className="font-body mx-auto mb-12 max-w-2xl text-center text-lg whitespace-pre-line opacity-70">
           {section.body}
         </p>
       )}
@@ -26,7 +26,7 @@ export default function SectionStory({ section, colors }: SectionStoryProps) {
       {section.timelineItems && section.timelineItems.length > 0 && (
         <div className="relative">
           <div
-            className="absolute bottom-0 left-4 top-0 w-0.5 md:left-1/2 md:-translate-x-1/2"
+            className="absolute top-0 bottom-0 left-4 w-0.5 md:left-1/2 md:-translate-x-1/2"
             style={{ backgroundColor: colors.primary + "33" }}
           />
           <div className="space-y-12">
@@ -37,7 +37,7 @@ export default function SectionStory({ section, colors }: SectionStoryProps) {
                   idx % 2 === 0 ? "" : "md:flex-row-reverse"
                 }`}
               >
-                <div className="absolute left-4 top-2 z-10 md:left-1/2 md:-translate-x-1/2">
+                <div className="absolute top-2 left-4 z-10 md:left-1/2 md:-translate-x-1/2">
                   <div
                     className="h-4 w-4 rounded-full border-4"
                     style={{
@@ -53,7 +53,7 @@ export default function SectionStory({ section, colors }: SectionStoryProps) {
                 >
                   {item.year && (
                     <span
-                      className="mb-1 inline-block text-sm font-bold uppercase tracking-wider"
+                      className="mb-1 inline-block text-sm font-bold tracking-wider uppercase"
                       style={{ color: colors.accent }}
                     >
                       {item.year}

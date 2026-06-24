@@ -9,7 +9,7 @@ import {
   ModalFooter,
   Input,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 interface AddressChangeModalProps {
@@ -63,7 +63,7 @@ const AddressChangeModal = ({
       size="2xl"
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
           Change Delivery Address
         </ModalHeader>
         <form onSubmit={handleSubmit(handleFormSubmit)}>
@@ -71,18 +71,18 @@ const AddressChangeModal = ({
             {(orderId || productTitle || currentAddress) && (
               <div className="mb-4 rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
                 {orderId && (
-                  <p className="text-sm text-light-text dark:text-dark-text">
+                  <p className="text-light-text dark:text-dark-text text-sm">
                     <span className="font-bold">Order:</span>{" "}
                     {orderId.substring(0, 8)}...
                   </p>
                 )}
                 {productTitle && (
-                  <p className="text-sm text-light-text dark:text-dark-text">
+                  <p className="text-light-text dark:text-dark-text text-sm">
                     <span className="font-bold">Product:</span> {productTitle}
                   </p>
                 )}
                 {currentAddress && (
-                  <p className="text-sm text-light-text dark:text-dark-text">
+                  <p className="text-light-text dark:text-dark-text text-sm">
                     <span className="font-bold">Current Address:</span>{" "}
                     {currentAddress}
                   </p>

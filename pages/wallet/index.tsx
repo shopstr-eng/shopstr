@@ -6,8 +6,14 @@ import ReceiveButton from "../../components/wallet/receive-button";
 import SendButton from "../../components/wallet/send-button";
 import PayButton from "../../components/wallet/pay-button";
 import Transactions from "../../components/wallet/transactions";
-import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  Keyset as MintKeyset,
+  Proof,
+} from "@cashu/cashu-ts";
 import ProtectedRoute from "@/components/utility-components/protected-route";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
@@ -30,7 +36,8 @@ const Wallet = () => {
   useEffect(() => {
     const fetchLocalKeySet = async () => {
       if (wallet) {
-        const mintKeySetIdsArray = await wallet.getKeySets();
+        await wallet.loadMint();
+        const mintKeySetIdsArray = await wallet.keyChain.getKeysets();
         if (mintKeySetIdsArray) {
           setMintKeySetIds(mintKeySetIdsArray);
         }
@@ -41,9 +48,8 @@ const Wallet = () => {
 
   const filteredProofs = useMemo(() => {
     if (mints && tokens && mintKeySetIds) {
-      return tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      return tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
     }
     return [];
@@ -51,17 +57,12 @@ const Wallet = () => {
 
   useEffect(() => {
     if (tokens) {
-      const tokensTotal =
-        tokens.length >= 1
-          ? tokens.reduce((acc, token: Proof) => acc + token.amount, 0)
-          : 0;
+      const tokensTotal = tokens.length >= 1 ? sumProofAmounts(tokens) : 0;
       setTotalBalance(tokensTotal);
     }
 
     const walletTotal =
-      filteredProofs.length >= 1
-        ? filteredProofs.reduce((acc, p: Proof) => acc + p.amount, 0)
-        : 0;
+      filteredProofs.length >= 1 ? sumProofAmounts(filteredProofs) : 0;
     setWalletBalance(walletTotal);
   }, [tokens, filteredProofs]);
 
@@ -70,12 +71,7 @@ const Wallet = () => {
       const { tokens: newTokens } = getLocalStorageData();
       if (newTokens) {
         const tokensTotal =
-          newTokens.length >= 1
-            ? newTokens.reduce(
-                (acc: number, token: Proof) => acc + token.amount,
-                0
-              )
-            : 0;
+          newTokens.length >= 1 ? sumProofAmounts(newTokens as Proof[]) : 0;
         setTotalBalance(tokensTotal);
 
         if (mintKeySetIds) {
@@ -84,10 +80,7 @@ const Wallet = () => {
           );
           const newWalletTotal =
             newFilteredProofs.length >= 1
-              ? newFilteredProofs.reduce(
-                  (acc: number, p: Proof) => acc + p.amount,
-                  0
-                )
+              ? sumProofAmounts(newFilteredProofs)
               : 0;
           setWalletBalance(newWalletTotal);
         }
@@ -103,14 +96,14 @@ const Wallet = () => {
 
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen flex-col bg-light-bg px-4 pt-[8rem] dark:bg-dark-bg">
+      <div className="bg-light-bg dark:bg-dark-bg flex min-h-screen flex-col px-4 pt-[8rem]">
         <div className="mx-auto w-full max-w-3xl">
           <div className="mb-8 rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
-            <h1 className="mb-2 text-center text-6xl font-bold text-light-text dark:text-dark-text">
+            <h1 className="text-light-text dark:text-dark-text mb-2 text-center text-6xl font-bold">
               {totalBalance} sats
             </h1>
             <p
-              className="mb-4 cursor-pointer break-words text-center text-sm italic text-gray-500 transition-colors hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
+              className="mb-4 cursor-pointer text-center text-sm break-words text-gray-500 italic transition-colors hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
               onClick={handleMintClick}
             >
               {mint}: {walletBalance} sats

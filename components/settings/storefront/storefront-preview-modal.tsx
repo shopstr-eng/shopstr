@@ -5,7 +5,7 @@ import {
   ModalBody,
   ModalFooter,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   StorefrontColorScheme,
   StorefrontSection,
@@ -137,7 +137,7 @@ function SectionPreview({
         <div className="flex flex-col gap-4 md:flex-row md:items-center">
           <div className="flex-1">
             <p
-              className="mb-1 text-xs font-semibold uppercase tracking-widest opacity-60"
+              className="mb-1 text-xs font-semibold tracking-widest uppercase opacity-60"
               style={labelStyle}
             >
               {type === "about" ? "About" : "Our Story"}
@@ -283,7 +283,7 @@ function SectionPreview({
               >
                 {product.tag && (
                   <span
-                    className="absolute right-2 top-2 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                    className="absolute top-2 right-2 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
                     style={{
                       backgroundColor: colors.accent,
                       color: navColorOnAccent,
@@ -299,7 +299,7 @@ function SectionPreview({
               </div>
               <div className="p-2">
                 <p
-                  className="text-xs font-semibold leading-tight"
+                  className="text-xs leading-tight font-semibold"
                   style={{ color: colors.text }}
                 >
                   {product.name}
@@ -457,7 +457,7 @@ function SectionPreview({
     <div className="px-2 py-4 text-center">
       <PlaceholderBadge />
       <p
-        className="text-xs font-bold uppercase tracking-widest opacity-50"
+        className="text-xs font-bold tracking-widest uppercase opacity-50"
         style={{ color: colors.primary }}
       >
         {type} section
@@ -833,7 +833,7 @@ export default function StorefrontPreviewModal({
                       >
                         {product.tag && (
                           <span
-                            className="absolute right-2 top-2 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                            className="absolute top-2 right-2 rounded-full px-1.5 py-0.5 text-[10px] font-bold"
                             style={{
                               backgroundColor: accent,
                               color: accentTextColor,
@@ -849,7 +849,7 @@ export default function StorefrontPreviewModal({
                       </div>
                       <div className="p-2">
                         <p
-                          className="text-xs font-semibold leading-tight"
+                          className="text-xs leading-tight font-semibold"
                           style={{ color: text }}
                         >
                           {product.name}
@@ -908,7 +908,7 @@ export default function StorefrontPreviewModal({
               href={`/shop/${shopSlug}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm font-bold text-shopstr-purple underline dark:text-shopstr-yellow"
+              className="text-shopstr-purple dark:text-shopstr-yellow text-sm font-bold underline"
             >
               Open live storefront →
             </a>

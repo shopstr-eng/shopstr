@@ -1,7 +1,7 @@
 import { useContext, useEffect, useState, useMemo } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { useDisclosure } from "@nextui-org/react";
+import { useDisclosure } from "@heroui/react";
 import {
   ShoppingCartIcon,
   Bars3Icon,
@@ -18,6 +18,7 @@ import {
 } from "@/utils/types/types";
 import StorefrontFooterComponent from "./storefront-footer";
 import { getNavTextColor } from "@/utils/storefront-colors";
+import { getStorefrontCartQuantity } from "@/utils/storefront-cart";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#a438ba",
@@ -90,17 +91,7 @@ export default function StorefrontThemeWrapper({
 
   useEffect(() => {
     const sync = () => {
-      const cart = localStorage.getItem("cart");
-      if (!cart) {
-        setCartQuantity(0);
-        return;
-      }
-      const items = JSON.parse(cart) as { pubkey?: string }[];
-      setCartQuantity(
-        sellerPubkey
-          ? items.filter((p) => p.pubkey === sellerPubkey).length
-          : items.length
-      );
+      setCartQuantity(getStorefrontCartQuantity(sellerPubkey));
     };
     sync();
     const interval = setInterval(sync, 1000);
@@ -235,7 +226,7 @@ export default function StorefrontThemeWrapper({
         }}
       >
         <nav
-          className="fixed left-0 right-0 top-0 z-50 border-b"
+          className="fixed top-0 right-0 left-0 z-50 border-b"
           style={{
             backgroundColor: colors.secondary,
             borderColor: colors.primary + "33",
@@ -267,7 +258,7 @@ export default function StorefrontThemeWrapper({
                 <ShoppingCartIcon className="h-5 w-5" />
                 {cartQuantity > 0 && (
                   <span
-                    className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold"
+                    className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold"
                     style={{
                       backgroundColor: colors.primary,
                       color: colors.secondary,

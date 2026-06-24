@@ -83,7 +83,7 @@ function PreviewProductGridInline({
             )}
             <div className="flex flex-col justify-center p-8 md:w-1/2">
               <span
-                className="mb-2 text-sm font-semibold uppercase tracking-wider"
+                className="mb-2 text-sm font-semibold tracking-wider uppercase"
                 style={{ color: colors.accent }}
               >
                 Featured

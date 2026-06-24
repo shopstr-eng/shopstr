@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, useContext, useMemo } from "react";
+import { nip19 } from "nostr-tools";
+import { useEffect, useState, useContext, useMemo } from "react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
-import { ProfileMapContext } from "@/utils/context/context";
+import { CashuWalletContext, ProfileMapContext } from "@/utils/context/context";
 import { useForm, Controller } from "react-hook-form";
 import {
   Button,
@@ -9,28 +10,82 @@ import {
   Image,
   Select,
   SelectItem,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {
   CheckIcon,
   ClipboardIcon,
   EyeSlashIcon,
   EyeIcon,
 } from "@heroicons/react/24/outline";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  AVATARBADGEBUTTONCLASSNAMES,
+  SHOPSTRBUTTONCLASSNAMES,
+} from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
-import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
+import {
+  createNostrProfileEvent,
+  getLocalUserProfileKey,
+  parseLocalProfileFallback,
+  isProfileContentPopulated,
+} from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import ProtectedRoute from "@/components/utility-components/protected-route";
+import {
+  normalizeCashuPubkey,
+  isP2pkEscrowFeatureEnabled,
+} from "@/utils/cashu/p2pk-checkout";
+
+function decodeNpubOrHexPubkey(value: string): string {
+  const cashuPubkey = normalizeCashuPubkey(value);
+  if (cashuPubkey) return cashuPubkey;
+
+  const decoded = nip19.decode(value);
+  if (decoded.type !== "npub") {
+    throw new Error("Must be npub");
+  }
+  const decodedCashuPubkey = normalizeCashuPubkey(decoded.data as string);
+  if (!decodedCashuPubkey) {
+    throw new Error("Must be Cashu-compatible pubkey");
+  }
+  return decodedCashuPubkey;
+}
+
+function profileContentToFormValues(content: Record<string, unknown>) {
+  const p2pk = content.p2pk as
+    | {
+        enabled?: boolean;
+        pubkey?: string;
+        refundDelayDays?: number;
+        locktime?: number;
+        reclaimKeys?: string[];
+      }
+    | undefined;
+
+  return {
+    ...content,
+    p2pkEnabled: p2pk?.enabled ?? (content.p2pkEnabled as boolean) ?? false,
+    p2pkPubkey: p2pk?.pubkey ?? (content.p2pkPubkey as string) ?? "",
+    refundDelayDays: String(
+      p2pk?.refundDelayDays ??
+        p2pk?.locktime ?? // old dev field name
+        content.refundDelayDays ??
+        content.lockTime ??
+        ""
+    ),
+    reclaimPubKeys: Array.isArray(p2pk?.reclaimKeys)
+      ? p2pk.reclaimKeys.join(", ")
+      : ((content.reclaimPubKeys as string) ?? ""),
+  };
+}
 
 const UserProfilePage = () => {
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
-  const [isFetchingProfile, setIsFetchingProfile] = useState(false);
   const {
     signer,
     pubkey: userPubkey,
@@ -42,7 +97,8 @@ const UserProfilePage = () => {
   const [viewState, setViewState] = useState<"shown" | "hidden">("hidden");
 
   const profileContext = useContext(ProfileMapContext);
-  const { handleSubmit, control, reset, watch, setValue } = useForm({
+  const { cashuPubkey } = useContext(CashuWalletContext);
+  const { handleSubmit, control, reset, watch, setValue, setError } = useForm({
     defaultValues: {
       banner: "",
       picture: "",
@@ -54,65 +110,219 @@ const UserProfilePage = () => {
       lud16: "", // Lightning address
       payment_preference: "ecash",
       shopstr_donation: 2.1,
+      p2pkEnabled: false,
+      p2pkPubkey: "",
+      refundDelayDays: "",
+      reclaimPubKeys: "",
     },
   });
 
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
+  const watchP2pkEnabled = watch("p2pkEnabled");
+  const watchP2pkPubkey = watch("p2pkPubkey");
+
+  const isFetchingProfile = !userPubkey;
   const defaultImage = useMemo(() => {
     return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
 
-  const contextLoadedRef = useRef(false);
-  useEffect(() => {
-    if (!userPubkey) return;
-    if (contextLoadedRef.current) return;
-    setIsFetchingProfile(true);
-    fetch(`/api/db/fetch-profile?pubkey=${encodeURIComponent(userPubkey)}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (contextLoadedRef.current) return;
-        if (data?.profile?.content) reset(data.profile.content);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!contextLoadedRef.current) setIsFetchingProfile(false);
-      });
-  }, [userPubkey, reset]);
+  const profileImageSrc = watchPicture || defaultImage;
 
   useEffect(() => {
     if (!userPubkey) return;
-    const profile = profileContext.profileData.get(userPubkey);
-    if (!profile) return;
-    contextLoadedRef.current = true;
-    setIsFetchingProfile(true);
-    reset(profile.content);
-    setIsFetchingProfile(false);
-  }, [profileContext, userPubkey, reset]);
 
-  const onSubmit = async (data: { [x: string]: string }) => {
-    if (!userPubkey) throw new Error("pubkey is undefined");
+    const localFallback = parseLocalProfileFallback(
+      localStorage.getItem(getLocalUserProfileKey(userPubkey))
+    );
+
+    const profileMap = profileContext.profileData;
+    const profile = profileMap.has(userPubkey)
+      ? profileMap.get(userPubkey)
+      : undefined;
+
+    if (profile) {
+      const profileCreatedAt = profile.created_at || 0;
+      const shouldUseLocalFallback =
+        !!localFallback &&
+        localFallback.updatedAt > profileCreatedAt &&
+        isProfileContentPopulated(localFallback.content);
+
+      if (shouldUseLocalFallback) {
+        reset(profileContentToFormValues(localFallback.content));
+      } else {
+        reset(profileContentToFormValues(profile.content));
+      }
+
+      try {
+        localStorage.setItem(
+          getLocalUserProfileKey(userPubkey),
+          JSON.stringify({
+            content: shouldUseLocalFallback
+              ? localFallback!.content
+              : profile.content,
+            updatedAt: shouldUseLocalFallback
+              ? localFallback!.updatedAt
+              : profileCreatedAt,
+          })
+        );
+      } catch (error) {
+        console.error("Failed to persist profile fallback locally:", error);
+      }
+    } else {
+      try {
+        if (localFallback?.content) {
+          reset(profileContentToFormValues(localFallback.content));
+        }
+      } catch (error) {
+        console.error("Failed to read local profile fallback:", error);
+      }
+    }
+  }, [userPubkey, profileContext.isLoading, profileContext.profileData, reset]);
+
+  useEffect(() => {
+    if (watchP2pkEnabled && cashuPubkey && !watchP2pkPubkey) {
+      setValue("p2pkPubkey", cashuPubkey);
+    }
+  }, [watchP2pkEnabled, cashuPubkey, watchP2pkPubkey, setValue]);
+
+  const onSubmit = async (data: {
+    [x: string]: any;
+    p2pkEnabled?: boolean;
+    p2pkPubkey?: string;
+    refundDelayDays?: string;
+    reclaimPubKeys?: string;
+  }) => {
+    if (!userPubkey) {
+      console.error("Cannot save profile: pubkey is undefined");
+      return;
+    }
+
     setIsUploadingProfile(true);
-    await createNostrProfileEvent(nostr!, signer!, JSON.stringify(data));
-    profileContext.updateProfileData({
-      pubkey: userPubkey!,
-      content: data,
-      created_at: 0,
-    });
-    setIsUploadingProfile(false);
+    try {
+      const profileMap = profileContext.profileData;
+      const existingProfile = profileMap.has(userPubkey)
+        ? profileMap.get(userPubkey)?.content
+        : {};
+
+      const updatedData = {
+        ...existingProfile,
+        ...data,
+      };
+
+      const reclaimArr: string[] = [];
+      const invalidReclaimKeys: string[] = [];
+      for (const s of (data?.reclaimPubKeys ?? "").split(",")) {
+        const trimmed = s.trim();
+        if (!trimmed) continue;
+        try {
+          reclaimArr.push(decodeNpubOrHexPubkey(trimmed));
+        } catch {
+          invalidReclaimKeys.push(trimmed);
+        }
+      }
+      if (invalidReclaimKeys.length > 0) {
+        setError("reclaimPubKeys", {
+          message: `Invalid reclaim key(s): ${invalidReclaimKeys.join(", ")}`,
+        });
+        setIsUploadingProfile(false);
+        return;
+      }
+
+      const existingP2pk = existingProfile?.p2pk as
+        | { pubkey?: string; refundDelayDays?: number }
+        | undefined;
+
+      if (data?.p2pkEnabled) {
+        const rawPubkey = (data?.p2pkPubkey as string) ?? "";
+        if (!rawPubkey) {
+          setError("p2pkPubkey", {
+            message:
+              "Cashu wallet key not yet available. Key management is coming soon.",
+          });
+          setIsUploadingProfile(false);
+          return;
+        }
+        let mainHex: string;
+        try {
+          mainHex = decodeNpubOrHexPubkey(rawPubkey);
+        } catch {
+          setError("p2pkPubkey", {
+            message: "Must be a Cashu-compatible pubkey",
+          });
+          setIsUploadingProfile(false);
+          return;
+        }
+
+        const refundDelayDays = parseInt(data?.refundDelayDays as string);
+        if (!refundDelayDays || refundDelayDays <= 0) {
+          setError("refundDelayDays", { message: "Required" });
+          setIsUploadingProfile(false);
+          return;
+        }
+
+        updatedData.p2pk = {
+          enabled: true,
+          pubkey: mainHex,
+          refundDelayDays,
+          ...(reclaimArr.length > 0 ? { reclaimKeys: reclaimArr } : {}),
+        };
+      } else {
+        updatedData.p2pk = {
+          enabled: false,
+          ...(existingP2pk?.pubkey ? { pubkey: existingP2pk.pubkey } : {}),
+          ...(existingP2pk?.refundDelayDays
+            ? { refundDelayDays: existingP2pk.refundDelayDays }
+            : {}),
+          ...(reclaimArr.length > 0 ? { reclaimKeys: reclaimArr } : {}),
+        };
+      }
+
+      try {
+        localStorage.setItem(
+          getLocalUserProfileKey(userPubkey),
+          JSON.stringify({
+            content: updatedData,
+            updatedAt: Math.floor(Date.now() / 1000),
+          })
+        );
+      } catch (error) {
+        console.error("Failed to save local profile fallback:", error);
+      }
+
+      if (!nostr || !signer) {
+        console.error("Cannot save profile: nostr or signer is unavailable");
+        return;
+      }
+
+      const signedProfileEvent = await createNostrProfileEvent(
+        nostr,
+        signer,
+        JSON.stringify(updatedData)
+      );
+      profileContext.updateProfileData({
+        pubkey: userPubkey,
+        content: updatedData,
+        created_at: signedProfileEvent.created_at,
+      });
+    } catch (error) {
+      console.error("Failed to save user profile:", error);
+    } finally {
+      setIsUploadingProfile(false);
+    }
   };
 
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
+      <div className="bg-light-bg dark:bg-dark-bg flex min-h-screen flex-col pt-24 md:pb-20">
         <div className="mx-auto h-full w-full px-4 lg:w-1/2">
           <SettingsBreadCrumbs />
           {isFetchingProfile ? (
             <ShopstrSpinner />
           ) : (
             <>
-              <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
-                <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
+              <div className="bg-light-fg dark:bg-dark-fg mb-20 h-40 rounded-lg">
+                <div className="bg-shopstr-purple-light dark:bg-dark-fg relative flex h-40 items-center justify-center rounded-lg">
                   {watchBanner && (
                     <Image
                       alt={"User banner image"}
@@ -121,44 +331,37 @@ const UserProfilePage = () => {
                     />
                   )}
                   <FileUploaderButton
-                    className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
+                    className={`bg-shopstr-purple absolute right-5 bottom-5 z-20 border-2 border-white shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                   >
                     Upload Banner
                   </FileUploaderButton>
                 </div>
                 <div className="flex items-center justify-center">
-                  <div className="relative z-20 mt-[-3rem] h-24 w-24">
-                    <div className="">
-                      <FileUploaderButton
-                        isIconOnly
-                        className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                        imgCallbackOnUpload={(imgUrl) =>
-                          setValue("picture", imgUrl)
-                        }
-                      />
-                      {watchPicture ? (
-                        <Image
-                          src={watchPicture}
-                          alt="user profile picture"
-                          className="rounded-full"
-                        />
-                      ) : (
-                        <Image
-                          src={defaultImage}
-                          alt="user profile picture"
-                          className="rounded-full"
-                        />
-                      )}
-                    </div>
+                  <div className="relative z-20 mt-[-3rem] h-24 w-24 overflow-visible">
+                    <FileUploaderButton
+                      isIconOnly
+                      className={AVATARBADGEBUTTONCLASSNAMES}
+                      containerClassName="absolute right-[-0.5rem] bottom-[-0.5rem] z-20"
+                      imgCallbackOnUpload={(imgUrl) =>
+                        setValue("picture", imgUrl)
+                      }
+                    />
+                    <Image
+                      key={profileImageSrc}
+                      src={profileImageSrc}
+                      alt="user profile picture"
+                      radius="full"
+                      className="h-24 w-24 rounded-full object-cover"
+                    />
                   </div>
                 </div>
               </div>
 
               <div
-                className="mx-auto mb-2 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 hover:opacity-60 dark:border-dark-fg"
+                className="border-light-fg dark:border-dark-fg mx-auto mb-2 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 p-2 hover:opacity-60"
                 onClick={() => {
-                  navigator.clipboard.writeText(userNPub!);
+                  if (userNPub) navigator.clipboard.writeText(userNPub);
                   setIsNPubCopied(true);
                   setTimeout(() => {
                     setIsNPubCopied(false);
@@ -166,30 +369,30 @@ const UserProfilePage = () => {
                 }}
               >
                 <span
-                  className="lg:text-md break-all pr-2 text-[0.50rem] font-bold text-light-text dark:text-dark-text sm:text-xs md:text-sm"
+                  className="lg:text-md text-light-text dark:text-dark-text pr-2 text-[0.50rem] font-bold break-all sm:text-xs md:text-sm"
                   suppressHydrationWarning
                 >
-                  {userNPub!}
+                  {userNPub}
                 </span>
                 {isNPubCopied ? (
                   <CheckIcon
                     width={15}
                     height={15}
-                    className="flex-shrink-0 text-light-text dark:text-dark-text"
+                    className="text-light-text dark:text-dark-text flex-shrink-0"
                   />
                 ) : (
                   <ClipboardIcon
                     width={15}
                     height={15}
-                    className="flex-shrink-0 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                    className="text-light-text dark:text-dark-text flex-shrink-0 hover:text-purple-700 dark:hover:text-yellow-700"
                   />
                 )}
               </div>
 
               {userNSec ? (
-                <div className="mx-auto mb-12 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 dark:border-dark-fg">
+                <div className="border-light-fg dark:border-dark-fg mx-auto mb-12 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 p-2">
                   <span
-                    className="lg:text-md break-all pr-2 text-[0.50rem] font-bold text-light-text dark:text-dark-text sm:text-xs md:text-sm"
+                    className="lg:text-md text-light-text dark:text-dark-text pr-2 text-[0.50rem] font-bold break-all sm:text-xs md:text-sm"
                     suppressHydrationWarning
                   >
                     {viewState === "shown"
@@ -200,13 +403,13 @@ const UserProfilePage = () => {
                     <CheckIcon
                       width={15}
                       height={15}
-                      className="flex-shrink-0 text-light-text dark:text-dark-text"
+                      className="text-light-text dark:text-dark-text flex-shrink-0"
                     />
                   ) : (
                     <ClipboardIcon
                       width={15}
                       height={15}
-                      className="flex-shrink-0 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                      className="text-light-text dark:text-dark-text flex-shrink-0 hover:text-purple-700 dark:hover:text-yellow-700"
                       onClick={() => {
                         navigator.clipboard.writeText(userNSec);
                         setIsNSecCopied(true);
@@ -218,14 +421,14 @@ const UserProfilePage = () => {
                   )}
                   {viewState === "shown" ? (
                     <EyeSlashIcon
-                      className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                      className="text-light-text dark:text-dark-text h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700 dark:hover:text-yellow-700"
                       onClick={() => {
                         setViewState("hidden");
                       }}
                     />
                   ) : (
                     <EyeIcon
-                      className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                      className="text-light-text dark:text-dark-text h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700 dark:hover:text-yellow-700"
                       onClick={async () => {
                         // Only decrypt nsec when user explicitly asks to see it.
                         if (!userNSec && signer instanceof NostrNSecSigner) {
@@ -248,6 +451,51 @@ const UserProfilePage = () => {
               )}
 
               <form onSubmit={handleSubmit(onSubmit as any)}>
+                <div className="grid gap-4 pb-4 md:grid-cols-2">
+                  <Controller
+                    name="picture"
+                    control={control}
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <Input
+                        className="text-light-text dark:text-dark-text"
+                        classNames={{
+                          label: "text-light-text dark:text-dark-text text-lg",
+                        }}
+                        variant="bordered"
+                        fullWidth={true}
+                        type="url"
+                        label="Profile image URL"
+                        labelPlacement="outside"
+                        placeholder="https://..."
+                        onChange={onChange}
+                        onBlur={onBlur}
+                        value={value || ""}
+                      />
+                    )}
+                  />
+                  <Controller
+                    name="banner"
+                    control={control}
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <Input
+                        className="text-light-text dark:text-dark-text"
+                        classNames={{
+                          label: "text-light-text dark:text-dark-text text-lg",
+                        }}
+                        variant="bordered"
+                        fullWidth={true}
+                        type="url"
+                        label="Profile banner URL"
+                        labelPlacement="outside"
+                        placeholder="https://..."
+                        onChange={onChange}
+                        onBlur={onBlur}
+                        value={value || ""}
+                      />
+                    )}
+                  />
+                </div>
+
                 <Controller
                   name="display_name"
                   control={control}
@@ -261,7 +509,7 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="text-light-text dark:text-dark-text pb-4"
                         classNames={{
                           label: "text-light-text dark:text-dark-text text-lg",
                         }}
@@ -294,7 +542,7 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="text-light-text dark:text-dark-text pb-4"
                         classNames={{
                           label: "text-light-text dark:text-dark-text text-lg",
                         }}
@@ -327,7 +575,7 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Textarea
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="text-light-text dark:text-dark-text pb-4"
                         classNames={{
                           label: "text-light-text dark:text-dark-text text-lg",
                         }}
@@ -360,7 +608,7 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="text-light-text dark:text-dark-text pb-4"
                         classNames={{
                           label: "text-light-text dark:text-dark-text text-lg",
                         }}
@@ -392,7 +640,7 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="text-light-text dark:text-dark-text pb-4"
                         classNames={{
                           label: "text-light-text dark:text-dark-text text-lg",
                         }}
@@ -425,7 +673,7 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="text-light-text dark:text-dark-text pb-4"
                         classNames={{
                           label: "text-light-text dark:text-dark-text text-lg",
                         }}
@@ -449,7 +697,7 @@ const UserProfilePage = () => {
                   control={control}
                   render={({ field: { onChange, onBlur, value } }) => (
                     <Select
-                      className="pb-4 text-light-text dark:text-dark-text"
+                      className="text-light-text dark:text-dark-text pb-4"
                       classNames={{
                         label: "text-light-text dark:text-dark-text text-lg",
                       }}
@@ -463,14 +711,12 @@ const UserProfilePage = () => {
                     >
                       <SelectItem
                         key="ecash"
-                        value="ecash"
                         className="text-light-text dark:text-dark-text"
                       >
                         Cashu (Bitcoin)
                       </SelectItem>
                       <SelectItem
                         key="lightning"
-                        value="lightning"
                         className="text-light-text dark:text-dark-text"
                       >
                         Lightning (Bitcoin)
@@ -488,7 +734,7 @@ const UserProfilePage = () => {
                       min={0}
                       max={100}
                       step={0.1}
-                      className="pb-4 text-light-text dark:text-dark-text"
+                      className="text-light-text dark:text-dark-text pb-4"
                       classNames={{
                         label: "text-light-text dark:text-dark-text text-lg",
                       }}
@@ -498,7 +744,164 @@ const UserProfilePage = () => {
                       labelPlacement="outside"
                       onChange={onChange}
                       onBlur={onBlur}
-                      value={value.toString()}
+                      value={value?.toString() || ""}
+                    />
+                  )}
+                />
+
+                {isP2pkEscrowFeatureEnabled() && (
+                  <>
+                    <p className="text-light-text dark:text-dark-text mb-2 text-lg font-semibold">
+                      P2PK escrow (for your shop)
+                    </p>
+                    <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                      When enabled, Cashu payments to you are locked to your
+                      redeem pubkey for a delay period. Buyers can configure
+                      their own reclaim keys separately below.
+                    </p>
+                    <Controller
+                      name="p2pkEnabled"
+                      control={control}
+                      render={({ field: { onChange, value } }) => (
+                        <div className="pb-4">
+                          <label className="text-light-text dark:text-dark-text flex items-center gap-2 text-lg">
+                            <input
+                              type="checkbox"
+                              checked={!!value}
+                              onChange={(e) => onChange(e.target.checked)}
+                            />
+                            Enable P2PK escrow on my listings
+                          </label>
+                        </div>
+                      )}
+                    />
+
+                    {watchP2pkEnabled && (
+                      <>
+                        <Controller
+                          name="p2pkPubkey"
+                          control={control}
+                          render={({
+                            field: { onChange, onBlur, value },
+                            fieldState: { error },
+                          }) => (
+                            <div>
+                              <Input
+                                className="text-light-text dark:text-dark-text"
+                                classNames={{
+                                  label:
+                                    "text-light-text dark:text-dark-text text-lg",
+                                }}
+                                variant="bordered"
+                                fullWidth
+                                label="P2PK Redeem Pubkey (Cashu wallet key)"
+                                labelPlacement="outside"
+                                placeholder="Will be auto-filled from your Cashu wallet key"
+                                isInvalid={!!error}
+                                errorMessage={error?.message}
+                                onChange={onChange}
+                                onBlur={onBlur}
+                                value={value}
+                              />
+                              <p className="text-default-400 mt-1 mb-4 text-xs">
+                                Auto-filled from your Cashu wallet when
+                                available, with no Nostr identity fallback. This
+                                key is used to claim locked payments &mdash; it
+                                is separate from your Nostr identity.
+                              </p>
+                            </div>
+                          )}
+                        />
+
+                        <Controller
+                          name="refundDelayDays"
+                          control={control}
+                          rules={{
+                            required: "Required",
+                            min: { value: 1, message: "Minimum 1 day" },
+                            max: { value: 365, message: "Maximum 365 days" },
+                          }}
+                          render={({
+                            field: { onChange, onBlur, value },
+                            fieldState: { error },
+                          }) => (
+                            <Input
+                              type="number"
+                              min={1}
+                              max={365}
+                              className="text-light-text dark:text-dark-text py-6"
+                              classNames={{
+                                label:
+                                  "text-light-text dark:text-dark-text text-lg",
+                              }}
+                              variant="bordered"
+                              fullWidth
+                              label="Reclaim opens after (days)"
+                              labelPlacement="outside"
+                              placeholder="e.g. 7 — then buyers gain an additional reclaim path"
+                              isInvalid={!!error}
+                              errorMessage={error?.message}
+                              onChange={onChange}
+                              onBlur={onBlur}
+                              value={value}
+                            />
+                          )}
+                        />
+                      </>
+                    )}
+                  </>
+                )}
+
+                <p className="text-light-text dark:text-dark-text mt-6 mb-2 text-lg font-semibold">
+                  Escrow reclaim keys (when you buy)
+                </p>
+                <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                  Optional. Embedded into P2PK payments you make so you (or
+                  advanced external Cashu-compatible keys you list) can manually
+                  reclaim after the seller&apos;s delay. Your current Cashu
+                  wallet pubkey is always included at checkout. This does not
+                  remove the seller&apos;s spend path after the delay (Cashu
+                  NUT-11).
+                </p>
+                <Controller
+                  name="reclaimPubKeys"
+                  control={control}
+                  rules={{
+                    validate: (v: string) => {
+                      const keys = v
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean);
+                      if (keys.length === 0) return true;
+                      for (const trimmed of keys) {
+                        try {
+                          decodeNpubOrHexPubkey(trimmed);
+                        } catch {
+                          return `Invalid Cashu reclaim key: ${trimmed}`;
+                        }
+                      }
+                      return true;
+                    },
+                  }}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => (
+                    <Textarea
+                      className="text-light-text dark:text-dark-text pb-4"
+                      classNames={{
+                        label: "text-light-text dark:text-dark-text text-lg",
+                      }}
+                      variant="bordered"
+                      fullWidth
+                      label="Reclaim pubkeys (comma separated, optional)"
+                      labelPlacement="outside"
+                      placeholder="Leave empty to use your Cashu wallet pubkey when paying"
+                      isInvalid={!!error}
+                      errorMessage={error?.message}
+                      onChange={onChange}
+                      onBlur={onBlur}
+                      value={value}
                     />
                   )}
                 />

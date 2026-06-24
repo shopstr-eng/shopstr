@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { Button, Input, Textarea, Image } from "@nextui-org/react";
+import { Button, Input, Textarea, Image } from "@heroui/react";
 import { Community } from "@/utils/types/types";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { v4 as uuidv4 } from "uuid";
@@ -90,6 +90,7 @@ const CreateCommunityForm: React.FC<CreateCommunityFormProps> = ({
         <FileUploaderButton
           className={`${SHOPSTRBUTTONCLASSNAMES} w-fit`}
           imgCallbackOnUpload={(imgUrl) => setValue("image", imgUrl)}
+          allowUrlInput
         >
           Upload Image
         </FileUploaderButton>

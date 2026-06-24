@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Input, Textarea } from "@nextui-org/react";
+import { Input, Textarea } from "@heroui/react";
 import {
   ChevronUpIcon,
   ChevronDownIcon,
@@ -64,11 +64,11 @@ export default function SectionEditor({
           className="flex flex-1 items-center gap-2 text-left"
         >
           <ChevronRightIcon
-            className={`h-4 w-4 flex-shrink-0 text-light-text transition-transform dark:text-dark-text ${
+            className={`text-light-text dark:text-dark-text h-4 w-4 flex-shrink-0 transition-transform ${
               expanded ? "rotate-90" : ""
             }`}
           />
-          <span className="text-sm font-bold text-light-text dark:text-dark-text">
+          <span className="text-light-text dark:text-dark-text text-sm font-bold">
             {SECTION_LABELS[section.type]}
           </span>
           {section.heading && (
@@ -90,7 +90,7 @@ export default function SectionEditor({
           type="button"
           onClick={onMoveUp}
           disabled={isFirst}
-          className="rounded p-1 text-light-text hover:bg-gray-100 disabled:opacity-30 dark:text-dark-text dark:hover:bg-gray-700"
+          className="text-light-text dark:text-dark-text rounded p-1 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-gray-700"
         >
           <ChevronUpIcon className="h-4 w-4" />
         </button>
@@ -98,7 +98,7 @@ export default function SectionEditor({
           type="button"
           onClick={onMoveDown}
           disabled={isLast}
-          className="rounded p-1 text-light-text hover:bg-gray-100 disabled:opacity-30 dark:text-dark-text dark:hover:bg-gray-700"
+          className="text-light-text dark:text-dark-text rounded p-1 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-gray-700"
         >
           <ChevronDownIcon className="h-4 w-4" />
         </button>
@@ -112,7 +112,7 @@ export default function SectionEditor({
       </div>
 
       {expanded && (
-        <div className="space-y-3 border-t-2 border-gray-200 p-3 dark:border-dark-fg">
+        <div className="dark:border-dark-fg space-y-3 border-t-2 border-gray-200 p-3">
           {/* Common fields for most sections */}
           {section.type !== "image" && section.type !== "reviews" && (
             <Input
@@ -161,7 +161,7 @@ export default function SectionEditor({
                 />
               )}
               <FileUploaderButton
-                className="rounded border border-black px-3 py-1.5 text-xs font-bold text-light-text dark:border-dark-fg dark:text-dark-text"
+                className="text-light-text dark:border-dark-fg dark:text-dark-text rounded border border-black px-3 py-1.5 text-xs font-bold"
                 imgCallbackOnUpload={(url) => update({ image: url })}
               >
                 {section.image ? "Change Image" : "Upload Image"}
@@ -187,7 +187,7 @@ export default function SectionEditor({
               {(["left", "right"] as const).map((pos) => (
                 <label
                   key={pos}
-                  className="flex items-center gap-1 text-xs text-light-text dark:text-dark-text"
+                  className="text-light-text dark:text-dark-text flex items-center gap-1 text-xs"
                 >
                   <input
                     type="radio"
@@ -262,7 +262,7 @@ export default function SectionEditor({
                     Layout
                   </label>
                   <select
-                    className="w-full rounded border border-gray-300 bg-light-fg p-1.5 text-xs text-light-text dark:border-gray-600 dark:bg-dark-fg dark:text-dark-text"
+                    className="bg-light-fg text-light-text dark:bg-dark-fg dark:text-dark-text w-full rounded border border-gray-300 p-1.5 text-xs dark:border-gray-600"
                     value={section.productLayout || "grid"}
                     onChange={(e) =>
                       update({
@@ -315,7 +315,7 @@ export default function SectionEditor({
                   />
                 )}
                 <FileUploaderButton
-                  className="rounded border border-black px-3 py-1.5 text-xs font-bold text-light-text dark:border-dark-fg dark:text-dark-text"
+                  className="text-light-text dark:border-dark-fg dark:text-dark-text rounded border border-black px-3 py-1.5 text-xs font-bold"
                   imgCallbackOnUpload={(url) => update({ image: url })}
                 >
                   {section.image ? "Change Image" : "Upload Image"}
@@ -382,7 +382,7 @@ export default function SectionEditor({
               {(section.items || []).map((item, i) => (
                 <div
                   key={i}
-                  className="rounded border border-gray-200 bg-light-bg p-2 dark:border-dark-fg dark:bg-dark-bg"
+                  className="bg-light-bg dark:border-dark-fg dark:bg-dark-bg rounded border border-gray-200 p-2"
                 >
                   <div className="flex items-start gap-2">
                     <div className="flex-1 space-y-1">
@@ -448,7 +448,7 @@ export default function SectionEditor({
               {(section.testimonials || []).map((t, i) => (
                 <div
                   key={i}
-                  className="rounded border border-gray-200 bg-light-bg p-2 dark:border-dark-fg dark:bg-dark-bg"
+                  className="bg-light-bg dark:border-dark-fg dark:bg-dark-bg rounded border border-gray-200 p-2"
                 >
                   <div className="flex items-start gap-2">
                     <div className="flex-1 space-y-1">
@@ -514,7 +514,7 @@ export default function SectionEditor({
               {(section.ingredientItems || []).map((item, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-2 rounded border border-gray-200 bg-light-bg p-2 dark:border-dark-fg dark:bg-dark-bg"
+                  className="bg-light-bg dark:border-dark-fg dark:bg-dark-bg flex items-center gap-2 rounded border border-gray-200 p-2"
                 >
                   <div className="flex-1 space-y-1">
                     <Input

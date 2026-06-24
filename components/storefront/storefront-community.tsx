@@ -54,7 +54,7 @@ export default function StorefrontCommunity({
               backgroundColor: colors.secondary + "11",
             }}
           >
-            <p className="text-2xl font-bold uppercase tracking-wide opacity-40">
+            <p className="text-2xl font-bold tracking-wide uppercase opacity-40">
               Community
             </p>
           </div>

@@ -6,8 +6,8 @@ import {
   DropdownMenu,
   DropdownItem,
   Button,
-} from "@nextui-org/react";
-import Link from "next/link";
+  useDisclosure,
+} from "@heroui/react";
 import {
   ArrowTopRightOnSquareIcon,
   EllipsisVerticalIcon,
@@ -22,6 +22,14 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import SignInModal from "../sign-in/SignInModal";
+import useReportEventFlow from "./use-report-event-flow";
+import { ProfileMapContext } from "@/utils/context/context";
+import { ProfileData } from "@/utils/types/types";
+import {
+  isSellerP2pkEscrowActive,
+  isP2pkEscrowFeatureEnabled,
+} from "@/utils/cashu/p2pk-checkout";
 
 export default function ProductCard({
   productData,
@@ -29,7 +37,10 @@ export default function ProductCard({
   href,
 }: {
   productData: ProductData;
-  onProductClick?: (productId: ProductData, e?: React.MouseEvent) => void;
+  onProductClick?: (
+    productId: ProductData,
+    e?: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>
+  ) => void;
   href?: string | null;
 }) {
   const [showRawEventModal, setShowRawEventModal] = useState(false);
@@ -37,7 +48,15 @@ export default function ProductCard({
 
   const router = useRouter();
   const { pubkey: userPubkey } = useContext(SignerContext);
+  const { isOpen, onOpen, onClose } = useDisclosure();
   if (!productData) return null;
+
+  const { openReportFlow, reportFlowUi } = useReportEventFlow({
+    targetLabel: "listing",
+    reportedPubkey: productData.pubkey,
+    reportedEventId: productData.id,
+    onRequireLogin: onOpen,
+  });
 
   const isZapsnag =
     productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
@@ -49,25 +68,121 @@ export default function ProductCard({
     ? Date.now() / 1000 > productData.expiration
     : false;
 
-  const handleCardClick = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
+  const profileMap = useContext(ProfileMapContext).profileData;
+  const sellerProfile: ProfileData | undefined = profileMap.get(
+    productData.pubkey
+  );
+  const p2pk = sellerProfile?.content.p2pk;
+
+  const p2pkIndicator = () => {
+    if (!isP2pkEscrowFeatureEnabled() || !isSellerP2pkEscrowActive(p2pk))
+      return null;
+
+    return (
+      <div className="mb-2 flex items-center gap-2">
+        <Chip color="secondary" size="sm" variant="flat">
+          🔒 P2PK Escrow · {p2pk!.refundDelayDays}d reclaim opens
+        </Chip>
+      </div>
+    );
+  };
+
+  const shouldBlockCardNavigation = (target: Element | null) => {
     const isCarouselControl =
-      target.closest('button[title*="slide"]') ||
-      target.closest('li[role="button"]') ||
-      target.closest(".carousel-control");
+      target?.closest('button[title*="slide"]') ||
+      target?.closest('li[role="button"]') ||
+      target?.closest(".carousel-control");
     const isDropdown =
-      target.closest('[role="menu"]') ||
-      target.closest('[data-slot="trigger"]') ||
-      target.closest('button[data-slot="trigger"]');
-    if (isCarouselControl || isDropdown) {
+      target?.closest('[role="menu"]') ||
+      target?.closest('[data-slot="trigger"]') ||
+      target?.closest('button[data-slot="trigger"]');
+    const isProfileDropdown = target?.closest("[data-profile-dropdown]");
+
+    return Boolean(isCarouselControl || isDropdown || isProfileDropdown);
+  };
+
+  const getElementTarget = (target: EventTarget | null): Element | null => {
+    return target instanceof Element ? target : null;
+  };
+
+  const navigateToHref = () => {
+    if (!href) return;
+    void router.push(href);
+  };
+
+  const handleCardClick = (e: React.MouseEvent<HTMLElement>) => {
+    const target = getElementTarget(e.target);
+    if (shouldBlockCardNavigation(target)) {
       e.preventDefault();
       e.stopPropagation();
       return;
     }
+
+    if (onProductClick) {
+      onProductClick(productData, e);
+      if (e.defaultPrevented) {
+        return;
+      }
+    }
+
+    if (href) {
+      // Keep native link behavior for modified clicks/new tabs.
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+        return;
+      }
+      e.preventDefault();
+      navigateToHref();
+    }
+  };
+
+  const handleCardClickCapture = (e: React.MouseEvent<HTMLElement>) => {
+    const target = getElementTarget(e.target);
+    if (shouldBlockCardNavigation(target)) {
+      // Cancel link default early; allow nested controls to handle the click.
+      e.preventDefault();
+    }
+  };
+
+  const handleCardKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    // Let nested interactive controls handle their own keyboard activation.
+    if (e.target !== e.currentTarget) {
+      return;
+    }
+
+    const target = getElementTarget(e.target);
+    if (shouldBlockCardNavigation(target)) {
+      return;
+    }
+
+    if (href) {
+      // Link semantics: activate with Enter only.
+      if (e.key !== "Enter") {
+        return;
+      }
+
+      e.preventDefault();
+      if (onProductClick) {
+        onProductClick(productData, e);
+        if (e.defaultPrevented) {
+          return;
+        }
+      }
+      navigateToHref();
+      return;
+    }
+
+    // Button semantics for non-link interactive cards.
+    if (e.key !== "Enter" && e.key !== " ") {
+      return;
+    }
+
+    e.preventDefault();
     if (onProductClick) {
       onProductClick(productData, e);
     }
   };
+
+  const isCardInteractive = Boolean(href || onProductClick);
 
   const handleNjumpClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -89,8 +204,8 @@ export default function ProductCard({
     }
   };
 
-  const content = (
-    <div className="cursor-pointer" onClick={handleCardClick}>
+  const contentBody = (
+    <>
       <div>
         <ImageCarousel
           images={productData.images}
@@ -101,87 +216,131 @@ export default function ProductCard({
       </div>
       <div className="flex flex-col p-4">
         {router.pathname !== "/" && (
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-              <h2 className="min-w-0 truncate text-xl font-semibold text-light-text dark:text-dark-text">
+          <>
+            {/* Title row */}
+            <div className="mb-1 flex items-start justify-between gap-2">
+              <h2 className="text-light-text dark:text-dark-text line-clamp-2 min-w-0 flex-1 text-base leading-snug font-semibold">
                 {productData.title}
               </h2>
-              {isZapsnag && productData.pubkey === userPubkey && (
-                <button
-                  onClick={handleNjumpClick}
-                  className="inline-flex flex-shrink-0 items-center text-xs text-purple-600 underline hover:text-purple-800 dark:text-yellow-500 dark:hover:text-yellow-700"
-                  title="Track Sales on Nostr"
-                  aria-label="Open Flash Sale in Nostr client"
-                >
-                  <span>View on Nostr</span>
-                  <ArrowTopRightOnSquareIcon className="ml-1 h-4 w-4" />
-                </button>
-              )}
+              <div className="flex flex-shrink-0 items-center gap-1">
+                {isZapsnag && productData.pubkey === userPubkey && (
+                  <button
+                    onClick={handleNjumpClick}
+                    className="inline-flex items-center text-xs text-purple-600 underline hover:text-purple-800 dark:text-yellow-500 dark:hover:text-yellow-700"
+                    title="Track Sales on Nostr"
+                    aria-label="Open Flash Sale in Nostr client"
+                  >
+                    <span>View on Nostr</span>
+                    <ArrowTopRightOnSquareIcon className="ml-1 h-4 w-4" />
+                  </button>
+                )}
+                {productData.rawEvent && (
+                  <Dropdown>
+                    <DropdownTrigger>
+                      <Button
+                        isIconOnly
+                        variant="light"
+                        size="sm"
+                        className="h-8 min-w-8"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                      >
+                        <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
+                      </Button>
+                    </DropdownTrigger>
+                    <DropdownMenu aria-label="Event Actions">
+                      <DropdownItem
+                        key="view-raw"
+                        onPress={() => setShowRawEventModal(true)}
+                      >
+                        View Raw Event
+                      </DropdownItem>
+                      <DropdownItem
+                        key="view-id"
+                        onPress={() => setShowEventIdModal(true)}
+                      >
+                        View Event ID
+                      </DropdownItem>
+                      {productData.pubkey !== userPubkey ? (
+                        <DropdownItem
+                          key="report-listing"
+                          className="text-danger"
+                          color="danger"
+                          onPress={openReportFlow}
+                        >
+                          Report Listing
+                        </DropdownItem>
+                      ) : null}
+                    </DropdownMenu>
+                  </Dropdown>
+                )}
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {isExpired && (
-                <Chip color="warning" size="sm" variant="flat">
-                  Outdated
-                </Chip>
-              )}
-              {productData.status === "active" && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
-                  Active
-                </span>
-              )}
-              {productData.status === "sold" && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900 dark:text-red-300">
-                  Sold
-                </span>
-              )}
-              {productData.rawEvent && (
-                <Dropdown>
-                  <DropdownTrigger>
-                    <Button
-                      isIconOnly
-                      variant="light"
-                      size="sm"
-                      className="min-w-8 h-8"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }}
-                    >
-                      <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
-                    </Button>
-                  </DropdownTrigger>
-                  <DropdownMenu aria-label="Event Actions">
-                    <DropdownItem
-                      key="view-raw"
-                      onPress={() => setShowRawEventModal(true)}
-                    >
-                      View Raw Event
-                    </DropdownItem>
-                    <DropdownItem
-                      key="view-id"
-                      onPress={() => setShowEventIdModal(true)}
-                    >
-                      View Event ID
-                    </DropdownItem>
-                  </DropdownMenu>
-                </Dropdown>
+            {/* Status badges */}
+            {(isExpired ||
+              router.pathname === "/my-listings" ||
+              productData.status === "sold") && (
+              <div className="mb-2 flex items-center gap-2">
+                {isExpired && (
+                  <Chip color="warning" size="sm" variant="flat">
+                    Outdated
+                  </Chip>
+                )}
+                {router.pathname === "/my-listings" &&
+                  productData.status === "active" && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
+                      Active
+                    </span>
+                  )}
+                {productData.status === "sold" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900 dark:text-red-300">
+                    Sold
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Price */}
+            <div className="mb-3">
+              {!isZapsnag ? (
+                <CompactPriceDisplay monetaryInfo={productData} />
+              ) : (
+                <div className="flex items-center justify-center rounded-md bg-black/10 px-2 py-1 dark:bg-white/10">
+                  <span className="text-shopstr-purple dark:text-shopstr-yellow text-sm font-bold">
+                    ⚡ {productData.price} {productData.currency}
+                  </span>
+                </div>
               )}
             </div>
-          </div>
+          </>
         )}
-        <div className="mb-3">
+
+        {/* Seller – supporting text */}
+        <div
+          className="mb-2"
+          data-profile-dropdown
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+        >
           <ProfileWithDropdown
             pubkey={productData.pubkey}
             dropDownKeys={
               productData.pubkey === userPubkey
                 ? ["shop_profile"]
-                : ["shop", "inquiry", "copy_npub"]
+                : ["shop", "inquiry", "copy_npub", "report_profile"]
             }
           />
         </div>
+
+        {p2pkIndicator()}
+
+        {/* Location */}
         {router.pathname !== "/" && (
-          <div className="mt-1 flex items-center justify-between">
+          <div className="mt-1">
             <Chip
               key={productData.location}
               startContent={locationAvatar(productData.location)}
@@ -189,34 +348,40 @@ export default function ProductCard({
             >
               {productData.location}
             </Chip>
-            {!isZapsnag ? (
-              <CompactPriceDisplay monetaryInfo={productData} />
-            ) : (
-              <div className="flex items-center justify-center rounded-md bg-black/10 px-2 py-1 dark:bg-white/10">
-                <span className="text-sm font-bold text-shopstr-purple dark:text-shopstr-yellow">
-                  ⚡ {productData.price} {productData.currency}
-                </span>
-              </div>
-            )}
           </div>
         )}
       </div>
+    </>
+  );
+
+  const content = href ? (
+    <a
+      href={href}
+      className={isCardInteractive ? "cursor-pointer" : ""}
+      onClickCapture={isCardInteractive ? handleCardClickCapture : undefined}
+      onClick={isCardInteractive ? handleCardClick : undefined}
+      onKeyDown={isCardInteractive ? handleCardKeyDown : undefined}
+    >
+      {contentBody}
+    </a>
+  ) : (
+    <div
+      className={isCardInteractive ? "cursor-pointer" : ""}
+      onClickCapture={isCardInteractive ? handleCardClickCapture : undefined}
+      onClick={isCardInteractive ? handleCardClick : undefined}
+      onKeyDown={isCardInteractive ? handleCardKeyDown : undefined}
+      role={isCardInteractive ? "button" : undefined}
+      tabIndex={isCardInteractive ? 0 : undefined}
+    >
+      {contentBody}
     </div>
   );
 
   return (
     <div
-      className={`${cardHoverStyle} my-4 w-full rounded-2xl bg-white shadow-md duration-300 transition-all dark:bg-neutral-900`}
+      className={`${cardHoverStyle} my-4 w-full rounded-2xl bg-white shadow-md transition-all duration-300 dark:bg-neutral-900`}
     >
-      <div className="w-full overflow-hidden rounded-2xl">
-        {href ? (
-          <Link href={href} className="block">
-            {content}
-          </Link>
-        ) : (
-          content
-        )}
-      </div>
+      <div className="w-full overflow-hidden rounded-2xl">{content}</div>
       <RawEventModal
         isOpen={showRawEventModal}
         onClose={() => setShowRawEventModal(false)}
@@ -227,6 +392,8 @@ export default function ProductCard({
         onClose={() => setShowEventIdModal(false)}
         rawEvent={productData.rawEvent}
       />
+      {reportFlowUi}
+      <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>
   );
 }

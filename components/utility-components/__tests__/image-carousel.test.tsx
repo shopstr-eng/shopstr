@@ -18,7 +18,7 @@ jest.mock("react-responsive-carousel", () => ({
   )),
 }));
 
-jest.mock("@nextui-org/react", () => ({
+jest.mock("@heroui/react", () => ({
   Image: ({ _disableSkeleton, ...props }: any) => (
     <img {...props} data-testid="next-image" />
   ),

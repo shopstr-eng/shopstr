@@ -61,7 +61,13 @@ export function verifyNostrAuth(
 export function hashApiKey(key: string): string {
   const salt = randomBytes(16);
   const iterations = 100_000;
-  const derivedKey = pbkdf2Sync(key, salt, iterations, 32, "sha256");
+  const derivedKey = pbkdf2Sync(
+    key,
+    Uint8Array.from(salt),
+    iterations,
+    32,
+    "sha256"
+  );
   const saltHex = salt.toString("hex");
   const hashHex = derivedKey.toString("hex");
   // format: algorithm$iterations$salt$hash
@@ -96,10 +102,11 @@ export async function initializeApiKeysTable(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_mcp_api_keys_pubkey ON mcp_api_keys(pubkey);
 
       CREATE TABLE IF NOT EXISTS mcp_request_proofs (
-        event_id TEXT PRIMARY KEY,
+        event_id TEXT NOT NULL,
         pubkey TEXT NOT NULL,
         action TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (event_id)
       );
       CREATE INDEX IF NOT EXISTS idx_mcp_request_proofs_created_at ON mcp_request_proofs(created_at);
 
@@ -124,15 +131,6 @@ export async function initializeApiKeysTable(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_order_id ON mcp_orders(order_id);
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_buyer_pubkey ON mcp_orders(buyer_pubkey);
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_api_key_id ON mcp_orders(api_key_id);
-
-      CREATE TABLE IF NOT EXISTS mcp_request_proofs (
-        event_id TEXT NOT NULL,
-        pubkey TEXT NOT NULL,
-        action TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (event_id)
-      );
-      CREATE INDEX IF NOT EXISTS idx_mcp_request_proofs_created_at ON mcp_request_proofs(created_at);
     `);
 
     try {
@@ -217,9 +215,8 @@ export async function getAgentSigner(
 ): Promise<{ signer: any; pubkey: string } | null> {
   if (!apiKey.encrypted_nsec) return null;
   try {
-    const { decryptNsec, McpNostrSigner } = await import(
-      "@/utils/mcp/nostr-signing"
-    );
+    const { decryptNsec, McpNostrSigner } =
+      await import("@/utils/mcp/nostr-signing");
     const nsec = decryptNsec(apiKey.encrypted_nsec);
     const signer = new McpNostrSigner(nsec);
     return { signer, pubkey: signer.getPubKey() };
@@ -237,12 +234,15 @@ export function verifyApiKey(key: string, storedHash: string): boolean {
   const expectedKey = Buffer.from(parts[3]!, "hex");
   const derivedKey = pbkdf2Sync(
     key,
-    salt,
+    Uint8Array.from(salt),
     iterations,
     expectedKey.length,
     "sha256"
   );
-  return timingSafeEqual(derivedKey, expectedKey);
+  return timingSafeEqual(
+    Uint8Array.from(derivedKey),
+    Uint8Array.from(expectedKey)
+  );
 }
 
 export async function validateApiKey(

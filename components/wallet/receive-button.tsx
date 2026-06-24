@@ -14,7 +14,7 @@ import {
   ModalFooter,
   Button,
   Textarea,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
@@ -22,16 +22,22 @@ import {
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
-  CashuMint,
-  CashuWallet,
-  getDecodedToken,
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  getTokenMetadata,
   Proof,
 } from "@cashu/cashu-ts";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
+import { CashuWalletContext } from "@/utils/context/context";
+import {
+  checkMintP2pkSupport,
+  parseP2PKProofSet,
+} from "@/utils/cashu/p2pk-checkout";
 
 const ReceiveButton = () => {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
@@ -42,6 +48,7 @@ const ReceiveButton = () => {
 
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
+  const { cashuPubkey, cashuPrivkey } = useContext(CashuWalletContext);
   const { mints, tokens, history } = getLocalStorageData();
 
   const {
@@ -64,16 +71,95 @@ const ReceiveButton = () => {
     await handleReceive(tokenString!);
   };
 
+  const storeReceivedProofs = async (
+    tokenMint: string,
+    receivedProofs: Proof[],
+    transactionAmount: number
+  ) => {
+    const uniqueProofs = receivedProofs.filter(
+      (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C)
+    );
+    if (JSON.stringify(uniqueProofs) != JSON.stringify(receivedProofs)) {
+      setIsDuplicateToken(true);
+      return false;
+    }
+
+    const tokenArray = [...tokens, ...uniqueProofs];
+    localStorage.setItem("tokens", JSON.stringify(tokenArray));
+    if (!mints.includes(tokenMint)) {
+      const updatedMints = [...mints, tokenMint];
+      localStorage.setItem("mints", JSON.stringify(updatedMints));
+      if (cashuPrivkey) {
+        await publishWalletEvent(
+          nostr!,
+          signer!,
+          { cashuPubkey, cashuPrivkey },
+          { mints: updatedMints }
+        );
+      }
+    }
+    setIsClaimed(true);
+    handleToggleReceiveModal();
+    localStorage.setItem(
+      "history",
+      JSON.stringify([
+        {
+          type: 1,
+          amount: transactionAmount,
+          date: Math.floor(Date.now() / 1000),
+        },
+        ...history,
+      ])
+    );
+    await publishProofEvent(
+      nostr!,
+      signer!,
+      tokenMint,
+      uniqueProofs,
+      "in",
+      transactionAmount.toString()
+    );
+    return true;
+  };
+
   const handleReceive = async (tokenString: string) => {
     setIsDuplicateToken(false);
     setIsClaimed(false);
     setIsSpent(false);
     setIsInvalidToken(false);
     try {
-      const token = getDecodedToken(tokenString);
+      const tokenMetadata = getTokenMetadata(tokenString);
+      const wallet = new CashuWallet(new CashuMint(tokenMetadata.mint), {
+        unit: tokenMetadata.unit,
+      });
+      await wallet.loadMint();
+      const token = wallet.decodeToken(tokenString);
       const tokenMint = token.mint;
       const tokenProofs = token.proofs;
-      const wallet = new CashuWallet(new CashuMint(tokenMint));
+      const transactionAmount = sumProofAmounts(tokenProofs);
+      const parsedP2pk = parseP2PKProofSet(tokenProofs);
+      if (parsedP2pk.invalidReason) {
+        setIsInvalidToken(true);
+        return;
+      }
+
+      if (parsedP2pk.p2pk) {
+        if (!cashuPrivkey) {
+          setIsInvalidToken(true);
+          return;
+        }
+        const mintSupport = await checkMintP2pkSupport(tokenMint);
+        if (!mintSupport.supported) {
+          setIsInvalidToken(true);
+          return;
+        }
+        const freshProofs = await wallet.receive(tokenProofs, {
+          privkey: cashuPrivkey,
+        });
+        await storeReceivedProofs(tokenMint, freshProofs, transactionAmount);
+        return;
+      }
+
       const proofsStates = await wallet.checkProofsStates(tokenProofs);
       const spentYs = new Set(
         proofsStates
@@ -81,45 +167,7 @@ const ReceiveButton = () => {
           .map((state) => state.Y)
       );
       if (spentYs.size === 0) {
-        const uniqueProofs = tokenProofs.filter(
-          (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C)
-        );
-        if (JSON.stringify(uniqueProofs) != JSON.stringify(tokenProofs)) {
-          setIsDuplicateToken(true);
-          return;
-        }
-        const tokenArray = [...tokens, ...uniqueProofs];
-        localStorage.setItem("tokens", JSON.stringify(tokenArray));
-        if (!mints.includes(tokenMint)) {
-          const updatedMints = [...mints, tokenMint];
-          localStorage.setItem("mints", JSON.stringify(updatedMints));
-          await publishWalletEvent(nostr!, signer!);
-        }
-        setIsClaimed(true);
-        handleToggleReceiveModal();
-        const transactionAmount = tokenProofs.reduce(
-          (acc, token: Proof) => acc + token.amount,
-          0
-        );
-        localStorage.setItem(
-          "history",
-          JSON.stringify([
-            {
-              type: 1,
-              amount: transactionAmount,
-              date: Math.floor(Date.now() / 1000),
-            },
-            ...history,
-          ])
-        );
-        await publishProofEvent(
-          nostr!,
-          signer!,
-          tokenMint,
-          uniqueProofs,
-          "in",
-          transactionAmount.toString()
-        );
+        await storeReceivedProofs(tokenMint, tokenProofs, transactionAmount);
       } else {
         setIsSpent(true);
       }
@@ -156,7 +204,7 @@ const ReceiveButton = () => {
           size="2xl"
         >
           <ModalContent>
-            <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+            <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
               Receive Token
             </ModalHeader>
             <form onSubmit={handleReceiveSubmit(onReceiveSubmit)}>
@@ -200,8 +248,8 @@ const ReceiveButton = () => {
                 />
                 {signer instanceof NostrNIP46Signer && (
                   <div className="mx-4 my-2 flex items-center justify-center text-center">
-                    <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                    <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                    <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
+                    <p className="text-light-text dark:text-dark-text ml-2 text-xs">
                       If the token is taking a while to be received, make sure
                       to check your bunker application to approve the
                       transaction events.
@@ -247,11 +295,11 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully claimed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   Your Shopstr wallet balance should now be updated.
                 </div>
@@ -280,11 +328,11 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Duplicate token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim is already in your Shopstr
                   wallet.
@@ -314,11 +362,11 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Invalid token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim is not a valid Cashu string.
                 </div>
@@ -347,11 +395,11 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Spent token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim has already been redeemed.
                 </div>

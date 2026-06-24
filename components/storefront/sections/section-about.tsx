@@ -1,5 +1,6 @@
 import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
+import { sanitizeStorefrontSectionLink } from "@/utils/storefront-links";
 
 interface SectionAboutProps {
   section: StorefrontSection;
@@ -36,13 +37,13 @@ export default function SectionAbout({ section, colors }: SectionAboutProps) {
         )}
         <div className={`w-full ${section.image ? "md:w-1/2" : ""}`}>
           {section.body && (
-            <p className="font-body whitespace-pre-line text-lg leading-relaxed opacity-80">
+            <p className="font-body text-lg leading-relaxed whitespace-pre-line opacity-80">
               {section.body}
             </p>
           )}
           {section.ctaText && (
             <a
-              href={section.ctaLink || "#products"}
+              href={sanitizeStorefrontSectionLink(section.ctaLink)}
               className="mt-6 inline-block rounded-lg px-6 py-3 font-bold transition-transform hover:-translate-y-0.5"
               style={{
                 backgroundColor: colors.primary,

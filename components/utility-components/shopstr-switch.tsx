@@ -1,4 +1,4 @@
-import { Switch } from "@nextui-org/react";
+import { Switch } from "@heroui/react";
 import { useRouter } from "next/router";
 import { useTheme } from "next-themes";
 
@@ -26,7 +26,7 @@ const ShopstrSwitch = ({
       />
       <span>
         <p
-          className="text-light-text hover:underline dark:text-dark-text"
+          className="text-light-text dark:text-dark-text hover:underline"
           onClick={handleTrustClick}
         >
           Trust

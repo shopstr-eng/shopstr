@@ -18,7 +18,7 @@ export default function SectionText({ section }: SectionTextProps) {
       )}
       {section.body && (
         <div
-          className="font-body mx-auto max-w-2xl whitespace-pre-line text-center text-lg leading-relaxed opacity-80"
+          className="font-body mx-auto max-w-2xl text-center text-lg leading-relaxed whitespace-pre-line opacity-80"
           style={{ color: "var(--sf-text)" }}
         >
           {section.body}

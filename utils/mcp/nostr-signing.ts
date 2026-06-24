@@ -5,7 +5,7 @@ import {
   nip19,
   nip44,
 } from "nostr-tools";
-import { hexToBytes } from "@noble/hashes/utils";
+import { hexToBytes } from "@noble/hashes/utils.js";
 import { SimplePool } from "nostr-tools";
 import {
   createCipheriv,
@@ -22,24 +22,45 @@ import {
 
 const ALGORITHM = "aes-256-gcm";
 
-function getEncryptionKey(): Buffer {
+export const MCP_RELAY_ALLOWLIST = new Set([
+  "wss://relay.damus.io",
+  "wss://nos.lol",
+  "wss://purplepag.es",
+  "wss://relay.primal.net",
+  "wss://relay.nostr.band",
+  "wss://sendit.nosflare.com",
+]);
+
+function filterAllowedRelays(urls: string[]): string[] {
+  const allowed: string[] = [];
+  for (const url of urls) {
+    if (MCP_RELAY_ALLOWLIST.has(url)) {
+      allowed.push(url);
+    } else {
+      console.warn(`MCP relay blocked (not in allowlist): ${url}`);
+    }
+  }
+  return allowed;
+}
+
+function getEncryptionKey(): Uint8Array {
   const envKey = process.env.MCP_ENCRYPTION_KEY;
   if (!envKey) {
     throw new Error(
       "MCP_ENCRYPTION_KEY environment variable is required for agent key storage"
     );
   }
-  return createHash("sha256").update(envKey).digest();
+  return Uint8Array.from(createHash("sha256").update(envKey).digest());
 }
 
 export function encryptNsec(nsec: string): string {
   const key = getEncryptionKey();
-  const iv = randomBytes(16);
+  const iv = Uint8Array.from(randomBytes(16));
   const cipher = createCipheriv(ALGORITHM, key, iv);
   let encrypted = cipher.update(nsec, "utf8", "hex");
   encrypted += cipher.final("hex");
   const authTag = cipher.getAuthTag().toString("hex");
-  return `${iv.toString("hex")}:${authTag}:${encrypted}`;
+  return `${Buffer.from(iv).toString("hex")}:${authTag}:${encrypted}`;
 }
 
 export function decryptNsec(encryptedData: string): string {
@@ -48,8 +69,12 @@ export function decryptNsec(encryptedData: string): string {
   if (!ivHex || !authTagHex || !encrypted) {
     throw new Error("Invalid encrypted nsec format");
   }
-  const decipher = createDecipheriv(ALGORITHM, key, Buffer.from(ivHex, "hex"));
-  decipher.setAuthTag(Buffer.from(authTagHex, "hex"));
+  const decipher = createDecipheriv(
+    ALGORITHM,
+    key,
+    Uint8Array.from(Buffer.from(ivHex, "hex"))
+  );
+  decipher.setAuthTag(Uint8Array.from(Buffer.from(authTagHex, "hex")));
   let decrypted = decipher.update(encrypted, "hex", "utf8");
   decrypted += decipher.final("utf8");
   return decrypted;
@@ -108,7 +133,11 @@ export class McpRelayManager {
 
   constructor(relayUrls?: string[]) {
     this.pool = new SimplePool();
-    this.relayUrls = relayUrls || withBlastr(getDefaultRelays());
+    const raw = relayUrls || withBlastr(getDefaultRelays());
+    this.relayUrls = filterAllowedRelays(raw);
+    if (this.relayUrls.length === 0) {
+      throw new Error("MCP relay allowlist produced no valid relays");
+    }
   }
 
   getRelayUrls(): string[] {
@@ -150,7 +179,8 @@ export async function signAndPublishEvent(
       await trackFailedRelayPublish(
         signedEvent.id,
         signedEvent,
-        manager.getRelayUrls()
+        manager.getRelayUrls(),
+        signer
       );
     } catch (trackError) {
       console.error("Failed to track failed relay publish:", trackError);

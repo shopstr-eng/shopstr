@@ -64,8 +64,8 @@ jest.mock("../../sign-in/SignInModal", () => {
 
 jest.mock("next/router", () => ({ __esModule: true, useRouter: jest.fn() }));
 
-jest.mock("@nextui-org/react", () => ({
-  ...jest.requireActual("@nextui-org/react"),
+jest.mock("@heroui/react", () => ({
+  ...jest.requireActual("@heroui/react"),
   useDisclosure: () => ({
     isOpen: false,
     onOpen: jest.fn(),
@@ -233,6 +233,22 @@ describe("Messages Component", () => {
       expect(
         screen.getByTestId("chat-button-new_chat_npub-decrypted")
       ).toBeInTheDocument();
+    });
+  });
+
+  it("should ignore malformed pubkeys from router query", async () => {
+    mockRouter.query.pk = "broken_npub";
+    mockChatsContextValue.isLoading = false;
+    mockChatsContextValue.chatsMap = mockChatsMap;
+    mockNostrHelper.decryptNpub.mockReturnValue(null as any);
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId(`chat-button-${mockChatPubkey1}`)
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId("chat-button-null")).not.toBeInTheDocument();
     });
   });
 

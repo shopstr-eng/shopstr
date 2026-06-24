@@ -3,7 +3,6 @@ import {
   screen,
   fireEvent,
   waitFor,
-  waitForElementToBeRemoved,
   within,
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
@@ -40,14 +39,19 @@ const mockCreateMeltQuote = jest.fn();
 const mockGetKeySets = jest.fn();
 const mockSend = jest.fn();
 const mockMeltProofs = jest.fn();
+const mockCheckMeltQuote = jest
+  .fn()
+  .mockResolvedValue({ state: "UNPAID", change: [] });
 
 jest.mock("@cashu/cashu-ts", () => ({
-  CashuMint: jest.fn().mockImplementation(() => ({})),
-  CashuWallet: jest.fn().mockImplementation(() => ({
-    createMeltQuote: mockCreateMeltQuote,
-    getKeySets: mockGetKeySets,
+  Mint: jest.fn().mockImplementation(() => ({})),
+  Wallet: jest.fn().mockImplementation(() => ({
+    loadMint: jest.fn().mockResolvedValue(undefined),
+    createMeltQuoteBolt11: mockCreateMeltQuote,
+    keyChain: { getKeysets: mockGetKeySets },
     send: mockSend,
-    meltProofs: mockMeltProofs,
+    meltProofsBolt11: mockMeltProofs,
+    checkMeltQuoteBolt11: mockCheckMeltQuote,
   })),
 }));
 
@@ -142,9 +146,11 @@ describe("PayButton Component", () => {
 
     const cancelButton = screen.getByRole("button", { name: "Cancel" });
     fireEvent.click(cancelButton);
-    await waitForElementToBeRemoved(() =>
-      screen.queryByText("Pay Lightning Invoice")
-    );
+    await waitFor(() => {
+      expect(
+        screen.queryByText("Pay Lightning Invoice")
+      ).not.toBeInTheDocument();
+    });
   });
 
   test("shows validation error for invalid invoice prefix", async () => {

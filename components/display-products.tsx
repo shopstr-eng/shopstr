@@ -1,12 +1,15 @@
 import { useState, useEffect, useContext } from "react";
-import { nip19 } from "nostr-tools";
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
-import { ProductContext, FollowsContext } from "../utils/context/context";
+import {
+  ProductContext,
+  FollowsContext,
+  RelaysContext,
+} from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { Button, Pagination } from "@nextui-org/react";
+import { Button, Pagination } from "@heroui/react";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { useRouter } from "next/router";
 import parseTags, {
@@ -18,14 +21,20 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { getListingSlug } from "@/utils/url-slugs";
+import { productSatisfiesAllFilters } from "@/utils/parsers/product-filter-helpers";
 import {
-  getDefaultRelays,
-  getLocalStorageData,
-} from "@/utils/nostr/nostr-helper-functions";
-import { searchMarketplaceProducts } from "@/utils/nostr/fetch-service";
+  dedupeProductEvents,
+  fetchNip50ProductSearch,
+  getProductEventKey,
+} from "@/utils/nostr/fetch-service";
+import { nip19 } from "nostr-tools";
 
-const escapeRegExp = (value: string) =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const isNip19SearchQuery = (search: string) => {
+  const normalizedSearch = search.trim();
+  return (
+    normalizedSearch.includes("naddr1") || normalizedSearch.includes("npub1")
+  );
+};
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -46,12 +55,17 @@ const DisplayProducts = ({
   isMyListings?: boolean;
   setCategories?: (categories: string[]) => void;
   onFilteredProductsChange?: (products: ProductData[]) => void;
-  searchBarRef?: React.RefObject<HTMLDivElement>;
+  searchBarRef?: React.RefObject<HTMLDivElement | null>;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
+  const [nip50ProductEvents, setNip50ProductEvents] = useState<NostrEvent[]>(
+    []
+  );
+  const [isNip50SearchLoading, setIsNip50SearchLoading] = useState(false);
   const productEventContext = useContext(ProductContext);
   const followsContext = useContext(FollowsContext);
+  const relaysContext = useContext(RelaysContext);
   const [focusedProduct, setFocusedProduct] = useState<ProductData>();
   const [showModal, setShowModal] = useState(false);
 
@@ -60,23 +74,20 @@ const DisplayProducts = ({
   const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [isSearchingRelays, setIsSearchingRelays] = useState(false);
 
   const router = useRouter();
 
   const { nostr } = useContext(NostrContext);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
-  const shouldUseRelaySearch = (searchValue: string) => {
-    const trimmedSearch = searchValue.trim();
-    if (trimmedSearch.length < 2) return false;
-    if (trimmedSearch.includes("naddr") || trimmedSearch.includes("npub")) {
-      return false;
-    }
-    if (/^[0-9a-fA-F]{64}$/.test(trimmedSearch)) return false;
-    if (!Number.isNaN(Number(trimmedSearch))) return false;
-    return true;
-  };
+  const searchRelaysKey = Array.from(
+    new Set([
+      ...(relaysContext.relayList || []),
+      ...(relaysContext.readRelayList || []),
+    ])
+  )
+    .filter(Boolean)
+    .join("|");
 
   // Load saved page from session storage on mount
   useEffect(() => {
@@ -96,14 +107,62 @@ const DisplayProducts = ({
   }, [focusedPubkey]);
 
   useEffect(() => {
+    const normalizedSearch = selectedSearch.trim();
+
+    if (!normalizedSearch || isNip19SearchQuery(normalizedSearch) || !nostr) {
+      setNip50ProductEvents([]);
+      setIsNip50SearchLoading(false);
+      return;
+    }
+
+    const relaysToSearch = searchRelaysKey ? searchRelaysKey.split("|") : [];
+
+    let didCancel = false;
+    setIsNip50SearchLoading(true);
+
+    fetchNip50ProductSearch(nostr, relaysToSearch, normalizedSearch, {
+      authors: focusedPubkey ? [focusedPubkey] : undefined,
+    })
+      .then(({ productEvents }) => {
+        if (didCancel) return;
+        setNip50ProductEvents(productEvents);
+      })
+      .catch((error) => {
+        if (didCancel) return;
+        setNip50ProductEvents([]);
+        console.error("Failed to search products with NIP-50:", error);
+      })
+      .finally(() => {
+        if (didCancel) return;
+        setIsNip50SearchLoading(false);
+      });
+
+    return () => {
+      didCancel = true;
+    };
+  }, [selectedSearch, focusedPubkey, nostr, searchRelaysKey]);
+
+  useEffect(() => {
     if (!productEventContext) return;
-    if (!productEventContext.isLoading && productEventContext.productEvents) {
-      setIsProductLoading(true);
-      const sortedProductEvents = [...productEventContext.productEvents].sort(
-        (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
-      );
+    const hasProducts =
+      productEventContext.productEvents &&
+      productEventContext.productEvents.length > 0;
+    const hasNip50Products = nip50ProductEvents.length > 0;
+    const sourceProductEvents =
+      selectedSearch.trim() && !isNip19SearchQuery(selectedSearch)
+        ? dedupeProductEvents([
+            ...nip50ProductEvents,
+            ...[...(productEventContext.productEvents || [])].sort(
+              (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
+            ),
+          ])
+        : [...(productEventContext.productEvents || [])].sort(
+            (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
+          );
+
+    if (hasProducts || hasNip50Products) {
       const parsedProductData: ProductData[] = [];
-      sortedProductEvents.forEach((event) => {
+      sourceProductEvents.forEach((event) => {
         if (wotFilter) {
           if (!followsContext.isLoading && followsContext.followList) {
             const followList = followsContext.followList;
@@ -131,13 +190,17 @@ const DisplayProducts = ({
         }
       });
       setProductEvents(parsedProductData);
-      if (parsedProductData.length >= itemsPerPage) {
-        setIsProductLoading(false);
-      } else if (!productEventContext.isLoading) {
+      if (
+        parsedProductData.length >= itemsPerPage ||
+        !productEventContext.isLoading
+      ) {
         setIsProductLoading(false);
       }
+    } else if (!productEventContext.isLoading) {
+      setProductEvents([]);
+      setIsProductLoading(false);
     }
-  }, [productEventContext, wotFilter]);
+  }, [productEventContext, wotFilter, nip50ProductEvents, selectedSearch]);
 
   useEffect(() => {
     if (focusedPubkey && setCategories) {
@@ -156,7 +219,14 @@ const DisplayProducts = ({
 
     const filtered = productEvents.filter((product) => {
       if (focusedPubkey && product.pubkey !== focusedPubkey) return false;
-      if (!productSatisfiesAllFilters(product)) return false;
+      if (
+        !productSatisfiesAllFilters(product, {
+          selectedCategories,
+          selectedLocation,
+          selectedSearch,
+        })
+      )
+        return false;
       if (!product.currency) return false;
       if (product.images.length === 0) return false;
       if (product.contentWarning) return false;
@@ -209,47 +279,6 @@ const DisplayProducts = ({
     isInitialized,
   ]);
 
-  useEffect(() => {
-    if (!nostr || !shouldUseRelaySearch(selectedSearch)) {
-      setIsSearchingRelays(false);
-      return;
-    }
-
-    let isActive = true;
-    setIsSearchingRelays(true);
-
-    const timeoutId = window.setTimeout(async () => {
-      const { relays, readRelays } = getLocalStorageData();
-      const targetRelays = [
-        ...new Set([...(relays || []), ...(readRelays || [])]),
-      ];
-      const effectiveRelays =
-        targetRelays.length > 0 ? targetRelays : getDefaultRelays();
-
-      const fetchedEvents = await searchMarketplaceProducts(
-        nostr,
-        effectiveRelays,
-        selectedSearch
-      );
-
-      if (!isActive) return;
-
-      fetchedEvents.forEach((event) => {
-        productEventContext.addNewlyCreatedProductEvent(event);
-      });
-      setIsSearchingRelays(false);
-    }, 350);
-
-    return () => {
-      isActive = false;
-      window.clearTimeout(timeoutId);
-    };
-  }, [
-    nostr,
-    productEventContext.addNewlyCreatedProductEvent,
-    selectedSearch,
-  ]);
-
   // Scroll effect only on page change
   useEffect(() => {
     // Skip initial render (currentPage === 1)
@@ -295,10 +324,35 @@ const DisplayProducts = ({
       return `/listing/${product.id}`;
     }
 
-    const allParsed = productEventContext.productEvents
-      .filter((e: NostrEvent) => e.kind !== 1)
-      .map((e: NostrEvent) => parseTags(e))
-      .filter((p: ProductData | undefined): p is ProductData => !!p);
+    const rawProductEvent = product.rawEvent;
+    const isNip50SearchResult =
+      rawProductEvent?.kind === 30402 &&
+      nip50ProductEvents.some(
+        (event: NostrEvent) =>
+          event.kind === 30402 &&
+          getProductEventKey(event) === getProductEventKey(rawProductEvent)
+      );
+
+    if (isNip50SearchResult) {
+      const dTag = rawProductEvent.tags.find((tag) => tag[0] === "d")?.[1];
+      if (dTag) {
+        try {
+          return `/listing/${nip19.naddrEncode({
+            identifier: dTag,
+            pubkey: rawProductEvent.pubkey,
+            kind: rawProductEvent.kind,
+          })}`;
+        } catch {
+          // Fall back to the slug path if this event cannot form a valid naddr.
+        }
+      }
+    }
+
+    const allParsed = productEvents.filter(
+      (productData) =>
+        productData.d !== "zapsnag" &&
+        !productData.categories?.includes("zapsnag")
+    );
 
     const slug = getListingSlug(product, allParsed);
     if (slug) {
@@ -308,7 +362,10 @@ const DisplayProducts = ({
     return `/listing/${product.id}`;
   };
 
-  const onProductClick = (product: ProductData, e?: React.MouseEvent) => {
+  const onProductClick = (
+    product: ProductData,
+    e?: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>
+  ) => {
     setFocusedProduct(product);
     if (product.pubkey === userPubkey) {
       e?.preventDefault();
@@ -316,84 +373,6 @@ const DisplayProducts = ({
     } else {
       setShowModal(false);
     }
-  };
-
-  const productSatisfiesCategoryFilter = (productData: ProductData) => {
-    if (selectedCategories.size === 0) return true;
-    return Array.from(selectedCategories).some((selectedCategory) => {
-      const re = new RegExp(selectedCategory, "gi");
-      return productData?.categories?.some((category) => {
-        const match = category.match(re);
-        return match && match.length > 0;
-      });
-    });
-  };
-
-  const productSatisfieslocationFilter = (productData: ProductData) => {
-    return !selectedLocation || productData.location === selectedLocation;
-  };
-
-  const productSatisfiesSearchFilter = (productData: ProductData) => {
-    const normalizedSearch = selectedSearch.trim();
-
-    if (!normalizedSearch) return true;
-    if (!productData.title) return false;
-
-    if (normalizedSearch.includes("naddr")) {
-      try {
-        const parsedNaddr = nip19.decode(normalizedSearch);
-        if (parsedNaddr.type === "naddr") {
-          return (
-            productData.d === parsedNaddr.data.identifier &&
-            productData.pubkey === parsedNaddr.data.pubkey
-          );
-        }
-        return false;
-      } catch {
-        return false;
-      }
-    }
-
-    if (normalizedSearch.includes("npub")) {
-      try {
-        const parsedNpub = nip19.decode(normalizedSearch);
-        if (parsedNpub.type === "npub") {
-          return parsedNpub.data === productData.pubkey;
-        }
-        return false;
-      } catch {
-        return false;
-      }
-    }
-
-    try {
-      const re = new RegExp(escapeRegExp(normalizedSearch), "i");
-
-      const titleMatch = productData.title.match(re);
-      if (titleMatch && titleMatch.length > 0) return true;
-
-      if (productData.summary) {
-        const summaryMatch = productData.summary.match(re);
-        if (summaryMatch && summaryMatch.length > 0) return true;
-      }
-
-      const numericSearch = parseFloat(normalizedSearch);
-      if (!isNaN(numericSearch) && productData.price === numericSearch) {
-        return true;
-      }
-
-      return false;
-    } catch {
-      return false;
-    }
-  };
-
-  const productSatisfiesAllFilters = (productData: ProductData) => {
-    return (
-      productSatisfiesCategoryFilter(productData) &&
-      productSatisfieslocationFilter(productData) &&
-      productSatisfiesSearchFilter(productData)
-    );
   };
 
   const getCurrentPageProducts = () => {
@@ -417,17 +396,12 @@ const DisplayProducts = ({
   return (
     <>
       <div className="w-full md:pl-4">
-        {!isMyListings && isProductsLoading ? (
-          <div className="mb-6 mt-6 flex items-center justify-center">
+        {!isMyListings && (isProductsLoading || isNip50SearchLoading) ? (
+          <div className="mt-6 mb-6 flex items-center justify-center">
             <ShopstrSpinner />
           </div>
         ) : null}
-        {isSearchingRelays && selectedSearch.trim() ? (
-          <div className="mb-4 text-center text-sm text-light-text dark:text-dark-text">
-            Searching connected relays for more listings...
-          </div>
-        ) : null}
-        {filteredProducts.length > 0 ? (
+        {filteredProducts.length > 0 && (
           <>
             <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(280px,1fr))] justify-items-stretch gap-4 overflow-x-hidden">
               {getCurrentPageProducts().map(
@@ -456,36 +430,37 @@ const DisplayProducts = ({
               </div>
             )}
 
-            <div className="mb-6 mt-2 text-center text-xs text-light-text dark:text-dark-text">
+            <div className="text-light-text dark:text-dark-text mt-2 mb-6 text-center text-xs">
               Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
               {Math.min(filteredProducts.length, currentPage * itemsPerPage)} of{" "}
               {filteredProducts.length} products
             </div>
           </>
-        ) : (
-          wotFilter &&
-          !isProductsLoading && (
+        )}
+        {!isMyListings &&
+          !isProductsLoading &&
+          !isNip50SearchLoading &&
+          filteredProducts.length === 0 && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
-                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+              <div className="bg-light-fg dark:bg-dark-fg w-full max-w-lg rounded-lg p-8 text-center shadow-lg">
+                <p className="text-light-text dark:text-dark-text text-3xl font-semibold">
                   No products found...
                 </p>
-                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
-                  Try turning off the trust filter!
+                <p className="text-light-text dark:text-dark-text mt-4 text-lg">
+                  Try changing your search or clearing some filters.
                 </p>
               </div>
             </div>
-          )
-        )}
+          )}
         {isMyListings &&
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
-                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+              <div className="bg-light-fg dark:bg-dark-fg w-full max-w-lg rounded-lg p-8 text-center shadow-lg">
+                <p className="text-light-text dark:text-dark-text text-3xl font-semibold">
                   No products found...
                 </p>
-                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                <p className="text-light-text dark:text-dark-text mt-4 text-lg">
                   Try adding a new listing!
                 </p>
                 <Button

@@ -4,7 +4,7 @@ import {
   ModalHeader,
   ModalBody,
   Snippet,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { Event, nip19 } from "nostr-tools";
 
 interface RawEventModalProps {
@@ -29,7 +29,7 @@ export const RawEventModal = ({
             className="w-full items-start"
           >
             <div className="max-h-[60vh] w-full overflow-y-auto">
-              <pre className="whitespace-pre-wrap break-all font-mono text-xs">
+              <pre className="font-mono text-xs break-all whitespace-pre-wrap">
                 {JSON.stringify(rawEvent, null, 2)}
               </pre>
             </div>
@@ -60,7 +60,7 @@ export const EventIdModal = ({
             <div className="w-full">
               <p className="mb-1 text-sm font-semibold">Hex ID:</p>
               <Snippet symbol="" codeString={rawEvent?.id} className="w-full">
-                <span className="whitespace-normal break-all font-mono text-sm">
+                <span className="font-mono text-sm break-all whitespace-normal">
                   {rawEvent?.id}
                 </span>
               </Snippet>
@@ -74,7 +74,7 @@ export const EventIdModal = ({
                   codeString={nip19.noteEncode(rawEvent.id)}
                   className="w-full"
                 >
-                  <span className="whitespace-normal break-all font-mono text-sm">
+                  <span className="font-mono text-sm break-all whitespace-normal">
                     {nip19.noteEncode(rawEvent.id)}
                   </span>
                 </Snippet>

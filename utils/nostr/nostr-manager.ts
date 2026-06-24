@@ -82,18 +82,20 @@ export class NostrManager {
     return signer;
   }
 
-  private keepAlive(relays: NostrRelay[]) {
-    for (const relay of relays) {
-      if (relay.sleeping) {
-        try {
-          relay.connect();
-          relay.sleeping = false;
-        } catch (e) {
-          console.error(e);
+  private async keepAlive(relays: NostrRelay[]) {
+    await Promise.all(
+      relays.map(async (relay) => {
+        if (relay.sleeping) {
+          try {
+            await relay.connect();
+            relay.sleeping = false;
+          } catch (e) {
+            console.error(e);
+          }
         }
-      }
-      relay.lastActive = Date.now();
-    }
+        relay.lastActive = Date.now();
+      })
+    );
   }
 
   private async gc() {
@@ -144,12 +146,12 @@ export class NostrManager {
     const relays = relayUrls
       ? this.relays.filter((r) => relayUrls.includes(r.url))
       : this.relays;
+    await this.keepAlive(relays);
+    const requests = relays.flatMap((r) =>
+      filters.map((f) => ({ url: r.url, filter: f }))
+    );
     const sub: NostrSub = {
-      _sub: this.pool.subscribeMany(
-        relays.map((r) => r.url),
-        filters,
-        params ?? {}
-      ),
+      _sub: this.pool.subscribeMap(requests, params ?? {}),
       close: async () => {
         sub._sub.close();
         for (const relay of relays) {
@@ -162,45 +164,68 @@ export class NostrManager {
     for (const relay of relays) {
       relay.activeSubs.push(sub);
     }
-    this.keepAlive(relays);
+    await this.keepAlive(relays);
     return sub;
   }
 
   public async fetch(
     filters: NostrFilter[],
     params?: SubscribeManyParams,
-    relayUrls?: string[]
+    relayUrls?: string[],
+    timeout?: number
   ): Promise<NostrEvent[]> {
-    return await newPromiseWithTimeout(async (resolve, _reject) => {
-      if (!params) {
-        params = {};
-      }
+    return await newPromiseWithTimeout(
+      async (resolve, _reject, abortSignal) => {
+        if (!params) {
+          params = {};
+        }
 
-      if (!params.onevent) {
-        params.onevent = () => {};
-      }
+        if (!params.onevent) {
+          params.onevent = () => {};
+        }
 
-      if (!params.oneose) {
-        params.oneose = () => {};
-      }
+        if (!params.oneose) {
+          params.oneose = () => {};
+        }
 
-      const onEvent = params.onevent;
-      const onEose = params.oneose;
-      const fetchedEvents: Array<NostrEvent> = [];
+        const onEvent = params.onevent;
+        const onEose = params.oneose;
+        const fetchedEvents: Array<NostrEvent> = [];
+        let sub: NostrSub | undefined;
+        let didCloseSub = false;
+        let didResolve = false;
 
-      params.onevent = (event: NostrEvent) => {
-        fetchedEvents.push(event);
-        return onEvent!(event);
-      };
+        const closeSubIfNeeded = async () => {
+          if (!sub || didCloseSub) return;
+          didCloseSub = true;
+          await sub.close();
+        };
 
-      params.oneose = () => {
-        sub!.close();
-        resolve(fetchedEvents);
-        return onEose!();
-      };
+        abortSignal.addEventListener("abort", () => {
+          closeSubIfNeeded().catch(console.error);
+        });
 
-      const sub = await this.subscribe(filters, params, relayUrls);
-    });
+        params.onevent = (event: NostrEvent) => {
+          fetchedEvents.push(event);
+          return onEvent!(event);
+        };
+
+        params.oneose = () => {
+          closeSubIfNeeded().catch(console.error);
+          if (!didResolve) {
+            didResolve = true;
+            resolve(fetchedEvents);
+          }
+          return onEose!();
+        };
+
+        sub = await this.subscribe(filters, params, relayUrls);
+        if (abortSignal.aborted) {
+          await closeSubIfNeeded();
+        }
+      },
+      { timeout }
+    );
   }
 
   public async publish(event: NostrEvent, relayUrls?: string[]): Promise<void> {
@@ -214,7 +239,7 @@ export class NostrManager {
     const relays = relayUrls
       ? this.relays.filter((r) => relayUrls.includes(r.url))
       : this.relays;
-    this.keepAlive(relays);
+    await this.keepAlive(relays);
     await Promise.allSettled(
       this.pool.publish(
         relays.map((r) => r.url),

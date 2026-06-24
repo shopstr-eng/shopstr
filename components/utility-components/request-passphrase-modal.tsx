@@ -7,10 +7,11 @@ import {
   ModalFooter,
   Input,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 
 export default function PassphraseChallengeModal({
   actionOnSubmit,
@@ -29,6 +30,7 @@ export default function PassphraseChallengeModal({
 }) {
   const [remindToggled, setRemindToggled] = useState(false);
   const [passphraseInput, setPassphraseInput] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const isButtonDisabled = useMemo(() => {
     return passphraseInput.trim().length === 0;
@@ -95,7 +97,7 @@ export default function PassphraseChallengeModal({
       isDismissable={false}
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
           Enter Passphrase
         </ModalHeader>
         <ModalBody>
@@ -106,12 +108,25 @@ export default function PassphraseChallengeModal({
             variant="flat"
             label="Passphrase"
             labelPlacement="inside"
-            type="password"
+            type={showPassword ? "text" : "password"}
             onChange={(e) => setPassphraseInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") onSubmit();
             }}
             value={passphraseInput}
+            endContent={
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="text-gray-400"
+              >
+                {showPassword ? (
+                  <EyeSlashIcon className="h-5 w-5" />
+                ) : (
+                  <EyeIcon className="h-5 w-5" />
+                )}
+              </button>
+            }
           />
           <div className="mt-4 flex items-center gap-2">
             <input

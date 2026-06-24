@@ -1,5 +1,5 @@
 import { ProfileMapContext } from "@/utils/context/context";
-import { User } from "@nextui-org/react";
+import { User } from "@heroui/react";
 import { nip19 } from "nostr-tools";
 import { useContext, useEffect, useState } from "react";
 

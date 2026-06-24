@@ -1,6 +1,6 @@
 import React from "react";
 import { CATEGORIES } from "@/utils/STATIC-VARIABLES";
-import { Chip, Tooltip } from "@nextui-org/react";
+import { Chip, Tooltip } from "@heroui/react";
 
 const CompactCategories = ({ categories }: { categories: string[] }) => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -50,7 +50,7 @@ const CompactCategories = ({ categories }: { categories: string[] }) => {
           }}
         >
           <div
-            className="z-0  w-fit"
+            className="z-0 w-fit"
             onClick={() => {
               setIsOpen(true);
             }}

@@ -140,6 +140,29 @@ describe("ShopProfileForm", () => {
     );
   });
 
+  test("updates shop image previews from pasted URLs", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ShopProfileForm />);
+
+    await user.type(
+      await screen.findByLabelText("Shop logo URL"),
+      "https://cdn.example.com/logo.png"
+    );
+    expect(screen.getByAltText("shop logo")).toHaveAttribute(
+      "src",
+      "https://cdn.example.com/logo.png"
+    );
+
+    await user.type(
+      screen.getByLabelText("Shop banner URL"),
+      "https://cdn.example.com/banner.png"
+    );
+    expect(screen.getByAltText("Shop banner image")).toHaveAttribute(
+      "src",
+      "https://cdn.example.com/banner.png"
+    );
+  });
+
   test("submits the form, shows loading state, and calls relevant functions", async () => {
     const user = userEvent.setup();
     let resolveCreateEvent: (value?: unknown) => void;
@@ -186,15 +209,16 @@ describe("ShopProfileForm", () => {
   });
 
   test("shows a validation error for inputs that exceed maxLength", async () => {
-    const user = userEvent.setup();
     renderWithProviders(<ShopProfileForm />);
 
     const shopNameInput = await screen.findByLabelText("Shop Name");
-    await user.type(
-      shopNameInput,
-      "This is a very long shop name that is definitely over fifty characters long for sure."
-    );
-    await user.click(screen.getByRole("button", { name: /Save Shop/i }));
+    fireEvent.change(shopNameInput, {
+      target: {
+        value:
+          "This is a very long shop name that is definitely over fifty characters long for sure.",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Save Shop/i }));
 
     expect(
       await screen.findByText("This input exceed maxLength of 50.")

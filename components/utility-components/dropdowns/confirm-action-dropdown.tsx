@@ -6,7 +6,7 @@ import {
   DropdownMenu,
   DropdownItem,
   DropdownSection,
-} from "@nextui-org/react";
+} from "@heroui/react";
 
 type ConfirmActionDropdownProps = {
   helpText: string;

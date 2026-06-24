@@ -1,5 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { fetchCachedEvents } from "@/utils/db/db-service";
+import { applyRateLimit } from "@/utils/rate-limit";
+
+const RATE_LIMIT = { limit: 600, windowMs: 60 * 1000 };
 
 /**
  * GET /api/db/fetch-profile?pubkey=<hex>
@@ -10,6 +13,7 @@ export default async function handler(
   res: NextApiResponse
 ) {
   if (req.method !== "GET") return res.status(405).end();
+  if (!applyRateLimit(req, res, "fetch-profile", RATE_LIMIT)) return;
   const { pubkey } = req.query;
   if (!pubkey || typeof pubkey !== "string")
     return res.status(400).json({ error: "pubkey required" });
