@@ -147,23 +147,33 @@ export default function ShopSubPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center pt-20">
-        <ShopstrSpinner />
+      <div className="relative flex min-h-screen items-center justify-center bg-[#111] pt-20 text-white">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_70%_55%_at_50%_0%,#000_65%,transparent_100%)] bg-[size:24px_24px]" />
+        <div className="relative z-10">
+          <ShopstrSpinner />
+        </div>
       </div>
     );
   }
 
   if (notFound || !shopPubkey) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center pt-20">
-        <h1 className="text-3xl font-bold">Page Not Found</h1>
-        <p className="mt-4 text-gray-500">This page doesn&apos;t exist.</p>
-        <a
-          href={`/shop/${slug}`}
-          className="bg-primary-blue mt-6 rounded-lg px-6 py-3 font-bold text-white transition-transform hover:-translate-y-0.5"
-        >
-          Back to Shop
-        </a>
+      <div className="relative flex min-h-screen flex-col items-center justify-center bg-[#111] px-4 pt-20 text-center text-white selection:bg-yellow-400 selection:text-black">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_70%_55%_at_50%_0%,#000_65%,transparent_100%)] bg-[size:24px_24px]" />
+        <div className="relative z-10 rounded-2xl border border-zinc-800 bg-[#161616] p-8 shadow-2xl shadow-black/30">
+          <h1 className="text-4xl font-black tracking-tight text-white uppercase">
+            Page Not Found
+          </h1>
+          <p className="mt-4 max-w-md text-zinc-400">
+            This page doesn&apos;t exist.
+          </p>
+          <a
+            href={`/shop/${slug}`}
+            className="mt-6 inline-flex h-11 items-center justify-center rounded-md border-2 border-black bg-yellow-400 px-6 text-sm font-black tracking-widest text-black uppercase shadow-[3px_3px_0_0_#000] transition-all hover:-translate-y-0.5 hover:shadow-[5px_5px_0_0_#000]"
+          >
+            Back to Shop
+          </a>
+        </div>
       </div>
     );
   }

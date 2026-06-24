@@ -9,27 +9,12 @@
 );
 
 :root {
-  --foreground-rgb: 33, 33, 33;
-  --background-start-rgb: 232, 232, 232;
-  --background-end-rgb: 232, 232, 232;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 232, 232, 232;
-    --background-start-rgb: 33, 33, 33;
-    --background-end-rgb: 33, 33, 33;
-  }
+  color-scheme: dark;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  color: white;
+  background: #111111;
 }
 
 /* Chrome, Edge, and Safari */
@@ -43,8 +28,8 @@ body {
 
 *::-webkit-scrollbar-thumb {
   border-radius: 2px;
-  border: 1px solid;
-  background-color: #686868;
+  border: 1px solid #27272a;
+  background-color: #3f3f46;
 }
 
 html {
@@ -71,4 +56,42 @@ body {
 
 body.sf-active [data-main-nav] {
   display: none !important;
+}
+
+.neo-settings-form [data-slot="input-wrapper"],
+.neo-settings-form [data-slot="trigger"] {
+  border-color: #3f3f46 !important;
+  background: #111111 !important;
+  color: #ffffff !important;
+}
+
+.neo-settings-form [data-slot="input-wrapper"]:hover,
+.neo-settings-form [data-slot="trigger"]:hover {
+  border-color: #71717a !important;
+}
+
+.neo-settings-form [data-focus="true"] [data-slot="input-wrapper"],
+.neo-settings-form [data-open="true"] [data-slot="trigger"] {
+  border-color: #facc15 !important;
+}
+
+.neo-settings-form [data-slot="label"] {
+  color: #a1a1aa !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+}
+
+.neo-settings-form [data-slot="input"],
+.neo-settings-form [data-slot="value"],
+.neo-settings-form input,
+.neo-settings-form textarea,
+.neo-settings-form select {
+  color: #ffffff !important;
+}
+
+.neo-settings-form [data-slot="description"],
+.neo-settings-form ::placeholder {
+  color: #71717a !important;
 }

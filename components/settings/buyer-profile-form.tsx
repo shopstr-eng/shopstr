@@ -3,10 +3,7 @@ import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import { Button, Input, Image } from "@heroui/react";
 import { ProfileMapContext } from "@/utils/context/context";
-import {
-  AVATARBADGEBUTTONCLASSNAMES,
-  SHOPSTRBUTTONCLASSNAMES,
-} from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
@@ -60,49 +57,33 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
   }, [profileContext, userPubkey, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
-    if (!userPubkey) {
-      console.error("Cannot save profile: pubkey is undefined");
-      return;
-    }
+    if (!userPubkey) throw new Error("pubkey is undefined");
     setIsUploadingProfile(true);
-    try {
-      const profileMap = profileContext.profileData;
-      const existingProfile = profileMap.has(userPubkey)
-        ? profileMap.get(userPubkey)?.content
-        : {};
 
-      const updatedData = {
-        ...existingProfile,
-        picture: data.picture || "",
-        display_name: data.display_name || "",
-        name: data.name || "",
-      };
+    const profileMap = profileContext.profileData;
+    const existingProfile = profileMap.has(userPubkey)
+      ? profileMap.get(userPubkey)?.content
+      : {};
 
-      if (!nostr || !signer) {
-        console.error("Cannot save profile: nostr or signer is unavailable");
-        return;
-      }
+    const updatedData = {
+      ...existingProfile,
+      picture: data.picture || "",
+      display_name: data.display_name || "",
+      name: data.name || "",
+    };
 
-      const signedProfileEvent = await createNostrProfileEvent(
-        nostr,
-        signer,
-        JSON.stringify(updatedData)
-      );
-      profileContext.updateProfileData({
-        pubkey: userPubkey,
-        content: updatedData,
-        created_at: signedProfileEvent.created_at,
-      });
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 3000);
+    await createNostrProfileEvent(nostr!, signer!, JSON.stringify(updatedData));
+    profileContext.updateProfileData({
+      pubkey: userPubkey!,
+      content: updatedData,
+      created_at: 0,
+    });
+    setIsUploadingProfile(false);
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 3000);
 
-      if (isOnboarding) {
-        router.push("/onboarding/wallet?type=buyer");
-      }
-    } catch (error) {
-      console.error("Failed to save user profile:", error);
-    } finally {
-      setIsUploadingProfile(false);
+    if (isOnboarding) {
+      router.push("/onboarding/wallet?type=buyer");
     }
   };
 
@@ -111,26 +92,25 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
   }
 
   return (
-    <>
+    <div className="neo-settings-form">
       <div className="mb-16 flex items-center justify-center">
-        <div className="relative h-24 w-24 overflow-visible">
+        <div className="relative h-24 w-24">
           <FileUploaderButton
             isIconOnly
-            className={AVATARBADGEBUTTONCLASSNAMES}
-            containerClassName="absolute right-[-0.5rem] bottom-[-0.5rem] z-20"
+            className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${NEO_BTN}`}
             imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
           />
           {watchPicture ? (
             <Image
               src={watchPicture}
               alt="User Profile Picture"
-              className="h-24 w-24 rounded-full object-cover"
+              className="rounded-full"
             />
           ) : (
             <Image
               src={defaultImage}
               alt="User Profile Picture"
-              className="h-24 w-24 rounded-full object-cover"
+              className="rounded-full"
             />
           )}
         </div>
@@ -148,9 +128,9 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="text-light-text dark:text-dark-text pb-4"
+                className="pb-4 text-white"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label: "text-white text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -178,9 +158,9 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="text-light-text dark:text-dark-text pb-4"
+                className="pb-4 text-white"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label: "text-white text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -198,7 +178,7 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
         />
 
         <Button
-          className={`mb-4 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
+          className={`mb-4 w-full ${NEO_BTN}`}
           type="submit"
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -212,7 +192,7 @@ const BuyerProfileForm = ({ isOnboarding }: BuyerProfileFormProps) => {
           {isSaved ? "✅ Saved!" : "Save Profile"}
         </Button>
       </form>
-    </>
+    </div>
   );
 };
 

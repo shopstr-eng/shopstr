@@ -12,7 +12,7 @@ import {
 } from "@heroui/react";
 
 import { ShopMapContext } from "@/utils/context/context";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
@@ -568,14 +568,14 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   }
 
   return (
-    <>
-      <div className="mb-6 flex w-full border-b-2 border-black dark:border-gray-600">
+    <div className="neo-settings-form">
+      <div className="mb-6 flex w-full gap-2 rounded-xl border border-zinc-800 bg-[#161616] p-1">
         <button
           type="button"
-          className={`px-6 py-3 text-sm font-semibold transition-colors ${
+          className={`flex-1 rounded-lg border px-6 py-3 text-sm font-black tracking-widest uppercase transition-all ${
             activeTab === "basic"
-              ? "border-shopstr-purple text-shopstr-purple dark:border-shopstr-yellow dark:text-shopstr-yellow border-b-4"
-              : "hover:text-light-text dark:hover:text-dark-text text-gray-500"
+              ? "border-yellow-400 bg-yellow-400 text-black shadow-[3px_3px_0px_0px_#ffffff]"
+              : "border-zinc-800 bg-[#111] text-zinc-400 hover:border-yellow-400 hover:text-white"
           }`}
           onClick={() => setActiveTab("basic")}
         >
@@ -583,10 +583,10 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         </button>
         <button
           type="button"
-          className={`px-6 py-3 text-sm font-semibold transition-colors ${
+          className={`flex-1 rounded-lg border px-6 py-3 text-sm font-black tracking-widest uppercase transition-all ${
             activeTab === "storefront"
-              ? "border-shopstr-purple text-shopstr-purple dark:border-shopstr-yellow dark:text-shopstr-yellow border-b-4"
-              : "hover:text-light-text dark:hover:text-dark-text text-gray-500"
+              ? "border-yellow-400 bg-yellow-400 text-black shadow-[3px_3px_0px_0px_#ffffff]"
+              : "border-zinc-800 bg-[#111] text-zinc-400 hover:border-yellow-400 hover:text-white"
           }`}
           onClick={() => setActiveTab("storefront")}
         >
@@ -596,8 +596,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
       {activeTab === "basic" && (
         <>
-          <div className="bg-light-fg dark:bg-dark-fg mb-20 h-40 rounded-lg">
-            <div className="bg-shopstr-purple-light dark:bg-dark-fg relative flex h-40 items-center justify-center rounded-lg">
+          <div className="mb-20 h-40 rounded-lg border border-zinc-800 bg-[#161616]">
+            <div className="relative flex h-40 items-center justify-center rounded-lg bg-[#111]">
               {watchBanner && (
                 <Image
                   alt={"Shop banner image"}
@@ -606,7 +606,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 />
               )}
               <FileUploaderButton
-                className={`bg-shopstr-purple absolute right-5 bottom-5 z-20 border-2 border-white shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
+                className={`absolute right-5 bottom-5 z-20 border-2 border-white bg-yellow-400 shadow-md ${NEO_BTN}`}
                 imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
               >
                 Upload Banner
@@ -617,7 +617,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 <div className="">
                   <FileUploaderButton
                     isIconOnly={true}
-                    className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+                    className={`absolute right-[-0.5rem] bottom-[-0.5rem] z-20 ${NEO_BTN}`}
                     imgCallbackOnUpload={(imgUrl) =>
                       setValue("picture", imgUrl)
                     }
@@ -700,9 +700,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 fieldState: { error },
               }) => (
                 <Input
-                  className="text-light-text dark:text-dark-text pb-4"
+                  className="pb-4 text-white"
                   classNames={{
-                    label: "text-light-text dark:text-dark-text text-lg",
+                    label: "text-white text-lg",
                   }}
                   variant="bordered"
                   fullWidth={true}
@@ -732,9 +732,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 fieldState: { error },
               }) => (
                 <Textarea
-                  className="text-light-text dark:text-dark-text pb-4"
+                  className="pb-4 text-white"
                   classNames={{
-                    label: "text-light-text dark:text-dark-text text-lg",
+                    label: "text-white text-lg",
                   }}
                   variant="bordered"
                   fullWidth={true}
@@ -751,16 +751,16 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             />
 
             <div className="pb-4">
-              <label className="text-light-text dark:text-dark-text mb-2 block text-lg">
+              <label className="mb-2 block text-lg text-white">
                 Free Shipping Threshold
               </label>
-              <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+              <p className="mb-3 text-sm text-zinc-400">
                 Set a minimum order amount to offer free shipping.
               </p>
               <div className="flex gap-3">
                 <div className="flex-1">
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-white"
                     variant="bordered"
                     fullWidth={true}
                     type="number"
@@ -780,7 +780,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                         setFreeShippingCurrency(e.target.value);
                     }}
                     aria-label="Currency"
-                    className="text-light-text dark:text-dark-text"
+                    className="text-white"
                   >
                     {CURRENCY_OPTIONS.map((currency) => (
                       <SelectItem key={currency}>{currency}</SelectItem>
@@ -790,7 +790,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               </div>
               {freeShippingThreshold &&
                 parseFloat(freeShippingThreshold) > 0 && (
-                  <p className="mt-2 text-sm text-green-600 dark:text-green-400">
+                  <p className="mt-2 text-sm text-green-300">
                     Buyers will get free shipping on orders of{" "}
                     {parseFloat(freeShippingThreshold).toFixed(2)}{" "}
                     {freeShippingCurrency} or more.
@@ -799,7 +799,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             </div>
 
             <Button
-              className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
+              className={`mb-10 w-full ${NEO_BTN}`}
               type="submit"
               isDisabled={isUploadingShopProfile}
               isLoading={isUploadingShopProfile}
@@ -811,9 +811,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       )}
 
       {activeTab === "storefront" && isOnboarding && (
-        <div className="dark:bg-dark-fg rounded-lg border-3 border-black bg-gray-50 p-4">
-          <p className="dark:text-dark-text text-sm text-gray-600">
-            <span className="dark:text-dark-text font-bold text-black">
+        <div className="rounded-lg border-3 border-zinc-800 bg-[#161616] p-4">
+          <p className="text-sm text-zinc-400">
+            <span className="font-bold text-white">
               Custom storefront & page settings
             </span>{" "}
             are available after onboarding in your shop settings.
@@ -825,14 +825,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           <div className="space-y-6 py-2">
             {/* Shop URL */}
             <div className="pb-2">
-              <p className="text-light-text dark:text-dark-text pb-1 text-lg font-semibold">
-                Shop URL
-              </p>
-              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+              <p className="pb-1 text-lg font-semibold text-white">Shop URL</p>
+              <p className="pb-3 text-sm text-zinc-400">
                 Choose a unique URL for your storefront.
               </p>
               <div className="flex gap-2">
-                <div className="bg-light-fg text-light-text dark:bg-dark-fg dark:text-dark-text flex items-center rounded-l-md border border-r-0 border-gray-300 px-3 py-2 text-sm dark:border-gray-600">
+                <div className="flex items-center rounded-l-md border border-r-0 border-zinc-800 bg-[#161616] px-3 py-2 text-sm text-zinc-300">
                   {siteHost}/shop/
                 </div>
                 <Input
@@ -848,7 +846,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   classNames={{ inputWrapper: "rounded-l-none" }}
                 />
                 <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
+                  className={`${NEO_BTN}`}
                   onPress={registerSlug}
                   isDisabled={!slugInput || slugInput.length < 2}
                 >
@@ -861,8 +859,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     slugStatus === "saved"
                       ? "text-green-600"
                       : slugStatus === "error" || slugStatus === "taken"
-                        ? "text-red-600"
-                        : "text-gray-500"
+                        ? "text-red-300"
+                        : "text-zinc-400"
                   }`}
                 >
                   {slugMessage}
@@ -873,18 +871,18 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   href={`/shop/${shopSlug}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-shopstr-purple dark:text-shopstr-yellow mt-2 inline-block text-sm underline"
+                  className="mt-2 inline-block text-sm text-yellow-300 underline"
                 >
                   {siteHost}/shop/{shopSlug} →
                 </a>
               )}
             </div>
 
-            <hr className="border-light-fg dark:border-dark-fg" />
+            <hr className="border-zinc-800" />
 
             {/* Landing Page Style */}
             <div className="pb-2">
-              <p className="text-light-text dark:text-dark-text pb-3 text-lg font-semibold">
+              <p className="pb-3 text-lg font-semibold text-white">
                 Landing Page Style
               </p>
               <div className="flex flex-wrap gap-3">
@@ -910,8 +908,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     type="button"
                     className={`flex-1 rounded-md border-2 p-3 text-left text-sm transition-all ${
                       landingPageStyle === style.value
-                        ? "border-shopstr-purple bg-shopstr-purple text-white"
-                        : "text-light-text hover:border-shopstr-purple-light dark:text-dark-text dark:hover:border-shopstr-purple-light border-gray-200 dark:border-gray-600"
+                        ? "border-yellow-400 bg-yellow-400 text-black shadow-[3px_3px_0px_0px_#ffffff]"
+                        : "border-zinc-800 bg-[#111] text-zinc-300 hover:border-yellow-400 hover:text-white"
                     }`}
                     onClick={() => setLandingPageStyle(style.value)}
                   >
@@ -926,11 +924,11 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               </div>
             </div>
 
-            <hr className="border-light-fg dark:border-dark-fg" />
+            <hr className="border-zinc-800" />
 
             {/* Product Layout */}
             <div className="pb-2">
-              <p className="text-light-text dark:text-dark-text pb-3 text-lg font-semibold">
+              <p className="pb-3 text-lg font-semibold text-white">
                 Product Layout
               </p>
               <div className="flex flex-wrap gap-3">
@@ -956,8 +954,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     type="button"
                     className={`flex-1 rounded-md border-2 p-3 text-left text-sm transition-all ${
                       productLayout === layout.value
-                        ? "border-shopstr-purple bg-shopstr-purple text-white"
-                        : "text-light-text hover:border-shopstr-purple-light dark:text-dark-text dark:hover:border-shopstr-purple-light border-gray-200 dark:border-gray-600"
+                        ? "border-yellow-400 bg-yellow-400 text-black shadow-[3px_3px_0px_0px_#ffffff]"
+                        : "border-zinc-800 bg-[#111] text-zinc-300 hover:border-yellow-400 hover:text-white"
                     }`}
                     onClick={() => setProductLayout(layout.value)}
                   >
@@ -972,11 +970,11 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               </div>
             </div>
 
-            <hr className="border-light-fg dark:border-dark-fg" />
+            <hr className="border-zinc-800" />
 
             {/* Color Scheme */}
             <div className="pb-2">
-              <p className="text-light-text dark:text-dark-text pb-3 text-lg font-semibold">
+              <p className="pb-3 text-lg font-semibold text-white">
                 Color Scheme
               </p>
               <div className="mb-4 flex flex-wrap gap-2">
@@ -985,23 +983,23 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     key={preset.name}
                     type="button"
                     onClick={() => setColors(preset.colors)}
-                    className={`text-light-text dark:text-dark-text flex items-center gap-2 rounded-lg border-2 px-3 py-1.5 text-sm font-medium transition-all ${
+                    className={`flex items-center gap-2 rounded-lg border-2 px-3 py-1.5 text-sm font-medium text-white transition-all ${
                       JSON.stringify(colors) === JSON.stringify(preset.colors)
-                        ? "border-shopstr-purple bg-shopstr-purple/10"
-                        : "hover:border-shopstr-purple-light border-gray-200 dark:border-gray-600 dark:hover:border-gray-400"
+                        ? "border-yellow-400 bg-yellow-400/10 text-yellow-200"
+                        : "border-zinc-800 hover:border-yellow-400"
                     }`}
                   >
                     <div className="flex gap-1">
                       <div
-                        className="h-4 w-4 rounded-full border border-gray-300"
+                        className="h-4 w-4 rounded-full border border-zinc-700"
                         style={{ backgroundColor: preset.colors.primary }}
                       />
                       <div
-                        className="h-4 w-4 rounded-full border border-gray-300"
+                        className="h-4 w-4 rounded-full border border-zinc-700"
                         style={{ backgroundColor: preset.colors.secondary }}
                       />
                       <div
-                        className="h-4 w-4 rounded-full border border-gray-300"
+                        className="h-4 w-4 rounded-full border border-zinc-700"
                         style={{ backgroundColor: preset.colors.accent }}
                       />
                     </div>
@@ -1020,7 +1018,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   ] as const
                 ).map(([key, label]) => (
                   <div key={key}>
-                    <label className="text-light-text dark:text-dark-text mb-1 block text-sm font-medium">
+                    <label className="mb-1 block text-sm font-medium text-white">
                       {label}
                     </label>
                     <div className="flex items-center gap-2">
@@ -1033,7 +1031,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             [key]: e.target.value,
                           }))
                         }
-                        className="h-10 w-16 cursor-pointer rounded border border-gray-200 dark:border-gray-600"
+                        className="h-10 w-16 cursor-pointer rounded border border-zinc-800"
                       />
                       <Input
                         variant="bordered"
@@ -1055,24 +1053,24 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               </div>
               <button
                 type="button"
-                className="hover:text-light-text dark:hover:text-dark-text mt-4 text-sm text-gray-500 underline dark:text-gray-400"
+                className="mt-4 text-sm text-white text-zinc-400 underline hover:text-yellow-300"
                 onClick={() => setColors(DEFAULT_COLORS)}
               >
                 Reset to defaults
               </button>
             </div>
 
-            <hr className="border-light-fg dark:border-dark-fg" />
+            <hr className="border-zinc-800" />
 
             {/* Typography */}
             <div className="pb-2">
-              <p className="text-light-text dark:text-dark-text pb-3 text-lg font-semibold">
+              <p className="pb-3 text-lg font-semibold text-white">
                 Typography
               </p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Select
-                  className="text-light-text dark:text-dark-text"
-                  classNames={{ label: "text-light-text dark:text-dark-text" }}
+                  className="text-white"
+                  classNames={{ label: "text-white" }}
                   variant="bordered"
                   label="Heading Font"
                   labelPlacement="outside"
@@ -1085,8 +1083,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   ))}
                 </Select>
                 <Select
-                  className="text-light-text dark:text-dark-text"
-                  classNames={{ label: "text-light-text dark:text-dark-text" }}
+                  className="text-white"
+                  classNames={{ label: "text-white" }}
                   variant="bordered"
                   label="Body Font"
                   labelPlacement="outside"
@@ -1101,14 +1099,14 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               </div>
             </div>
 
-            <hr className="border-light-fg dark:border-dark-fg" />
+            <hr className="border-zinc-800" />
 
             {/* Navigation Links */}
             <div className="pb-2">
-              <p className="text-light-text dark:text-dark-text pb-1 text-lg font-semibold">
+              <p className="pb-1 text-lg font-semibold text-white">
                 Navigation Links
               </p>
-              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+              <p className="pb-3 text-sm text-zinc-400">
                 Define the top navigation links for your storefront. Leave empty
                 to use default navigation.
               </p>
@@ -1139,7 +1137,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       placeholder="URL or page slug"
                       className="flex-1"
                     />
-                    <label className="flex items-center gap-1 text-xs whitespace-nowrap text-gray-500 dark:text-gray-400">
+                    <label className="flex items-center gap-1 text-xs whitespace-nowrap text-zinc-400">
                       <input
                         type="checkbox"
                         checked={link.isPage || false}
@@ -1168,20 +1166,20 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 onClick={() =>
                   setNavLinks([...navLinks, { label: "", href: "" }])
                 }
-                className="text-shopstr-purple dark:text-shopstr-yellow mt-2 text-sm hover:underline"
+                className="mt-2 text-sm text-yellow-300 hover:underline"
               >
                 + Add Nav Link
               </button>
             </div>
 
-            <hr className="border-light-fg dark:border-dark-fg" />
+            <hr className="border-zinc-800" />
 
             {/* Homepage Sections */}
             <div className="pb-2">
-              <p className="text-light-text dark:text-dark-text pb-1 text-lg font-semibold">
+              <p className="pb-1 text-lg font-semibold text-white">
                 Homepage Sections
               </p>
-              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+              <p className="pb-3 text-sm text-zinc-400">
                 Build your storefront homepage by adding and arranging content
                 sections. If no sections are added, the landing page style above
                 is used instead.
@@ -1275,7 +1273,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                         },
                       ])
                     }
-                    className="hover:border-shopstr-purple hover:text-shopstr-purple dark:hover:border-shopstr-yellow dark:hover:text-shopstr-yellow rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600 dark:border-gray-600 dark:text-gray-400"
+                    className="rounded border border-zinc-800 bg-[#111] px-2 py-1 text-xs font-medium text-zinc-400 hover:border-yellow-400 hover:text-yellow-300"
                   >
                     + {st.label}
                   </button>
@@ -1283,27 +1281,25 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               </div>
             </div>
 
-            <hr className="border-light-fg dark:border-dark-fg" />
+            <hr className="border-zinc-800" />
 
             {/* Custom Pages */}
             <div className="pb-2">
               <PageEditor pages={pages} onChange={setPages} />
             </div>
 
-            <hr className="border-light-fg dark:border-dark-fg" />
+            <hr className="border-zinc-800" />
 
             {/* Built-in Pages */}
             <div className="pb-2">
-              <p className="text-light-text dark:text-dark-text pb-3 text-lg font-semibold">
+              <p className="pb-3 text-lg font-semibold text-white">
                 Built-in Pages
               </p>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-light-text dark:text-dark-text font-medium">
-                      Community Page
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="font-medium text-white">Community Page</p>
+                    <p className="text-sm text-zinc-400">
                       Show a community discussion page
                     </p>
                   </div>
@@ -1314,10 +1310,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-light-text dark:text-dark-text font-medium">
-                      Wallet Page
-                    </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="font-medium text-white">Wallet Page</p>
+                    <p className="text-sm text-zinc-400">
                       Show a Bitcoin wallet page for buyers
                     </p>
                   </div>
@@ -1329,14 +1323,14 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               </div>
             </div>
 
-            <hr className="border-light-fg dark:border-dark-fg" />
+            <hr className="border-zinc-800" />
 
             {/* Contact Us */}
             <div className="pb-2">
-              <p className="text-light-text dark:text-dark-text pb-1 text-lg font-semibold">
+              <p className="pb-1 text-lg font-semibold text-white">
                 Contact Us
               </p>
-              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+              <p className="pb-3 text-sm text-zinc-400">
                 A &quot;Contact&quot; link is shown on your storefront by
                 default. Clicking it opens a Nostr DM inquiry with you directly
                 within your storefront. If you prefer to use email instead,
@@ -1351,19 +1345,17 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 value={contactEmail}
                 onChange={(e) => setContactEmail(e.target.value)}
                 classNames={{
-                  label: "text-light-text dark:text-dark-text font-medium pb-1",
+                  label: "text-white font-medium pb-1",
                 }}
               />
             </div>
 
-            <hr className="border-light-fg dark:border-dark-fg" />
+            <hr className="border-zinc-800" />
 
             {/* Footer */}
             <div className="pb-2">
-              <p className="text-light-text dark:text-dark-text pb-1 text-lg font-semibold">
-                Footer
-              </p>
-              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+              <p className="pb-1 text-lg font-semibold text-white">Footer</p>
+              <p className="pb-3 text-sm text-zinc-400">
                 Customize the footer at the bottom of your storefront.
               </p>
               <FooterEditor
@@ -1373,26 +1365,26 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               />
             </div>
 
-            <hr className="border-light-fg dark:border-dark-fg" />
+            <hr className="border-zinc-800" />
 
             {/* Custom Domain */}
             <div className="pb-2">
-              <p className="text-light-text dark:text-dark-text pb-1 text-lg font-semibold">
+              <p className="pb-1 text-lg font-semibold text-white">
                 Custom Domain
               </p>
-              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+              <p className="pb-3 text-sm text-zinc-400">
                 Want to use your own domain (e.g.,{" "}
-                <code className="bg-light-fg dark:bg-dark-fg rounded px-1 text-xs">
+                <code className="rounded border border-zinc-800 bg-[#161616] px-1 text-xs">
                   shop.yourdomain.com
                 </code>
                 ) for your storefront? We can help set that up for you.
               </p>
               {customDomain && (
-                <div className="mb-3 flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-2 dark:border-green-700 dark:bg-green-950/30">
-                  <span className="text-xs font-medium text-green-700 dark:text-green-400">
+                <div className="mb-3 flex items-center gap-2 rounded-lg border border-green-400/40 bg-green-400/10 px-3 py-2">
+                  <span className="text-xs font-medium text-green-300">
                     Active custom domain:
                   </span>
-                  <code className="text-xs font-bold text-green-800 dark:text-green-300">
+                  <code className="text-xs font-bold text-green-200">
                     {customDomain}
                   </code>
                 </div>
@@ -1404,17 +1396,17 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     "/orders?pk=npub15dc33fyg3cpd9r58vlqge2hh8dy6hkkrjxkhluv2xpyfreqkmsesesyv6e&isInquiry=true"
                   )
                 }
-                className="dark:bg-dark-fg dark:text-dark-text dark:hover:bg-dark-bg inline-block rounded-lg border-3 border-black bg-white px-4 py-2 text-sm font-bold text-black hover:bg-gray-100 dark:border-gray-500"
+                className="inline-flex rounded-lg border-2 border-yellow-400 bg-yellow-400 px-4 py-2 text-sm font-black text-black shadow-[3px_3px_0px_0px_#ffffff] transition-all hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_0px_#ffffff]"
               >
                 {customDomain ? "Contact Us to Change Domain" : "Contact Us"}
               </button>
             </div>
 
-            <hr className="border-light-fg dark:border-dark-fg" />
+            <hr className="border-zinc-800" />
 
             {/* Preview + Save */}
-            <div className="border-light-fg dark:border-dark-fg rounded-lg border-2 border-dashed p-4">
-              <p className="text-light-text dark:text-dark-text mb-3 text-sm font-medium">
+            <div className="rounded-lg border-2 border-dashed border-zinc-800 p-4">
+              <p className="mb-3 text-sm font-medium text-white">
                 Preview your storefront before saving to see how it will look to
                 visitors.
               </p>
@@ -1422,7 +1414,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 <button
                   type="button"
                   onClick={() => setIsPreviewOpen(true)}
-                  className={`${SHOPSTRBUTTONCLASSNAMES} rounded-lg px-4 py-2 text-sm font-bold`}
+                  className={`${NEO_BTN} rounded-lg px-4 py-2 text-sm font-bold`}
                 >
                   Preview Storefront
                 </button>
@@ -1431,13 +1423,13 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     href={`/shop/${shopSlug}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-shopstr-purple dark:text-shopstr-yellow text-sm underline"
+                    className="text-sm text-yellow-300 underline"
                   >
                     {siteHost}/shop/{shopSlug} →
                   </a>
                 )}
               </div>
-              <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+              <p className="mt-2 text-xs text-zinc-500">
                 Preview shows approximate appearance. Save to publish your
                 changes to the live storefront.
               </p>
@@ -1447,12 +1439,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             {shopSlug && (
               <div className="pt-2">
                 <Button
-                  className="border-2 border-red-500 bg-transparent font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                  className="border-2 border-red-500 bg-transparent font-bold text-red-400 hover:bg-red-500/10"
                   onPress={handleRemoveStorefront}
                 >
                   Remove Storefront
                 </Button>
-                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                <p className="mt-1 text-xs text-zinc-500">
                   This will delete your shop URL, custom domain, and reset all
                   storefront customization.
                 </p>
@@ -1460,7 +1452,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             )}
 
             <Button
-              className={`w-full ${SHOPSTRBUTTONCLASSNAMES}`}
+              className={`w-full ${NEO_BTN}`}
               onPress={saveStorefront}
               isDisabled={isSavingStorefront}
               isLoading={isSavingStorefront}
@@ -1489,7 +1481,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         navLinks={navLinks}
         shopSlug={shopSlug}
       />
-    </>
+    </div>
   );
 };
 

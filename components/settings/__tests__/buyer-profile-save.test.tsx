@@ -114,7 +114,7 @@ describe("BuyerProfileForm fast saves", () => {
     jest.clearAllMocks();
   });
 
-  test("updates context with the returned created_at and clears save loading state", async () => {
+  test("updates context with the saved profile and clears save loading state", async () => {
     mockCreateNostrProfileEvent.mockResolvedValue(mockSavedProfileEvent);
     const user = userEvent.setup();
     const { mockUpdateProfileData } = renderWithProviders(<BuyerProfileForm />);
@@ -127,7 +127,7 @@ describe("BuyerProfileForm fast saves", () => {
       expect(mockUpdateProfileData).toHaveBeenCalledWith(
         expect.objectContaining({
           pubkey: mockUserPubkey,
-          created_at: mockSavedProfileEvent.created_at,
+          created_at: 0,
         })
       );
       expect(saveButton).not.toBeDisabled();

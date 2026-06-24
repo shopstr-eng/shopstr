@@ -18,7 +18,7 @@ import ProductForm from "./product-form";
 import ImageCarousel from "./utility-components/image-carousel";
 import CompactCategories from "./utility-components/compact-categories";
 import { locationAvatar } from "./utility-components/dropdowns/location-dropdown";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import SuccessModal from "./utility-components/success-modal";
@@ -64,12 +64,18 @@ export default function DisplayProductModal({
 
   const handleShare = async () => {
     const allParsed = productEventContext.productEvents
-      .filter((e: NostrEvent) => e.kind !== 1)
-      .map((e: NostrEvent) => parseTags(e))
-      .filter((p: ProductData | undefined): p is ProductData => !!p);
+      .filter((event: NostrEvent) => event.kind !== 1)
+      .map((event: NostrEvent) => parseTags(event))
+      .filter(
+        (parsed: ProductData | undefined): parsed is ProductData => !!parsed
+      );
 
-    const slug = getListingSlug(productData, allParsed);
-    const listingPath = slug || productData.id;
+    if (!allParsed.some((parsed) => parsed.id === productData.id)) {
+      allParsed.push(productData);
+    }
+
+    const listingPath =
+      getListingSlug(productData, allParsed) || productData.id;
     const shareData = {
       title: productData.title,
       url: `${window.location.origin}/listing/${listingPath}`,
@@ -108,56 +114,62 @@ export default function DisplayProductModal({
         backdrop="blur"
         isOpen={showModal}
         onClose={handleModalToggle}
-        // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
         classNames={{
+          base: "border border-zinc-800 bg-[#161616] shadow-xl",
           body: "py-6",
-          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          header: "border-b-[1px] border-[#292f46]",
-          footer: "border-t-[1px] border-[#292f46]",
-          closeButton: "hover:bg-black/5 active:bg-white/10",
+          backdrop: "bg-black/80 backdrop-blur-sm",
+          header: "border-b border-zinc-800 py-4",
+          footer: "border-t border-zinc-800 py-4",
+          closeButton: "text-zinc-400 hover:bg-white/10 active:bg-white/20",
         }}
         isDismissable={false}
         scrollBehavior={"outside"}
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col">
-            <div className="flex items-center justify-between">
-              <h2 className="text-light-text dark:text-dark-text text-2xl font-bold">
+          <ModalHeader className="flex flex-col text-white">
+            <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
+              <h2 className="text-xl font-black tracking-tighter text-white uppercase md:text-2xl">
                 {productData.title}
                 {isExpired && (
-                  <Chip color="warning" variant="flat" className="ml-2">
+                  <Chip
+                    color="warning"
+                    variant="flat"
+                    className="ml-2"
+                    size="sm"
+                  >
                     Outdated
                   </Chip>
                 )}
               </h2>
-              {productData.expiration && (
-                <p className="text-sm text-gray-500">
-                  Valid until:{" "}
-                  {new Date(productData.expiration * 1000).toLocaleDateString()}
-                </p>
-              )}
-              <div>
+              <div className="flex items-center gap-3">
+                {productData.expiration && (
+                  <p className="text-xs font-bold tracking-widest text-zinc-500 uppercase">
+                    Expires:{" "}
+                    {new Date(
+                      productData.expiration * 1000
+                    ).toLocaleDateString()}
+                  </p>
+                )}
                 {productData.status === "active" && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 bg-green-400/10 px-2 py-0.5 text-xs font-medium text-green-300 text-green-700">
                     Active
                   </span>
                 )}
                 {productData.status === "sold" && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900 dark:text-red-300">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 bg-red-400/10 px-2 py-0.5 text-xs font-medium text-red-300 text-red-700">
                     Sold
                   </span>
                 )}
               </div>
             </div>
           </ModalHeader>
-          <ModalBody className="text-light-text dark:text-dark-text">
+          <ModalBody className="text-white">
             {productData.images ? (
               <ImageCarousel
                 images={productData.images}
-                productTitle={productData.title}
                 showThumbs={productData.images.length > 1}
-                classname="max-h-[80vh]"
+                classname="max-h-[50vh] md:max-h-[80vh]"
               />
             ) : null}
             <Divider />
@@ -167,7 +179,7 @@ export default function DisplayProductModal({
                 dropDownKeys={
                   productData.pubkey === userPubkey
                     ? ["shop_profile"]
-                    : ["shop", "inquiry", "copy_npub", "report_profile"]
+                    : ["shop", "inquiry", "copy_npub"]
                 }
               />
               <Chip
@@ -197,10 +209,7 @@ export default function DisplayProductModal({
                 <div className="flex flex-wrap items-center">
                   {productData.sizes && productData.sizes.length > 0
                     ? productData.sizes.map((size: string) => (
-                        <span
-                          key={size}
-                          className="text-light-text dark:text-dark-text mr-4 mb-2"
-                        >
+                        <span key={size} className="mr-4 mb-2 text-white">
                           {size}: {productData.sizeQuantities?.get(size) || 0}
                         </span>
                       ))
@@ -214,10 +223,7 @@ export default function DisplayProductModal({
                 <div className="flex flex-wrap items-center">
                   {productData.volumes && productData.volumes.length > 0
                     ? productData.volumes.map((volume: string) => (
-                        <span
-                          key={volume}
-                          className="text-light-text dark:text-dark-text mr-4 mb-2"
-                        >
+                        <span key={volume} className="mr-4 mb-2 text-white">
                           {volume}: {productData.volumePrices?.get(volume) || 0}{" "}
                           {productData.currency}
                         </span>
@@ -232,10 +238,7 @@ export default function DisplayProductModal({
                 <div className="flex flex-wrap items-center">
                   {productData.weights && productData.weights.length > 0
                     ? productData.weights.map((weight: string) => (
-                        <span
-                          key={weight}
-                          className="text-light-text dark:text-dark-text mr-4 mb-2"
-                        >
+                        <span key={weight} className="mr-4 mb-2 text-white">
                           {weight}: {productData.weightPrices?.get(weight) || 0}{" "}
                           {productData.currency}
                         </span>
@@ -251,10 +254,7 @@ export default function DisplayProductModal({
                   {Array.from(productData.bulkPrices.entries())
                     .sort((a, b) => a[0] - b[0])
                     .map(([units, price]) => (
-                      <span
-                        key={units}
-                        className="text-light-text dark:text-dark-text mr-4 mb-2"
-                      >
+                      <span key={units} className="mr-4 mb-2 text-white">
                         {units} units: {price} {productData.currency}
                       </span>
                     ))}
@@ -263,7 +263,7 @@ export default function DisplayProductModal({
             ) : null}
             {productData.condition && (
               <>
-                <div className="text-light-text dark:text-dark-text text-left text-xs">
+                <div className="text-left text-xs text-white">
                   <span className="text-xl font-semibold">Condition: </span>
                   <span className="text-xl">{productData.condition}</span>
                 </div>
@@ -271,7 +271,7 @@ export default function DisplayProductModal({
             )}
             {productData.quantity && (
               <>
-                <div className="text-light-text dark:text-dark-text text-left text-xs">
+                <div className="text-left text-xs text-white">
                   <span className="text-xl font-semibold">Quantity: </span>
                   <span className="text-xl">{productData.quantity}</span>
                 </div>
@@ -279,7 +279,7 @@ export default function DisplayProductModal({
             )}
             {productData.restrictions && (
               <>
-                <div className="text-light-text dark:text-dark-text text-left text-xs">
+                <div className="text-left text-xs text-white">
                   <span className="text-xl font-semibold">Restrictions: </span>
                   <span className="text-xl text-red-500">
                     {productData.restrictions}
@@ -289,7 +289,7 @@ export default function DisplayProductModal({
             )}
             {productData.required && (
               <>
-                <div className="text-light-text dark:text-dark-text text-left text-xs">
+                <div className="text-left text-xs text-white">
                   <span className="text-xl font-semibold">
                     Required Customer Information:{" "}
                   </span>
@@ -300,10 +300,10 @@ export default function DisplayProductModal({
           </ModalBody>
 
           <ModalFooter>
-            <div className="flex w-full flex-wrap justify-evenly gap-2">
+            <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Button
                 type="submit"
-                className={SHOPSTRBUTTONCLASSNAMES}
+                className={`${NEO_BTN} w-full`}
                 startContent={
                   <ShareIcon className="h-6 w-6 hover:text-yellow-500" />
                 }
@@ -317,7 +317,7 @@ export default function DisplayProductModal({
                 <>
                   <Button
                     type="submit"
-                    className={SHOPSTRBUTTONCLASSNAMES}
+                    className={`${NEO_BTN} w-full`}
                     startContent={
                       <PencilSquareIcon className="h-6 w-6 hover:text-yellow-500" />
                     }
@@ -332,7 +332,7 @@ export default function DisplayProductModal({
                     onConfirm={beginDeleteListingProcess}
                   >
                     <Button
-                      className="min-w-fit bg-gradient-to-tr from-red-600 via-red-500 to-red-600 text-white shadow-lg"
+                      className={`${NEO_BTN} w-full bg-red-500 text-white hover:bg-red-400`}
                       startContent={
                         <TrashIcon className="h-6 w-6 hover:text-yellow-500" />
                       }

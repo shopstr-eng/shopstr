@@ -9,7 +9,6 @@ import { useRouter } from "next/router";
 import SignInModal from "./sign-in/SignInModal";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import { ShopProfile } from "../utils/types/types";
-import { getLocalStorageJson } from "@/utils/safe-json";
 
 const TopNav = ({
   setFocusedPubkey,
@@ -18,15 +17,8 @@ const TopNav = ({
   setFocusedPubkey: (value: string) => void;
   setSelectedSection: (value: string) => void;
 }) => {
-  const {
-    isHomeActive,
-    isProfileActive,
-    isCommunitiesActive,
-    isMessagesActive,
-    isWalletActive,
-    isMyListingsActive,
-    isCartActive,
-  } = useNavigation();
+  const { isHomeActive, isProfileActive, isCommunitiesActive } =
+    useNavigation();
   const router = useRouter();
 
   const chatsContext = useContext(ChatsContext);
@@ -45,14 +37,11 @@ const TopNav = ({
 
   useEffect(() => {
     const fetchAndUpdateCartQuantity = async () => {
-      const cartList = getLocalStorageJson<unknown[]>("cart", [], {
-        removeOnError: true,
-        validate: Array.isArray,
-      });
-      if (cartList.length > 0) {
+      const cartList = localStorage.getItem("cart")
+        ? JSON.parse(localStorage.getItem("cart") as string)
+        : [];
+      if (cartList) {
         setCartQuantity(cartList.length);
-      } else {
-        setCartQuantity(0);
       }
     };
 
@@ -78,7 +67,7 @@ const TopNav = ({
   useEffect(() => {
     const npub = router.pathname
       .split("/")
-      .find((segment) => segment.includes("npub1"));
+      .find((segment) => segment.includes("npub"));
     if (
       npub &&
       shopMapContext.shopData.has(npub) &&
@@ -125,52 +114,49 @@ const TopNav = ({
   };
 
   const MobileMenu = () => (
-    <div className="bg-light-fg dark:bg-dark-fg absolute top-full left-0 w-full shadow-lg">
+    <div className="absolute top-full left-0 flex max-h-[calc(100vh-70px)] w-full flex-col overflow-y-auto border-b border-zinc-800 bg-[#161616] p-2 shadow-xl">
       <Button
-        className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text w-full bg-transparent hover:text-purple-700"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold text-zinc-400 uppercase hover:text-white"
         onClick={handleHomeClick}
       >
         Marketplace
       </Button>
       <Button
-        className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text w-full bg-transparent hover:text-purple-700"
-        onClick={() => {
-          router.push("/communities");
-          setIsMobileMenuOpen(false);
-        }}
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold text-zinc-400 uppercase hover:text-white"
+        onClick={() => router.push("/communities")}
       >
         Communities
       </Button>
       <Button
-        className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text w-full bg-transparent hover:text-purple-700"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold text-zinc-400 uppercase hover:text-white"
         onClick={() => handleRoute("/orders")}
       >
         Orders
         {unreadMsgCount > 0 && (
-          <span className="bg-shopstr-purple dark:bg-shopstr-yellow dark:text-dark-bg ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold text-white">
+          <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-yellow-400 px-1.5 text-xs font-bold text-black">
             {unreadMsgCount}
           </span>
         )}
       </Button>
       <Button
-        className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text w-full bg-transparent hover:text-purple-700"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold text-zinc-400 uppercase hover:text-white"
         onClick={() => handleRoute("/wallet")}
       >
         Wallet
       </Button>
       <Button
-        className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text w-full bg-transparent hover:text-purple-700"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold text-zinc-400 uppercase hover:text-white"
         onClick={() => handleRoute("/my-listings")}
       >
         My Listings
       </Button>
       <Button
-        className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text w-full bg-transparent hover:text-purple-700"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold text-zinc-400 uppercase hover:text-white"
         onClick={() => handleRoute("/cart")}
       >
         Cart
         {cartQuantity > 0 && (
-          <span className="bg-shopstr-purple dark:bg-shopstr-yellow dark:text-dark-bg ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold text-white">
+          <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-yellow-400 px-1.5 text-xs font-bold text-black">
             {cartQuantity}
           </span>
         )}
@@ -179,15 +165,12 @@ const TopNav = ({
   );
 
   return (
-    <div
-      data-main-nav
-      className="bg-light-fg dark:bg-dark-fg fixed top-0 z-50 w-full border-b border-zinc-200 shadow-lg dark:border-zinc-800"
-    >
-      <div className="flex items-center py-2 pr-4">
-        <div className="flex flex-shrink-0 items-center">
+    <div className="fixed top-0 z-50 w-full border-b border-zinc-800 bg-[#161616] shadow-lg">
+      <div className="flex items-center justify-between py-2 pr-4">
+        <div className="flex items-center">
           <Button
             onClick={handleHomeClick}
-            className={`text-light-text dark:text-dark-text dark:hover:text-accent-dark-text flex items-center bg-transparent duration-200 hover:text-purple-700`}
+            className="flex items-center bg-transparent text-white hover:text-yellow-400"
           >
             <Image
               alt="Shopstr logo"
@@ -197,138 +180,124 @@ const TopNav = ({
               width={40}
             />
             <span
-              className={`ml-2 text-xl md:hidden lg:flex ${
-                isHomeActive ? "font-bold" : ""
+              className={`ml-2 hidden text-xl font-black tracking-tighter uppercase md:flex ${
+                isHomeActive ? "text-white" : "text-white"
               }`}
             >
               {shopName != "" ? shopName : "Shopstr"}
             </span>
           </Button>
         </div>
-        <div className="ml-auto flex flex-row items-center md:hidden">
+        <div className="flex flex-row items-center md:hidden">
           <Button
             className="bg-transparent"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
-            <Bars4Icon className="text-light-text dark:text-dark-text h-6 w-6" />
+            <Bars4Icon className="h-6 w-6 text-white" />
           </Button>
           {signedIn ? (
             <ProfileWithDropdown
               pubkey={userPubkey!}
-              baseClassname="flex-shrink-0 dark:hover:shopstr-yellow-light rounded-3xl hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
+              baseClassname="w-auto rounded-3xl hover:bg-[#111]"
               dropDownKeys={[
                 "shop_profile",
                 "user_profile",
                 "settings",
                 "logout",
               ]}
-              nameClassname="hidden"
+              nameClassname="md:block"
             />
           ) : (
             <Button
               onClick={onOpen}
-              className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text bg-transparent hover:text-purple-700"
+              className="w-full bg-transparent font-bold text-yellow-400 hover:text-white"
             >
               Sign In
             </Button>
           )}
         </div>
-        <div className="text-light-text dark:text-dark-text hidden flex-1 items-center justify-evenly md:flex">
+        <div className="hidden items-center gap-1 font-bold text-zinc-400 md:flex">
           <Button
-            className={`dark:hover:text-accent-dark-text bg-transparent hover:text-purple-700 ${
-              isHomeActive
-                ? "text-shopstr-purple dark:text-shopstr-yellow font-bold"
-                : "text-light-text dark:text-dark-text"
+            className={`bg-transparent text-xs font-black tracking-widest uppercase hover:text-white ${
+              isHomeActive ? "text-yellow-400" : ""
             }`}
             onClick={handleHomeClick}
           >
             Marketplace
           </Button>
+          <span className="text-zinc-700">|</span>
           <Button
-            className={`dark:hover:text-accent-dark-text bg-transparent hover:text-purple-700 ${
-              isCommunitiesActive
-                ? "text-shopstr-purple dark:text-shopstr-yellow font-bold"
-                : "text-light-text dark:text-dark-text"
+            className={`bg-transparent text-xs font-black tracking-widest uppercase hover:text-white ${
+              isCommunitiesActive ? "text-yellow-400" : ""
             }`}
             onClick={() => router.push("/communities")}
           >
             Communities
           </Button>
+          <span className="text-zinc-700">|</span>
           <Button
-            className={`dark:hover:text-accent-dark-text bg-transparent hover:text-purple-700 ${
-              isMessagesActive
-                ? "text-shopstr-purple dark:text-shopstr-yellow font-bold"
-                : "text-light-text dark:text-dark-text"
-            }`}
+            className="bg-transparent text-xs font-black tracking-widest uppercase hover:text-white"
             onClick={() => handleRoute("/orders")}
           >
             Orders
             {unreadMsgCount > 0 && (
-              <span className="bg-shopstr-purple dark:bg-shopstr-yellow dark:text-dark-bg ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold text-white">
+              <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-yellow-400 px-1.5 text-xs font-bold text-black">
                 {unreadMsgCount}
               </span>
             )}
           </Button>
+          <span className="text-zinc-700">|</span>
           <Button
-            className={`dark:hover:text-accent-dark-text bg-transparent hover:text-purple-700 ${
-              isWalletActive
-                ? "text-shopstr-purple dark:text-shopstr-yellow font-bold"
-                : "text-light-text dark:text-dark-text"
-            }`}
+            className="bg-transparent text-xs font-black tracking-widest uppercase hover:text-white"
             onClick={() => handleRoute("/wallet")}
           >
             Wallet
           </Button>
+          <span className="text-zinc-700">|</span>
           <Button
-            className={`dark:hover:text-accent-dark-text bg-transparent hover:text-purple-700 ${
-              isMyListingsActive
-                ? "text-shopstr-purple dark:text-shopstr-yellow font-bold"
-                : "text-light-text dark:text-dark-text"
-            }`}
+            className="bg-transparent text-xs font-black tracking-widest uppercase hover:text-white"
             onClick={() => handleRoute("/my-listings")}
           >
             My Listings
           </Button>
+          <span className="text-zinc-700">|</span>
           <Button
-            className={`dark:hover:text-accent-dark-text bg-transparent hover:text-purple-700 ${
-              isCartActive
-                ? "text-shopstr-purple dark:text-shopstr-yellow font-bold"
-                : "text-light-text dark:text-dark-text"
-            }`}
+            className="bg-transparent text-xs font-black tracking-widest uppercase hover:text-white"
             onClick={() => handleRoute("/cart")}
           >
             Cart
             {cartQuantity > 0 && (
-              <span className="bg-shopstr-purple dark:bg-shopstr-yellow dark:text-dark-bg ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold text-white">
+              <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-yellow-400 px-1.5 text-xs font-bold text-black">
                 {cartQuantity}
               </span>
             )}
           </Button>
-        </div>
-        <div className="hidden flex-shrink-0 items-center md:flex">
+          <span className="text-zinc-700">|</span>
           {signedIn ? (
-            <ProfileWithDropdown
-              pubkey={userPubkey!}
-              baseClassname="justify-start dark:hover:shopstr-yellow-light pl-2 rounded-3xl py-2 hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
-              dropDownKeys={[
-                "shop_profile",
-                "user_profile",
-                "settings",
-                "logout",
-              ]}
-              nameClassname="lg:block"
-            />
+            <>
+              <ProfileWithDropdown
+                pubkey={userPubkey!}
+                baseClassname="justify-start pl-4 rounded-3xl py-2 hover:bg-[#111]"
+                dropDownKeys={[
+                  "shop_profile",
+                  "user_profile",
+                  "settings",
+                  "logout",
+                ]}
+                nameClassname="md:block"
+              />
+            </>
           ) : (
-            <Button
-              onClick={onOpen}
-              className={`dark:hover:text-accent-dark-text bg-transparent duration-200 hover:text-purple-700 ${
-                isProfileActive
-                  ? "text-shopstr-purple dark:text-shopstr-yellow font-bold"
-                  : "text-light-text dark:text-dark-text"
-              }`}
-            >
-              Sign In
-            </Button>
+            <>
+              <Button
+                onClick={onOpen}
+                className={`bg-transparent text-xs font-black tracking-widest uppercase hover:text-white ${
+                  isProfileActive ? "text-yellow-400" : ""
+                }`}
+              >
+                Sign In
+              </Button>
+            </>
           )}
         </div>
       </div>

@@ -1,17 +1,35 @@
 import { NostrManager } from "./nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 import {
   getFailedRelayPublishes,
   clearFailedRelayPublish,
 } from "@/utils/db/db-client";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 
+type RetryFailedRelayPublishesOptions = {
+  silent?: boolean;
+};
+
+function canSignWithoutUserPrompt(signer: NostrSigner): boolean {
+  if (signer instanceof NostrNSecSigner) {
+    return signer.canSignWithoutPrompt();
+  }
+
+  return false;
+}
+
 export async function retryFailedRelayPublishes(
   nostr: NostrManager,
-  signer?: NostrSigner
+  signer?: NostrSigner,
+  options: RetryFailedRelayPublishesOptions = {}
 ): Promise<void> {
   try {
     if (!signer) {
+      return;
+    }
+
+    if (options.silent && !canSignWithoutUserPrompt(signer)) {
       return;
     }
 

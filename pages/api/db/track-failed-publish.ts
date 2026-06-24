@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { trackFailedRelayPublishRecord } from "@/utils/db/db-service";
+import { logger } from "@/utils/logger";
 import { applyRateLimit } from "@/utils/rate-limit";
 import { verifyEvent } from "nostr-tools";
 import {
@@ -79,7 +80,7 @@ export default async function handler(
 
     return res.status(200).json({ success: true });
   } catch (error) {
-    console.error("Error tracking failed relay publish:", error);
+    logger.error("Error tracking failed relay publish", undefined, error);
     return res.status(500).json({ error: "Internal server error" });
   }
 }

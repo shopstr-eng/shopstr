@@ -49,13 +49,11 @@ export default function SectionEditor({
     onChange({ ...section, ...fields });
 
   const enabled = section.enabled !== false;
-  const borderClass = enabled
-    ? "border-gray-400 dark:border-gray-500"
-    : "border-gray-200 dark:border-gray-700";
+  const borderClass = enabled ? "border-zinc-700" : "border-zinc-800";
 
   return (
     <div
-      className={`rounded-lg border-2 ${borderClass} bg-light-fg dark:bg-dark-fg`}
+      className={`rounded-lg border-2 ${borderClass} border border-zinc-800 bg-[#161616]`}
     >
       <div className="flex items-center gap-2 p-3">
         <button
@@ -64,20 +62,20 @@ export default function SectionEditor({
           className="flex flex-1 items-center gap-2 text-left"
         >
           <ChevronRightIcon
-            className={`text-light-text dark:text-dark-text h-4 w-4 flex-shrink-0 transition-transform ${
+            className={`h-4 w-4 flex-shrink-0 text-white transition-transform ${
               expanded ? "rotate-90" : ""
             }`}
           />
-          <span className="text-light-text dark:text-dark-text text-sm font-bold">
+          <span className="text-sm font-bold text-white">
             {SECTION_LABELS[section.type]}
           </span>
           {section.heading && (
-            <span className="truncate text-xs text-gray-400 dark:text-gray-500">
+            <span className="truncate text-xs text-zinc-500">
               — {section.heading}
             </span>
           )}
         </button>
-        <label className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+        <label className="flex items-center gap-1 text-xs text-zinc-400">
           <input
             type="checkbox"
             checked={enabled}
@@ -90,7 +88,7 @@ export default function SectionEditor({
           type="button"
           onClick={onMoveUp}
           disabled={isFirst}
-          className="text-light-text dark:text-dark-text rounded p-1 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-gray-700"
+          className="rounded p-1 text-white hover:bg-[#1f1f1f] disabled:opacity-30"
         >
           <ChevronUpIcon className="h-4 w-4" />
         </button>
@@ -98,21 +96,21 @@ export default function SectionEditor({
           type="button"
           onClick={onMoveDown}
           disabled={isLast}
-          className="text-light-text dark:text-dark-text rounded p-1 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-gray-700"
+          className="rounded p-1 text-white hover:bg-[#1f1f1f] disabled:opacity-30"
         >
           <ChevronDownIcon className="h-4 w-4" />
         </button>
         <button
           type="button"
           onClick={onRemove}
-          className="rounded p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+          className="rounded p-1 text-red-500 hover:bg-red-50"
         >
           <TrashIcon className="h-4 w-4" />
         </button>
       </div>
 
       {expanded && (
-        <div className="dark:border-dark-fg space-y-3 border-t-2 border-gray-200 p-3">
+        <div className="space-y-3 border-t-2 border-zinc-800 p-3">
           {/* Common fields for most sections */}
           {section.type !== "image" && section.type !== "reviews" && (
             <Input
@@ -150,7 +148,7 @@ export default function SectionEditor({
           {/* Image upload for relevant sections */}
           {["hero", "about", "story", "image"].includes(section.type) && (
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+              <label className="mb-1 block text-xs font-medium text-zinc-400">
                 Image
               </label>
               {section.image && (
@@ -161,7 +159,7 @@ export default function SectionEditor({
                 />
               )}
               <FileUploaderButton
-                className="text-light-text dark:border-dark-fg dark:text-dark-text rounded border border-black px-3 py-1.5 text-xs font-bold"
+                className="rounded border border-yellow-400 bg-yellow-400 px-3 py-1.5 text-xs font-black text-black shadow-[2px_2px_0px_0px_#ffffff]"
                 imgCallbackOnUpload={(url) => update({ image: url })}
               >
                 {section.image ? "Change Image" : "Upload Image"}
@@ -181,13 +179,11 @@ export default function SectionEditor({
           {/* Image position for sections with side-by-side layout */}
           {["about", "story"].includes(section.type) && (
             <div className="flex gap-2">
-              <label className="text-xs text-gray-500 dark:text-gray-400">
-                Image Position:
-              </label>
+              <label className="text-xs text-zinc-400">Image Position:</label>
               {(["left", "right"] as const).map((pos) => (
                 <label
                   key={pos}
-                  className="text-light-text dark:text-dark-text flex items-center gap-1 text-xs"
+                  className="flex items-center gap-1 text-xs text-white"
                 >
                   <input
                     type="radio"
@@ -220,7 +216,7 @@ export default function SectionEditor({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-gray-500 dark:text-gray-400">
+                <label className="mb-1 block text-xs text-zinc-400">
                   Overlay Opacity: {section.overlayOpacity ?? 40}%
                 </label>
                 <input
@@ -235,7 +231,7 @@ export default function SectionEditor({
                   className="w-full"
                 />
               </div>
-              <label className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <label className="flex items-center gap-2 text-xs text-zinc-400">
                 <input
                   type="checkbox"
                   checked={!!section.fullWidth}
@@ -258,11 +254,11 @@ export default function SectionEditor({
               />
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="mb-1 block text-xs text-gray-500 dark:text-gray-400">
+                  <label className="mb-1 block text-xs text-zinc-400">
                     Layout
                   </label>
                   <select
-                    className="bg-light-fg text-light-text dark:bg-dark-fg dark:text-dark-text w-full rounded border border-gray-300 p-1.5 text-xs dark:border-gray-600"
+                    className="w-full rounded border border-zinc-700 bg-[#111] p-1.5 text-xs text-white"
                     value={section.productLayout || "grid"}
                     onChange={(e) =>
                       update({
@@ -304,7 +300,7 @@ export default function SectionEditor({
           {section.type === "image" && (
             <>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">
+                <label className="mb-1 block text-xs font-medium text-zinc-400">
                   Image
                 </label>
                 {section.image && (
@@ -315,7 +311,7 @@ export default function SectionEditor({
                   />
                 )}
                 <FileUploaderButton
-                  className="text-light-text dark:border-dark-fg dark:text-dark-text rounded border border-black px-3 py-1.5 text-xs font-bold"
+                  className="rounded border border-yellow-400 bg-yellow-400 px-3 py-1.5 text-xs font-black text-black shadow-[2px_2px_0px_0px_#ffffff]"
                   imgCallbackOnUpload={(url) => update({ image: url })}
                 >
                   {section.image ? "Change Image" : "Upload Image"}
@@ -337,7 +333,7 @@ export default function SectionEditor({
                 value={section.caption || ""}
                 onChange={(e) => update({ caption: e.target.value })}
               />
-              <label className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <label className="flex items-center gap-2 text-xs text-zinc-400">
                 <input
                   type="checkbox"
                   checked={!!section.fullWidth}
@@ -382,7 +378,7 @@ export default function SectionEditor({
               {(section.items || []).map((item, i) => (
                 <div
                   key={i}
-                  className="bg-light-bg dark:border-dark-fg dark:bg-dark-bg rounded border border-gray-200 p-2"
+                  className="rounded border border-zinc-800 bg-[#111] p-2"
                 >
                   <div className="flex items-start gap-2">
                     <div className="flex-1 space-y-1">
@@ -435,7 +431,7 @@ export default function SectionEditor({
                     ],
                   })
                 }
-                className="text-xs font-bold text-blue-600 hover:underline dark:text-blue-400"
+                className="text-xs font-bold text-yellow-300 hover:underline"
               >
                 + Add FAQ Item
               </button>
@@ -448,7 +444,7 @@ export default function SectionEditor({
               {(section.testimonials || []).map((t, i) => (
                 <div
                   key={i}
-                  className="bg-light-bg dark:border-dark-fg dark:bg-dark-bg rounded border border-gray-200 p-2"
+                  className="rounded border border-zinc-800 bg-[#111] p-2"
                 >
                   <div className="flex items-start gap-2">
                     <div className="flex-1 space-y-1">
@@ -501,7 +497,7 @@ export default function SectionEditor({
                     ],
                   })
                 }
-                className="text-xs font-bold text-blue-600 hover:underline dark:text-blue-400"
+                className="text-xs font-bold text-yellow-300 hover:underline"
               >
                 + Add Testimonial
               </button>
@@ -514,7 +510,7 @@ export default function SectionEditor({
               {(section.ingredientItems || []).map((item, i) => (
                 <div
                   key={i}
-                  className="bg-light-bg dark:border-dark-fg dark:bg-dark-bg flex items-center gap-2 rounded border border-gray-200 p-2"
+                  className="flex items-center gap-2 rounded border border-zinc-800 bg-[#111] p-2"
                 >
                   <div className="flex-1 space-y-1">
                     <Input
@@ -567,7 +563,7 @@ export default function SectionEditor({
                     ],
                   })
                 }
-                className="text-xs font-bold text-blue-600 hover:underline dark:text-blue-400"
+                className="text-xs font-bold text-yellow-300 hover:underline"
               >
                 + Add Ingredient
               </button>
@@ -576,7 +572,7 @@ export default function SectionEditor({
 
           {/* Reviews section */}
           {section.type === "reviews" && (
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-zinc-400">
               This section automatically displays your customer reviews from
               Nostr.
             </p>

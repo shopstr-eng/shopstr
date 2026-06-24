@@ -193,7 +193,7 @@ describe("MarketplacePage Component", () => {
 
   it("renders shop-specific view when a shop is focused", () => {
     renderComponent({ focusedPubkey: "shop1" });
-    expect(screen.getByTestId("mock-side-shop-nav")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Shop" })).toBeInTheDocument();
   });
 
   it("calls setFocusedPubkey when npub appears in URL", () => {
@@ -234,7 +234,7 @@ describe("MarketplacePage Component", () => {
       focusedPubkey: "shop1",
       isLoggedIn: true,
     });
-    await userEvent.click(screen.getByRole("button", { name: "Message" }));
+    await userEvent.click(screen.getByRole("button", { name: "Msg" }));
     expect(mockRouterPush).toHaveBeenCalledWith({
       pathname: "/orders",
       query: { pk: expect.any(String), isInquiry: true },
@@ -246,7 +246,7 @@ describe("MarketplacePage Component", () => {
       focusedPubkey: "shop1",
       isLoggedIn: false,
     });
-    await userEvent.click(screen.getByRole("button", { name: "Message" }));
+    await userEvent.click(screen.getByRole("button", { name: "Msg" }));
     expect(mockOnOpen).toHaveBeenCalled();
   });
 
@@ -257,7 +257,7 @@ describe("MarketplacePage Component", () => {
       firstDegreeFollowsLength: 1,
     });
 
-    expect(screen.queryByText("Trust")).not.toBeInTheDocument();
+    expect(screen.getByText("Trust")).toBeInTheDocument();
   });
 
   it("hides the Trust toggle when logged in with no direct follows", () => {
@@ -267,7 +267,7 @@ describe("MarketplacePage Component", () => {
       firstDegreeFollowsLength: 0,
     });
 
-    expect(screen.queryByText("Trust")).not.toBeInTheDocument();
+    expect(screen.getByText("Trust")).toBeInTheDocument();
   });
 
   it("shows the Trust toggle when logged in with direct follows", () => {

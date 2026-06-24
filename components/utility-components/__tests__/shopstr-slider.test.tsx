@@ -71,12 +71,9 @@ describe("ShopstrSlider", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("sets slider color based on the theme", () => {
+  it("uses revamp slider styling independent of theme color prop", () => {
     const { rerender } = renderWithContext(defaultFollowsContext);
-    expect(screen.getByTestId("slider")).toHaveAttribute(
-      "data-color",
-      "secondary"
-    );
+    expect(screen.getByTestId("slider")).not.toHaveAttribute("data-color");
 
     mockUseTheme.theme = "dark";
     rerender(
@@ -84,10 +81,7 @@ describe("ShopstrSlider", () => {
         <ShopstrSlider />
       </FollowsContext.Provider>
     );
-    expect(screen.getByTestId("slider")).toHaveAttribute(
-      "data-color",
-      "warning"
-    );
+    expect(screen.getByTestId("slider")).not.toHaveAttribute("data-color");
   });
 
   it("uses firstDegreeFollowsLength for maxValue when available", () => {

@@ -39,8 +39,10 @@ export const SHIPPING_OPTIONS = [
   "Added Cost", // you are going to charge for shipping
 ];
 
-export const SHOPSTRBUTTONCLASSNAMES =
-  "text-dark-text dark:text-light-text shadow-lg bg-gradient-to-tr from-shopstr-purple via-shopstr-purple-light to-shopstr-purple min-w-fit dark:from-shopstr-yellow dark:via-shopstr-yellow-light dark:to-shopstr-yellow";
+export const NEO_BTN =
+  "rounded-xl border-2 border-transparent bg-yellow-400 font-black uppercase tracking-widest text-black shadow-[2px_2px_0px_0px_#ffffff] hover:bg-yellow-500 transition-all active:shadow-none active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed";
+
+export const SHOPSTRBUTTONCLASSNAMES = NEO_BTN;
 
 export const AVATARBADGEBUTTONCLASSNAMES =
   "h-10 w-10 min-w-0 rounded-full border-2 border-white p-0 text-dark-text shadow-md bg-gradient-to-tr from-shopstr-purple via-shopstr-purple-light to-shopstr-purple dark:text-light-text dark:from-shopstr-yellow dark:via-shopstr-yellow-light dark:to-shopstr-yellow";
@@ -52,4 +54,4 @@ export const BLUEBUTTONCLASSNAMES =
   "bg-primary-blue border-2 border-black text-white font-bold hover:opacity-90 transition-opacity";
 
 export const PREVNEXTBUTTONSTYLES =
-  "absolute z-10 top-1/2 transform -translate-y-1/2 p-2 bg-white dark:bg-neutral-800 bg-opacity-60 rounded-full shadow-md hover:bg-opacity-90 transition duration-200";
+  "absolute z-10 top-1/2 transform -translate-y-1/2 p-2 bg-[#161616] border border-zinc-700 text-white rounded-lg shadow-[2px_2px_0px_0px_#ffffff] hover:bg-zinc-800 transition duration-200";

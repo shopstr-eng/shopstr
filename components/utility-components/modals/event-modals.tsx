@@ -19,17 +19,32 @@ export const RawEventModal = ({
   rawEvent,
 }: RawEventModalProps) => {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="2xl" scrollBehavior="inside">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="2xl"
+      scrollBehavior="inside"
+      backdrop="blur"
+      classNames={{
+        base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+        header: "border-b border-zinc-800 text-white",
+        body: "p-0 bg-[#111]",
+        closeButton: "hover:bg-white/10 text-white",
+      }}
+    >
       <ModalContent>
-        <ModalHeader>Raw Event JSON</ModalHeader>
+        <ModalHeader className="font-black tracking-tighter uppercase">
+          Raw Event JSON
+        </ModalHeader>
         <ModalBody>
           <Snippet
             symbol=""
             codeString={JSON.stringify(rawEvent, null, 2)}
-            className="w-full items-start"
+            className="w-full items-start overflow-hidden bg-transparent p-4 text-zinc-300"
+            hideCopyButton={false}
           >
-            <div className="max-h-[60vh] w-full overflow-y-auto">
-              <pre className="font-mono text-xs break-all whitespace-pre-wrap">
+            <div className="max-h-[50vh] w-full overflow-y-auto pr-2 md:max-h-[60vh]">
+              <pre className="font-mono text-[10px] break-all whitespace-pre-wrap text-green-400 md:text-xs">
                 {JSON.stringify(rawEvent, null, 2)}
               </pre>
             </div>
@@ -52,15 +67,35 @@ export const EventIdModal = ({
   rawEvent,
 }: EventIdModalProps) => {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="lg">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="lg"
+      backdrop="blur"
+      classNames={{
+        base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+        header: "border-b border-zinc-800 text-white",
+        body: "py-6 text-zinc-300",
+        closeButton: "hover:bg-white/10 text-white",
+      }}
+    >
       <ModalContent>
-        <ModalHeader>Event ID</ModalHeader>
+        <ModalHeader className="font-black tracking-tighter uppercase">
+          Event ID
+        </ModalHeader>
         <ModalBody className="pb-6">
           <div className="flex flex-col gap-4">
             <div className="w-full">
-              <p className="mb-1 text-sm font-semibold">Hex ID:</p>
-              <Snippet symbol="" codeString={rawEvent?.id} className="w-full">
-                <span className="font-mono text-sm break-all whitespace-normal">
+              <p className="mb-2 text-xs font-bold tracking-wider text-zinc-500 uppercase">
+                Hex ID:
+              </p>
+              <Snippet
+                symbol=""
+                codeString={rawEvent?.id}
+                className="w-full rounded-xl border border-zinc-800 bg-[#111] py-3 text-zinc-300"
+                classNames={{ pre: "font-mono" }}
+              >
+                <span className="font-mono text-xs break-all whitespace-normal md:text-sm">
                   {rawEvent?.id}
                 </span>
               </Snippet>
@@ -68,13 +103,16 @@ export const EventIdModal = ({
 
             {rawEvent && (
               <div className="w-full">
-                <p className="mb-1 text-sm font-semibold">Bech32 Note ID:</p>
+                <p className="mb-2 text-xs font-bold tracking-wider text-zinc-500 uppercase">
+                  Bech32 Note ID:
+                </p>
                 <Snippet
                   symbol=""
                   codeString={nip19.noteEncode(rawEvent.id)}
-                  className="w-full"
+                  className="w-full rounded-xl border border-zinc-800 bg-[#111] py-3 text-zinc-300"
+                  classNames={{ pre: "font-mono" }}
                 >
-                  <span className="font-mono text-sm break-all whitespace-normal">
+                  <span className="font-mono text-xs break-all whitespace-normal md:text-sm">
                     {nip19.noteEncode(rawEvent.id)}
                   </span>
                 </Snippet>

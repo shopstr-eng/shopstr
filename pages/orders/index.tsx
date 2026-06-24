@@ -8,7 +8,7 @@ export default function MessageView() {
 
   return (
     <ProtectedRoute>
-      <div className="bg-light-bg dark:bg-dark-bg flex min-h-screen flex-col pt-16">
+      <div className="flex min-h-screen flex-col bg-[#111] pt-16 text-white selection:bg-yellow-400 selection:text-black">
         <MessageFeed
           {...(isInquiry !== undefined
             ? { isInquiry: isInquiry === "true" }

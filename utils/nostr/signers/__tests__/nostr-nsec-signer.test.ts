@@ -184,6 +184,30 @@ describe("NostrNSecSigner", () => {
     expect(pt).toBe("decryptedMessage");
   });
 
+  it("_getPrivKey() exits when passphrase challenge is aborted", async () => {
+    (CryptoJS.AES.decrypt as jest.Mock).mockImplementationOnce(() => ({
+      toString: () => "",
+    }));
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const abortingCH = jest.fn<
+      Promise<{ res: string; remind: boolean }>,
+      [string, string, () => void, AbortSignal, Error?]
+    >((_type, _challenge, abort, abortSignal) => {
+      return new Promise((resolve) => {
+        abortSignal.addEventListener("abort", () => {
+          resolve({ res: "", remind: false });
+        });
+        abort();
+      });
+    });
+
+    const s = new NostrNSecSigner({ encryptedPrivKey: encrypted }, abortingCH);
+    await expect(s._getPrivKey()).rejects.toThrow("Action cancelled by user");
+    consoleErrorSpy.mockRestore();
+  });
+
   it("close()", async () => {
     const s = new NostrNSecSigner({ encryptedPrivKey: encrypted }, mockCH);
     (s as any).rememberedPassphrase = "foo";

@@ -3,7 +3,6 @@ import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import ClaimButton from "../utility-components/claim-button";
-import LinkPreview from "./link-preview";
 import { NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 import { getTokenMetadata } from "@cashu/cashu-ts";
@@ -13,31 +12,6 @@ function isDecodableToken(token: string): boolean {
   try {
     getTokenMetadata(token);
     return true;
-  } catch {
-    return false;
-  }
-}
-
-function decodeBuyerPubkeyFromContent(content: string): string | null {
-  const npubMatch = content.match(/npub[a-zA-Z0-9]+/);
-  if (!npubMatch) {
-    return null;
-  }
-
-  try {
-    const decoded = nip19.decode(npubMatch[0]);
-    return decoded.type === "npub" && typeof decoded.data === "string"
-      ? decoded.data
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function isDecodableNpub(value: string): boolean {
-  try {
-    const decoded = nip19.decode(value);
-    return decoded.type === "npub" && typeof decoded.data === "string";
   } catch {
     return false;
   }
@@ -65,9 +39,19 @@ const ChatMessage = ({
   const { pubkey: userPubkey } = useContext(SignerContext);
 
   useEffect(() => {
-    if (messageEvent?.content && messageEvent.content.includes("npub1")) {
-      const buyerPubkey = decodeBuyerPubkeyFromContent(messageEvent.content);
-      setBuyerPubkey(buyerPubkey || "");
+    if (messageEvent?.content && messageEvent.content.includes("npub")) {
+      // Find word containing npub using regex
+      const npubMatch = messageEvent.content.match(/npub[a-zA-Z0-9]+/);
+      if (npubMatch && setBuyerPubkey) {
+        try {
+          const decoded = nip19.decode(npubMatch[0]);
+          setBuyerPubkey(
+            decoded.type === "npub" ? (decoded.data as string) : ""
+          );
+        } catch {
+          setBuyerPubkey("");
+        }
+      }
     } else {
       setBuyerPubkey("");
     }
@@ -97,7 +81,7 @@ const ChatMessage = ({
     );
     setProductAddress?.(productAddress as string);
     setOrderId?.(orderId as string);
-  }, [messageEvent]);
+  }, [messageEvent, setCanReview, setOrderId, setProductAddress]);
 
   const cashuMatch = messageEvent.content.match(/cashu[A-Za-z]/);
   const cashuPrefix = cashuMatch ? cashuMatch[0] : null;
@@ -130,36 +114,33 @@ const ChatMessage = ({
   };
 
   const renderMessageContent = (content: string) => {
-    const parts = content.split(/(https?:\/\/[^\s<>"']+)/g);
-    return parts.map((part, index) => {
-      if (/^https?:\/\//.test(part)) {
+    const words = content.split(/(\s+)/);
+    return words.map((word, index) => {
+      const npubMatch = word.match(/npub[a-zA-Z0-9]+/);
+      if (npubMatch) {
+        try {
+          const decoded = nip19.decode(npubMatch[0]);
+          if (decoded.type !== "npub") return word;
+        } catch {
+          return word;
+        }
+
         return (
-          <span key={index} className="block">
-            <LinkPreview url={part} isUserMessage={isUserMessage} />
+          <span
+            key={index}
+            className="cursor-pointer font-bold underline hover:text-white/80"
+            onClick={() => {
+              router.replace({
+                pathname: "/orders",
+                query: { pk: npubMatch[0], isInquiry: true },
+              });
+            }}
+          >
+            {word}
           </span>
         );
       }
-      const subParts = part.split(/(\s+)/);
-      return subParts.map((sub, subIndex) => {
-        const npubMatch = sub.match(/npub[a-zA-Z0-9]+/);
-        if (npubMatch && isDecodableNpub(npubMatch[0])) {
-          return (
-            <span
-              key={`${index}-${subIndex}`}
-              className="text-shopstr-purple dark:text-shopstr-yellow cursor-pointer hover:underline"
-              onClick={() => {
-                router.replace({
-                  pathname: "/orders",
-                  query: { pk: npubMatch[0], isInquiry: true },
-                });
-              }}
-            >
-              {sub}
-            </span>
-          );
-        }
-        return sub;
-      });
+      return word;
     });
   };
 
@@ -177,13 +158,13 @@ const ChatMessage = ({
       }`}
     >
       <div
-        className={`rounded-t-large flex max-w-[90%] flex-col p-3 ${
+        className={`flex max-w-[85%] flex-col rounded-2xl p-4 shadow-md md:max-w-[60%] ${
           isUserMessage
-            ? "dark:from-shopstr-yellow-dark from-shopstr-purple to-shopstr-purple-light dark:to-shopstr-yellow-light dark:text-dark-bg rounded-bl-lg bg-gradient-to-br text-white"
-            : "text-light-text dark:text-dark-text rounded-br-lg bg-gray-300 dark:bg-gray-700"
+            ? "rounded-tr-sm bg-yellow-400 text-black shadow-[2px_2px_0px_0px_rgba(255,255,255,0.2)]"
+            : "rounded-tl-sm border border-zinc-700 bg-[#27272a] text-white shadow-[2px_2px_0px_0px_#000000]"
         }`}
       >
-        <div className="flex flex-col overflow-x-hidden break-all">
+        <p className="inline-block flex-wrap overflow-x-hidden break-all">
           {cashuPrefix && canDecodeToken && tokenAfterCashuVersion ? (
             <>
               {renderMessageContent(contentBeforeCashu!)}
@@ -202,8 +183,12 @@ const ChatMessage = ({
               </div>
             </>
           ) : orderData ? (
-            <div className="border-shopstr-purple dark:border-shopstr-yellow flex flex-col gap-2 border-l-4 pl-3">
-              <span className="text-sm font-bold uppercase opacity-70">
+            <div
+              className={`flex flex-col gap-2 border-l-4 pl-3 ${
+                isUserMessage ? "border-black/20" : "border-yellow-400"
+              }`}
+            >
+              <span className="text-xs font-black tracking-wider uppercase opacity-70">
                 ⚡ Zapsnag Order
               </span>
               <div className="font-semibold">{orderData.shipping.name}</div>
@@ -220,10 +205,10 @@ const ChatMessage = ({
           ) : (
             renderMessageContent(messageEvent.content)
           )}
-        </div>
+        </p>
         <div className="m-1"></div>
         <span
-          className={`text-xs opacity-50 ${
+          className={`text-[10px] font-bold tracking-wider uppercase opacity-60 ${
             isUserMessage ? "text-right" : "text-left"
           }`}
         >

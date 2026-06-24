@@ -1,14 +1,9 @@
 import { useState } from "react";
-import Link from "next/link";
-import { ArrowLeftIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 
 export default function PrivacyPolicy() {
-  const [openItems, setOpenItems] = useState<number[]>([]);
-
-  const toggle = (i: number) =>
-    setOpenItems((prev) =>
-      prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]
-    );
+  const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>(
+    {}
+  );
 
   const policyContent = [
     {
@@ -63,61 +58,76 @@ export default function PrivacyPolicy() {
     },
   ];
 
+  const toggleItem = (index: number) => {
+    setExpandedItems((prev) => ({ ...prev, [index]: !prev[index] }));
+  };
+
   return (
-    <div className="bg-light-bg dark:bg-dark-bg flex min-h-screen flex-col pt-24 md:pb-20">
-      <div className="container mx-auto max-w-6xl px-4">
-        <div className="mb-6 flex justify-end">
-          <Link href="/" passHref legacyBehavior>
-            <a className="border-shopstr-purple/30 text-shopstr-purple hover:bg-shopstr-purple/10 dark:border-shopstr-yellow/30 dark:text-shopstr-yellow dark:hover:bg-shopstr-yellow/10 inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors">
-              <ArrowLeftIcon className="h-4 w-4" />
-              Back to Home
-            </a>
-          </Link>
-        </div>
-        <h1 className="text-light-text dark:text-dark-text mb-8 text-center text-3xl font-bold">
-          Privacy Policy
-        </h1>
+    <div className="min-h-screen bg-[#050505] pt-32 pb-20 text-white">
+      <div className="container mx-auto max-w-3xl px-4">
+        {/* Header */}
+        <div className="mb-16 flex flex-col items-center text-center">
+          <h1 className="mb-6 text-3xl font-black tracking-tight uppercase md:text-5xl lg:text-6xl">
+            Privacy Policy
+          </h1>
+          <p className="mb-8 text-lg text-gray-400">
+            How Shopstr protects your privacy
+          </p>
 
-        <p className="text-light-text/80 dark:text-dark-text/80 mx-auto mb-10 max-w-3xl text-center">
-          How Shopstr protects your privacy
-        </p>
-
-        <div className="text-light-text/70 dark:text-dark-text/70 mb-4 text-right text-sm">
-          Last updated: 2025-04-25
+          {/* Date Pill */}
+          <div className="inline-flex items-center rounded-lg border border-white/10 bg-[#111] px-4 py-2 text-sm text-gray-400">
+            <span>Last updated:</span>
+            <span className="text-shopstr-yellow ml-2 font-bold">
+              2025-04-25
+            </span>
+          </div>
         </div>
 
-        <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
-          {policyContent.map((section, i) => (
-            <div
-              key={i}
-              className={
-                i < policyContent.length - 1
-                  ? "border-b border-gray-200 dark:border-gray-700"
-                  : ""
-              }
-            >
-              <button
-                onClick={() => toggle(i)}
-                className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-900/50"
+        {/* Content List */}
+        <div className="space-y-3">
+          {policyContent.map((item, index) => {
+            const isOpen = expandedItems[index];
+            return (
+              <div
+                key={index}
+                className="overflow-hidden rounded-xl border border-white/10 bg-[#111]"
               >
-                <span className="text-light-text dark:text-dark-text font-medium">
-                  {section.title}
-                </span>
-                <ChevronDownIcon
-                  className={`text-light-text/60 dark:text-dark-text/60 ml-4 h-5 w-5 flex-shrink-0 transition-transform duration-200 ${
-                    openItems.includes(i) ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-              {openItems.includes(i) && (
-                <div className="px-5 pt-1 pb-5">
-                  <p className="text-light-text/90 dark:text-dark-text/90 leading-relaxed">
-                    {section.content}
-                  </p>
-                </div>
-              )}
-            </div>
-          ))}
+                <button
+                  onClick={() => toggleItem(index)}
+                  className="flex w-full items-center justify-between p-6 text-left transition-colors hover:bg-white/5"
+                >
+                  <span className="pr-8 text-lg font-bold text-white uppercase">
+                    {item.title}
+                  </span>
+                  <div
+                    className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 transition-transform duration-200 ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="text-gray-400"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="border-t border-white/5 px-6 pt-4 pb-6 leading-relaxed text-gray-400">
+                    {item.content}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

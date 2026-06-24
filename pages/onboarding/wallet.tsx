@@ -1,28 +1,19 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
-import { Card, CardBody, Button, Image, Input } from "@heroui/react";
-import {
-  ArrowLongRightIcon,
-  WalletIcon,
-  ExclamationCircleIcon,
-} from "@heroicons/react/24/outline";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { Button, Image } from "@heroui/react";
+import { WalletIcon, ExclamationCircleIcon } from "@heroicons/react/24/outline";
 import { saveNWCString } from "@/utils/nostr/nostr-helper-functions";
 import { NostrWebLNProvider } from "@getalby/sdk";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 const OnboardingWallet = () => {
   const router = useRouter();
-  const { type } = router.query;
   const [nwcString, setNwcString] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleNext = () => {
-    if (type === "seller") {
-      router.push("/onboarding/shop-profile");
-    } else {
-      router.push("/marketplace");
-    }
+    router.push("/onboarding/shop-profile");
   };
 
   const handleConnect = async () => {
@@ -59,75 +50,78 @@ const OnboardingWallet = () => {
   };
 
   return (
-    <div className="bg-light-bg dark:bg-dark-bg flex h-[100vh] flex-col pt-24">
-      <div className="mx-auto w-full max-w-2xl px-4 py-6">
-        <Card>
-          <CardBody>
-            <div className="mb-4 flex flex-row items-center justify-center">
-              <Image
-                alt="Shopstr logo"
-                height={50}
-                radius="sm"
-                src="/shopstr-2000x2000.png"
-                width={50}
-              />
-              <h1 className="text-shopstr-purple-light dark:text-shopstr-yellow-light cursor-pointer text-center text-3xl font-bold hover:text-purple-700">
-                Shopstr
-              </h1>
-            </div>
-            <div className="mb-6 text-center">
-              <h2 className="text-light-text dark:text-dark-text text-2xl font-bold">
-                Step 4: Connect Wallet
-              </h2>
-              <p className="text-light-text dark:text-dark-text">
-                Connect your NWC-enabled Lightning wallet to pay invoices
-                seamlessly.
-              </p>
-            </div>
+    <div className="flex min-h-screen items-center justify-center bg-[#050505] p-4 pt-24">
+      <div className="relative w-full max-w-2xl rounded-3xl border border-white/10 bg-[#1a1a1a] p-6 shadow-2xl md:p-12">
+        {/* Step Pill */}
+        <div className="border-shopstr-yellow absolute -top-5 left-1/2 -translate-x-1/2 rounded-full border-2 border-b-4 bg-[#222] px-6 py-2">
+          <span className="text-shopstr-yellow text-xs font-bold tracking-widest uppercase">
+            Step 3 of 4
+          </span>
+        </div>
 
-            <div className="space-y-6">
-              <Input
-                isClearable
-                label="Nostr Wallet Connect String"
+        <div className="mb-8 flex flex-col items-center">
+          <div className="mb-6 flex items-center gap-3">
+            <Image
+              alt="Shopstr logo"
+              height={40}
+              radius="sm"
+              src="/shopstr-2000x2000.png"
+              width={40}
+            />
+            <h1 className="text-3xl font-bold text-white">Shopstr</h1>
+          </div>
+          <h2 className="mb-4 text-center text-3xl font-black text-white md:text-4xl">
+            Connect Wallet
+          </h2>
+          <p className="text-center text-gray-400">
+            Connect your NWC-enabled Lightning wallet to pay invoices
+            seamlessly.
+          </p>
+        </div>
+
+        <div className="space-y-6">
+          <div>
+            <label className="mb-3 block text-xs font-bold tracking-widest text-white/50 uppercase">
+              Nostr Wallet Connect String
+            </label>
+            <div className="relative">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                <WalletIcon className="h-5 w-5 text-gray-500" />
+              </div>
+              <input
+                type="text"
+                className="w-full rounded-xl border border-white/10 bg-[#111] py-4 pr-4 pl-12 text-base text-white placeholder-gray-600 transition-colors focus:border-white/30 focus:outline-none"
                 placeholder="nostr+walletconnect://..."
                 value={nwcString}
-                onValueChange={setNwcString}
-                variant="bordered"
-                startContent={<WalletIcon className="h-5 w-5 text-gray-400" />}
-                classNames={{
-                  label: "text-light-text dark:text-dark-text",
-                  input: "text-light-text dark:text-dark-text",
-                }}
+                onChange={(e) => setNwcString(e.target.value)}
               />
-
-              {error && (
-                <div className="flex items-center rounded border border-red-400 bg-red-100 p-3 text-red-700">
-                  <ExclamationCircleIcon className="mr-2 h-5 w-5" />
-                  <span className="text-sm">{error}</span>
-                </div>
-              )}
-
-              <div className="flex flex-col gap-3">
-                <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
-                  onClick={handleConnect}
-                  isLoading={isLoading}
-                  isDisabled={!nwcString}
-                >
-                  Connect & Continue
-                </Button>
-
-                <Button
-                  variant="light"
-                  className="text-gray-500 dark:text-gray-400"
-                  onClick={handleNext}
-                >
-                  Skip for now <ArrowLongRightIcon className="ml-1 h-4 w-4" />
-                </Button>
-              </div>
             </div>
-          </CardBody>
-        </Card>
+          </div>
+
+          {error && (
+            <div className="flex items-center rounded-xl border border-red-500/50 bg-red-900/20 p-4 text-red-200">
+              <ExclamationCircleIcon className="mr-3 h-5 w-5 flex-shrink-0" />
+              <span className="text-sm font-medium">{error}</span>
+            </div>
+          )}
+
+          <div className="mt-8 flex flex-col items-center justify-between gap-4 sm:flex-row">
+            <button
+              onClick={handleNext}
+              className="text-xs font-bold tracking-widest text-gray-600 uppercase transition-colors hover:text-white"
+            >
+              Skip for now
+            </button>
+            <Button
+              className={`${NEO_BTN} w-full px-8 py-6 text-sm sm:w-auto`}
+              onClick={handleConnect}
+              isLoading={isLoading}
+              isDisabled={!nwcString}
+            >
+              Connect & Continue
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

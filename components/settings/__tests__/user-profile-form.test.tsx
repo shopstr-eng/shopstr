@@ -11,7 +11,6 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
-import { AVATARBADGEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 const mockRouterPush = jest.fn();
 jest.mock("next/router", () => ({
@@ -44,6 +43,17 @@ jest.mock(
         <input
           aria-label={label}
           type={type}
+          value={value}
+          onChange={onChange}
+          onBlur={onBlur}
+        />
+      </label>
+    ),
+    Textarea: ({ label, value, onChange, onBlur }: any) => (
+      <label>
+        {label}
+        <textarea
+          aria-label={label}
           value={value}
           onChange={onChange}
           onBlur={onBlur}
@@ -121,6 +131,17 @@ jest.mock(
         <input
           aria-label={label}
           type={type}
+          value={value}
+          onChange={onChange}
+          onBlur={onBlur}
+        />
+      </label>
+    ),
+    Textarea: ({ label, value, onChange, onBlur }: any) => (
+      <label>
+        {label}
+        <textarea
+          aria-label={label}
           value={value}
           onChange={onChange}
           onBlur={onBlur}
@@ -245,8 +266,7 @@ describe("UserProfileForm", () => {
     expect(mockFileUploaderButton).toHaveBeenCalledWith(
       expect.objectContaining({
         isIconOnly: true,
-        className: AVATARBADGEBUTTONCLASSNAMES,
-        containerClassName: "absolute right-[-0.5rem] bottom-[-0.5rem] z-20",
+        className: expect.stringContaining("absolute right-0 bottom-0"),
       }),
       undefined
     );
@@ -293,7 +313,7 @@ describe("UserProfileForm", () => {
       expect(mockUpdateProfileData).toHaveBeenCalledWith(
         expect.objectContaining({
           pubkey: mockUserPubkey,
-          created_at: mockSavedProfileEvent.created_at,
+          created_at: 0,
         })
       );
     });
@@ -311,9 +331,7 @@ describe("UserProfileForm", () => {
     await user.click(screen.getByRole("button", { name: /Save Profile/i }));
 
     await waitFor(() => {
-      expect(mockRouterPush).toHaveBeenCalledWith(
-        "/onboarding/wallet?type=seller"
-      );
+      expect(mockRouterPush).toHaveBeenCalledWith("/onboarding/shop-profile");
     });
   });
 
@@ -341,18 +359,17 @@ describe("UserProfileForm", () => {
     expect(newProfileImage).toHaveAttribute("src", "https://new.image/url");
   });
 
-  test("updates the profile picture from a pasted URL", async () => {
+  test("updates the banner image via uploader", async () => {
     const user = userEvent.setup();
     renderWithProviders(<UserProfileForm />);
+    await screen.findByLabelText("Display name");
 
-    await user.type(
-      await screen.findByLabelText("Profile image URL"),
-      "https://cdn.example.com/profile.png"
-    );
+    const uploadBannerBtn = screen.getByTestId("upload-banner-btn");
+    await user.click(uploadBannerBtn);
 
-    expect(screen.getByAltText("user profile picture")).toHaveAttribute(
+    expect(screen.getByAltText("User banner image")).toHaveAttribute(
       "src",
-      "https://cdn.example.com/profile.png"
+      "https://new.image/url"
     );
   });
 

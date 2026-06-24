@@ -61,16 +61,22 @@ jest.mock("@heroui/react", () => {
       children: React.ReactNode;
       isOpen?: boolean;
       onOpenChange?: (isOpen: boolean) => void;
-    }) => (
-      <DropdownContext.Provider
-        value={{
-          isOpen: Boolean(isOpen),
-          onOpenChange: onOpenChange || (() => {}),
-        }}
-      >
-        <div>{children}</div>
-      </DropdownContext.Provider>
-    ),
+    }) => {
+      const [internalOpen, setInternalOpen] = React.useState(Boolean(isOpen));
+      const open = isOpen ?? internalOpen;
+      const setOpen = onOpenChange || setInternalOpen;
+
+      return (
+        <DropdownContext.Provider
+          value={{
+            isOpen: open,
+            onOpenChange: setOpen,
+          }}
+        >
+          <div>{children}</div>
+        </DropdownContext.Provider>
+      );
+    },
     DropdownTrigger: ({ children }: { children: React.ReactNode }) => {
       const { isOpen, onOpenChange } = React.useContext(DropdownContext);
 
@@ -103,17 +109,29 @@ jest.mock("@heroui/react", () => {
     DropdownItem: ({
       children,
       onPress,
+      onClick,
       startContent,
     }: {
       children: React.ReactNode;
       onPress?: () => void;
+      onClick?: () => void;
       startContent?: React.ReactNode;
-    }) => (
-      <button role="menuitem" onClick={() => onPress?.()}>
-        {startContent}
-        {children}
-      </button>
-    ),
+    }) => {
+      const { onOpenChange } = React.useContext(DropdownContext);
+      return (
+        <button
+          role="menuitem"
+          onClick={() => {
+            onPress?.();
+            onClick?.();
+            onOpenChange(false);
+          }}
+        >
+          {startContent}
+          {children}
+        </button>
+      );
+    },
     User: jest.fn(({ name }) => <span>{name}</span>),
   };
 });
@@ -204,7 +222,7 @@ describe("ProfileWithDropdown", () => {
       {}
     );
 
-    expect(screen.getByText(npub.slice(0, 15) + "...")).toBeInTheDocument();
+    expect(screen.getByText(npub.slice(0, 18) + "...")).toBeInTheDocument();
 
     openDropdownMenu();
 

@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getFailedRelayPublishesForOwner } from "@/utils/db/db-service";
+import { logger } from "@/utils/logger";
 import { applyRateLimit } from "@/utils/rate-limit";
 import {
   buildListFailedRelayPublishesProof,
@@ -39,7 +40,7 @@ export default async function handler(
 
     return res.status(200).json(failedPublishes);
   } catch (error) {
-    console.error("Error getting failed relay publishes:", error);
+    logger.error("Error getting failed relay publishes", undefined, error);
     return res.status(500).json({ error: "Internal server error" });
   }
 }

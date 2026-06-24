@@ -9,7 +9,6 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
-import { AVATARBADGEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 jest.mock("next/router", () => ({
   useRouter: jest.fn(() => ({ push: jest.fn() })),
@@ -86,8 +85,9 @@ describe("BuyerProfileForm", () => {
     expect(mockFileUploaderButton).toHaveBeenCalledWith(
       expect.objectContaining({
         isIconOnly: true,
-        className: AVATARBADGEBUTTONCLASSNAMES,
-        containerClassName: "absolute right-[-0.5rem] bottom-[-0.5rem] z-20",
+        className: expect.stringContaining(
+          "absolute right-[-0.5rem] bottom-[-0.5rem] z-20"
+        ),
       }),
       undefined
     );

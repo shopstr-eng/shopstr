@@ -554,17 +554,17 @@ export default function StorefrontPreviewModal({
       size="5xl"
       scrollBehavior="outside"
       classNames={{
-        base: "border-4 border-black rounded-lg",
+        base: "border-4 border-zinc-800 rounded-lg",
         body: "p-0",
-        header: "border-b-4 border-black bg-white rounded-t-lg",
-        footer: "border-t-4 border-black bg-white rounded-b-lg",
-        closeButton: "hover:bg-gray-100 active:bg-gray-200",
+        header: "border-b-4 border-zinc-800 bg-[#111] rounded-t-lg",
+        footer: "border-t-4 border-zinc-800 bg-[#111] rounded-b-lg",
+        closeButton: "hover:bg-[#1f1f1f] active:bg-gray-200",
       }}
     >
       <ModalContent>
-        <ModalHeader className="flex items-center gap-3 text-black">
+        <ModalHeader className="flex items-center gap-3 text-white">
           <span className="text-xl font-bold">Storefront Preview</span>
-          <span className="text-sm font-normal text-gray-500">
+          <span className="text-sm font-normal text-zinc-400">
             (approximate preview — save to see the live version)
           </span>
         </ModalHeader>
@@ -908,18 +908,18 @@ export default function StorefrontPreviewModal({
               href={`/shop/${shopSlug}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-shopstr-purple dark:text-shopstr-yellow text-sm font-bold underline"
+              className="text-sm font-bold text-yellow-300 underline"
             >
               Open live storefront →
             </a>
           ) : (
-            <span className="text-sm text-gray-400">
+            <span className="text-sm text-zinc-500">
               Save a shop URL to see your live storefront
             </span>
           )}
           <Button
             onPress={onClose}
-            className="border-2 border-black bg-white font-bold text-black hover:bg-gray-100"
+            className="border-2 border-zinc-800 bg-[#111] font-bold text-white hover:bg-[#1f1f1f]"
           >
             Close
           </Button>

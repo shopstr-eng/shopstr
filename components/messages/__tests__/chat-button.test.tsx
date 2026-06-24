@@ -88,7 +88,7 @@ describe("ChatButton Component", () => {
     ).toBeUndefined();
 
     const container = avatar.closest("div.cursor-pointer");
-    expect(container).not.toHaveClass("bg-[#ccccccb9]");
+    expect(container).not.toHaveClass("bg-[#27272a]");
   });
 
   test("displays unread count when it is greater than 0", () => {
@@ -103,7 +103,7 @@ describe("ChatButton Component", () => {
 
     const unreadBadge = screen.getByText("3");
     expect(unreadBadge).toBeInTheDocument();
-    expect(unreadBadge).toHaveClass("rounded-full bg-shopstr-purple-light");
+    expect(unreadBadge).toHaveClass("rounded-full bg-yellow-400");
   });
 
   test("applies active styles when it is the opened chat", () => {
@@ -116,7 +116,7 @@ describe("ChatButton Component", () => {
     const container = screen
       .getByTestId("profile-avatar")
       .closest("div.cursor-pointer");
-    expect(container).toHaveClass("bg-[#ccccccb9]");
+    expect(container).toHaveClass("bg-[#27272a]");
   });
 
   test("calls handleClickChat with the correct pubkey on click", () => {

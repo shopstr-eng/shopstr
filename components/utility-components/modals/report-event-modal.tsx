@@ -77,7 +77,7 @@ export default function ReportEventModal({
         backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
         header: "border-b-[1px] border-[#292f46]",
         footer: "border-t-[1px] border-[#292f46]",
-        closeButton: "hover:bg-black/5 active:bg-white/10",
+        closeButton: "hover:bg-white/10 active:bg-white/20",
       }}
       isDismissable={!isSubmitting}
       scrollBehavior="inside"
@@ -85,10 +85,8 @@ export default function ReportEventModal({
       size="lg"
     >
       <ModalContent>
-        <ModalHeader className="text-light-text dark:text-dark-text">
-          Report {targetLabel}
-        </ModalHeader>
-        <ModalBody className="text-light-text dark:text-dark-text">
+        <ModalHeader className="text-white">Report {targetLabel}</ModalHeader>
+        <ModalBody className="text-white">
           <Select
             label="Reason"
             placeholder="Choose a report type"

@@ -10,7 +10,7 @@ import {
   Input,
   Button,
 } from "@heroui/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 interface AddressChangeModalProps {
   isOpen: boolean;
@@ -57,32 +57,32 @@ const AddressChangeModal = ({
         backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
         header: "border-b-[1px] border-[#292f46]",
         footer: "border-t-[1px] border-[#292f46]",
-        closeButton: "hover:bg-black/5 active:bg-white/10",
+        closeButton: "hover:bg-white/10 active:bg-white/20",
       }}
       scrollBehavior={"outside"}
       size="2xl"
     >
       <ModalContent>
-        <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
+        <ModalHeader className="flex flex-col gap-1 text-white">
           Change Delivery Address
         </ModalHeader>
         <form onSubmit={handleSubmit(handleFormSubmit)}>
           <ModalBody>
             {(orderId || productTitle || currentAddress) && (
-              <div className="mb-4 rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
+              <div className="mb-4 rounded-lg bg-[#111] p-3">
                 {orderId && (
-                  <p className="text-light-text dark:text-dark-text text-sm">
+                  <p className="text-sm text-white">
                     <span className="font-bold">Order:</span>{" "}
                     {orderId.substring(0, 8)}...
                   </p>
                 )}
                 {productTitle && (
-                  <p className="text-light-text dark:text-dark-text text-sm">
+                  <p className="text-sm text-white">
                     <span className="font-bold">Product:</span> {productTitle}
                   </p>
                 )}
                 {currentAddress && (
-                  <p className="text-light-text dark:text-dark-text text-sm">
+                  <p className="text-sm text-white">
                     <span className="font-bold">Current Address:</span>{" "}
                     {currentAddress}
                   </p>
@@ -115,7 +115,7 @@ const AddressChangeModal = ({
                     variant="bordered"
                     isInvalid={isErrored}
                     errorMessage={errorMessage}
-                    className="text-light-text dark:text-dark-text"
+                    className="text-white"
                     onChange={onChange}
                     onBlur={onBlur}
                     value={value}
@@ -128,11 +128,7 @@ const AddressChangeModal = ({
             <Button color="danger" variant="light" onClick={handleClose}>
               Cancel
             </Button>
-            <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
-              type="submit"
-              isLoading={isLoading}
-            >
+            <Button className={NEO_BTN} type="submit" isLoading={isLoading}>
               Update Address
             </Button>
           </ModalFooter>

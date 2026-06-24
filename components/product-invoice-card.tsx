@@ -100,10 +100,12 @@ export default function ProductInvoiceCard({
 }: {
   productData: ProductData;
   setIsBeingPaid: (isBeingPaid: boolean) => void;
-  setInvoiceIsPaid: (invoiceIsPaid: boolean) => void;
-  setInvoiceGenerationFailed: (invoiceGenerationFailed: boolean) => void;
-  setCashuPaymentSent: (cashuPaymentSent: boolean) => void;
-  setCashuPaymentFailed: (cashuPaymentFailed: boolean) => void;
+  setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
+  setFiatOrderFailed?: (fiatOrderFailed: boolean) => void;
+  setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
+  setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
+  setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
+  setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
   selectedSize?: string;
   selectedVolume?: string;
   selectedWeight?: string;
@@ -966,7 +968,7 @@ export default function ProductInvoiceCard({
         data.additionalInfo ? data.additionalInfo : undefined
       );
     } catch {
-      setInvoiceGenerationFailed(true);
+      setInvoiceGenerationFailed?.(true);
       setShowInvoiceCard(false);
       setInvoice("");
       setQrCodeUrl(null);
@@ -1094,7 +1096,7 @@ export default function ProductInvoiceCard({
                 markMintQuoteClaimed(hash);
                 setPaymentConfirmed(true);
                 setQrCodeUrl(null);
-                setInvoiceIsPaid(true);
+                setInvoiceIsPaid?.(true);
                 break;
               } catch (handoffError) {
                 await recoverProofsToBuyerWallet(
@@ -2003,10 +2005,10 @@ export default function ProductInvoiceCard({
         price.toString(),
         deletedEventIds
       );
-      setCashuPaymentSent(true);
+      setCashuPaymentSent?.(true);
       setPaymentConfirmed(true);
     } catch {
-      setCashuPaymentFailed(true);
+      setCashuPaymentFailed?.(true);
     }
   };
 

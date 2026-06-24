@@ -8,14 +8,11 @@ import {
   Input,
   InputProps,
 } from "@heroui/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   setLocalStorageDataOnSignIn,
   validateNSecKey,
   parseBunkerToken,
 } from "@/utils/nostr/nostr-helper-functions";
-import * as nip49 from "nostr-tools/nip49";
-import { getPublicKey } from "nostr-tools";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import { RelaysContext } from "../../utils/context/context";
 import { useRouter } from "next/router";
@@ -23,16 +20,14 @@ import FailureModal from "../../components/utility-components/failure-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
-import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 export default function SignInModal({
   isOpen,
   onClose,
-  sellerFlow,
 }: {
   isOpen: boolean;
   onClose: () => void;
-  sellerFlow?: boolean;
 }) {
   const [bunkerToken, setBunkerToken] = useState("");
   const [validBunkerToken, setValidBunkerToken] =
@@ -47,17 +42,9 @@ export default function SignInModal({
   const [isBunkerConnecting, setIsBunkerConnecting] = useState(false);
 
   const [showNsecSignIn, setShowNsecSignIn] = useState(false);
-  const [isNcryptsec, setIsNcryptsec] = useState(false);
-  const [ncryptsecError, setNcryptsecError] = useState("");
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
-
-  const [showPrivateKey, setShowPrivateKey] = useState(false);
-  const [showPassphrase, setShowPassphrase] = useState(false);
-
-  const [showSignInOptions, setShowSignInOptions] = useState(false);
-  const [showSignUpOptions, setShowSignUpOptions] = useState(false);
 
   const relaysContext = useContext(RelaysContext);
 
@@ -87,22 +74,6 @@ export default function SignInModal({
     }
   };
 
-  const resetModalState = () => {
-    setShowBunkerSignIn(false);
-    setIsBunkerConnecting(false);
-    setBunkerToken("");
-    setShowNsecSignIn(false);
-    setPrivateKey("");
-    setPassphrase("");
-    setShowPrivateKey(false);
-    setShowPassphrase(false);
-    setIsNcryptsec(false);
-    setNcryptsecError("");
-    setShowSignInOptions(false);
-    setShowSignUpOptions(false);
-  };
-
-  // Sign-in functions (go to marketplace)
   const startExtensionLogin = async () => {
     setShowBunkerSignIn(false);
     setShowNsecSignIn(false);
@@ -111,7 +82,7 @@ export default function SignInModal({
       await signer.getPubKey();
       saveSigner(signer);
       onClose();
-      router.push("/marketplace");
+      router.push("/onboarding/user-profile");
     } catch (error) {
       setFailureText("Extension sign-in failed! " + error);
       setShowFailureModal(true);
@@ -127,117 +98,12 @@ export default function SignInModal({
       setIsBunkerConnecting(false);
       await signer.getPubKey();
       onClose();
-      router.push("/marketplace");
+      router.push("/onboarding/user-profile");
     } catch {
       setFailureText("Bunker sign-in failed!");
       setShowFailureModal(true);
       setIsBunkerConnecting(false);
     }
-  };
-
-  // Sign-up functions (go to user-type onboarding)
-  const startExtensionSignup = async () => {
-    try {
-      const signer = newSigner!("nip07", {});
-      await signer.getPubKey();
-      saveSigner(signer);
-      onClose();
-      router.push(
-        sellerFlow
-          ? "/onboarding/user-type?preselect=seller"
-          : "/onboarding/user-type"
-      );
-    } catch (error) {
-      setFailureText("Extension sign-up failed! " + error);
-      setShowFailureModal(true);
-    }
-  };
-
-  const startBunkerSignup = async () => {
-    setIsBunkerConnecting(true);
-    try {
-      const signer = newSigner!("nip46", { bunker: bunkerToken });
-      await signer.connect();
-      saveSigner(signer);
-      setIsBunkerConnecting(false);
-      await signer.getPubKey();
-      onClose();
-      router.push(
-        sellerFlow
-          ? "/onboarding/user-type?preselect=seller"
-          : "/onboarding/user-type"
-      );
-    } catch {
-      setFailureText("Bunker sign-up failed!");
-      setShowFailureModal(true);
-      setIsBunkerConnecting(false);
-    }
-  };
-
-  const handleNsecSignup = async () => {
-    if (validPrivateKey === "success" || isNcryptsec) {
-      if (!passphrase || passphrase.trim() === "") {
-        setFailureText("No passphrase provided!");
-        setShowFailureModal(true);
-      } else {
-        let encryptedPrivKey: string;
-        let pubkey: string;
-
-        if (isNcryptsec) {
-          try {
-            setNcryptsecError("");
-            const decryptedSecretKey = await nip49.decrypt(
-              privateKey,
-              passphrase
-            );
-            pubkey = getPublicKey(decryptedSecretKey);
-            encryptedPrivKey = privateKey;
-          } catch {
-            setNcryptsecError("Incorrect passphrase or invalid ncryptsec.");
-            setFailureText(
-              "Could not decrypt ncryptsec. Check your passphrase and try again."
-            );
-            setShowFailureModal(true);
-            return;
-          }
-        } else {
-          ({ encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
-            privateKey,
-            passphrase
-          ));
-        }
-
-        setTimeout(() => {
-          onClose();
-        }, 500);
-
-        const signer = newSigner!("nsec", {
-          encryptedPrivKey: encryptedPrivKey,
-          pubkey,
-        });
-        await signer.getPubKey();
-        saveSigner(signer);
-        onClose();
-
-        router.push(
-          sellerFlow
-            ? "/onboarding/user-type?preselect=seller"
-            : "/onboarding/user-type"
-        );
-      }
-    } else {
-      setFailureText(
-        "The private key inputted was not valid! Generate a new key pair or try again."
-      );
-      setShowFailureModal(true);
-    }
-  };
-
-  const startNewAccountCreation = () => {
-    router.push(
-      sellerFlow ? "/onboarding/keys?preselect=seller" : "/onboarding/keys"
-    );
-    onClose();
   };
 
   useEffect(() => {
@@ -248,41 +114,24 @@ export default function SignInModal({
     }
   }, [bunkerToken]);
 
+  const handleGenerateKeys = () => {
+    router.push("/onboarding/keys");
+    onClose();
+  };
+
   const handleSignIn = async () => {
-    if (validPrivateKey === "success" || isNcryptsec) {
-      if (!passphrase || passphrase.trim() === "") {
+    if (validPrivateKey) {
+      if (passphrase === "" || passphrase === null) {
         setFailureText("No passphrase provided!");
         setShowFailureModal(true);
       } else {
-        let encryptedPrivKey: string;
-        let pubkey: string;
-
-        if (isNcryptsec) {
-          try {
-            setNcryptsecError("");
-            const decryptedSecretKey = await nip49.decrypt(
-              privateKey,
-              passphrase
-            );
-            pubkey = getPublicKey(decryptedSecretKey);
-            encryptedPrivKey = privateKey;
-          } catch {
-            setNcryptsecError("Incorrect passphrase or invalid ncryptsec.");
-            setFailureText(
-              "Could not decrypt ncryptsec. Check your passphrase and try again."
-            );
-            setShowFailureModal(true);
-            return;
-          }
-        } else {
-          ({ encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
-            privateKey,
-            passphrase
-          ));
-        }
+        const { encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
+          privateKey,
+          passphrase
+        );
 
         setTimeout(() => {
-          onClose();
+          onClose(); // avoids tree walker issue by closing modal
         }, 500);
 
         const signer = newSigner!("nsec", {
@@ -293,7 +142,7 @@ export default function SignInModal({
         saveSigner(signer);
         onClose();
 
-        router.push("/marketplace");
+        router.push("/onboarding/user-profile");
       }
     } else {
       setFailureText(
@@ -306,15 +155,7 @@ export default function SignInModal({
   useEffect(() => {
     if (privateKey === "") {
       setValidPrivateKey("default");
-      setIsNcryptsec(false);
-      setNcryptsecError("");
-    } else if (privateKey.startsWith("ncryptsec")) {
-      setIsNcryptsec(true);
-      setValidPrivateKey("success");
-      setNcryptsecError("");
     } else {
-      setIsNcryptsec(false);
-      setNcryptsecError("");
       setValidPrivateKey(validateNSecKey(privateKey) ? "success" : "danger");
     }
   }, [privateKey]);
@@ -327,15 +168,21 @@ export default function SignInModal({
         backdrop="blur"
         isOpen={isOpen}
         onClose={() => {
-          resetModalState();
+          setShowBunkerSignIn(false);
+          setIsBunkerConnecting(false);
+          setBunkerToken("");
+          setShowNsecSignIn(false);
+          setPrivateKey("");
+          setPassphrase("");
           onClose();
         }}
         classNames={{
-          body: "py-6",
-          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          header: "border-b-[1px] border-[#292f46]",
-          footer: "border-t-[1px] border-[#292f46]",
-          closeButton: "hover:bg-black/5 active:bg-white/10",
+          base: "bg-[#161616] border border-zinc-800",
+          body: "py-8 text-zinc-300",
+          backdrop: "bg-black/80 backdrop-blur-sm",
+          header: "border-b border-zinc-800",
+          footer: "border-t border-zinc-800",
+          closeButton: "hover:bg-white/10 active:bg-white/20 text-white",
         }}
         isDismissable={true}
         scrollBehavior={"normal"}
@@ -343,282 +190,34 @@ export default function SignInModal({
         size="2xl"
       >
         <ModalContent>
-          <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
-            {!showSignInOptions && !showSignUpOptions ? (
-              // Landing view
-              <div className="flex flex-col items-center justify-center space-y-6 py-8">
-                <div className="flex items-center justify-center">
-                  <Image
-                    alt="Shopstr logo"
-                    height={80}
-                    radius="sm"
-                    src="/shopstr-2000x2000.png"
-                    width={80}
-                  />
-                  <h1 className="text-shopstr-purple-light dark:text-shopstr-yellow-light ml-3 text-4xl font-bold">
-                    Shopstr
-                  </h1>
+          <ModalBody className="flex flex-col overflow-hidden">
+            <div className="flex flex-row">
+              <div className="hidden flex-col justify-between border-r border-zinc-800 pr-6 md:flex md:basis-1/2">
+                <div className="mb-4">
+                  <Image src="/signup.png" alt="sign up"></Image>
                 </div>
-
-                <div className="w-full max-w-md">
-                  <Image src="signup.png" alt="sign up" className="w-full" />
-                </div>
-
-                <div className="flex w-full max-w-md flex-col space-y-4">
-                  <div className="text-center">
-                    <p className="text-light-text dark:text-dark-text mb-2 text-lg font-bold">
-                      New to Shopstr?
+                <div className="flex flex-col gap-4 rounded-xl bg-[#111] p-4">
+                  <div>
+                    <p className="text-lg font-bold text-white">
+                      New to Nostr?
                     </p>
-                    <p className="text-light-text dark:text-dark-text mb-4 text-sm">
+                    <p className="text-xs text-zinc-500">
+                      {" "}
                       Sign up to get started!
                     </p>
                   </div>
-
                   <Button
-                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full text-lg`}
-                    onClick={() => setShowSignUpOptions(true)}
-                    size="lg"
+                    className="h-10 rounded-lg border border-zinc-600 bg-transparent text-sm font-bold tracking-wider text-white uppercase hover:border-white hover:bg-zinc-800"
+                    onClick={handleGenerateKeys}
                   >
                     Sign Up
                   </Button>
-
-                  <div className="text-light-text dark:text-dark-text text-center text-xs font-bold">
-                    ------ or ------
-                  </div>
-
-                  <Button
-                    className={`w-full text-lg`}
-                    onClick={() => setShowSignInOptions(true)}
-                    size="lg"
-                  >
-                    Sign In
-                  </Button>
                 </div>
               </div>
-            ) : showSignUpOptions ? (
-              // Sign-up options view (Nostr sign-up)
-              <div className="flex w-full flex-col">
-                <div className="space-y-3">
-                  <div className="mb-3 flex items-center justify-center gap-3">
-                    <Image
-                      alt="Shopstr logo"
-                      height={50}
-                      radius="sm"
-                      src="/shopstr-2000x2000.png"
-                      width={50}
-                    />
-                    <div className="text-shopstr-purple-light dark:text-shopstr-yellow-light text-2xl font-bold">
-                      Sign Up
-                    </div>
-                  </div>
 
-                  {/* Extension Sign-up */}
-                  <Button
-                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
-                    onClick={startExtensionSignup}
-                  >
-                    Nostr Extension Sign-up
-                  </Button>
-
-                  <div className="text-light-text dark:text-dark-text text-center text-xs font-bold">
-                    ------ or ------
-                  </div>
-
-                  {/* Bunker Sign-up */}
-                  <div className="flex flex-col">
-                    <Button
-                      data-testid="bunker-signup-open-btn"
-                      onClick={() => {
-                        setShowNsecSignIn(false);
-                        setShowBunkerSignIn(true);
-                      }}
-                      className={`w-full ${showBunkerSignIn ? "hidden" : ""}`}
-                    >
-                      Bunker Sign-up
-                    </Button>
-                    <div
-                      className={`flex flex-col justify-between space-y-3 ${
-                        showBunkerSignIn ? "" : "hidden"
-                      }`}
-                    >
-                      <div>
-                        <label className="text-light-text dark:text-dark-text">
-                          Bunker Token:
-                        </label>
-                        <Input
-                          color={validBunkerToken}
-                          width="100%"
-                          size="lg"
-                          value={bunkerToken}
-                          placeholder="Paste your bunker token (bunker://)..."
-                          onChange={(e) => setBunkerToken(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Button
-                          data-testid="bunker-signup-submit-btn"
-                          className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
-                          onClick={startBunkerSignup}
-                          isDisabled={validBunkerToken !== "success"}
-                        >
-                          {isBunkerConnecting ? (
-                            <div className="flex items-center justify-center">
-                              <ShopstrSpinner />
-                            </div>
-                          ) : (
-                            <>Bunker Sign-up</>
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-light-text dark:text-dark-text text-center text-xs font-bold">
-                    ------ or ------
-                  </div>
-
-                  {/* nsec / ncryptsec Sign-up */}
-                  <div className="flex flex-col">
-                    <Button
-                      data-testid="nsec-signup-open-btn"
-                      onClick={() => {
-                        setShowBunkerSignIn(false);
-                        setShowNsecSignIn(true);
-                      }}
-                      className={`w-full ${showNsecSignIn ? "hidden" : ""}`}
-                    >
-                      nsec / ncryptsec Sign-up
-                    </Button>
-                    <div
-                      className={`flex flex-col justify-between space-y-4 ${
-                        showNsecSignIn ? "" : "hidden"
-                      }`}
-                    >
-                      <div>
-                        <label className="text-light-text dark:text-dark-text">
-                          {isNcryptsec
-                            ? "Encrypted Private Key (ncryptsec):"
-                            : "Private Key:"}
-                        </label>
-                        <Input
-                          color={validPrivateKey}
-                          type={showPrivateKey ? "text" : "password"}
-                          width="100%"
-                          size="lg"
-                          value={privateKey}
-                          placeholder="Paste your nsec or ncryptsec..."
-                          onChange={(e) => setPrivateKey(e.target.value)}
-                          endContent={
-                            <button
-                              type="button"
-                              onClick={() => setShowPrivateKey((v) => !v)}
-                              className="text-gray-400"
-                            >
-                              {showPrivateKey ? (
-                                <EyeSlashIcon className="h-5 w-5" />
-                              ) : (
-                                <EyeIcon className="h-5 w-5" />
-                              )}
-                            </button>
-                          }
-                        />
-                        {isNcryptsec && (
-                          <p className="mt-1 text-xs text-green-600">
-                            ncryptsec detected — enter the passphrase used to
-                            encrypt it.
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="text-light-text dark:text-dark-text">
-                          {isNcryptsec
-                            ? "Decryption Passphrase "
-                            : "Encryption Passphrase "}
-                          <span className="text-red-500">*</span>
-                        </label>
-                        <Input
-                          type={showPassphrase ? "text" : "password"}
-                          width="100%"
-                          size="lg"
-                          value={passphrase}
-                          placeholder={
-                            isNcryptsec
-                              ? "Enter the passphrase used to encrypt..."
-                              : "Enter a passphrase of your choice..."
-                          }
-                          onChange={(e) => setPassphrase(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (
-                              e.key === "Enter" &&
-                              (validPrivateKey === "success" || isNcryptsec)
-                            )
-                              handleNsecSignup();
-                          }}
-                          endContent={
-                            <button
-                              type="button"
-                              onClick={() => setShowPassphrase((v) => !v)}
-                              className="text-gray-400"
-                            >
-                              {showPassphrase ? (
-                                <EyeSlashIcon className="h-5 w-5" />
-                              ) : (
-                                <EyeIcon className="h-5 w-5" />
-                              )}
-                            </button>
-                          }
-                        />
-                      </div>
-                      <div>
-                        <Button
-                          data-testid="nsec-signup-submit-btn"
-                          className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
-                          onClick={handleNsecSignup}
-                          isDisabled={
-                            validPrivateKey !== "success" && !isNcryptsec
-                          }
-                        >
-                          {isNcryptsec ? "ncryptsec Sign-up" : "nsec Sign-up"}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-light-text dark:text-dark-text text-center text-xs font-bold">
-                    ------ or ------
-                  </div>
-
-                  {/* New Account Creation */}
-                  <Button
-                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
-                    onClick={startNewAccountCreation}
-                  >
-                    Create New Account
-                  </Button>
-
-                  <div className="mt-4 text-center">
-                    <button
-                      className="text-shopstr-purple-light dark:text-shopstr-yellow-light text-sm font-bold underline"
-                      onClick={() => {
-                        setShowSignUpOptions(false);
-                        setShowSignInOptions(true);
-                        setShowBunkerSignIn(false);
-                        setShowNsecSignIn(false);
-                        setBunkerToken("");
-                        setPrivateKey("");
-                        setPassphrase("");
-                      }}
-                    >
-                      Already have an account? Sign in
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              // Sign-in options view
-              <div className="flex w-full flex-col">
+              <div className="flex w-full flex-col pl-0 md:basis-1/2 md:pl-6">
                 <div className="space-y-2">
-                  <div className="flex items-center justify-center">
+                  <div className="mb-6 flex items-center justify-center gap-3">
                     <Image
                       alt="Shopstr logo"
                       height={50}
@@ -626,44 +225,51 @@ export default function SignInModal({
                       src="/shopstr-2000x2000.png"
                       width={50}
                     />
-                    <div className="text-shopstr-purple-light dark:text-shopstr-yellow-light ml-2 text-2xl font-bold">
+                    <div className="text-2xl font-black tracking-tighter text-white uppercase">
                       Shopstr
                     </div>
                   </div>
-
                   <Button
-                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                    className={`${NEO_BTN} h-12 w-full text-sm`}
                     onClick={startExtensionLogin}
                   >
                     Extension Sign-in
                   </Button>
-
-                  <div className="text-center">------ or ------</div>
-
+                  <div className="text-center font-mono text-xs text-zinc-600">
+                    ------ or ------
+                  </div>
                   <div className="flex flex-col">
-                    <Button
-                      data-testid="bunker-open-btn"
-                      onClick={() => {
-                        setShowNsecSignIn(false);
-                        setShowBunkerSignIn(true);
-                      }}
-                      className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
-                        showBunkerSignIn ? "hidden" : ""
-                      }`}
-                    >
-                      Bunker Sign-in
-                    </Button>
+                    <div className="">
+                      <Button
+                        data-testid="bunker-open-btn"
+                        onClick={() => {
+                          setShowNsecSignIn(false);
+                          setShowBunkerSignIn(true);
+                        }}
+                        className={`${NEO_BTN} h-12 w-full text-sm ${
+                          showBunkerSignIn ? "hidden" : ""
+                        }`}
+                      >
+                        Bunker Sign-in
+                      </Button>
+                    </div>
                     <div
-                      className={`mb-4 flex flex-col justify-between space-y-4 ${
+                      className={`mb-4 flex flex-col justify-between space-y-4 rounded-xl border border-dashed border-zinc-700 bg-[#111] p-4 ${
                         showBunkerSignIn ? "" : "hidden"
                       }`}
                     >
                       <div>
-                        <label className="text-light-text dark:text-dark-text">
+                        <label className="mb-1 block text-xs font-bold text-zinc-500 uppercase">
                           Bunker Token:
                         </label>
                         <Input
                           color={validBunkerToken}
+                          variant="bordered"
+                          classNames={{
+                            input: "text-white text-base md:text-sm",
+                            inputWrapper:
+                              "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                          }}
                           width="100%"
                           size="lg"
                           value={bunkerToken}
@@ -674,9 +280,9 @@ export default function SignInModal({
                       <div>
                         <Button
                           data-testid="bunker-submit-btn"
-                          className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                          className={`${NEO_BTN} h-10 w-full text-xs shadow-sm`}
                           onClick={startBunkerLogin}
-                          isDisabled={validBunkerToken !== "success"}
+                          isDisabled={validBunkerToken != "success"}
                         >
                           {isBunkerConnecting ? (
                             <div className="flex items-center justify-center">
@@ -689,139 +295,110 @@ export default function SignInModal({
                       </div>
                     </div>
                   </div>
-
-                  <div className="text-center">------ or ------</div>
+                  <div className="text-center font-mono text-xs text-zinc-600">
+                    ------ or ------
+                  </div>
                 </div>
-
                 <div className="flex flex-col">
-                  <Button
-                    data-testid="nsec-open-btn"
-                    onClick={() => {
-                      setShowBunkerSignIn(false);
-                      setShowNsecSignIn(true);
-                    }}
-                    className={`mt-2 w-full ${showNsecSignIn ? "hidden" : ""}`}
-                  >
-                    nsec / ncryptsec Sign-in
-                  </Button>
+                  <div className="">
+                    <Button
+                      data-testid="nsec-open-btn"
+                      onClick={() => {
+                        setShowBunkerSignIn(false);
+                        setShowNsecSignIn(true);
+                      }}
+                      className={`${NEO_BTN} mt-2 h-12 w-full text-sm ${
+                        showNsecSignIn ? "hidden" : ""
+                      }`}
+                    >
+                      nsec Sign-in
+                    </Button>
+                  </div>
                   <div
-                    className={`mb-4 flex flex-col justify-between space-y-4 ${
+                    className={`mb-4 flex flex-col justify-between space-y-4 rounded-xl border border-dashed border-zinc-700 bg-[#111] p-4 ${
                       showNsecSignIn ? "" : "hidden"
                     }`}
                   >
                     <div>
-                      <label className="text-light-text dark:text-dark-text">
-                        {isNcryptsec
-                          ? "Encrypted Private Key (ncryptsec):"
-                          : "Private Key:"}
+                      <label className="mb-1 block text-xs font-bold text-zinc-500 uppercase">
+                        Private Key:
                       </label>
                       <Input
                         color={validPrivateKey}
-                        type={showPrivateKey ? "text" : "password"}
+                        variant="bordered"
+                        classNames={{
+                          input: "text-white text-base md:text-sm",
+                          inputWrapper:
+                            "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                        }}
+                        type="password"
                         width="100%"
                         size="lg"
                         value={privateKey}
-                        placeholder="Paste your nsec or ncryptsec..."
+                        placeholder="Paste your Nostr private key..."
                         onChange={(e) => setPrivateKey(e.target.value)}
-                        endContent={
-                          <button
-                            type="button"
-                            onClick={() => setShowPrivateKey((v) => !v)}
-                            className="text-gray-400"
-                          >
-                            {showPrivateKey ? (
-                              <EyeSlashIcon className="h-5 w-5" />
-                            ) : (
-                              <EyeIcon className="h-5 w-5" />
-                            )}
-                          </button>
-                        }
                       />
-                      {isNcryptsec && (
-                        <p className="mt-1 text-xs text-green-600">
-                          ncryptsec detected — enter the passphrase used to
-                          encrypt it.
-                        </p>
-                      )}
                     </div>
                     <div>
-                      <label className="text-light-text dark:text-dark-text">
-                        {isNcryptsec
-                          ? "Decryption Passphrase "
-                          : "Encryption Passphrase "}
+                      <label className="mb-1 block text-xs font-bold text-zinc-500 uppercase">
+                        Encryption Passphrase:
                         <span className="text-red-500">*</span>
                       </label>
                       <Input
-                        type={showPassphrase ? "text" : "password"}
+                        type="password"
+                        variant="bordered"
+                        classNames={{
+                          input: "text-white text-base md:text-sm",
+                          inputWrapper:
+                            "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                        }}
                         width="100%"
                         size="lg"
                         value={passphrase}
-                        placeholder={
-                          isNcryptsec
-                            ? "Enter the passphrase used to encrypt..."
-                            : "Enter a passphrase of your choice..."
-                        }
+                        placeholder="Enter a passphrase of your choice..."
                         onChange={(e) => setPassphrase(e.target.value)}
                         onKeyDown={(e) => {
-                          if (
-                            e.key === "Enter" &&
-                            (validPrivateKey === "success" || isNcryptsec)
-                          )
+                          if (e.key === "Enter" && validPrivateKey)
                             handleSignIn();
                         }}
-                        endContent={
-                          <button
-                            type="button"
-                            onClick={() => setShowPassphrase((v) => !v)}
-                            className="text-gray-400"
-                          >
-                            {showPassphrase ? (
-                              <EyeSlashIcon className="h-5 w-5" />
-                            ) : (
-                              <EyeIcon className="h-5 w-5" />
-                            )}
-                          </button>
-                        }
                       />
-                      {ncryptsecError && (
-                        <p className="mt-1 text-xs text-red-500">
-                          {ncryptsecError}
-                        </p>
-                      )}
                     </div>
                     <div>
                       <Button
                         data-testid="nsec-submit-btn"
-                        className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                        className={`${NEO_BTN} h-10 w-full text-xs shadow-sm`}
                         onClick={handleSignIn}
-                        isDisabled={
-                          validPrivateKey !== "success" && !isNcryptsec
-                        }
+                        isDisabled={validPrivateKey != "success"}
                       >
-                        {isNcryptsec ? "ncryptsec Sign-in" : "nsec Sign-in"}
+                        nsec Sign-in
                       </Button>
                     </div>
                   </div>
                 </div>
-
-                <div className="mt-4 text-center">
-                  <button
-                    className="text-shopstr-purple-light dark:text-shopstr-yellow-light text-sm font-bold underline"
-                    onClick={() => {
-                      setShowSignInOptions(false);
-                      setShowSignUpOptions(true);
-                      setShowBunkerSignIn(false);
-                      setShowNsecSignIn(false);
-                      setBunkerToken("");
-                      setPrivateKey("");
-                      setPassphrase("");
-                    }}
-                  >
-                    New to Shopstr? Sign up
-                  </button>
+                <div className="flex flex-col md:hidden">
+                  <div className="mt-6 flex justify-center">
+                    <Image src="/signup.png" alt="sign up"></Image>
+                  </div>
+                  <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-zinc-800 bg-[#111] p-4 text-center">
+                    <div>
+                      <p className="text-lg font-bold text-white">
+                        New to Nostr?
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {" "}
+                        Sign up to get started!
+                      </p>
+                    </div>
+                    <Button
+                      className="h-10 w-full rounded-lg border border-zinc-600 bg-transparent text-sm font-bold tracking-wider text-white uppercase hover:border-white hover:bg-zinc-800"
+                      onClick={handleGenerateKeys}
+                    >
+                      Sign Up
+                    </Button>
+                  </div>
                 </div>
               </div>
-            )}
+            </div>
           </ModalBody>
         </ModalContent>
       </Modal>

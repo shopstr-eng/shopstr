@@ -1,15 +1,11 @@
 import { useContext, useEffect, useRef, useState } from "react";
 import { isP2pkEscrowFeatureEnabled } from "@/utils/cashu/p2pk-checkout";
 import { Event, nip19 } from "nostr-tools";
-import parseTags, {
-  ProductData,
-} from "@/utils/parsers/product-parser-functions";
-import { getListingSlug } from "@/utils/url-slugs";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { DisplayCheckoutCost } from "./display-monetary-info";
 import ProductInvoiceCard from "../product-invoice-card";
 import { useRouter } from "next/router";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   Button,
   Chip,
@@ -28,30 +24,23 @@ import {
   ArrowLongUpIcon,
   EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
-import {
-  ReviewsContext,
-  ProductContext,
-  ShopMapContext,
-} from "@/utils/context/context";
-import FreeShippingNotification from "../free-shipping-notification";
+import { ReviewsContext } from "@/utils/context/context";
 import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
 import SignInModal from "../sign-in/SignInModal";
 import currencySelection from "../../public/currencySelection.json";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import VolumeSelector from "./volume-selector";
-import WeightSelector from "./weight-selector";
-import BulkSelector from "./bulk-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
-import useReportEventFlow from "./use-report-event-flow";
-import { getLocalStorageJson } from "@/utils/safe-json";
-import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
 export default function CheckoutCard({
   productData,
+  setFiatOrderIsPlaced,
+  setFiatOrderFailed,
   setInvoiceIsPaid,
   setInvoiceGenerationFailed,
   setCashuPaymentSent,
@@ -61,10 +50,12 @@ export default function CheckoutCard({
   p2pk,
 }: {
   productData: ProductData;
-  setInvoiceIsPaid: (invoiceIsPaid: boolean) => void;
-  setInvoiceGenerationFailed: (invoiceGenerationFailed: boolean) => void;
-  setCashuPaymentSent: (cashuPaymentSent: boolean) => void;
-  setCashuPaymentFailed: (cashuPaymentFailed: boolean) => void;
+  setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
+  setFiatOrderFailed?: (fiatOrderFailed: boolean) => void;
+  setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
+  setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
+  setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
+  setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
   uniqueKey?: string;
   rawEvent?: Event;
   p2pk?: {
@@ -74,22 +65,11 @@ export default function CheckoutCard({
   };
 }) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
-  const productEventContext = useContext(ProductContext);
-  const shopMapContext = useContext(ShopMapContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const [showFreeShippingNotification, setShowFreeShippingNotification] =
-    useState(false);
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
 
   const router = useRouter();
-
-  const { openReportFlow, reportFlowUi } = useReportEventFlow({
-    targetLabel: "listing",
-    reportedPubkey: productData.pubkey,
-    reportedEventId: productData.id,
-    onRequireLogin: onOpen,
-  });
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [isBeingPaid, setIsBeingPaid] = useState(false);
@@ -112,14 +92,9 @@ export default function CheckoutCard({
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [successText, setSuccessText] = useState(
-    "Listing URL copied to clipboard!"
-  );
 
   const [cart, setCart] = useState<ProductData[]>([]);
   const [selectedVolume, setSelectedVolume] = useState<string>("");
-  const [selectedWeight, setSelectedWeight] = useState<string>("");
-  const [selectedBulkOption, setSelectedBulkOption] = useState<string>("1");
   const [currentPrice, setCurrentPrice] = useState(productData.price);
   const [discountCode, setDiscountCode] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState<number>(0);
@@ -128,9 +103,6 @@ export default function CheckoutCard({
   const reviewsContext = useContext(ReviewsContext);
 
   const hasVolumes = productData.volumes && productData.volumes.length > 0;
-  const hasWeights = productData.weights && productData.weights.length > 0;
-  const hasBulkPrices =
-    productData.bulkPrices && productData.bulkPrices.size > 0;
 
   const isExpired = productData.expiration
     ? Date.now() / 1000 > productData.expiration
@@ -140,39 +112,15 @@ export default function CheckoutCard({
     productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
 
   useEffect(() => {
-    if (
-      selectedBulkOption &&
-      selectedBulkOption !== "1" &&
-      productData.bulkPrices
-    ) {
-      const bulkPrice = productData.bulkPrices.get(
-        parseInt(selectedBulkOption)
-      );
-      if (bulkPrice !== undefined) {
-        setCurrentPrice(bulkPrice);
-      }
-    } else if (selectedVolume && productData.volumePrices) {
+    if (selectedVolume && productData.volumePrices) {
       const volumePrice = productData.volumePrices.get(selectedVolume);
       if (volumePrice !== undefined) {
         setCurrentPrice(volumePrice);
       }
-    } else if (selectedWeight && productData.weightPrices) {
-      const weightPrice = productData.weightPrices.get(selectedWeight);
-      if (weightPrice !== undefined) {
-        setCurrentPrice(weightPrice);
-      }
     } else {
       setCurrentPrice(productData.price);
     }
-  }, [
-    selectedVolume,
-    selectedWeight,
-    selectedBulkOption,
-    productData.price,
-    productData.volumePrices,
-    productData.weightPrices,
-    productData.bulkPrices,
-  ]);
+  }, [selectedVolume, productData.price, productData.volumePrices]);
 
   const p2pkIndicator = () => {
     if (!isP2pkEscrowFeatureEnabled() || !p2pk?.enabled) return null;
@@ -234,10 +182,9 @@ export default function CheckoutCard({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const cartList = getLocalStorageJson<ProductData[]>("cart", [], {
-        removeOnError: true,
-        validate: Array.isArray,
-      });
+      const cartList = localStorage.getItem("cart")
+        ? JSON.parse(localStorage.getItem("cart") as string)
+        : [];
       if (cartList && cartList.length > 0) {
         setCart(cartList);
       }
@@ -360,30 +307,11 @@ export default function CheckoutCard({
       }
       if (selectedVolume) {
         productToAdd.selectedVolume = selectedVolume;
+        // Set the volume price if one exists
         if (productData.volumePrices) {
           const volumePrice = productData.volumePrices.get(selectedVolume);
           if (volumePrice !== undefined) {
             productToAdd.volumePrice = volumePrice;
-          }
-        }
-      }
-      if (selectedWeight) {
-        productToAdd.selectedWeight = selectedWeight;
-        if (productData.weightPrices) {
-          const weightPrice = productData.weightPrices.get(selectedWeight);
-          if (weightPrice !== undefined) {
-            productToAdd.weightPrice = weightPrice;
-          }
-        }
-      }
-      if (selectedBulkOption && selectedBulkOption !== "1") {
-        productToAdd.selectedBulkOption = parseInt(selectedBulkOption);
-        if (productData.bulkPrices) {
-          const bulkPrice = productData.bulkPrices.get(
-            parseInt(selectedBulkOption)
-          );
-          if (bulkPrice !== undefined) {
-            productToAdd.bulkPrice = bulkPrice;
           }
         }
       }
@@ -392,28 +320,13 @@ export default function CheckoutCard({
       setCart(updatedCart);
       localStorage.setItem("cart", JSON.stringify(updatedCart));
 
-      const sellerShop = shopMapContext.shopData.get(productData.pubkey);
-      if (
-        sellerShop &&
-        sellerShop.content.freeShippingThreshold &&
-        sellerShop.content.freeShippingThreshold > 0
-      ) {
-        setShowFreeShippingNotification(true);
-      }
-
       // Store discount code if applied
       if (appliedDiscount > 0 && discountCode) {
-        const discounts = getLocalStorageJson<CartDiscountsMap>(
-          "cartDiscounts",
-          {},
-          {
-            removeOnError: true,
-            removeOnValidationError: true,
-            validate: isCartDiscountsMap,
-          }
-        );
+        const storedDiscounts = localStorage.getItem("cartDiscounts");
+        const discounts = storedDiscounts ? JSON.parse(storedDiscounts) : {};
         discounts[productData.pubkey] = {
           code: discountCode,
+          percentage: appliedDiscount,
         };
         localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
       }
@@ -423,45 +336,34 @@ export default function CheckoutCard({
   };
 
   const handleShare = async () => {
-    const allParsed = productEventContext.productEvents
-      .filter((e: Event) => e.kind !== 1)
-      .map((e: Event) => parseTags(e))
-      .filter((p: ProductData | undefined): p is ProductData => !!p);
-
-    const slug = getListingSlug(productData, allParsed);
-    const listingPath = slug || productData.id;
+    const naddr = nip19.naddrEncode({
+      identifier: productData.d as string,
+      pubkey: productData.pubkey,
+      kind: 30402,
+    });
+    // The content you want to share
     const shareData = {
       title: productData.title,
-      url: `${window.location.origin}/listing/${listingPath}`,
+      url: `${window.location.origin}/listing/${naddr}`,
     };
+    // Check if the Web Share API is available
     if (navigator.share) {
+      // Use the share API
       await navigator.share(shareData);
     } else {
+      // Fallback for browsers that do not support the Web Share API
       navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${listingPath}`
+        `${window.location.origin}/listing/${naddr}`
       );
-      setSuccessText("Listing URL copied to clipboard!");
       setShowSuccessModal(true);
     }
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     if (isLoggedIn) {
-      const allParsed = productEventContext.productEvents
-        .filter((e: Event) => e.kind !== 1)
-        .map((e: Event) => parseTags(e))
-        .filter((p: ProductData | undefined): p is ProductData => !!p);
-      const slug = getListingSlug(productData, allParsed);
-      const listingPath = slug || productData.id;
-      const productUrl = `${window.location.origin}/listing/${listingPath}`;
       router.push({
         pathname: "/orders",
-        query: {
-          pk: nip19.npubEncode(pubkeyToOpenChatWith),
-          isInquiry: true,
-          productTitle: productData.title,
-          productUrl,
-        },
+        query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
       });
     } else {
       onOpen();
@@ -515,10 +417,10 @@ export default function CheckoutCard({
           (productData.sizeQuantities?.get(size) || 0) > 0 ? (
             <button
               key={size}
-              className={`rounded-md border p-2 text-sm ${
+              className={`rounded-lg border p-2 text-sm font-bold tracking-wider uppercase ${
                 selectedSize === size
-                  ? "bg-shopstr-purple dark:bg-shopstr-yellow text-white dark:text-black"
-                  : "bg-white text-black dark:bg-black dark:text-white"
+                  ? "border-yellow-400 bg-yellow-400 text-black"
+                  : "border-zinc-700 bg-[#161616] text-zinc-400 hover:border-zinc-500 hover:text-white"
               }`}
               onClick={() => setSelectedSize(size)}
             >
@@ -541,6 +443,7 @@ export default function CheckoutCard({
 
   const discountedTotal = discountedPrice + (productData.shippingCost ?? 0);
 
+  // Create updated product data with selected volume price and discount
   const updatedProductData = {
     ...productData,
     price: discountedPrice,
@@ -551,33 +454,21 @@ export default function CheckoutCard({
       selectedVolume && productData.volumePrices
         ? productData.volumePrices.get(selectedVolume)
         : undefined,
-    weightPrice:
-      selectedWeight && productData.weightPrices
-        ? productData.weightPrices.get(selectedWeight)
-        : undefined,
-    selectedBulkOption:
-      selectedBulkOption && selectedBulkOption !== "1"
-        ? parseInt(selectedBulkOption)
-        : undefined,
-    bulkPrice:
-      selectedBulkOption && selectedBulkOption !== "1" && productData.bulkPrices
-        ? productData.bulkPrices.get(parseInt(selectedBulkOption))
-        : undefined,
   };
 
   return (
-    <div className="bg-light-bg dark:bg-dark-bg flex w-full items-center justify-center">
+    <div className="flex w-full items-center justify-center bg-[#111]">
       <div className="mx-auto flex w-full flex-col">
         {!isBeingPaid ? (
           <>
             <div className="max-w-screen pt-4">
               <div
-                className="mx-3 my-3 flex max-w-screen flex-row break-words whitespace-normal"
+                className="mx-3 my-3 flex max-w-screen flex-col gap-6 break-words whitespace-normal md:flex-row"
                 key={uniqueKey}
               >
-                <div className="w-1/2 pr-4">
+                <div className="w-full md:w-1/2">
                   <div className="flex w-full flex-row">
-                    <div className="flex w-1/4 flex-col pr-4">
+                    <div className="hidden w-1/4 flex-col pr-4 md:flex">
                       <div
                         ref={containerRef}
                         className="flex-1 overflow-hidden"
@@ -597,8 +488,8 @@ export default function CheckoutCard({
                               alt={`Product image ${index + 1}`}
                               className={`w-full cursor-pointer rounded-xl object-cover ${
                                 image === selectedImage
-                                  ? "border-shopstr-purple dark:border-shopstr-yellow border-2"
-                                  : ""
+                                  ? "border-2 border-yellow-400"
+                                  : "border border-zinc-800"
                               }`}
                               style={{ aspectRatio: "1 / 1" }}
                               onClick={() => setSelectedImage(image)}
@@ -609,7 +500,7 @@ export default function CheckoutCard({
                       {productData.images.length > 3 && (
                         <button
                           onClick={() => setShowAllImages(!showAllImages)}
-                          className="mt-2 flex flex-col items-center text-sm text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+                          className="mt-2 flex flex-col items-center text-sm text-yellow-500 hover:text-yellow-400"
                         >
                           {showAllImages ? (
                             <ArrowLongUpIcon className="h-5 w-5" />
@@ -619,17 +510,17 @@ export default function CheckoutCard({
                         </button>
                       )}
                     </div>
-                    <div className="w-3/4">
+                    <div className="w-full md:w-3/4">
                       <img
                         src={selectedImage}
                         alt="Selected product image"
-                        className="w-full rounded-xl object-cover"
+                        className="w-full rounded-2xl border border-zinc-800 object-cover shadow-2xl"
                         style={{ aspectRatio: "1 / 1" }}
                       />
                     </div>
                   </div>
                 </div>
-                <div className="w-1/2 px-3">
+                <div className="w-full px-1 md:w-1/2 md:px-3">
                   <div className="flex w-full flex-col gap-4">
                     <div className="flex flex-wrap items-center gap-4">
                       <ProfileWithDropdown
@@ -637,34 +528,34 @@ export default function CheckoutCard({
                         dropDownKeys={
                           productData.pubkey === userPubkey
                             ? ["shop_profile"]
-                            : ["shop", "inquiry", "copy_npub", "report_profile"]
+                            : ["shop", "inquiry", "copy_npub"]
                         }
                       />
                       {merchantQuality !== "" && (
-                        <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black px-2 dark:border-white">
+                        <div className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-[#161616] px-3 py-1">
                           {merchantReview >= 0.5 ? (
                             <>
                               <FaceSmileIcon
-                                className={`h-10 w-10 p-1 ${
+                                className={`h-6 w-6 ${
                                   merchantReview >= 0.75
                                     ? "text-green-500"
                                     : "text-green-300"
                                 }`}
                               />
-                              <span className="text-light-text dark:text-dark-text mr-2 text-sm whitespace-nowrap">
+                              <span className="text-xs font-bold tracking-wider whitespace-nowrap text-zinc-300 uppercase">
                                 {merchantQuality}
                               </span>
                             </>
                           ) : (
                             <>
                               <FaceFrownIcon
-                                className={`h-10 w-10 p-1 ${
+                                className={`h-6 w-6 ${
                                   merchantReview >= 0.25
                                     ? "text-red-300"
                                     : "text-red-500"
                                 }`}
                               />
-                              <span className="text-light-text dark:text-dark-text mr-2 text-sm whitespace-nowrap">
+                              <span className="text-xs font-bold tracking-wider whitespace-nowrap text-zinc-300 uppercase">
                                 {merchantQuality}
                               </span>
                             </>
@@ -674,7 +565,7 @@ export default function CheckoutCard({
                     </div>
                   </div>
                   <div className="mt-4 flex w-full items-start justify-between">
-                    <h2 className="text-light-text dark:text-dark-text text-left text-2xl font-bold">
+                    <h2 className="text-left text-2xl font-black tracking-tighter text-white uppercase">
                       {productData.title}
                       {isExpired && (
                         <Chip color="warning" variant="flat" className="ml-2">
@@ -683,44 +574,35 @@ export default function CheckoutCard({
                       )}
                     </h2>
                     {rawEvent && (
-                      <Dropdown>
+                      <Dropdown
+                        classNames={{
+                          content:
+                            "bg-[#161616] border border-zinc-800 rounded-xl",
+                        }}
+                      >
                         <DropdownTrigger>
                           <Button
                             isIconOnly
                             variant="light"
                             size="sm"
-                            className="h-8 min-w-8"
+                            className="h-8 min-w-8 text-zinc-400 hover:text-white"
                           >
-                            <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
+                            <EllipsisVerticalIcon className="h-6 w-6" />
                           </Button>
                         </DropdownTrigger>
                         <DropdownMenu aria-label="Event Actions">
-                          {[
-                            <DropdownItem
-                              key="view-raw"
-                              onPress={() => setShowRawEventModal(true)}
-                            >
-                              View Raw Event
-                            </DropdownItem>,
-                            <DropdownItem
-                              key="view-id"
-                              onPress={() => setShowEventIdModal(true)}
-                            >
-                              View Event ID
-                            </DropdownItem>,
-                            ...(productData.pubkey !== userPubkey
-                              ? [
-                                  <DropdownItem
-                                    key="report-listing"
-                                    color="danger"
-                                    className="text-danger"
-                                    onPress={openReportFlow}
-                                  >
-                                    Report Listing
-                                  </DropdownItem>,
-                                ]
-                              : []),
-                          ]}
+                          <DropdownItem
+                            key="view-raw"
+                            onPress={() => setShowRawEventModal(true)}
+                          >
+                            View Raw Event
+                          </DropdownItem>
+                          <DropdownItem
+                            key="view-id"
+                            onPress={() => setShowEventIdModal(true)}
+                          >
+                            View Event ID
+                          </DropdownItem>
                         </DropdownMenu>
                       </Dropdown>
                     )}
@@ -728,7 +610,7 @@ export default function CheckoutCard({
                   {productData.expiration && (
                     <p
                       className={`mt-1 text-left text-sm ${
-                        isExpired ? "font-medium text-red-500" : "text-gray-500"
+                        isExpired ? "font-medium text-red-500" : "text-zinc-500"
                       }`}
                     >
                       {isExpired ? "Expired on: " : "Valid until: "}{" "}
@@ -738,12 +620,17 @@ export default function CheckoutCard({
                     </p>
                   )}
                   {productData.condition && (
-                    <div className="text-light-text dark:text-dark-text text-left text-xs">
-                      <span>Condition: {productData.condition}</span>
+                    <div className="text-left text-xs font-bold tracking-wider text-zinc-400 uppercase">
+                      <span>
+                        Condition:{" "}
+                        <span className="text-white">
+                          {productData.condition}
+                        </span>
+                      </span>
                     </div>
                   )}
                   {productData.restrictions && (
-                    <div className="text-light-text dark:text-dark-text text-left text-xs">
+                    <div className="text-left text-xs font-bold tracking-wider text-zinc-400 uppercase">
                       <span>Restrictions: </span>
                       <span className="text-red-500">
                         {productData.restrictions}
@@ -751,13 +638,13 @@ export default function CheckoutCard({
                     </div>
                   )}
                   <div className="hidden sm:block">
-                    <p className="text-light-text dark:text-dark-text mt-4 w-full text-left text-lg break-words whitespace-pre-wrap">
+                    <p className="mt-4 w-full text-left text-base text-zinc-300">
                       {renderSummary()}
                     </p>
                     {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
                       <button
                         onClick={toggleExpand}
-                        className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+                        className="mt-2 text-sm font-bold text-yellow-500 hover:text-yellow-400"
                       >
                         {isExpanded ? "Show less" : "Show more"}
                       </button>
@@ -773,32 +660,8 @@ export default function CheckoutCard({
                       isRequired={true}
                     />
                   )}
-                  {hasWeights && (
-                    <WeightSelector
-                      weights={productData.weights!}
-                      weightPrices={productData.weightPrices!}
-                      currency={productData.currency}
-                      selectedWeight={selectedWeight}
-                      onWeightChange={setSelectedWeight}
-                      isRequired={true}
-                    />
-                  )}
-                  {hasBulkPrices && (
-                    <BulkSelector
-                      bulkPrices={productData.bulkPrices!}
-                      basePrice={productData.price}
-                      currency={productData.currency}
-                      selectedBulkOption={selectedBulkOption}
-                      onBulkChange={setSelectedBulkOption}
-                    />
-                  )}
                   <div className="mt-4">
                     <DisplayCheckoutCost monetaryInfo={updatedProductData} />
-                    {selectedBulkOption && selectedBulkOption !== "1" && (
-                      <p className="text-light-text dark:text-dark-text mt-1 text-sm">
-                        Bundle: {selectedBulkOption} units
-                      </p>
-                    )}
                   </div>
 
                   {isZapsnag ? (
@@ -809,29 +672,37 @@ export default function CheckoutCard({
                     <>
                       {productData.pubkey !== userPubkey && (
                         <div className="mt-4 space-y-2">
-                          <div className="flex gap-2">
+                          <p className="text-xs font-bold tracking-wider text-zinc-500 uppercase">
+                            DISCOUNT CODE
+                          </p>
+                          <div className="flex items-start gap-2">
                             <Input
-                              label="Discount Code"
                               placeholder="Enter code"
                               value={discountCode}
                               onChange={(e) =>
                                 setDiscountCode(e.target.value.toUpperCase())
                               }
-                              className="text-light-text dark:text-dark-text flex-1"
+                              className="flex-1"
+                              classNames={{
+                                input: "text-white",
+                                inputWrapper:
+                                  "bg-[#111] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-10",
+                              }}
+                              variant="bordered"
                               disabled={appliedDiscount > 0}
                               isInvalid={!!discountError}
                               errorMessage={discountError}
                             />
                             {appliedDiscount > 0 ? (
                               <Button
-                                color="warning"
+                                className="h-10 rounded-lg bg-red-500 font-bold tracking-wider text-white uppercase"
                                 onClick={handleRemoveDiscount}
                               >
                                 Remove
                               </Button>
                             ) : (
                               <Button
-                                className={SHOPSTRBUTTONCLASSNAMES}
+                                className="h-10 rounded-lg border border-zinc-700 bg-[#161616] font-bold tracking-wider text-zinc-300 uppercase hover:bg-zinc-800 hover:text-white"
                                 onClick={handleApplyDiscount}
                               >
                                 Apply
@@ -839,7 +710,7 @@ export default function CheckoutCard({
                             )}
                           </div>
                           {appliedDiscount > 0 && (
-                            <p className="text-sm text-green-600 dark:text-green-400">
+                            <p className="text-sm font-bold text-green-400">
                               {appliedDiscount}% discount applied! You save{" "}
                               {Math.ceil((discountAmount / 100) * 100) / 100}{" "}
                               {productData.currency}
@@ -863,15 +734,14 @@ export default function CheckoutCard({
                       </div>
                       {p2pkIndicator()}
                       {renderSizeGrid()}
-                      <div className="flex w-full flex-col gap-2">
+                      <div className="flex w-full flex-col gap-4 pt-2">
                         <div className="flex flex-wrap items-center gap-2">
                           {productData.status !== "sold" ? (
                             <>
                               <Button
-                                className={`text-dark-text dark:text-light-text min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 ${
+                                className={`${NEO_BTN} h-14 min-w-[140px] flex-1 px-8 text-lg font-black tracking-widest md:flex-none ${
                                   (hasSizes && !selectedSize) ||
-                                  (hasVolumes && !selectedVolume) ||
-                                  (hasWeights && !selectedWeight)
+                                  (hasVolumes && !selectedVolume)
                                     ? "cursor-not-allowed opacity-50"
                                     : ""
                                 }`}
@@ -879,18 +749,16 @@ export default function CheckoutCard({
                                 disabled={
                                   (hasSizes && !selectedSize) ||
                                   (hasVolumes && !selectedVolume) ||
-                                  (hasWeights && !selectedWeight) ||
                                   isExpired
                                 }
                               >
                                 Buy Now
                               </Button>
                               <Button
-                                className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                                className={`h-14 min-w-[140px] flex-1 rounded-xl border-2 border-zinc-700 bg-[#161616] px-6 text-sm font-bold tracking-wider text-zinc-300 uppercase hover:border-zinc-500 hover:text-white md:flex-none ${
                                   isAdded ||
                                   (hasSizes && !selectedSize) ||
-                                  (hasVolumes && !selectedVolume) ||
-                                  (hasWeights && !selectedWeight)
+                                  (hasVolumes && !selectedVolume)
                                     ? "cursor-not-allowed opacity-50"
                                     : ""
                                 }`}
@@ -899,7 +767,6 @@ export default function CheckoutCard({
                                   isAdded ||
                                   (hasSizes && !selectedSize) ||
                                   (hasVolumes && !selectedVolume) ||
-                                  (hasWeights && !selectedWeight) ||
                                   isExpired
                                 }
                               >
@@ -909,7 +776,7 @@ export default function CheckoutCard({
                           ) : (
                             <>
                               <Button
-                                className={`${SHOPSTRBUTTONCLASSNAMES} cursor-not-allowed opacity-50`}
+                                className="h-12 min-w-fit cursor-not-allowed rounded-xl border-2 border-zinc-800 bg-zinc-900 px-6 text-sm font-bold tracking-wider text-zinc-600 uppercase opacity-50"
                                 disabled
                               >
                                 Sold Out
@@ -918,7 +785,7 @@ export default function CheckoutCard({
                           )}
                           <Button
                             type="submit"
-                            className={SHOPSTRBUTTONCLASSNAMES}
+                            className="h-14 w-full rounded-xl border-2 border-zinc-700 bg-[#161616] px-6 text-sm font-bold tracking-wider text-zinc-300 uppercase hover:border-zinc-500 hover:text-white md:w-auto"
                             onClick={handleShare}
                           >
                             Share
@@ -935,7 +802,7 @@ export default function CheckoutCard({
                       className="cursor-pointer text-gray-500"
                     >
                       or{" "}
-                      <span className="hover:text-light-text dark:hover:text-dark-text underline">
+                      <span className="underline hover:text-white">
                         contact
                       </span>{" "}
                       seller
@@ -943,14 +810,14 @@ export default function CheckoutCard({
                   )}
                 </div>
               </div>
-              <div className="mx-3 my-3 max-w-full max-w-screen overflow-hidden sm:hidden">
-                <p className="text-light-text dark:text-dark-text w-full text-left text-lg break-words whitespace-pre-wrap">
+              <div className="mx-3 my-3 max-w-full max-w-screen overflow-hidden break-words whitespace-normal sm:hidden">
+                <p className="break-words-all w-full text-left text-base text-zinc-300">
                   {renderSummary()}
                 </p>
                 {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
                   <button
                     onClick={toggleExpand}
-                    className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+                    className="mt-2 text-sm font-bold text-yellow-500 hover:text-yellow-400"
                   >
                     {isExpanded ? "Show less" : "Show more"}
                   </button>
@@ -958,7 +825,7 @@ export default function CheckoutCard({
               </div>
               {!isFetchingReviews && productReviews && (
                 <div className="mt-4 max-w-full p-4 pt-4">
-                  <h3 className="text-light-text dark:text-dark-text mb-3 text-lg font-semibold">
+                  <h3 className="mb-3 text-lg font-black tracking-tighter text-white uppercase">
                     Product Reviews
                   </h3>
                   {productReviews.size > 0 ? (
@@ -967,7 +834,7 @@ export default function CheckoutCard({
                         ([reviewerPubkey, reviewData]) => (
                           <div
                             key={reviewerPubkey}
-                            className="rounded-lg border-2 border-black p-3 dark:border-white"
+                            className="rounded-xl border border-zinc-800 bg-[#161616] p-4"
                           >
                             <div className="mb-2 flex items-center gap-2">
                               <ProfileWithDropdown
@@ -975,12 +842,7 @@ export default function CheckoutCard({
                                 dropDownKeys={
                                   reviewerPubkey === userPubkey
                                     ? ["shop_profile"]
-                                    : [
-                                        "shop",
-                                        "inquiry",
-                                        "copy_npub",
-                                        "report_profile",
-                                      ]
+                                    : ["shop", "inquiry", "copy_npub"]
                                 }
                               />
                             </div>
@@ -995,10 +857,10 @@ export default function CheckoutCard({
                                       return (
                                         <Chip
                                           key={index}
-                                          className={`text-light-text dark:text-dark-text ${
+                                          className={`border text-xs font-bold tracking-wider uppercase ${
                                             value === "1"
-                                              ? "bg-green-500"
-                                              : "bg-red-500"
+                                              ? "border-green-900 bg-green-900/20 text-green-400"
+                                              : "border-red-900 bg-red-900/20 text-red-400"
                                           }`}
                                         >
                                           {`overall: ${
@@ -1011,10 +873,10 @@ export default function CheckoutCard({
                                       return (
                                         <Chip
                                           key={index}
-                                          className={`text-light-text dark:text-dark-text ${
+                                          className={`border text-xs font-bold tracking-wider uppercase ${
                                             value === "1"
-                                              ? "bg-green-500"
-                                              : "bg-red-500"
+                                              ? "border-green-900 bg-green-900/20 text-green-400"
+                                              : "border-red-900 bg-red-900/20 text-red-400"
                                           }`}
                                         >
                                           {`${category}: ${
@@ -1032,7 +894,7 @@ export default function CheckoutCard({
                                   return (
                                     <p
                                       key={index}
-                                      className="text-light-text dark:text-dark-text italic"
+                                      className="mt-2 text-sm text-zinc-300 italic"
                                     >
                                       &ldquo;{value}&rdquo;
                                     </p>
@@ -1047,12 +909,12 @@ export default function CheckoutCard({
                     </div>
                   ) : (
                     <div className="flex justify-center">
-                      <div className="bg-light-fg dark:bg-dark-fg w-full max-w-xl rounded-lg p-10 text-center shadow-lg">
-                        <span className="text-light-text dark:text-dark-text block text-5xl">
+                      <div className="w-full max-w-xl rounded-2xl border border-zinc-800 bg-[#161616] p-10 text-center">
+                        <span className="block text-4xl font-black tracking-tighter text-zinc-700 uppercase">
                           No reviews . . . yet!
                         </span>
                         <div className="flex flex-col items-center justify-center gap-3 pt-5 opacity-80">
-                          <span className="text-light-text dark:text-dark-text text-2xl">
+                          <span className="text-lg font-bold text-zinc-500">
                             Be the first to leave a review!
                           </span>
                         </div>
@@ -1068,16 +930,14 @@ export default function CheckoutCard({
             <ProductInvoiceCard
               productData={updatedProductData}
               setIsBeingPaid={setIsBeingPaid}
+              setFiatOrderIsPlaced={setFiatOrderIsPlaced}
+              setFiatOrderFailed={setFiatOrderFailed}
               setInvoiceIsPaid={setInvoiceIsPaid}
               setInvoiceGenerationFailed={setInvoiceGenerationFailed}
               setCashuPaymentSent={setCashuPaymentSent}
               setCashuPaymentFailed={setCashuPaymentFailed}
               selectedSize={selectedSize}
               selectedVolume={selectedVolume}
-              selectedWeight={selectedWeight}
-              selectedBulkOption={
-                selectedBulkOption ? parseInt(selectedBulkOption) : undefined
-              }
               discountCode={appliedDiscount > 0 ? discountCode : undefined}
               discountPercentage={
                 appliedDiscount > 0 ? appliedDiscount : undefined
@@ -1093,11 +953,10 @@ export default function CheckoutCard({
           onClose={() => setShowFailureModal(false)}
         />
         <SuccessModal
-          bodyText={successText}
+          bodyText="Listing URL copied to clipboard!"
           isOpen={showSuccessModal}
           onClose={() => setShowSuccessModal(false)}
         />
-        {reportFlowUi}
         <RawEventModal
           isOpen={showRawEventModal}
           onClose={() => setShowRawEventModal(false)}
@@ -1107,12 +966,6 @@ export default function CheckoutCard({
           isOpen={showEventIdModal}
           onClose={() => setShowEventIdModal(false)}
           rawEvent={rawEvent}
-        />
-        <FreeShippingNotification
-          isVisible={showFreeShippingNotification}
-          onClose={() => setShowFreeShippingNotification(false)}
-          shopData={shopMapContext.shopData}
-          cart={cart}
         />
       </div>
     </div>

@@ -21,7 +21,7 @@ import {
   Button,
   Input,
 } from "@heroui/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
@@ -30,10 +30,10 @@ import {
   Mint as CashuMint,
   Wallet as CashuWallet,
   getEncodedToken,
-  Keyset as MintKeyset,
+  MintKeyset,
   Proof,
 } from "@cashu/cashu-ts";
-import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import * as cashuCompat from "@/utils/cashu/compat";
 import { CashuWalletContext } from "../../utils/context/context";
 import {
   NostrContext,
@@ -85,22 +85,14 @@ const SendButton = () => {
     try {
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
-      await wallet.loadMint();
-      const mintKeySetIds = await wallet.keyChain.getKeysets();
+      const mintKeySetIds = await cashuCompat.getWalletKeysets(wallet);
       const filteredProofs = tokens.filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      ) as Proof[];
-      const sendTotal = numSats;
-      const swapOutcome = await safeSwap(wallet, sendTotal, filteredProofs, {
-        sendConfig: { includeFees: true },
+      );
+      const sendTotal = (numSats / 10) * 10;
+      const { keep, send } = await wallet.send(sendTotal, filteredProofs, {
+        includeFees: true,
       });
-      if (swapOutcome.status !== "swapped") {
-        throw new Error(
-          swapOutcome.errorMessage ??
-            `Token swap did not complete (${swapOutcome.status})`
-        );
-      }
-      const { keep, send } = swapOutcome;
 
       const deletedEventIds = [
         ...new Set([
@@ -108,7 +100,8 @@ const SendButton = () => {
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
                 filteredProofs.some(
-                  (filteredProof) => filteredProof.secret === proof.secret
+                  (filteredProof) =>
+                    JSON.stringify(proof) === JSON.stringify(filteredProof)
                 )
               )
             )
@@ -116,14 +109,20 @@ const SendButton = () => {
           ...walletContext.proofEvents
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
-                keep.some((keepProof) => keepProof.secret === proof.secret)
+                keep.some(
+                  (keepProof) =>
+                    JSON.stringify(proof) === JSON.stringify(keepProof)
+                )
               )
             )
             .map((event) => event.id),
           ...walletContext.proofEvents
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
-                send.some((sendProof) => sendProof.secret === proof.secret)
+                send.some(
+                  (sendProof) =>
+                    JSON.stringify(proof) === JSON.stringify(sendProof)
+                )
               )
             )
             .map((event) => event.id),
@@ -137,10 +136,9 @@ const SendButton = () => {
       setShowTokenCard(true);
       setNewToken(encodedSendToken);
       const changeProofs = keep;
-      const remainingProofs = tokens.filter(
-        (p: Proof) =>
-          !mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
-      ) as Proof[];
+      const remainingProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id)
+      );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {
         proofArray = [...remainingProofs, ...changeProofs];
@@ -180,11 +178,9 @@ const SendButton = () => {
   return (
     <div>
       <Button
-        className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
+        className={`${NEO_BTN} w-full py-6 text-sm font-black tracking-widest`}
         onClick={() => setShowSendModal(!showSendModal)}
-        startContent={
-          <ArrowUpTrayIcon className="h-6 w-6 hover:text-yellow-500 dark:hover:text-purple-500" />
-        }
+        startContent={<ArrowUpTrayIcon className="h-5 w-5 stroke-2" />}
       >
         Send
       </Button>
@@ -195,16 +191,15 @@ const SendButton = () => {
         classNames={{
           body: "py-6",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",
-          closeButton: "hover:bg-black/5 active:bg-white/10",
+          closeButton: "hover:bg-white/10 active:bg-white/20",
         }}
         scrollBehavior={"outside"}
-        size="2xl"
+        size="md"
       >
         <ModalContent>
-          <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
+          <ModalHeader className="flex flex-col gap-1 text-white">
             Send Tokens
           </ModalHeader>
           <form onSubmit={handleSendSubmit(onSendSubmit)}>
@@ -231,7 +226,8 @@ const SendButton = () => {
                     : "";
                   return (
                     <Input
-                      className="text-light-text dark:text-dark-text"
+                      className="text-white"
+                      classNames={{ input: "text-base" }} // Prevents iOS auto-zoom
                       autoFocus
                       variant="bordered"
                       fullWidth={true}
@@ -239,9 +235,8 @@ const SendButton = () => {
                       labelPlacement="inside"
                       isInvalid={isErrored}
                       errorMessage={errorMessage}
-                      // controller props
-                      onChange={onChange} // send value to hook form
-                      onBlur={onBlur} // notify when input is touched/blur
+                      onChange={onChange}
+                      onBlur={onBlur}
                       value={value}
                     />
                   );
@@ -249,8 +244,8 @@ const SendButton = () => {
               />
               {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
-                  <InformationCircleIcon className="text-light-text dark:text-dark-text h-6 w-6" />
-                  <p className="text-light-text dark:text-dark-text ml-2 text-xs">
+                  <InformationCircleIcon className="h-6 w-6 text-white" />
+                  <p className="ml-2 text-xs text-white">
                     If the token is taking a while to be generated, make sure to
                     check your bunker application to approve the transaction
                     events.
@@ -290,18 +285,18 @@ const SendButton = () => {
                   <Divider />
                   <CardBody className="flex flex-col items-center">
                     {newToken ? (
-                      <div className="flex flex-col items-center justify-center">
-                        <p className="break-all whitespace-break-spaces">
+                      <div className="flex w-full flex-col items-center justify-center">
+                        <p className="px-2 text-center text-xs break-all whitespace-break-spaces">
                           {newToken}
                         </p>
                         <ClipboardIcon
                           onClick={handleCopyTokenString}
-                          className={`text-light-text dark:text-dark-text ml-2 h-6 w-6 cursor-pointer ${
+                          className={`mt-4 h-8 w-8 cursor-pointer text-white ${
                             copiedToClipboard ? "hidden" : ""
                           }`}
                         />
                         <CheckIcon
-                          className={`text-light-text dark:text-dark-text ml-2 h-6 w-6 cursor-pointer ${
+                          className={`mt-4 h-8 w-8 cursor-pointer text-white ${
                             copiedToClipboard ? "" : "hidden"
                           }`}
                         />
@@ -329,7 +324,7 @@ const SendButton = () => {
                     Cancel
                   </Button>
 
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                  <Button className={NEO_BTN} type="submit">
                     Send
                   </Button>
                 </ModalFooter>

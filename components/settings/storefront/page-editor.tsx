@@ -92,13 +92,13 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
 
   return (
     <div>
-      <label className="text-light-text dark:text-dark-text mb-2 block text-base font-bold">
+      <label className="mb-2 block text-base font-bold text-white">
         Custom Pages
       </label>
-      <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
+      <p className="mb-3 text-sm text-zinc-400">
         Add custom pages to your storefront (e.g. About, FAQ, Contact). Each
         page gets its own URL at{" "}
-        <code className="bg-light-bg dark:bg-dark-bg rounded px-1 text-xs">
+        <code className="rounded bg-[#111] px-1 text-xs">
           /shop/[slug]/[page-slug]
         </code>
         .
@@ -107,7 +107,7 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
         {pages.map((page, i) => (
           <div
             key={page.id}
-            className="bg-light-fg dark:bg-dark-fg rounded-lg border-2 border-gray-400 dark:border-gray-500"
+            className="rounded-lg border border-2 border-zinc-700 border-zinc-800 bg-[#161616]"
           >
             <div className="flex items-center gap-2 p-3">
               <button
@@ -116,20 +116,18 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
                 className="flex flex-1 items-center gap-2 text-left"
               >
                 <ChevronRightIcon
-                  className={`text-light-text dark:text-dark-text h-4 w-4 flex-shrink-0 transition-transform ${
+                  className={`h-4 w-4 flex-shrink-0 text-white transition-transform ${
                     expandedIdx === i ? "rotate-90" : ""
                   }`}
                 />
-                <span className="text-light-text dark:text-dark-text text-sm font-bold">
+                <span className="text-sm font-bold text-white">
                   {page.title || "(Untitled Page)"}
                 </span>
                 {page.slug && (
-                  <span className="text-xs text-gray-400 dark:text-gray-500">
-                    /{page.slug}
-                  </span>
+                  <span className="text-xs text-zinc-500">/{page.slug}</span>
                 )}
                 {page.sections && page.sections.length > 0 && (
-                  <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-xs text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                  <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-xs text-zinc-400">
                     {page.sections.length} section
                     {page.sections.length !== 1 ? "s" : ""}
                   </span>
@@ -138,13 +136,13 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
               <button
                 type="button"
                 onClick={() => removePage(i)}
-                className="rounded p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                className="rounded p-1 text-red-500 hover:bg-red-50"
               >
                 <TrashIcon className="h-4 w-4" />
               </button>
             </div>
             {expandedIdx === i && (
-              <div className="dark:border-dark-fg space-y-4 border-t-2 border-gray-200 p-3">
+              <div className="space-y-4 border-t-2 border-zinc-800 p-3">
                 <Input
                   variant="bordered"
                   size="sm"
@@ -167,15 +165,13 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
                     updatePage(i, { slug: slugify(e.target.value) })
                   }
                   startContent={
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
-                      /
-                    </span>
+                    <span className="text-xs text-zinc-500">/</span>
                   }
                   description="Only letters, numbers, and hyphens"
                 />
 
                 <div>
-                  <p className="text-light-text dark:text-dark-text mb-2 text-xs font-semibold">
+                  <p className="mb-2 text-xs font-semibold text-white">
                     Page Sections
                   </p>
                   <div className="space-y-2">
@@ -200,7 +196,7 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
                         key={st.type}
                         type="button"
                         onClick={() => addSectionToPage(i, st.type)}
-                        className="hover:border-shopstr-purple hover:text-shopstr-purple dark:hover:border-shopstr-yellow dark:hover:text-shopstr-yellow rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600 dark:border-gray-600 dark:text-gray-400"
+                        className="rounded border border-zinc-800 bg-[#111] px-2 py-1 text-xs font-medium text-zinc-400 hover:border-yellow-400 hover:text-yellow-300"
                       >
                         + {st.label}
                       </button>
@@ -215,7 +211,7 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
       <button
         type="button"
         onClick={addPage}
-        className="mt-3 text-sm font-bold text-blue-600 hover:underline dark:text-blue-400"
+        className="mt-3 text-sm font-bold text-yellow-300 hover:underline"
       >
         + Add Custom Page
       </button>

@@ -9,11 +9,11 @@ import Transactions from "../../components/wallet/transactions";
 import {
   Mint as CashuMint,
   Wallet as CashuWallet,
-  Keyset as MintKeyset,
+  MintKeyset,
   Proof,
 } from "@cashu/cashu-ts";
+import * as cashuCompat from "@/utils/cashu/compat";
 import ProtectedRoute from "@/components/utility-components/protected-route";
-import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
@@ -36,8 +36,7 @@ const Wallet = () => {
   useEffect(() => {
     const fetchLocalKeySet = async () => {
       if (wallet) {
-        await wallet.loadMint();
-        const mintKeySetIdsArray = await wallet.keyChain.getKeysets();
+        const mintKeySetIdsArray = await cashuCompat.getWalletKeysets(wallet);
         if (mintKeySetIdsArray) {
           setMintKeySetIds(mintKeySetIdsArray);
         }
@@ -57,21 +56,40 @@ const Wallet = () => {
 
   useEffect(() => {
     if (tokens) {
-      const tokensTotal = tokens.length >= 1 ? sumProofAmounts(tokens) : 0;
+      const tokensTotal =
+        tokens.length >= 1
+          ? tokens.reduce(
+              (acc, token: Proof) => acc + cashuCompat.proofAmount(token),
+              0
+            )
+          : 0;
       setTotalBalance(tokensTotal);
     }
 
     const walletTotal =
-      filteredProofs.length >= 1 ? sumProofAmounts(filteredProofs) : 0;
+      filteredProofs.length >= 1
+        ? filteredProofs.reduce(
+            (acc, p: Proof) => acc + cashuCompat.proofAmount(p),
+            0
+          )
+        : 0;
     setWalletBalance(walletTotal);
   }, [tokens, filteredProofs]);
 
   useEffect(() => {
     const interval = setInterval(() => {
+      // Optimization: Do not poll if the tab is in the background
+      if (document.hidden) return;
       const { tokens: newTokens } = getLocalStorageData();
       if (newTokens) {
         const tokensTotal =
-          newTokens.length >= 1 ? sumProofAmounts(newTokens as Proof[]) : 0;
+          newTokens.length >= 1
+            ? newTokens.reduce(
+                (acc: number, token: Proof) =>
+                  acc + cashuCompat.proofAmount(token),
+                0
+              )
+            : 0;
         setTotalBalance(tokensTotal);
 
         if (mintKeySetIds) {
@@ -80,7 +98,10 @@ const Wallet = () => {
           );
           const newWalletTotal =
             newFilteredProofs.length >= 1
-              ? sumProofAmounts(newFilteredProofs)
+              ? newFilteredProofs.reduce(
+                  (acc: number, p: Proof) => acc + cashuCompat.proofAmount(p),
+                  0
+                )
               : 0;
           setWalletBalance(newWalletTotal);
         }
@@ -96,19 +117,25 @@ const Wallet = () => {
 
   return (
     <ProtectedRoute>
-      <div className="bg-light-bg dark:bg-dark-bg flex min-h-screen flex-col px-4 pt-[8rem]">
-        <div className="mx-auto w-full max-w-3xl">
-          <div className="mb-8 rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
-            <h1 className="text-light-text dark:text-dark-text mb-2 text-center text-6xl font-bold">
-              {totalBalance} sats
+      <div className="flex min-h-screen flex-col items-center bg-[#050505] px-4 pt-24 md:pt-36">
+        <div className="w-full max-w-4xl space-y-8">
+          {/* Balance & Actions Card */}
+          <div className="rounded-3xl border border-white/10 bg-[#111] px-6 py-10 shadow-2xl md:px-16 md:py-16">
+            <h1 className="flex items-baseline justify-center gap-2 text-center text-5xl font-black text-white md:text-8xl">
+              {totalBalance}{" "}
+              <span className="text-2xl font-bold text-gray-600 md:text-5xl">
+                sats
+              </span>
             </h1>
             <p
-              className="mb-4 cursor-pointer text-center text-sm break-words text-gray-500 italic transition-colors hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
+              className="mt-6 cursor-pointer text-center font-mono text-sm break-words text-gray-600 transition-colors hover:text-gray-400"
               onClick={handleMintClick}
             >
               {mint}: {walletBalance} sats
             </p>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+
+            {/* Action Buttons Grid */}
+            <div className="mt-16 grid grid-cols-2 gap-4 md:grid-cols-4">
               <div className="flex items-center justify-center">
                 <ReceiveButton />
               </div>
@@ -124,7 +151,8 @@ const Wallet = () => {
             </div>
           </div>
 
-          <div className="flex justify-center">
+          {/* Transactions Container */}
+          <div className="rounded-3xl border border-white/10 bg-[#111] p-1">
             <Transactions />
           </div>
         </div>

@@ -23,8 +23,8 @@ export default function VolumeSelector({
     <Select
       variant="bordered"
       aria-label="Volume"
-      label="Select Volume"
-      labelPlacement="inside"
+      label="SELECT VOLUME"
+      labelPlacement="outside"
       selectedKeys={selectedVolume ? new Set([selectedVolume]) : new Set()}
       onSelectionChange={(keys) => {
         const selectedKey = Array.from(keys)[0] as string;
@@ -32,17 +32,24 @@ export default function VolumeSelector({
           onVolumeChange(selectedKey);
         }
       }}
+      classNames={{
+        label: "text-zinc-500 font-bold uppercase tracking-wider text-xs",
+        trigger:
+          "bg-[#111] border-zinc-700 data-[hover=true]:border-zinc-500 data-[focus=true]:border-yellow-400 rounded-xl",
+        value: "text-white font-bold text-base",
+        popoverContent: "bg-[#161616] border border-zinc-800 rounded-xl p-1",
+      }}
       isRequired={isRequired}
-      className="text-light-text dark:text-dark-text mb-4 w-full md:w-1/2"
+      className="mb-4 w-full md:w-1/2"
     >
-      <SelectSection className="text-light-text dark:text-dark-text">
+      <SelectSection>
         {volumes.map((volume) => {
           const price = volumePrices.get(volume) || 0;
           return (
             <SelectItem
               key={volume}
               textValue={`${volume} - ${price} ${currency}`}
-              className="text-light-text dark:text-dark-text"
+              className="rounded-lg text-zinc-300 data-[hover=true]:bg-zinc-800 data-[hover=true]:text-white data-[selectable=true]:focus:bg-zinc-800"
             >
               {volume} - {price} {currency}
             </SelectItem>

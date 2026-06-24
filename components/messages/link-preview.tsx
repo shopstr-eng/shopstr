@@ -62,9 +62,7 @@ const LinkPreview = ({
   } catch {}
 
   const linkClass = `underline ${
-    isUserMessage
-      ? "text-white/90 hover:text-white"
-      : "text-shopstr-purple dark:text-shopstr-yellow"
+    isUserMessage ? "text-white/90 hover:text-white" : "text-yellow-300"
   }`;
 
   if (status === "loading" || status === "link") {
@@ -89,7 +87,7 @@ const LinkPreview = ({
       className={`mt-1 block overflow-hidden rounded-lg border no-underline transition-opacity hover:opacity-80 ${
         isUserMessage
           ? "border-white/30 bg-white/10"
-          : "border-gray-200 bg-white dark:border-gray-600 dark:bg-gray-800"
+          : "border-zinc-800 bg-white"
       }`}
       onClick={(e) => e.stopPropagation()}
     >
@@ -107,9 +105,7 @@ const LinkPreview = ({
         {ogData?.title && (
           <p
             className={`truncate text-sm font-semibold ${
-              isUserMessage
-                ? "text-white"
-                : "text-light-text dark:text-dark-text"
+              isUserMessage ? "text-white" : "text-white"
             }`}
           >
             {ogData.title}
@@ -118,9 +114,7 @@ const LinkPreview = ({
         {ogData?.description && (
           <p
             className={`mt-0.5 line-clamp-2 text-xs ${
-              isUserMessage
-                ? "text-white/70"
-                : "text-light-text/70 dark:text-dark-text/70"
+              isUserMessage ? "text-white/70" : "text-zinc-400"
             }`}
           >
             {ogData.description}
@@ -128,9 +122,7 @@ const LinkPreview = ({
         )}
         <p
           className={`mt-1 truncate text-xs ${
-            isUserMessage
-              ? "text-white/50"
-              : "text-light-text/50 dark:text-dark-text/50"
+            isUserMessage ? "text-white/50" : "text-zinc-500"
           }`}
         >
           {hostname}

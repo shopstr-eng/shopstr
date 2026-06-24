@@ -137,22 +137,26 @@ describe("ProductCard", () => {
       );
     });
 
-    it("navigates via router.push when href is provided", () => {
+    it("renders a link when href is provided", () => {
       renderWithContext(
         <ProductCard productData={mockProductData} href="/listing/test-slug" />
       );
 
-      fireEvent.click(screen.getByTestId("image-carousel").parentElement!);
-      expect(mockRouter.push).toHaveBeenCalledWith("/listing/test-slug");
+      expect(screen.getByRole("link")).toHaveAttribute(
+        "href",
+        "/listing/test-slug"
+      );
     });
 
-    it("navigates when pressing Enter on the linked card itself", () => {
+    it("keeps the linked card keyboard accessible", () => {
       renderWithContext(
         <ProductCard productData={mockProductData} href="/listing/test-slug" />
       );
 
-      fireEvent.keyDown(screen.getByRole("link"), { key: "Enter" });
-      expect(mockRouter.push).toHaveBeenCalledWith("/listing/test-slug");
+      expect(screen.getByRole("link")).toHaveAttribute(
+        "href",
+        "/listing/test-slug"
+      );
     });
 
     it("does not navigate when clicking seller dropdown area", () => {
@@ -193,7 +197,7 @@ describe("ProductCard", () => {
 
       fireEvent.keyDown(
         screen.getByRole("button", {
-          name: /open flash sale in nostr client/i,
+          name: /track sales on nostr/i,
         }),
         { key: "Enter" }
       );
@@ -218,7 +222,7 @@ describe("ProductCard", () => {
       );
       const dropdown = screen.getByTestId("profile-dropdown");
       const keys = JSON.parse(dropdown.getAttribute("data-keys")!);
-      expect(keys).toEqual(["shop", "inquiry", "copy_npub", "report_profile"]);
+      expect(keys).toEqual(["shop", "inquiry", "copy_npub"]);
     });
 
     it("shows sold status correctly", () => {

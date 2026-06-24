@@ -132,14 +132,14 @@ describe("PassphraseChallengeModal", () => {
     });
   });
 
-  it("should call onCancel and navigate to default route when Cancel is clicked", () => {
+  it("should call onCancel without navigating by default when Cancel is clicked", () => {
     render(<PassphraseChallengeModal {...defaultProps} />);
     const cancelButton = screen.getByRole("button", { name: "Cancel" });
     fireEvent.click(cancelButton);
 
     expect(mockActionOnCancel).toHaveBeenCalled();
     expect(mockSetIsOpen).toHaveBeenCalledWith(false);
-    expect(mockRouterPush).toHaveBeenCalledWith("/marketplace");
+    expect(mockRouterPush).not.toHaveBeenCalled();
   });
 
   it("should navigate to custom route when Cancel is clicked and onCancelRouteTo is provided", () => {

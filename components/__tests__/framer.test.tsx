@@ -74,8 +74,8 @@ describe("Framer.Tabs", () => {
     const activeTab = screen.getByText("Tab 2");
     const inactiveTab = screen.getByText("Tab 1");
 
-    expect(activeTab).toHaveClass("font-bold");
-    expect(inactiveTab).not.toHaveClass("font-bold");
+    expect(activeTab).toHaveClass("font-black");
+    expect(inactiveTab).not.toHaveClass("font-black");
   });
 
   it("should call setSelectedTab with the correct index and direction when a tab is clicked", () => {

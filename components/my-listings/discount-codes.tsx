@@ -1,16 +1,8 @@
 import { useContext, useEffect, useState } from "react";
-import { Button, Input, Card, CardBody, CardHeader, Chip } from "@heroui/react";
+import { Button, Input, Card, CardBody, Chip } from "@heroui/react";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import { TrashIcon } from "@heroicons/react/24/outline";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { formatCurrentDateTimeLocalValue } from "@/utils/datetime-local";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import {
-  buildDiscountCodeCreateProof,
-  buildDiscountCodeDeleteProof,
-  buildDiscountCodesListProof,
-  buildSignedHttpRequestProofTemplate,
-  SIGNED_EVENT_HEADER,
-} from "@/utils/nostr/request-auth";
 import ConfirmActionDropdown from "../utility-components/dropdowns/confirm-action-dropdown";
 
 interface DiscountCode {
@@ -20,7 +12,7 @@ interface DiscountCode {
 }
 
 export default function DiscountCodes() {
-  const { pubkey, signer } = useContext(SignerContext);
+  const { pubkey } = useContext(SignerContext);
   const [codes, setCodes] = useState<DiscountCode[]>([]);
   const [newCode, setNewCode] = useState("");
   const [newDiscount, setNewDiscount] = useState("");
@@ -29,24 +21,18 @@ export default function DiscountCodes() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (pubkey && signer) {
+    if (pubkey) {
       fetchCodes();
     }
-  }, [pubkey, signer]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pubkey]);
 
   const fetchCodes = async () => {
-    if (!pubkey || !signer) return;
+    if (!pubkey) return;
 
     setIsLoading(true);
     try {
-      const signedEvent = await signer.sign(
-        buildSignedHttpRequestProofTemplate(buildDiscountCodesListProof(pubkey))
-      );
-      const response = await fetch(`/api/db/discount-codes?pubkey=${pubkey}`, {
-        headers: {
-          [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
-        },
-      });
+      const response = await fetch(`/api/db/discount-codes?pubkey=${pubkey}`);
       if (response.ok) {
         const data = await response.json();
         setCodes(data);
@@ -59,7 +45,7 @@ export default function DiscountCodes() {
   };
 
   const handleAddCode = async () => {
-    if (!pubkey || !signer || !newCode || !newDiscount) return;
+    if (!pubkey || !newCode || !newDiscount) return;
 
     const discount = parseFloat(newDiscount);
     if (discount <= 0 || discount > 100) {
@@ -69,29 +55,15 @@ export default function DiscountCodes() {
 
     setIsSaving(true);
     try {
-      const normalizedCode = newCode.toUpperCase();
       const expiration = newExpiration
         ? Math.floor(new Date(newExpiration).getTime() / 1000)
         : undefined;
-      const signedEvent = await signer.sign(
-        buildSignedHttpRequestProofTemplate(
-          buildDiscountCodeCreateProof({
-            code: normalizedCode,
-            pubkey,
-            discountPercentage: discount,
-            expiration,
-          })
-        )
-      );
 
       const response = await fetch("/api/db/discount-codes", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          code: normalizedCode,
+          code: newCode.toUpperCase(),
           pubkey,
           discountPercentage: discount,
           expiration,
@@ -115,20 +87,12 @@ export default function DiscountCodes() {
   };
 
   const handleDeleteCode = async (code: string) => {
-    if (!pubkey || !signer) return;
+    if (!pubkey) return;
 
     try {
-      const signedEvent = await signer.sign(
-        buildSignedHttpRequestProofTemplate(
-          buildDiscountCodeDeleteProof({ code, pubkey })
-        )
-      );
       const response = await fetch("/api/db/discount-codes", {
         method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code, pubkey }),
       });
 
@@ -151,96 +115,128 @@ export default function DiscountCodes() {
   return (
     <div className="w-full space-y-6 p-4">
       <div className="mb-6">
-        <h2 className="text-light-text dark:text-dark-text mb-2 text-2xl font-bold">
+        <h2 className="mb-2 text-2xl font-black tracking-wide text-white uppercase">
           Discount Codes
         </h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
+        <p className="text-sm text-zinc-400">
           Create discount codes that customers can use at checkout to reduce the
           price of all products in their order.
         </p>
       </div>
 
-      <Card className="bg-light-fg dark:bg-dark-fg">
-        <CardHeader>
-          <h3 className="text-light-text dark:text-dark-text text-lg font-semibold">
+      <div className="rounded-2xl border border-zinc-800 bg-[#161616] p-4 shadow-none sm:p-6">
+        <div className="mb-4">
+          <h3 className="text-lg font-bold tracking-wider text-white uppercase">
             Add New Discount Code
           </h3>
-        </CardHeader>
-        <CardBody className="space-y-4">
-          <Input
-            label="Code"
-            placeholder="SUMMER2024"
-            value={newCode}
-            onChange={(e) => setNewCode(e.target.value.toUpperCase())}
-            className="text-light-text dark:text-dark-text"
-          />
-          <Input
-            type="number"
-            label="Discount Percentage"
-            placeholder="10"
-            min="0.01"
-            max="100"
-            step="0.01"
-            value={newDiscount}
-            onChange={(e) => setNewDiscount(e.target.value)}
-            endContent={<span className="text-default-400">%</span>}
-            className="text-light-text dark:text-dark-text"
-          />
+        </div>
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Input
+              label="Code"
+              placeholder="SUMMER2024"
+              value={newCode}
+              onChange={(e) => setNewCode(e.target.value.toUpperCase())}
+              classNames={{
+                input: "text-white placeholder:text-zinc-600 text-base",
+                inputWrapper:
+                  "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-14",
+                label: "text-zinc-400",
+              }}
+              variant="bordered"
+              labelPlacement="outside"
+            />
+            <Input
+              type="number"
+              label="Discount Percentage"
+              placeholder="10"
+              min="0.01"
+              max="100"
+              step="0.01"
+              value={newDiscount}
+              onChange={(e) => setNewDiscount(e.target.value)}
+              endContent={<span className="text-zinc-500">%</span>}
+              classNames={{
+                input: "text-white placeholder:text-zinc-600 text-base",
+                inputWrapper:
+                  "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-14",
+                label: "text-zinc-400",
+              }}
+              variant="bordered"
+              labelPlacement="outside"
+            />
+          </div>
           <Input
             type="datetime-local"
             label="Expiration (Optional)"
             placeholder="Select expiration date"
             value={newExpiration}
             onChange={(e) => setNewExpiration(e.target.value)}
-            min={formatCurrentDateTimeLocalValue()}
-            className="text-light-text dark:text-dark-text"
+            min={new Date().toISOString().slice(0, 16)}
+            classNames={{
+              input: "text-white placeholder:text-zinc-600 text-base",
+              inputWrapper:
+                "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-14",
+              label: "text-zinc-400",
+            }}
+            variant="bordered"
+            labelPlacement="outside"
           />
           <Button
-            className={SHOPSTRBUTTONCLASSNAMES}
+            className={`${NEO_BTN} h-12 w-full text-sm font-bold tracking-wide`}
             onClick={handleAddCode}
             isDisabled={!newCode || !newDiscount || isSaving}
             isLoading={isSaving}
           >
             Add Code
           </Button>
-        </CardBody>
-      </Card>
+        </div>
+      </div>
 
       <div className="space-y-3">
-        <h3 className="text-light-text dark:text-dark-text text-lg font-semibold">
+        <h3 className="text-lg font-bold tracking-wider text-white uppercase">
           Active Codes
         </h3>
         {isLoading ? (
-          <p className="text-light-text dark:text-dark-text">Loading...</p>
+          <p className="text-zinc-400">Loading...</p>
         ) : codes.length === 0 ? (
-          <Card className="bg-light-fg dark:bg-dark-fg">
+          <Card className="border border-dashed border-zinc-700 bg-transparent shadow-none">
             <CardBody>
-              <p className="text-center text-gray-500">
+              <p className="text-center text-zinc-500">
                 No discount codes yet. Create one above!
               </p>
             </CardBody>
           </Card>
         ) : (
           codes.map((code) => (
-            <Card key={code.code} className="bg-light-fg dark:bg-dark-fg">
+            <Card
+              key={code.code}
+              className="rounded-xl border border-zinc-800 bg-[#161616] shadow-none"
+            >
               <CardBody>
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-light-text dark:text-dark-text font-mono text-lg font-bold">
+                      <span className="font-mono text-xl font-bold text-white">
                         {code.code}
                       </span>
                       {isExpired(code.expiration) && (
-                        <Chip color="warning" size="sm">
+                        <Chip
+                          classNames={{
+                            base: "bg-red-500/20 text-red-500 border border-red-500/50",
+                          }}
+                          size="sm"
+                          variant="bordered"
+                        >
                           Expired
                         </Chip>
                       )}
                     </div>
-                    <p className="text-light-text dark:text-dark-text text-sm">
+                    <p className="text-sm text-zinc-300">
                       {code.discount_percentage}% off
                     </p>
                     {code.expiration && (
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-zinc-500">
                         {isExpired(code.expiration)
                           ? "Expired on: "
                           : "Expires: "}

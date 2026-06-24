@@ -58,8 +58,8 @@ function renderModal(open = true) {
   return { user, push, onClose };
 }
 
-async function openSignInOptions(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getAllByRole("button", { name: /sign in/i })[0]!);
+async function openSignInOptions(_user: ReturnType<typeof userEvent.setup>) {
+  // The revamp modal renders sign-in options immediately.
 }
 
 describe("SignInModal", () => {
@@ -80,9 +80,6 @@ describe("SignInModal", () => {
     const { user, push } = renderModal();
     const btn = screen.getAllByRole("button", { name: /sign up/i })[0]!;
     await user.click(btn);
-    await user.click(
-      screen.getByRole("button", { name: /create new account/i })
-    );
     await waitFor(() => expect(push).toHaveBeenCalledWith("/onboarding/keys"));
   });
 
@@ -105,7 +102,7 @@ describe("SignInModal", () => {
           readRelays: mockRelays.readRelayList,
           writeRelays: mockRelays.writeRelayList,
         });
-        expect(push).toHaveBeenCalledWith("/marketplace");
+        expect(push).toHaveBeenCalledWith("/onboarding/user-profile");
       });
     });
 
@@ -167,7 +164,7 @@ describe("SignInModal", () => {
           readRelays: mockRelays.readRelayList,
           writeRelays: mockRelays.writeRelayList,
         });
-        expect(push).toHaveBeenCalledWith("/marketplace");
+        expect(push).toHaveBeenCalledWith("/onboarding/user-profile");
       });
     });
 
@@ -199,7 +196,7 @@ describe("SignInModal", () => {
       await user.click(screen.getByTestId("nsec-open-btn"));
 
       const pkInput = await screen.findByPlaceholderText(
-        /paste your nsec or ncryptsec/i
+        /paste your nostr private key/i
       );
       await user.type(pkInput, "abc");
       expect(helpers.validateNSecKey).toHaveBeenCalledWith("abc");
@@ -215,7 +212,7 @@ describe("SignInModal", () => {
       await user.click(screen.getByTestId("nsec-open-btn"));
 
       const pkInput = await screen.findByPlaceholderText(
-        /paste your nsec or ncryptsec/i
+        /paste your nostr private key/i
       );
       const passInput = screen.getByPlaceholderText(
         /enter a passphrase of your choice/i
@@ -239,7 +236,7 @@ describe("SignInModal", () => {
           readRelays: mockRelays.readRelayList,
           writeRelays: mockRelays.writeRelayList,
         });
-        expect(push).toHaveBeenCalledWith("/marketplace");
+        expect(push).toHaveBeenCalledWith("/onboarding/user-profile");
       });
     });
 
@@ -250,7 +247,7 @@ describe("SignInModal", () => {
       await user.click(screen.getByTestId("nsec-open-btn"));
 
       const pkInput = await screen.findByPlaceholderText(
-        /paste your nsec or ncryptsec/i
+        /paste your nostr private key/i
       );
       await user.type(pkInput, "nsec1validkey");
 

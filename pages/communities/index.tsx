@@ -1,14 +1,38 @@
-import { useContext, useState, useMemo } from "react";
+import { useContext, useState, useMemo, useEffect } from "react";
 import { CommunityContext } from "@/utils/context/context";
 import CommunityCard from "@/components/communities/CommunityCard";
-import { Spinner, Input, Divider } from "@heroui/react";
+import { Spinner, Input } from "@heroui/react";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import { UserGroupIcon } from "@heroicons/react/24/outline";
 
 const CommunitiesDiscoveryPage = () => {
   const { communities, isLoading } = useContext(CommunityContext);
   const { pubkey } = useContext(SignerContext);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [showEmptyFallback, setShowEmptyFallback] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (!isLoading || communities.size > 0) {
+      setShowEmptyFallback(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setShowEmptyFallback(true);
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, [communities.size, isLoading]);
 
   const { myCommunities, otherCommunities } = useMemo(() => {
     const all = Array.from(communities.values());
@@ -18,30 +42,41 @@ const CommunitiesDiscoveryPage = () => {
   }, [communities, pubkey]);
 
   const filteredOtherCommunities = useMemo(() => {
-    if (!searchQuery) {
+    if (!debouncedQuery) {
       return otherCommunities;
     }
     return otherCommunities.filter(
       (community) =>
-        community.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        community.description.toLowerCase().includes(searchQuery.toLowerCase())
+        community.name.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
+        community.description
+          .toLowerCase()
+          .includes(debouncedQuery.toLowerCase())
     );
-  }, [otherCommunities, searchQuery]);
+  }, [otherCommunities, debouncedQuery]);
+
+  const hasCommunityFetchSettled = !isLoading || showEmptyFallback;
+  const shouldShowLoading =
+    isLoading && communities.size === 0 && !showEmptyFallback;
 
   return (
-    <div className="bg-light-bg dark:bg-dark-bg flex min-h-screen flex-col pt-24 md:pb-20">
+    <div className="flex min-h-screen flex-col bg-[#050505] pt-32 md:pb-20">
       <div className="container mx-auto max-w-7xl px-4">
-        {isLoading && communities.size === 0 ? (
+        {shouldShowLoading ? (
           <div className="flex justify-center pt-10">
-            <Spinner label="Loading communities..." />
+            <Spinner label="Loading communities..." color="warning" />
           </div>
         ) : (
           <>
-            {/* --- Main Heading and Search Bar (Centered) --- */}
-            <h1 className="text-light-text dark:text-dark-text mb-4 text-center text-4xl font-bold">
-              Discover Communities
-            </h1>
-            <div className="mb-8 flex justify-center">
+            {/* --- Header --- */}
+            <div className="mb-16 flex flex-col items-center">
+              <div className="border-shopstr-yellow text-shopstr-yellow mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border-2">
+                <UserGroupIcon className="h-8 w-8" />
+              </div>
+              <h1 className="mb-8 text-center text-4xl font-black tracking-tighter text-white uppercase md:text-6xl">
+                Discover{" "}
+                <span className="text-shopstr-yellow">Communities</span>
+              </h1>
+
               <Input
                 isClearable
                 aria-label="Search"
@@ -49,40 +84,64 @@ const CommunitiesDiscoveryPage = () => {
                 value={searchQuery}
                 onClear={() => setSearchQuery("")}
                 onValueChange={setSearchQuery}
-                className="max-w-md"
+                classNames={{
+                  base: "max-w-xl w-full",
+                  inputWrapper:
+                    "h-14 bg-[#111] border border-white/10 rounded-xl data-[hover=true]:bg-[#1a1a1a] group-data-[focus=true]:bg-[#1a1a1a]",
+                  input:
+                    "text-white placeholder:text-gray-500 text-base md:text-lg",
+                  clearButton: "text-gray-400",
+                }}
                 startContent={
-                  <MagnifyingGlassIcon className="text-default-400 pointer-events-none h-5 w-5 flex-shrink-0" />
+                  <MagnifyingGlassIcon className="pointer-events-none mr-2 h-6 w-6 flex-shrink-0 text-gray-500" />
                 }
               />
             </div>
+            <div className="mb-12 border-t border-white/10"></div>
 
             {/* --- User's Pinned Communities (Conditional) --- */}
             {myCommunities.length > 0 && (
               <div className="mb-12">
-                <h2 className="text-light-text dark:text-dark-text mb-4 text-2xl font-bold">
-                  My Community 📌
-                </h2>
-                <div className="flex flex-wrap gap-6">
+                <div className="mb-6 flex items-center justify-center gap-2 md:justify-start">
+                  <h2 className="text-xl font-bold text-white uppercase">
+                    My Community
+                  </h2>
+                  <span className="text-xl">📌</span>
+                </div>
+                <div className="flex flex-wrap justify-center gap-6 md:justify-start">
                   {myCommunities.map((community) => (
                     <CommunityCard key={community.id} community={community} />
                   ))}
                 </div>
-                <Divider className="my-8" />
               </div>
             )}
 
             {/* --- Grid of Other Communities --- */}
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid auto-rows-fr grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredOtherCommunities.map((community) => (
                 <CommunityCard key={community.id} community={community} />
               ))}
             </div>
 
+            {hasCommunityFetchSettled &&
+              filteredOtherCommunities.length === 0 &&
+              myCommunities.length === 0 &&
+              !searchQuery && (
+                <div className="mt-10 rounded-2xl border border-white/10 bg-[#111] p-10 text-center text-gray-400">
+                  <p className="text-lg font-bold text-white uppercase">
+                    No communities found
+                  </p>
+                  <p className="mt-2">
+                    There are no Shopstr communities available yet.
+                  </p>
+                </div>
+              )}
+
             {/* --- Message for No Search Results --- */}
-            {!isLoading &&
+            {hasCommunityFetchSettled &&
               filteredOtherCommunities.length === 0 &&
               searchQuery && (
-                <div className="text-light-text/80 dark:text-dark-text/80 mt-10 text-center">
+                <div className="mt-10 text-center text-gray-500">
                   <p>No communities match your search.</p>
                 </div>
               )}

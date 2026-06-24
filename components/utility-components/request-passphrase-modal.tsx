@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Modal,
   ModalContent,
@@ -8,10 +8,8 @@ import {
   Input,
   Button,
 } from "@heroui/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
-import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
-import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 export default function PassphraseChallengeModal({
   actionOnSubmit,
@@ -30,41 +28,19 @@ export default function PassphraseChallengeModal({
 }) {
   const [remindToggled, setRemindToggled] = useState(false);
   const [passphraseInput, setPassphraseInput] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const isButtonDisabled = useMemo(() => {
     return passphraseInput.trim().length === 0;
   }, [passphraseInput]);
   const router = useRouter();
-
-  useEffect(() => {
-    if (!isOpen) {
-      setIsLoading(false);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (error) {
-      setIsLoading(false);
-    }
-  }, [error]);
   const passphraseInputRef = useRef<HTMLInputElement>(null);
-
-  const buttonClassName = useMemo(() => {
-    const enabledStyle = SHOPSTRBUTTONCLASSNAMES;
-    const className = "text-white shadow-lg bg-gradient-to-tr" + enabledStyle;
-    return className;
-  }, []);
 
   const onSubmit = () => {
     if (isButtonDisabled && passphraseInputRef.current) {
       passphraseInputRef.current.focus();
     } else if (!isButtonDisabled) {
-      setIsLoading(true);
+      setIsOpen(false);
       if (actionOnSubmit) {
-        setTimeout(() => {
-          actionOnSubmit(passphraseInput, remindToggled);
-        }, 0);
+        actionOnSubmit(passphraseInput, remindToggled);
       }
     }
   };
@@ -74,8 +50,6 @@ export default function PassphraseChallengeModal({
     setIsOpen(false);
     if (onCancelRouteTo) {
       router.push(onCancelRouteTo);
-    } else {
-      router.push("/marketplace");
     }
   };
 
@@ -85,56 +59,49 @@ export default function PassphraseChallengeModal({
       isOpen={isOpen}
       onClose={onCancel}
       classNames={{
-        body: "py-6",
-        backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-        // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-        header: "border-b-[1px] border-[#292f46]",
-        footer: "border-t-[1px] border-[#292f46]",
-        closeButton: "hover:bg-black/5 active:bg-white/10",
+        base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+        body: "py-8",
+        backdrop: "bg-black/80 backdrop-blur-sm",
+        header: "border-b border-zinc-800",
+        footer: "border-t border-zinc-800",
+        closeButton: "hover:bg-white/10 text-white",
       }}
       scrollBehavior={"outside"}
-      size="2xl"
+      size="md"
       isDismissable={false}
     >
       <ModalContent>
-        <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
+        <ModalHeader className="flex flex-col gap-1 font-black tracking-tighter text-white uppercase">
           Enter Passphrase
         </ModalHeader>
         <ModalBody>
           <Input
-            className="text-light-text dark:text-dark-text"
             autoFocus
             ref={passphraseInputRef}
-            variant="flat"
-            label="Passphrase"
-            labelPlacement="inside"
-            type={showPassword ? "text" : "password"}
+            variant="bordered"
+            label="PASSPHRASE"
+            labelPlacement="outside"
+            classNames={{
+              label: "text-zinc-500 font-bold uppercase tracking-wider text-xs",
+              input: "text-white text-base",
+              inputWrapper:
+                "bg-[#111] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
+            }}
+            type="password"
             onChange={(e) => setPassphraseInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") onSubmit();
             }}
             value={passphraseInput}
-            endContent={
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                className="text-gray-400"
-              >
-                {showPassword ? (
-                  <EyeSlashIcon className="h-5 w-5" />
-                ) : (
-                  <EyeIcon className="h-5 w-5" />
-                )}
-              </button>
-            }
           />
           <div className="mt-4 flex items-center gap-2">
             <input
               type="checkbox"
               checked={remindToggled}
               onChange={() => setRemindToggled(!remindToggled)}
+              className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-yellow-400 accent-yellow-400 focus:ring-yellow-400"
             />
-            <label className="text-light-text dark:text-dark-text">
+            <label className="text-sm font-bold text-zinc-400">
               Remember passphrase for this session
             </label>
           </div>
@@ -145,27 +112,20 @@ export default function PassphraseChallengeModal({
 
         <ModalFooter>
           <Button
+            className="font-bold tracking-wider text-red-500 uppercase hover:bg-red-500/10"
             color="danger"
             variant="light"
             onClick={onCancel}
-            isDisabled={isLoading}
           >
             Cancel
           </Button>
 
           <Button
-            className={buttonClassName}
+            className={`${NEO_BTN} h-10 px-6 text-xs`}
             type="submit"
             onClick={onSubmit}
-            isDisabled={isLoading}
           >
-            {isLoading ? (
-              <div className="flex items-center justify-center">
-                <ShopstrSpinner />
-              </div>
-            ) : (
-              "Submit"
-            )}
+            Submit
           </Button>
         </ModalFooter>
       </ModalContent>

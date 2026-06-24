@@ -149,14 +149,14 @@ describe("ImageCarousel", () => {
       );
       const indicator = getByRole("button");
       expect(indicator).toBeInTheDocument();
-      expect(indicator.className).toContain("bg-blue-500");
+      expect(indicator.className).toContain("bg-yellow-400");
 
       fireEvent.click(indicator);
       expect(mockClickHandler).toHaveBeenCalled();
 
       rerender(<>{renderIndicator(mockClickHandler, false, 1, "item")}</>);
       const nonSelectedIndicator = getByRole("button");
-      expect(nonSelectedIndicator.className).toContain("bg-gray-300");
+      expect(nonSelectedIndicator.className).toContain("bg-zinc-700");
     });
   });
 });
