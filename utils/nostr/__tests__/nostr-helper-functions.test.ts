@@ -72,6 +72,7 @@ import {
   REPORT_TYPES,
   saveNWCString,
   sendGiftWrappedMessageEvent,
+  sendShippingInfoMessage,
   setLocalStorageDataOnSignIn,
   validateNPubKey,
   validateNSecKey,
@@ -1658,6 +1659,76 @@ describe("sendGiftWrappedMessageEvent", () => {
       undefined
     );
     consoleWarnSpy.mockRestore();
+  });
+});
+
+describe("sendShippingInfoMessage", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem(
+      "writeRelays",
+      JSON.stringify(["wss://write.example"])
+    );
+    (nip44.encrypt as jest.Mock).mockReturnValue("encrypted-wrap");
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise<void>((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  it("sends one canonical shipping-info order message to the buyer", async () => {
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue("seller-pubkey"),
+      encrypt: jest.fn().mockResolvedValue("encrypted-seal"),
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: "seal-id",
+        sig: "seal-sig",
+      })),
+    };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await sendShippingInfoMessage({
+      nostr: nostr as any,
+      signer: signer as any,
+      buyerPubkey: "buyer-pubkey",
+      orderId: "order-ship",
+      productAddress: "30402:seller-pubkey:listing-d",
+      tracking: "1Z999AA10123456784",
+      carrier: "UPS",
+      eta: 1720000000,
+    });
+
+    expect(signer.encrypt).toHaveBeenCalledWith(
+      "buyer-pubkey",
+      expect.any(String)
+    );
+    const rumor = JSON.parse(signer.encrypt.mock.calls[0][1]);
+    expect(rumor).toMatchObject({
+      pubkey: "seller-pubkey",
+      kind: 14,
+      content:
+        "Your order order-ship has shipped. UPS tracking number: 1Z999AA10123456784. Estimated delivery: 7/3/2024.",
+    });
+    expect(rumor.tags).toEqual(
+      expect.arrayContaining([
+        ["p", "buyer-pubkey", "wss://relay.example"],
+        ["subject", "shipping-info"],
+        ["order", "order-ship"],
+        ["b", "buyer-pubkey"],
+        ["type", "4"],
+        ["status", "shipped"],
+        ["tracking", "1Z999AA10123456784"],
+        ["carrier", "UPS"],
+        ["eta", "1720000000"],
+        ["item", "30402:seller-pubkey:listing-d", "1"],
+      ])
+    );
+    expect(cacheEventToDatabase).toHaveBeenCalledTimes(1);
+    expect(nostr.publish).toHaveBeenCalledTimes(1);
   });
 });
 

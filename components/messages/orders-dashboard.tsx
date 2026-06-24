@@ -46,6 +46,7 @@ import {
   sendGiftWrappedMessageEvent,
   generateKeys,
   publishReviewEvent,
+  sendShippingInfoMessage,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   NostrContext,
@@ -184,11 +185,7 @@ const OrdersDashboard = ({
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
 
-  const {
-    signer,
-    pubkey: userPubkey,
-    npub: userNPub,
-  } = useContext(SignerContext);
+  const { signer, pubkey: userPubkey } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
   const reviewsContext = useContext(ReviewsContext);
 
@@ -313,7 +310,6 @@ const OrdersDashboard = ({
           const subject = tagsMap.get("subject") || "";
           if (
             subject === "order-receipt" ||
-            subject === "payment-confirmation" ||
             subject === "shipping-info" ||
             subject === "order-completed"
           ) {
@@ -891,74 +887,23 @@ const OrdersDashboard = ({
     setIsSendingShipping(true);
 
     try {
-      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
-      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
-      const decodedRandomPubkeyForReceiver = nip19.decode(
-        randomNpubForReceiver
-      );
-      const decodedRandomPrivkeyForReceiver = nip19.decode(
-        randomNsecForReceiver
-      );
-
       const daysToAdd = parseInt(data["Delivery Time"]!);
       const currentTimestamp = Math.floor(Date.now() / 1000);
       const futureTimestamp = currentTimestamp + daysToAdd * 24 * 60 * 60;
 
-      const humanReadableDate = new Date(
-        futureTimestamp * 1000
-      ).toLocaleDateString("en-US", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
-
       const shippingCarrier = data["Shipping Carrier"];
       const trackingNumber = data["Tracking Number"];
-      const message =
-        "Your order from " +
-        userNPub +
-        " is expected to arrive on " +
-        humanReadableDate +
-        ". Your " +
-        shippingCarrier +
-        " tracking number is: " +
-        trackingNumber;
 
-      const giftWrappedMessageEvent = await constructGiftWrappedEvent(
-        decodedRandomPubkeyForSender.data as string,
-        selectedOrder.buyerPubkey,
-        message,
-        "shipping-info",
-        {
-          productAddress: selectedOrder.productAddress,
-          type: 4, // Shipping update type
-          status: "shipped",
-          isOrder: true,
-          orderId: selectedOrder.orderId,
-          tracking: trackingNumber,
-          carrier: shippingCarrier,
-          eta: futureTimestamp,
-          buyerPubkey: selectedOrder.buyerPubkey,
-        }
-      );
-
-      const sealedEvent = await constructMessageSeal(
+      await sendShippingInfoMessage({
+        nostr,
         signer,
-        giftWrappedMessageEvent,
-        decodedRandomPubkeyForSender.data as string,
-        selectedOrder.buyerPubkey,
-        decodedRandomPrivkeyForSender.data as Uint8Array
-      );
-
-      const giftWrappedEvent = await constructMessageGiftWrap(
-        sealedEvent,
-        decodedRandomPubkeyForReceiver.data as string,
-        decodedRandomPrivkeyForReceiver.data as Uint8Array,
-        selectedOrder.buyerPubkey
-      );
-
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
+        buyerPubkey: selectedOrder.buyerPubkey,
+        orderId: selectedOrder.orderId,
+        productAddress: selectedOrder.productAddress,
+        tracking: trackingNumber,
+        carrier: shippingCarrier,
+        eta: futureTimestamp,
+      });
 
       // Update local state to shipped status (removes Send Shipping Update button)
       setOrders((prevOrders) =>

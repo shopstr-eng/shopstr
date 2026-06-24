@@ -1836,6 +1836,112 @@ export async function verifyNip05Identifier(
   }
 }
 
+type OrderNotificationParams = {
+  nostr: NostrManager;
+  signer: NostrSigner;
+  recipientPubkey: string;
+  orderId: string;
+  message: string;
+  subject: string;
+  status: string;
+  productAddress?: string;
+  tracking?: string;
+  carrier?: string;
+  eta?: number;
+};
+
+async function sendOrderNotificationMessage({
+  nostr,
+  signer,
+  recipientPubkey,
+  orderId,
+  message,
+  subject,
+  status,
+  productAddress,
+  tracking,
+  carrier,
+  eta,
+}: OrderNotificationParams): Promise<void> {
+  const senderPubkey = await signer.getPubKey();
+  const randomPrivkey = generateSecretKey();
+  const randomPubkey = getPublicKey(randomPrivkey);
+  const messageEvent = await constructGiftWrappedEvent(
+    senderPubkey,
+    recipientPubkey,
+    message,
+    subject,
+    {
+      isOrder: true,
+      type: 4,
+      orderId,
+      status,
+      productAddress,
+      tracking,
+      carrier,
+      eta,
+      buyerPubkey: recipientPubkey,
+    }
+  );
+  const sealEvent = await constructMessageSeal(
+    signer,
+    messageEvent,
+    senderPubkey,
+    recipientPubkey
+  );
+  const giftWrappedEvent = await constructMessageGiftWrap(
+    sealEvent,
+    randomPubkey,
+    randomPrivkey,
+    recipientPubkey
+  );
+
+  await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer);
+}
+
+export async function sendShippingInfoMessage({
+  nostr,
+  signer,
+  buyerPubkey,
+  orderId,
+  productAddress,
+  tracking,
+  carrier,
+  eta,
+}: {
+  nostr: NostrManager;
+  signer: NostrSigner;
+  buyerPubkey: string;
+  orderId: string;
+  productAddress?: string;
+  tracking?: string;
+  carrier?: string;
+  eta?: number;
+}): Promise<void> {
+  const trackingText =
+    carrier && tracking ? ` ${carrier} tracking number: ${tracking}.` : "";
+  const etaText = eta
+    ? ` Estimated delivery: ${new Date(eta * 1000).toLocaleDateString(
+        "en-US"
+      )}.`
+    : "";
+  const message = `Your order ${orderId} has shipped.${trackingText}${etaText}`;
+
+  await sendOrderNotificationMessage({
+    nostr,
+    signer,
+    recipientPubkey: buyerPubkey,
+    orderId,
+    message,
+    subject: "shipping-info",
+    status: "shipped",
+    productAddress,
+    tracking,
+    carrier,
+    eta,
+  });
+}
+
 export const saveNWCString = (nwcString: string) => {
   if (nwcString) {
     localStorage.setItem(LOCALSTORAGECONSTANTS.nwcString, nwcString);

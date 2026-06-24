@@ -135,7 +135,7 @@ describe("order-message-utils", () => {
       },
       {
         id: "msg-6",
-        tags: [["subject", "payment-confirmation"]],
+        tags: [["subject", "order-receipt"]],
       },
     ] as any[];
 
