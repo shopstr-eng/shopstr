@@ -855,6 +855,9 @@ describe("fetch-service NIP-50 search helpers", () => {
       content: "responsive coffee",
       sig: "sig-responsive",
     };
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
     const nostr = {
       fetch: jest.fn((_, __, relays: string[]) =>
         relays[0] === DEFAULT_NIP50_SEARCH_RELAYS[1]
@@ -872,6 +875,10 @@ describe("fetch-service NIP-50 search helpers", () => {
     expectNip50RelayFetches(nostr.fetch);
     expect(result.productEvents).toEqual([searchListing]);
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([searchListing]);
+    expect(consoleWarnSpy).toHaveBeenCalledTimes(
+      DEFAULT_NIP50_SEARCH_RELAYS.length - 1
+    );
+    consoleWarnSpy.mockRestore();
   });
 
   it("returns an empty result without caching when every NIP-50 relay fails", async () => {
@@ -4826,6 +4833,7 @@ describe("fetchCashuWallet", () => {
       })),
       deleteEvent: jest.fn(),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn(),
@@ -5103,6 +5111,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -5243,6 +5252,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -5308,6 +5318,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -5391,6 +5402,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -5485,6 +5497,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -5556,6 +5569,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -5650,6 +5664,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -5722,6 +5737,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -5832,6 +5848,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent,
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -5902,6 +5919,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -5973,6 +5991,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -6071,6 +6090,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -6132,6 +6152,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -6186,6 +6207,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     const cacheEventsToDatabase = jest.fn().mockRejectedValue(cacheError);
     jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
@@ -6258,6 +6280,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -6325,6 +6348,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -6406,6 +6430,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -6476,6 +6501,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     const cacheEventsToDatabase = jest.fn().mockRejectedValue(proofCacheError);
     jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
@@ -6545,6 +6571,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -6612,6 +6639,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -6686,6 +6714,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -6767,6 +6796,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -6836,6 +6866,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -6907,6 +6938,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockRejectedValue(deleteError),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -6977,6 +7009,7 @@ describe("fetchCashuWallet", () => {
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn(),
       verifyNip05Identifier: jest.fn(),
+      publishWalletEvent: jest.fn().mockResolvedValue(undefined),
     }));
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -6997,6 +7030,9 @@ describe("fetchCashuWallet", () => {
     const consoleErrorSpy = jest
       .spyOn(console, "error")
       .mockImplementation(() => {});
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
 
     await expect(
       fetchCashuWallet(
@@ -7011,8 +7047,12 @@ describe("fetchCashuWallet", () => {
       "Fatal error in fetchCashuWallet:",
       fatalError
     );
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      "Wallet identity unavailable: relay fetch failed. Skipping identity generation to avoid overwriting an existing identity."
+    );
     expect(editCashuWalletContext).toHaveBeenCalledWith([], [], [], false);
     consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
   });
 });
 
@@ -7316,6 +7356,9 @@ describe("fetchShopProfile", () => {
         .mockResolvedValue([validShopEvent, missingId, missingSig, wrongKind]),
     } as any;
     const editShopContext = jest.fn();
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
 
     await fetchShopProfile(
       nostr,
@@ -7326,6 +7369,11 @@ describe("fetchShopProfile", () => {
 
     expect(cacheEventsToDatabase).toHaveBeenCalledTimes(1);
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([validShopEvent]);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to parse shop profile for pubkey: shop-cache-wrong-kind-pk",
+      expect.any(SyntaxError)
+    );
+    consoleErrorSpy.mockRestore();
   });
 
   it("sort comparator runs when DB returns multiple events for the same pubkey (line 627)", async () => {
