@@ -5,6 +5,7 @@ import {
   dedupeProductEvents,
   fetchNip50ProductSearch,
   getProductEventKey,
+  isHexString,
   NIP50_SEARCH_TIMEOUT_MS,
 } from "../fetch-service";
 
@@ -44,29 +45,27 @@ const expectNip50RelayFetches = (
 };
 
 describe("getProductEventKey", () => {
-  it("returns kind:pubkey:dTag for kind-30402 events with a d-tag (line 96)", () => {
-    const event = makeBaseEvent({
-      kind: 30402,
-      id: "e1",
-      pubkey: "pk1",
-      tags: [["d", "listing-slug"]],
-    });
-    expect(getProductEventKey(event as any)).toBe("30402:pk1:listing-slug");
-  });
-
-  it("falls back to kind:id for kind-30402 events without a d-tag", () => {
-    const event = makeBaseEvent({
-      kind: 30402,
-      id: "e2",
-      pubkey: "pk2",
-      tags: [],
-    });
-    expect(getProductEventKey(event as any)).toBe("30402:e2");
-  });
-
-  it("falls back to kind:id for non-30402 events", () => {
-    const event = makeBaseEvent({ kind: 1, id: "e3", pubkey: "pk3", tags: [] });
-    expect(getProductEventKey(event as any)).toBe("1:e3");
+  it("builds the correct key for every input shape", () => {
+    expect(
+      getProductEventKey(
+        makeBaseEvent({
+          kind: 30402,
+          id: "e1",
+          pubkey: "pk1",
+          tags: [["d", "listing-slug"]],
+        }) as any
+      )
+    ).toBe("30402:pk1:listing-slug");
+    expect(
+      getProductEventKey(
+        makeBaseEvent({ kind: 30402, id: "e2", pubkey: "pk2", tags: [] }) as any
+      )
+    ).toBe("30402:e2");
+    expect(
+      getProductEventKey(
+        makeBaseEvent({ kind: 1, id: "e3", pubkey: "pk3", tags: [] }) as any
+      )
+    ).toBe("1:e3");
   });
 });
 
@@ -490,29 +489,13 @@ describe("getReportTargetIdentifiers", () => {
 });
 
 describe("isHexString", () => {
-  beforeEach(() => {
-    jest.resetModules();
-  });
-
-  it("returns true for a valid 64-character hex string", async () => {
-    const { isHexString } = await import("../fetch-service");
-
+  it("returns true for a valid 64-char hex pubkey and false for short or non-hex strings", () => {
     expect(
       isHexString(
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
       )
     ).toBe(true);
-  });
-
-  it("returns false for short strings", async () => {
-    const { isHexString } = await import("../fetch-service");
-
     expect(isHexString("abc123")).toBe(false);
-  });
-
-  it("returns false for non-hex strings", async () => {
-    const { isHexString } = await import("../fetch-service");
-
     expect(
       isHexString(
         "z23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -2460,7 +2443,7 @@ describe("fetchProfile", () => {
       .spyOn(console, "error")
       .mockImplementation(() => {});
 
-    await fetchProfile(
+    const { profileMap } = await fetchProfile(
       nostr,
       ["wss://relay.example"],
       [pubkey],
@@ -2470,6 +2453,10 @@ describe("fetchProfile", () => {
 
     await Promise.resolve();
 
+    // Cache failure must not suppress the profile that was fetched from the relay
+    expect(profileMap.get(pubkey)).toMatchObject({
+      content: { display_name: "Cache Fail" },
+    });
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       "Failed to cache profiles to database:",
       cacheError
@@ -4247,7 +4234,7 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
 
     global.fetch = jest.fn() as typeof global.fetch;
 
-    await fetchGiftWrappedChatsAndMessages(
+    const result = await fetchGiftWrappedChatsAndMessages(
       nostr,
       signer as any,
       ["wss://relay.example"],
@@ -4255,6 +4242,8 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
       "user-pk-953"
     );
 
+    // DB error must not prevent the relay path from running and returning its result
+    expect(result.profileSetFromChats).toEqual(new Set());
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       "Failed to fetch messages from database: ",
       dbError
@@ -4564,7 +4553,7 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
       .spyOn(console, "error")
       .mockImplementation(() => {});
 
-    await fetchGiftWrappedChatsAndMessages(
+    const result = await fetchGiftWrappedChatsAndMessages(
       nostr as any,
       signer as any,
       ["wss://relay.example"],
@@ -4573,6 +4562,8 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     );
     await Promise.resolve();
 
+    // Cache failure must not suppress the chat that was built from relay messages
+    expect(result.profileSetFromChats).toContain(senderPubkey);
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       "Failed to cache messages to database:",
       cacheError
@@ -7436,10 +7427,19 @@ describe("fetchShopProfile", () => {
       .spyOn(console, "error")
       .mockImplementation(() => {});
 
-    await fetchShopProfile(nostr, ["wss://relay.example"], [pubkey], jest.fn());
+    const { shopProfileMap } = await fetchShopProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      jest.fn()
+    );
 
     await Promise.resolve();
 
+    // Cache failure must not suppress the shop profile fetched from the relay
+    expect(shopProfileMap.get(pubkey)).toMatchObject({
+      content: { name: "Cache Reject Shop" },
+    });
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       "Failed to cache shop profiles to database:",
       cacheError
