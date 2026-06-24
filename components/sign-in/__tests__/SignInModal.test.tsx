@@ -97,7 +97,14 @@ describe("SignInModal", () => {
         screen.getByRole("button", { name: /extension sign-in/i })
       );
       await waitFor(() => {
+        expect(mockNewSigner).toHaveBeenCalledWith("nip07", {});
         expect(signer.getPubKey).toHaveBeenCalled();
+        expect(helpers.setLocalStorageDataOnSignIn).toHaveBeenCalledWith({
+          signer,
+          relays: mockRelays.relayList,
+          readRelays: mockRelays.readRelayList,
+          writeRelays: mockRelays.writeRelayList,
+        });
         expect(push).toHaveBeenCalledWith("/marketplace");
       });
     });
@@ -148,7 +155,20 @@ describe("SignInModal", () => {
       await user.type(input, "bunker://valid-token");
 
       await user.click(screen.getByTestId("bunker-submit-btn"));
-      await waitFor(() => expect(push).toHaveBeenCalledWith("/marketplace"));
+      await waitFor(() => {
+        expect(mockNewSigner).toHaveBeenCalledWith("nip46", {
+          bunker: "bunker://valid-token",
+        });
+        expect(signer.connect).toHaveBeenCalled();
+        expect(signer.getPubKey).toHaveBeenCalled();
+        expect(helpers.setLocalStorageDataOnSignIn).toHaveBeenCalledWith({
+          signer,
+          relays: mockRelays.relayList,
+          readRelays: mockRelays.readRelayList,
+          writeRelays: mockRelays.writeRelayList,
+        });
+        expect(push).toHaveBeenCalledWith("/marketplace");
+      });
     });
 
     it("shows a failure modal on connection error", async () => {
@@ -207,7 +227,20 @@ describe("SignInModal", () => {
 
       act(() => jest.runAllTimers());
 
-      await waitFor(() => expect(push).toHaveBeenCalledWith("/marketplace"));
+      await waitFor(() => {
+        expect(mockNewSigner).toHaveBeenCalledWith("nsec", {
+          encryptedPrivKey: "encrypted-key",
+          pubkey: "test-pubkey",
+        });
+        expect(signer.getPubKey).toHaveBeenCalled();
+        expect(helpers.setLocalStorageDataOnSignIn).toHaveBeenCalledWith({
+          signer,
+          relays: mockRelays.relayList,
+          readRelays: mockRelays.readRelayList,
+          writeRelays: mockRelays.writeRelayList,
+        });
+        expect(push).toHaveBeenCalledWith("/marketplace");
+      });
     });
 
     it("shows a failure modal if passphrase is empty", async () => {

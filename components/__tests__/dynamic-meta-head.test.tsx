@@ -21,19 +21,15 @@ jest.mock("next/router", () => ({
 }));
 const mockUseRouter = useRouter as jest.Mock;
 
-jest.mock("nostr-tools", () => ({
-  nip19: {
-    naddrEncode: jest.fn(),
-    npubEncode: jest.fn(),
-  },
-}));
-const mockNip19 = nip19 as jest.Mocked<typeof nip19>;
-
 jest.mock("@/utils/parsers/product-parser-functions", () => ({
   __esModule: true,
   default: jest.fn(),
 }));
 const mockParseTags = parseTags as jest.Mock;
+
+const shopPubkey = "1".repeat(64);
+const fallbackShopPubkey = "2".repeat(64);
+const productPubkey = "3".repeat(64);
 
 describe("DynamicHead", () => {
   const getMetaContent = (name: string) => {
@@ -48,7 +44,7 @@ describe("DynamicHead", () => {
   });
 
   test("should render default meta tags for a generic page", async () => {
-    mockUseRouter.mockReturnValue({ pathname: "/", query: {} });
+    mockUseRouter.mockReturnValue({ pathname: "/", asPath: "/", query: {} });
     render(
       <DynamicHead
         productEvents={[]}
@@ -65,8 +61,7 @@ describe("DynamicHead", () => {
 
   describe("Shop Pages", () => {
     test("should render meta tags for a specific shop page when shop is found", async () => {
-      const shopPubkey = "shop_pubkey_1";
-      const shopNpub = "npub1shop";
+      const shopNpub = nip19.npubEncode(shopPubkey);
       const shopEvents = new Map<string, ShopProfile>([
         [
           shopPubkey,
@@ -89,9 +84,9 @@ describe("DynamicHead", () => {
       ]);
       mockUseRouter.mockReturnValue({
         pathname: `/marketplace/${shopNpub}`,
+        asPath: `/marketplace/${shopNpub}`,
         query: { npub: [shopNpub] },
       });
-      mockNip19.npubEncode.mockReturnValue(shopNpub);
       render(
         <DynamicHead
           productEvents={[]}
@@ -103,9 +98,10 @@ describe("DynamicHead", () => {
     });
 
     test("should render fallback meta tags for a shop page when shop is not found", async () => {
-      const shopNpub = "npub1shop_not_found";
+      const shopNpub = nip19.npubEncode(fallbackShopPubkey);
       mockUseRouter.mockReturnValue({
         pathname: `/marketplace/${shopNpub}`,
+        asPath: `/marketplace/${shopNpub}`,
         query: { npub: [shopNpub] },
       });
       render(
@@ -121,6 +117,7 @@ describe("DynamicHead", () => {
     test("should render fallback tags if npub is missing from query", async () => {
       mockUseRouter.mockReturnValue({
         pathname: `/marketplace/npub`,
+        asPath: `/marketplace/npub`,
         query: {},
       });
       render(
@@ -138,8 +135,7 @@ describe("DynamicHead", () => {
     });
 
     test("should use fallback image for a shop with picture set to null", async () => {
-      const shopPubkey = "shop_pubkey_3";
-      const shopNpub = "npub1nullpic";
+      const shopNpub = nip19.npubEncode(shopPubkey);
       const shopEvents = new Map<string, ShopProfile>([
         [
           shopPubkey,
@@ -157,9 +153,9 @@ describe("DynamicHead", () => {
       ]);
       mockUseRouter.mockReturnValue({
         pathname: `/marketplace/${shopNpub}`,
+        asPath: `/marketplace/${shopNpub}`,
         query: { npub: [shopNpub] },
       });
-      mockNip19.npubEncode.mockReturnValue(shopNpub);
       render(
         <DynamicHead
           productEvents={[]}
@@ -177,7 +173,6 @@ describe("DynamicHead", () => {
 
   describe("Listing Pages", () => {
     const productId = "product_123";
-    const productPubkey = "product_pubkey_1";
     const productEvent = {
       id: productId,
       pubkey: productPubkey,
@@ -186,12 +181,11 @@ describe("DynamicHead", () => {
     } as NostrEvent;
 
     test("should find a product by event id if d tag does not match", async () => {
-      const naddr = "naddr1product";
       mockUseRouter.mockReturnValue({
         pathname: `/listing/${productId}`,
+        asPath: `/listing/${productId}`,
         query: { productId: [productId] },
       });
-      mockNip19.naddrEncode.mockReturnValue(naddr);
       mockParseTags.mockReturnValue({ title: "Found By ID" });
       render(
         <DynamicHead
@@ -203,13 +197,38 @@ describe("DynamicHead", () => {
       await waitFor(() => expect(document.title).toBe("Found By ID"));
     });
 
+    test("should resolve relay-hinted naddr routes from the matching listing identity", async () => {
+      const relayHintedNaddr = nip19.naddrEncode({
+        identifier: "some_other_id",
+        pubkey: productPubkey,
+        kind: 30402,
+        relays: [
+          "wss://relay.shopstr.example",
+          "wss://relay-2.shopstr.example",
+        ],
+      });
+      mockUseRouter.mockReturnValue({
+        pathname: `/listing/${relayHintedNaddr}`,
+        asPath: `/listing/${relayHintedNaddr}`,
+        query: { productId: [relayHintedNaddr] },
+      });
+      mockParseTags.mockReturnValue({ title: "Relay Hint Listing" });
+      render(
+        <DynamicHead
+          productEvents={[productEvent]}
+          shopEvents={new Map()}
+          profileData={new Map()}
+        />
+      );
+      await waitFor(() => expect(document.title).toBe("Relay Hint Listing"));
+    });
+
     test("should use fallback values for a parsed product with partial data", async () => {
-      const naddr = "naddr1product";
       mockUseRouter.mockReturnValue({
         pathname: `/listing/${productId}`,
+        asPath: `/listing/${productId}`,
         query: { productId: [productId] },
       });
-      mockNip19.naddrEncode.mockReturnValue(naddr);
       mockParseTags.mockReturnValue({ summary: "Only summary exists." });
       render(
         <DynamicHead
@@ -225,12 +244,11 @@ describe("DynamicHead", () => {
     });
 
     test("should render fallback tags for a listing when parsing fails", async () => {
-      const naddr = "naddr1product";
       mockUseRouter.mockReturnValue({
         pathname: `/listing/${productId}`,
+        asPath: `/listing/${productId}`,
         query: { productId: [productId] },
       });
-      mockNip19.naddrEncode.mockReturnValue(naddr);
       mockParseTags.mockReturnValue(null);
       render(
         <DynamicHead

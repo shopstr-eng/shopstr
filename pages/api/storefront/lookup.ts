@@ -65,7 +65,7 @@ export default async function handler(
          FROM custom_domains cd
          LEFT JOIN profile_events pe
            ON pe.pubkey = cd.pubkey AND pe.kind = 30019
-         WHERE cd.domain = $1
+         WHERE cd.domain = $1 AND cd.verified = true
          ORDER BY pe.created_at DESC NULLS LAST
          LIMIT 1`,
         [domain.toLowerCase().trim()]

@@ -68,6 +68,11 @@ const faqSections = [
         content:
           "Shopstr has no mandatory platform fees — buyers and sellers keep the full amount of every transaction, minus only standard Bitcoin network fees. Sellers may optionally specify a donation rate on their listings to give back to the Shopstr platform on their sales; this is entirely at the seller's discretion and is never required.",
       },
+      {
+        title: "What is P2PK escrow, and how does it work?",
+        content:
+          "P2PK (Pay-to-Pubkey) escrow adds time-locked Cashu payments on Shopstr. Sellers can enable escrow on their shop, set the Cashu wallet pubkey that claims payments while the lock is active, and choose how many days must pass before a buyer reclaim path opens. Buyers may optionally list reclaim pubkeys in Profile Settings (when you buy); your current Cashu wallet pubkey is always included at checkout. Reclaim is manual in your wallet—it is not automatic. After the delay, Cashu NUT-11 allows an additional spend path for your reclaim keys; the seller’s redeem path may still exist, so whoever spends the proof first (seller claim or your reclaim) determines the outcome. Sellers: enable P2PK escrow, add your redeem pubkey, and set the reclaim delay. Buyers: optionally add reclaim pubkeys under “Escrow reclaim keys (when you buy).”",
+      },
     ],
   },
   {
@@ -176,7 +181,6 @@ export default function Faq() {
           name="description"
           content="Answers to common questions about Shopstr — the permissionless Bitcoin marketplace on Nostr. Learn about payments, Lightning Network, selling, privacy, and more."
         />
-        <link rel="canonical" href="https://shopstr.market/faq" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: safeJsonLdString(structuredData) }}

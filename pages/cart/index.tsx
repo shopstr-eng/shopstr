@@ -1,5 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
-
 import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -32,6 +30,7 @@ import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wra
 import ProtectedRoute from "@/components/utility-components/protected-route";
 import { getLocalStorageJson } from "@/utils/safe-json";
 import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
+import { isSellerP2pkEscrowActive } from "@/utils/cashu/p2pk-checkout";
 
 interface QuantitySelectorProps {
   value: number;
@@ -85,11 +84,21 @@ export default function Component() {
   const shopContext = useContext(ShopMapContext);
   const profileContext = useContext(ProfileMapContext);
 
+  const renderP2pkCartBadge = (sellerPubkey: string) => {
+    const p2pk = profileContext.profileData.get(sellerPubkey)?.content.p2pk;
+    if (!isSellerP2pkEscrowActive(p2pk)) return null;
+    return (
+      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-[11px] font-medium text-yellow-700 dark:text-yellow-300">
+        🔒 P2PK Escrow · {p2pk!.refundDelayDays}d reclaim opens
+      </div>
+    );
+  };
+
   const [products, setProducts] = useState<ProductData[]>([]);
   const [satPrices, setSatPrices] = useState<{ [key: string]: number | null }>(
     {}
   );
-  const [totalCostsInSats, setTotalCostsInSats] = useState<{
+  const [productTotalsInSats, setProductTotalsInSats] = useState<{
     [key: string]: number;
   }>({});
   const [subtotal, setSubtotal] = useState<number>(0);
@@ -382,8 +391,8 @@ export default function Component() {
             }
             prices[product.id] = productSubtotal;
             shipping[product.id] = productShipping;
-            // Store just the product cost in totals for now
-            totals[product.pubkey] = productSubtotal;
+            // Store per-product totals so checkout can apply shipping later.
+            totals[product.id] = productSubtotal;
           }
         } catch (error) {
           // Outer guard for any unexpected failure during cart pricing.
@@ -401,7 +410,7 @@ export default function Component() {
 
       setSatPrices(prices);
       setSubtotal(subtotalAmount);
-      setTotalCostsInSats(totals);
+      setProductTotalsInSats(totals);
     };
 
     fetchSatPrices();
@@ -731,6 +740,7 @@ export default function Component() {
                                       )}
                                     </div>
                                   )}
+                                  {renderP2pkCartBadge(product.pubkey)}
                                 </div>
                               </div>
                               <div className="mt-4 flex md:mt-0 md:items-center">
@@ -936,7 +946,7 @@ export default function Component() {
                   products={products}
                   quantities={quantities}
                   shippingTypes={shippingTypes}
-                  totalCostsInSats={totalCostsInSats}
+                  productTotalsInSats={productTotalsInSats}
                   subtotalCost={subtotal}
                   appliedDiscounts={appliedDiscounts}
                   discountCodes={discountCodes}

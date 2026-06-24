@@ -92,9 +92,10 @@ function MarketplacePage({
   const [selectedCategories, setSelectedCategories] = useState(
     new Set<string>([])
   );
+  const [categorySearch, setCategorySearch] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
-  const debouncedSearch = useDebounce(selectedSearch, 300);
+  const debouncedSearch = useDebounce(selectedSearch, 500);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [wotFilter, setWotFilter] = useState(false);
@@ -128,6 +129,10 @@ function MarketplacePage({
     useContext(SignerContext);
 
   const searchBarRef = useRef<HTMLDivElement>(null);
+  const hasTrustGraph =
+    Boolean(loggedIn) &&
+    !followsContext.isLoading &&
+    followsContext.firstDegreeFollowsLength > 0;
 
   useEffect(() => {
     const slug = normalizeNpub(router.query.npub);
@@ -239,11 +244,14 @@ function MarketplacePage({
   }, [focusedPubkey, shopMapContext]);
 
   useEffect(() => {
-    setIsFetchingFollows(true);
-    if (followsContext.followList.length && !followsContext.isLoading) {
-      setIsFetchingFollows(false);
+    setIsFetchingFollows(followsContext.isLoading);
+  }, [followsContext.isLoading]);
+
+  useEffect(() => {
+    if (!hasTrustGraph && wotFilter) {
+      setWotFilter(false);
     }
-  }, [followsContext]);
+  }, [hasTrustGraph, wotFilter]);
 
   const handleFilteredProductsChange = (products: ProductData[]) => {
     setFilteredProducts(products);
@@ -336,7 +344,12 @@ function MarketplacePage({
                           dropDownKeys={
                             reviewerPubkey === userPubkey
                               ? ["shop_profile"]
-                              : ["shop", "inquiry", "copy_npub"]
+                              : [
+                                  "shop",
+                                  "inquiry",
+                                  "copy_npub",
+                                  "report_profile",
+                                ]
                           }
                         />
                       </div>
@@ -532,9 +545,31 @@ function MarketplacePage({
                   }
                 }}
                 selectionMode="multiple"
+                listboxProps={{
+                  topContent: (
+                    <Input
+                      aria-label="Search categories"
+                      className="mb-1 px-1 py-1"
+                      value={categorySearch}
+                      onValueChange={setCategorySearch}
+                      placeholder="Search category..."
+                      type="text"
+                      startContent={
+                        <MagnifyingGlassIcon
+                          aria-hidden="true"
+                          className="text-default-400 h-4 w-4"
+                        />
+                      }
+                      onKeyDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ),
+                }}
               >
                 <SelectSection className="text-light-text dark:text-dark-text">
-                  {CATEGORIES.map((category) => (
+                  {CATEGORIES.filter((c) =>
+                    c.toLowerCase().includes(categorySearch.toLowerCase())
+                  ).map((category) => (
                     <SelectItem key={category}>{category}</SelectItem>
                   ))}
                 </SelectSection>
@@ -548,7 +583,7 @@ function MarketplacePage({
                   setSelectedLocation(event.target.value);
                 }}
               />
-              {!isFetchingFollows ? (
+              {!isFetchingFollows && hasTrustGraph ? (
                 <ShopstrSwitch
                   wotFilter={wotFilter}
                   setWotFilter={setWotFilter}
