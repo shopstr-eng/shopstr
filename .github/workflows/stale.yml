@@ -22,7 +22,7 @@ jobs:
       - name: Update inactive issues and pull requests
         uses: actions/stale@eb5cf3af3ac0a1aa4c9c45633dd1ae542a27a899 # v10
         with:
-          days-before-stale: 30
+          days-before-stale: 45
           days-before-close: 15
 
           stale-issue-label: stale
@@ -33,7 +33,7 @@ jobs:
           exempt-all-milestones: true
 
           stale-issue-message: |
-            This issue has been automatically marked as stale because it has not had recent activity for 1 month.
+            This issue has been automatically marked as stale because it has not had recent activity for 45 days.
             It will be closed if no further activity occurs within 15 days.
             If this issue is still relevant, please leave a comment to keep it open.
             Thank you for your contributions!
@@ -44,7 +44,7 @@ jobs:
             Thank you for your understanding!
 
           stale-pr-message: |
-            This pull request has been automatically marked as stale because it has not had recent activity for 1 month.
+            This pull request has been automatically marked as stale because it has not had recent activity for 45 days.
             It will be closed if no further activity occurs within 15 days.
             If this PR is still relevant, please leave a comment or push new commits to keep it open.
             Thank you for your contribution!
