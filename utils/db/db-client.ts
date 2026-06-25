@@ -6,6 +6,7 @@ import {
   buildTrackFailedRelayPublishProof,
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
+import { mapWithConcurrency } from "@/utils/concurrency";
 
 type RequestProofSigner = {
   getPubKey: () => string | Promise<string>;
@@ -44,6 +45,7 @@ export async function cacheEventToDatabase(event: NostrEvent): Promise<void> {
 }
 
 const CACHE_EVENTS_CHUNK_SIZE = 50;
+const CACHE_EVENTS_MAX_CONCURRENT_REQUESTS = 4;
 
 export async function cacheEventsToDatabase(
   events: NostrEvent[]
@@ -54,13 +56,26 @@ export async function cacheEventsToDatabase(
     for (let i = 0; i < events.length; i += CACHE_EVENTS_CHUNK_SIZE) {
       chunks.push(events.slice(i, i + CACHE_EVENTS_CHUNK_SIZE));
     }
-    for (const chunk of chunks) {
-      const response = await fetch("/api/db/cache-events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(chunk),
-      });
-      if (!response.ok) {
+    const responses = await mapWithConcurrency(
+      chunks,
+      CACHE_EVENTS_MAX_CONCURRENT_REQUESTS,
+      async (chunk) => {
+        try {
+          const response = await fetch("/api/db/cache-events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(chunk),
+          });
+          return { status: "fulfilled" as const, value: response };
+        } catch (reason) {
+          return { status: "rejected" as const, reason };
+        }
+      }
+    );
+    for (const response of responses) {
+      if (response.status === "rejected") {
+        console.error("Failed to cache events to database:", response.reason);
+      } else if (!response.value.ok) {
         console.error("Failed to cache events to database");
       }
     }

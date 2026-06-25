@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useRef } from "react";
 import { useRouter } from "next/router";
 import {
   InformationCircleIcon,
@@ -22,7 +22,7 @@ const Keys = () => {
   const router = useRouter();
   const { preselect } = router.query;
 
-  const [privateKey, setPrivateKey] = useState<string>("");
+  const privateKeyRef = useRef<string>("");
   const [passphrase, setPassphrase] = useState<string>("");
   const [showPassphrase, setShowPassphrase] = useState(false);
   const [showFailureModal, setShowFailureModal] = useState(false);
@@ -51,7 +51,7 @@ const Keys = () => {
   useEffect(() => {
     const fetchKeys = async () => {
       const { nsec } = await generateKeys();
-      setPrivateKey(nsec);
+      privateKeyRef.current = nsec;
     };
 
     fetchKeys();
@@ -62,7 +62,7 @@ const Keys = () => {
       setShowFailureModal(true);
     } else {
       const { encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
-        privateKey,
+        privateKeyRef.current,
         passphrase
       );
       const signer = newSigner!("nsec", {
