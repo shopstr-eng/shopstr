@@ -64,3 +64,47 @@ export const buildShippingAdjustedProductTotals = ({
 
   return updatedProductTotalsInSats;
 };
+
+export type ProductPricingResult =
+  | { id: string; status: "priced"; price: number; shipping: number }
+  | { id: string; status: "error" }
+  | { id: string; status: "skipped" };
+
+export interface ComputeProductPricingParams {
+  id: string;
+  priceSats: number;
+  shippingSats: number;
+  discountPercent: number;
+  quantity: number | undefined;
+}
+
+/**
+ * Pure per-product cart pricing computation. Takes already-converted sat
+ * amounts plus the seller discount and selected quantity, applies the discount
+ * (rounding up), then scales by quantity (rounding up). The "error" variant is
+ * never produced here — it is reserved for the caller's conversion try/catch.
+ */
+export const computeProductPricing = ({
+  id,
+  priceSats,
+  shippingSats,
+  discountPercent,
+  quantity,
+}: ComputeProductPricingParams): ProductPricingResult => {
+  let discountedPrice = priceSats;
+  if (discountPercent > 0) {
+    discountedPrice = Math.ceil(priceSats * (1 - discountPercent / 100));
+  }
+
+  if (discountedPrice !== null || shippingSats !== null) {
+    const price = quantity
+      ? Math.ceil(discountedPrice * quantity)
+      : discountedPrice;
+    const shipping = quantity
+      ? Math.ceil(shippingSats * quantity)
+      : shippingSats;
+    return { id, status: "priced", price, shipping };
+  }
+
+  return { id, status: "skipped" };
+};

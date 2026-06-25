@@ -32,6 +32,10 @@ import { getLocalStorageJson } from "@/utils/safe-json";
 import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
 import { isSellerP2pkEscrowActive } from "@/utils/cashu/p2pk-checkout";
 import { mapWithConcurrency } from "@/utils/concurrency";
+import {
+  computeProductPricing,
+  ProductPricingResult,
+} from "@/utils/cart-totals";
 
 const CART_PRICE_CONVERSION_CONCURRENCY = 6;
 
@@ -364,69 +368,20 @@ export default function Component() {
       const shipping: { [key: string]: number } = {};
       const totals: { [key: string]: number } = {};
       let subtotalAmount = 0;
-      type PriceConversionResult =
-        | {
-            id: string;
-            price: number;
-            shipping: number;
-            total: number;
-            subtotalContribution: number;
-            isError: false;
-          }
-        | {
-            id: string;
-            price: null;
-            shipping: 0;
-            subtotalContribution: 0;
-            isError: true;
-          }
-        | { id: string; subtotalContribution: 0; isError: false };
-
       const results = await mapWithConcurrency(
         products,
         CART_PRICE_CONVERSION_CONCURRENCY,
-        async (product): Promise<PriceConversionResult> => {
+        async (product): Promise<ProductPricingResult> => {
           try {
             const priceSats = await convertPriceToSats(product);
-            const shippingSatPrice = await convertShippingToSats(product);
-            const discount = appliedDiscounts[product.pubkey] || 0;
-            let discountedPrice = priceSats;
-            let productSubtotal = 0;
-            let productShipping = 0;
-
-            if (discount > 0) {
-              discountedPrice = Math.ceil(priceSats * (1 - discount / 100));
-            }
-
-            if (discountedPrice !== null || shippingSatPrice !== null) {
-              if (quantities[product.id]) {
-                productSubtotal = Math.ceil(
-                  discountedPrice * quantities[product.id]!
-                );
-                productShipping = Math.ceil(
-                  shippingSatPrice * quantities[product.id]!
-                );
-                return {
-                  id: product.id,
-                  price: productSubtotal,
-                  shipping: productShipping,
-                  total: productSubtotal,
-                  subtotalContribution: productSubtotal,
-                  isError: false,
-                };
-              }
-              productSubtotal = discountedPrice;
-              productShipping = shippingSatPrice;
-              return {
-                id: product.id,
-                price: productSubtotal,
-                shipping: productShipping,
-                total: productSubtotal,
-                subtotalContribution: discountedPrice,
-                isError: false,
-              };
-            }
-            return { id: product.id, subtotalContribution: 0, isError: false };
+            const shippingSats = await convertShippingToSats(product);
+            return computeProductPricing({
+              id: product.id,
+              priceSats,
+              shippingSats,
+              discountPercent: appliedDiscounts[product.pubkey] || 0,
+              quantity: quantities[product.id],
+            });
           } catch (error) {
             // Outer guard for any unexpected failure during cart pricing.
             // console.warn (not console.error) keeps the Next.js dev overlay
@@ -436,28 +391,22 @@ export default function Component() {
               `Error converting price for product ${product.id}:`,
               error
             );
-            return {
-              id: product.id,
-              price: null,
-              shipping: 0,
-              subtotalContribution: 0,
-              isError: true,
-            };
+            return { id: product.id, status: "error" };
           }
         }
       );
 
       for (const result of results) {
-        if (result.isError) {
-          prices[result.id] = null;
-          shipping[result.id] = 0;
-        } else if ("price" in result) {
+        if (result.status === "priced") {
           prices[result.id] = result.price;
           shipping[result.id] = result.shipping;
           // Store per-product totals so checkout can apply shipping later.
-          totals[result.id] = result.total;
+          totals[result.id] = result.price;
+          subtotalAmount += result.price;
+        } else if (result.status === "error") {
+          prices[result.id] = null;
+          shipping[result.id] = 0;
         }
-        subtotalAmount += result.subtotalContribution;
       }
 
       setSatPrices(prices);
