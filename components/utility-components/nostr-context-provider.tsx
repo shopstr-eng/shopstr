@@ -12,7 +12,11 @@ import {
   NostrSigner,
 } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  getPersistableSignerData,
+  type StoredSignerData,
+} from "@/utils/nostr/nostr-helper-functions";
 import PassphraseChallengeModal from "@/components/utility-components/request-passphrase-modal";
 import AuthUrlChallengeModal from "@/components/utility-components/auth-challenge-modal";
 import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
@@ -124,7 +128,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
   };
 
   const loadSigner = useCallback((retryCount = 0) => {
-    let existingSigner;
+    let existingSigner: StoredSignerData | undefined;
     const { signer, signInMethod } = getLocalStorageData();
 
     if (signer) {
@@ -185,7 +189,10 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
 
     let signerObject: NostrSigner;
     try {
-      signerObject = NostrManager.signerFrom(existingSigner!, challengeHandler);
+      signerObject = NostrManager.signerFrom(
+        existingSigner! as { [key: string]: string },
+        challengeHandler
+      );
     } catch {
       const isExtension =
         existingSigner?.type === "nip07" || signInMethod === "extension";
@@ -207,12 +214,20 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
     loadKeys(signerObject);
 
     const isAlreadyLoaded = localStorage.getItem("signer");
-    if (
-      !isAlreadyLoaded ||
-      JSON.stringify(existingSigner) !== isAlreadyLoaded
-    ) {
-      localStorage.setItem("signer", JSON.stringify(existingSigner));
+    const persistableSigner = existingSigner
+      ? getPersistableSignerData(existingSigner)
+      : undefined;
+    const serializedSigner = persistableSigner
+      ? JSON.stringify(persistableSigner)
+      : "";
+    const hasStorageMismatch =
+      !isAlreadyLoaded || serializedSigner !== isAlreadyLoaded;
 
+    if (persistableSigner && hasStorageMismatch) {
+      localStorage.setItem("signer", serializedSigner);
+    }
+
+    if (hasStorageMismatch) {
       const shouldReloadSigner = false;
       window.dispatchEvent(
         new CustomEvent("storage", { detail: { shouldReloadSigner } })

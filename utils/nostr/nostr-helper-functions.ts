@@ -1345,6 +1345,51 @@ const LOCALSTORAGECONSTANTS = {
   savedAddresses: "savedAddresses",
 };
 
+export type StoredSignerData =
+  | { type: "nip07" }
+  | { type: "nip46"; bunker?: string; appPrivKey?: string }
+  | { type: "nsec"; encryptedPrivKey: string; pubkey?: string };
+
+let runtimeSignerData: StoredSignerData | undefined;
+
+export function getPersistableSignerData(
+  signerData: StoredSignerData
+): StoredSignerData {
+  if (signerData.type === "nip46") {
+    return { type: "nip46" };
+  }
+  return signerData;
+}
+
+function buildNip46SignerData({
+  clientPrivkey,
+  bunkerRemotePubkey,
+  bunkerRelays,
+  bunkerSecret,
+}: {
+  clientPrivkey?: string;
+  bunkerRemotePubkey?: string;
+  bunkerRelays?: string[];
+  bunkerSecret?: string;
+}): StoredSignerData | undefined {
+  if (!clientPrivkey || !bunkerRemotePubkey) return undefined;
+
+  const bunkerParams = [
+    ...(bunkerSecret ? [`secret=${bunkerSecret}`] : []),
+    ...(bunkerRelays ?? []).map((relay) => `relay=${relay}`),
+  ];
+  const bunker =
+    "bunker://" +
+    bunkerRemotePubkey +
+    (bunkerParams.length > 0 ? `?${bunkerParams.join("&")}` : "");
+
+  return {
+    type: "nip46",
+    bunker,
+    appPrivKey: clientPrivkey,
+  };
+}
+
 export const setLocalStorageDataOnSignIn = ({
   encryptedPrivateKey,
   relays,
@@ -1431,7 +1476,12 @@ export const setLocalStorageDataOnSignIn = ({
   }
 
   if (signer) {
-    localStorage.setItem(LOCALSTORAGECONSTANTS.signer, JSON.stringify(signer));
+    const signerData = signer.toJSON() as StoredSignerData;
+    runtimeSignerData = signerData;
+    localStorage.setItem(
+      LOCALSTORAGECONSTANTS.signer,
+      JSON.stringify(getPersistableSignerData(signerData))
+    );
   }
 
   if (migrationComplete) {
@@ -1459,19 +1509,14 @@ export interface LocalStorageInterface {
   bunkerRemotePubkey?: string;
   bunkerRelays?: string[];
   bunkerSecret?: string;
-  signer?:
-    | { type: "nip07" }
-    | { type: "nip46"; bunker: string; appPrivKey?: string }
-    | { type: "nsec"; encryptedPrivKey: string; pubkey?: string };
+  signer?: StoredSignerData;
   nwcString?: string | null;
   nwcInfo?: string | null;
   migrationComplete?: boolean;
   savedAddresses: SavedAddress[];
 }
 
-function isStoredSignerData(
-  value: unknown
-): value is NonNullable<LocalStorageInterface["signer"]> {
+function isStoredSignerData(value: unknown): value is StoredSignerData {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
@@ -1490,7 +1535,8 @@ function isStoredSignerData(
 
   if (candidate.type === "nip46") {
     return (
-      typeof candidate.bunker === "string" &&
+      (candidate.bunker === undefined ||
+        typeof candidate.bunker === "string") &&
       (candidate.appPrivKey === undefined ||
         typeof candidate.appPrivKey === "string")
     );
@@ -1525,7 +1571,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let bunkerRemotePubkey;
   let bunkerRelays;
   let bunkerSecret;
-  let signer: LocalStorageInterface["signer"] | undefined;
+  let signer: StoredSignerData | undefined = runtimeSignerData;
   let migrationComplete;
   let nwcString;
   let nwcInfo;
@@ -1662,7 +1708,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       : undefined;
 
-    signer = getLocalStorageJson<LocalStorageInterface["signer"] | undefined>(
+    const persistedSigner = getLocalStorageJson<StoredSignerData | undefined>(
       LOCALSTORAGECONSTANTS.signer,
       undefined,
       {
@@ -1670,6 +1716,39 @@ export const getLocalStorageData = (): LocalStorageInterface => {
         validate: isStoredSignerData,
       }
     );
+    if (persistedSigner?.type === "nip46") {
+      const persistableSigner = getPersistableSignerData(persistedSigner);
+      const serializedPersistableSigner = JSON.stringify(persistableSigner);
+      if (
+        localStorage.getItem(LOCALSTORAGECONSTANTS.signer) !==
+        serializedPersistableSigner
+      ) {
+        localStorage.setItem(
+          LOCALSTORAGECONSTANTS.signer,
+          serializedPersistableSigner
+        );
+      }
+
+      const reconstructedSigner = buildNip46SignerData({
+        clientPrivkey:
+          typeof clientPrivkey === "string" ? clientPrivkey : undefined,
+        bunkerRemotePubkey:
+          typeof bunkerRemotePubkey === "string"
+            ? bunkerRemotePubkey
+            : undefined,
+        bunkerRelays,
+        bunkerSecret:
+          typeof bunkerSecret === "string" ? bunkerSecret : undefined,
+      });
+      if (reconstructedSigner) {
+        signer = reconstructedSigner;
+      } else if (!signer && (!signInMethod || signInMethod === "bunker")) {
+        signer = persistableSigner;
+      }
+    } else if (persistedSigner) {
+      signer = persistedSigner;
+    }
+
     if (!signer) {
       switch (signInMethod) {
         case "extension":
@@ -1678,17 +1757,17 @@ export const getLocalStorageData = (): LocalStorageInterface => {
           };
           break;
         case "bunker":
-          let bunker =
-            "bunker://" + bunkerRemotePubkey + "?secret=" + bunkerSecret;
-          for (const relay of bunkerRelays) {
-            bunker += "&relay=" + relay;
-          }
-          signer = {
-            type: "nip46",
-            bunker: bunker,
-            appPrivKey:
+          signer = buildNip46SignerData({
+            clientPrivkey:
               typeof clientPrivkey === "string" ? clientPrivkey : undefined,
-          };
+            bunkerRemotePubkey:
+              typeof bunkerRemotePubkey === "string"
+                ? bunkerRemotePubkey
+                : undefined,
+            bunkerRelays,
+            bunkerSecret:
+              typeof bunkerSecret === "string" ? bunkerSecret : undefined,
+          });
           break;
         case "nsec":
           if (typeof encryptedPrivateKey === "string") {
@@ -1742,6 +1821,8 @@ export const getLocalStorageData = (): LocalStorageInterface => {
 };
 
 export const LogOut = () => {
+  runtimeSignerData = undefined;
+
   // remove old data
   localStorage.removeItem("npub");
   localStorage.removeItem("signIn");
