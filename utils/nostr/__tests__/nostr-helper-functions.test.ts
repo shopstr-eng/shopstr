@@ -65,6 +65,8 @@ import {
   parseLocalProfileFallback,
   parseBunkerToken,
   PostListing,
+  publishBlossomServerEvent,
+  publishSavedForLaterEvent,
   publishWalletEvent,
   publishRelayEvent,
   publishReportEvent,
@@ -2479,5 +2481,238 @@ describe("finalizeAndSendNostrEvent", () => {
 
     consoleWarnSpy.mockRestore();
     consoleErrorSpy.mockRestore();
+  });
+});
+
+describe("publishBlossomServerEvent", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("creates a kind-10063 event with server tags and caches it when signedEvent is truthy", async () => {
+    const servers = ["https://blossom1.example", "https://blossom2.example"];
+    const signedEvent = {
+      kind: 10063,
+      id: "blossom-event-id",
+      pubkey: "user-pubkey",
+      sig: "sig",
+      content: "",
+      created_at: 1,
+      tags: servers.map((s) => ["server", s]),
+    };
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishBlossomServerEvent(nostr as any, signer as any, servers);
+
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 10063,
+        tags: expect.arrayContaining([
+          ["server", "https://blossom1.example"],
+          ["server", "https://blossom2.example"],
+        ]),
+      })
+    );
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(signedEvent);
+  });
+
+  it("logs console.error (fire-and-forget) when caching rejects", async () => {
+    const servers = ["https://blossom.example"];
+    const signedEvent = {
+      kind: 10063,
+      id: "blossom-event-id",
+      pubkey: "user-pubkey",
+      sig: "sig",
+      content: "",
+      created_at: 1,
+      tags: [["server", "https://blossom.example"]],
+    };
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    // First call is inside finalizeAndSendNostrEvent (succeeds); second is the
+    // explicit cache call in publishBlossomServerEvent (rejects).
+    (cacheEventToDatabase as jest.Mock)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Cache write failed"));
+
+    await publishBlossomServerEvent(nostr as any, signer as any, servers);
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to cache blossom server event to database:",
+      expect.any(Error)
+    );
+    consoleErrorSpy.mockRestore();
+  });
+});
+
+describe("publishSavedForLaterEvent", () => {
+  const userPubkey =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const product = { pubkey: "seller-pubkey", d: "listing-1" } as any;
+
+  function makeSigner(encryptedResult = "encrypted-content") {
+    return {
+      encrypt: jest.fn().mockResolvedValue(encryptedResult),
+      sign: jest.fn().mockImplementation(async (tpl: any) => ({
+        ...tpl,
+        id: "saved-event-id",
+        pubkey: userPubkey,
+        sig: "sig",
+      })),
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("filters out all cart addresses whose tag value contains :<product.d> when quantity < 0", async () => {
+    const cartAddresses = [
+      ["a", "30402:seller-pubkey:listing-1"],
+      ["a", "30402:seller-pubkey:listing-2"],
+    ];
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSavedForLaterEvent(
+      nostr as any,
+      signer as any,
+      "cart",
+      userPubkey,
+      cartAddresses,
+      product,
+      -1
+    );
+
+    const encryptedArg = signer.encrypt.mock.calls[0][1] as string;
+    const tags: string[][] = JSON.parse(encryptedArg);
+    const aTags = tags.filter((t) => t[0] === "a");
+    expect(aTags.every((t) => !t[1]!.includes(":listing-1"))).toBe(true);
+    expect(aTags.some((t) => t[1]!.includes(":listing-2"))).toBe(true);
+  });
+
+  it("pushes quantity copies of the a tag when quantity > 0", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSavedForLaterEvent(
+      nostr as any,
+      signer as any,
+      "cart",
+      userPubkey,
+      [],
+      product,
+      3
+    );
+
+    const encryptedArg = signer.encrypt.mock.calls[0][1] as string;
+    const tags: string[][] = JSON.parse(encryptedArg);
+    const aTags = tags.filter((t) => t[0] === "a");
+    expect(aTags).toHaveLength(3);
+    aTags.forEach((t) => expect(t[1]).toBe("30402:seller-pubkey:listing-1"));
+  });
+
+  it("builds only d/title tags (no a tags) when quantity is absent", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSavedForLaterEvent(
+      nostr as any,
+      signer as any,
+      "saved",
+      userPubkey,
+      [],
+      product
+    );
+
+    const encryptedArg = signer.encrypt.mock.calls[0][1] as string;
+    const tags: string[][] = JSON.parse(encryptedArg);
+    expect(tags.some((t) => t[0] === "a")).toBe(false);
+    expect(tags.some((t) => t[0] === "d")).toBe(true);
+    expect(tags.some((t) => t[0] === "title")).toBe(true);
+  });
+
+  it("builds only d/title tags (no a tags) when quantity is zero", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSavedForLaterEvent(
+      nostr as any,
+      signer as any,
+      "cart",
+      userPubkey,
+      [],
+      product,
+      0
+    );
+
+    const encryptedArg = signer.encrypt.mock.calls[0][1] as string;
+    const tags: string[][] = JSON.parse(encryptedArg);
+    expect(tags.some((t) => t[0] === "a")).toBe(false);
+  });
+
+  it("returns without throwing on success", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await expect(
+      publishSavedForLaterEvent(
+        nostr as any,
+        signer as any,
+        "cart",
+        userPubkey,
+        [],
+        product,
+        1
+      )
+    ).resolves.toBeUndefined();
+  });
+
+  it("returns silently when an inner error occurs", async () => {
+    const signer = {
+      encrypt: jest.fn().mockRejectedValue(new Error("Encrypt failed")),
+      sign: jest.fn(),
+    };
+    const nostr = { publish: jest.fn() };
+
+    await expect(
+      publishSavedForLaterEvent(
+        nostr as any,
+        signer as any,
+        "cart",
+        userPubkey,
+        [],
+        product,
+        1
+      )
+    ).resolves.toBeUndefined();
   });
 });
