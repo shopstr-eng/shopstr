@@ -1876,6 +1876,105 @@ describe("publishWalletEvent", () => {
       expect.arrayContaining(["wss://relay.example"])
     );
   });
+
+  it("deduplicates mints via Set, creates a kind-17375 event, and caches it when signedEvent is truthy", async () => {
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const cashuPrivkey =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      encrypt: jest
+        .fn()
+        .mockImplementation(async (_pubkey: string, content: string) => {
+          return `encrypted:${content}`;
+        }),
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: "wallet-event-id",
+        pubkey: userPubkey,
+        sig: "sig",
+      })),
+    };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishWalletEvent(
+      nostr as any,
+      signer as any,
+      { cashuPrivkey },
+      { mints: ["https://mint.a", "https://mint.a", "https://mint.b"] }
+    );
+
+    const expectedContent = JSON.stringify([
+      ["privkey", cashuPrivkey],
+      ["mint", "https://mint.a"],
+      ["mint", "https://mint.b"],
+    ]);
+    expect(signer.encrypt).toHaveBeenCalledWith(userPubkey, expectedContent);
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 17375 })
+    );
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 17375, id: "wallet-event-id" })
+    );
+  });
+
+  it("logs console.error when caching rejects", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const cashuPrivkey =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      encrypt: jest
+        .fn()
+        .mockImplementation(async (_pubkey: string, content: string) => {
+          return `encrypted:${content}`;
+        }),
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: "wallet-event-id",
+        pubkey: userPubkey,
+        sig: "sig",
+      })),
+    };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    // First call inside finalizeAndSendNostrEvent succeeds; second explicit call rejects.
+    (cacheEventToDatabase as jest.Mock)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Cache write failed"));
+
+    await publishWalletEvent(
+      nostr as any,
+      signer as any,
+      { cashuPrivkey },
+      { mints: ["https://mint.example"] }
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to cache wallet event to database:",
+      expect.any(Error)
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("returns silently on any inner error", async () => {
+    const signer = {
+      getPubKey: jest.fn().mockRejectedValue(new Error("Signer unavailable")),
+      encrypt: jest.fn(),
+      sign: jest.fn(),
+    };
+    const nostr = { publish: jest.fn() };
+
+    await expect(
+      publishWalletEvent(nostr as any, signer as any, {
+        cashuPrivkey: "b".repeat(64),
+      })
+    ).resolves.toBeUndefined();
+  });
 });
 
 describe("PostListing", () => {
