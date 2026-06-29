@@ -708,14 +708,15 @@ export async function publishSavedForLaterEvent(
 ) {
   try {
     let cartTags: string[][] = [];
+    const productAddress = `30402:${product.pubkey}:${product.d}`;
 
     if (quantity && quantity < 0) {
       cartTags = [...cartAddresses].filter(
-        (address) => !address[1]!.includes(`:${product.d}`)
+        (address) => !(address[0] === "a" && address[1] === productAddress)
       );
     } else if (quantity && quantity > 0) {
       for (let i = 0; i < quantity; i++) {
-        const productTag = ["a", "30402:" + product.pubkey + ":" + product.d];
+        const productTag = ["a", productAddress];
         cartTags.push(productTag);
       }
     }

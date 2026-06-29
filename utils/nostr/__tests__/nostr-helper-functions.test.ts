@@ -2694,7 +2694,7 @@ describe("publishSavedForLaterEvent", () => {
     jest.clearAllMocks();
   });
 
-  it("filters out all cart addresses whose tag value contains :<product.d> when quantity < 0", async () => {
+  it("filters out the exact product address when quantity < 0", async () => {
     const cartAddresses = [
       ["a", "30402:seller-pubkey:listing-1"],
       ["a", "30402:seller-pubkey:listing-2"],
@@ -2715,8 +2715,35 @@ describe("publishSavedForLaterEvent", () => {
     const encryptedArg = signer.encrypt.mock.calls[0][1] as string;
     const tags: string[][] = JSON.parse(encryptedArg);
     const aTags = tags.filter((t) => t[0] === "a");
-    expect(aTags.every((t) => !t[1]!.includes(":listing-1"))).toBe(true);
-    expect(aTags.some((t) => t[1]!.includes(":listing-2"))).toBe(true);
+    expect(aTags).not.toContainEqual(["a", "30402:seller-pubkey:listing-1"]);
+    expect(aTags).toContainEqual(["a", "30402:seller-pubkey:listing-2"]);
+  });
+
+  it("keeps cart addresses for other sellers when removing a product with the same d tag", async () => {
+    const cartAddresses = [
+      ["a", "30402:seller-pubkey:listing-1"],
+      ["a", "30402:other-seller-pubkey:listing-1"],
+      ["a", "30402:seller-pubkey:listing-2"],
+    ];
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSavedForLaterEvent(
+      nostr as any,
+      signer as any,
+      "cart",
+      userPubkey,
+      cartAddresses,
+      product,
+      -1
+    );
+
+    const encryptedArg = signer.encrypt.mock.calls[0][1] as string;
+    const tags: string[][] = JSON.parse(encryptedArg);
+    const aTags = tags.filter((t) => t[0] === "a");
+    expect(aTags).not.toContainEqual(["a", "30402:seller-pubkey:listing-1"]);
+    expect(aTags).toContainEqual(["a", "30402:other-seller-pubkey:listing-1"]);
+    expect(aTags).toContainEqual(["a", "30402:seller-pubkey:listing-2"]);
   });
 
   it("pushes quantity copies of the a tag when quantity > 0", async () => {
