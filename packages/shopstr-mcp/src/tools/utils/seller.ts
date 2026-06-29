@@ -161,11 +161,15 @@ export async function fetchSellerProducts(
   );
 
   const events = mergeAndDeduplicateProducts(relayResult.events);
-  const products = events.map(parseProductEvent).filter(isPublicProduct);
+  const publicProducts = events
+    .map((event) => ({ event, product: parseProductEvent(event) }))
+    .filter(({ product }) => isPublicProduct(product));
+  const products = publicProducts.map(({ product }) => product);
+  const productEvents = publicProducts.map(({ event }) => event);
   const returnedProducts = products.slice(0, PRODUCT_RESPONSE_BUDGET);
 
   return {
-    events,
+    events: productEvents,
     products,
     returnedProducts,
     truncated: returnedProducts.length < products.length,
@@ -292,9 +296,33 @@ function reviewMatchesSeller(
   sellerPubkey: string,
   productAddresses: readonly string[]
 ): boolean {
+  const productReferences = getSellerProductAddressReferences(
+    event,
+    sellerPubkey
+  );
+  if (productReferences.length > 0) {
+    return productReferences.some((address) =>
+      productAddresses.includes(address)
+    );
+  }
   if (hasTag(event, "p", sellerPubkey)) return true;
   if (eventReferencesSeller(event, sellerPubkey)) return true;
   return productAddresses.some((address) => hasProductAddress(event, address));
+}
+
+function getSellerProductAddressReferences(
+  event: NostrEvent,
+  sellerPubkey: string
+): string[] {
+  const prefix = `${PRODUCT_KIND}:${sellerPubkey}:`;
+  return event.tags.flatMap((tag) => {
+    const [key, value] = tag;
+    if ((key !== "d" && key !== "a") || typeof value !== "string") {
+      return [];
+    }
+    const coordinate = value.startsWith("a:") ? value.slice(2) : value;
+    return coordinate.startsWith(prefix) ? [coordinate] : [];
+  });
 }
 
 /**
