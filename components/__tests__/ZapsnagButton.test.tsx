@@ -87,6 +87,7 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 
 jest.mock("@/utils/nostr/zap-validator", () => ({
   validateZapReceipt: jest.fn(),
+  validateSingleReceipt: jest.fn().mockReturnValue({ valid: true, amountSats: 100, errors: [] }),
 }));
 
 Object.defineProperty(global, "crypto", {
@@ -284,7 +285,13 @@ describe("ZapsnagButton Component", () => {
       nostrHelpers.sendGiftWrappedMessageEvent as jest.Mock
     ).mockResolvedValueOnce(undefined);
 
-    (zapValidator.validateZapReceipt as jest.Mock).mockResolvedValue(true);
+    (zapValidator.validateZapReceipt as jest.Mock).mockResolvedValue({
+      valid: true,
+      amountSats: 100,
+      payerPubkey: "buyer-pubkey",
+      receiptId: "receipt-id",
+      errors: [],
+    });
 
     renderComponent();
 
@@ -390,7 +397,10 @@ describe("ZapsnagButton Component", () => {
     expect(zapValidator.validateZapReceipt).toHaveBeenCalledWith(
       mockNostrManager,
       mockProduct.id,
-      1700000000
+      1700000000,
+      mockProduct.pubkey,
+      mockProduct.price,
+      "test-preimage"
     );
 
     expect(localStorage.setItem).toHaveBeenCalledWith(
@@ -399,6 +409,65 @@ describe("ZapsnagButton Component", () => {
     );
     expect(window.alert).toHaveBeenCalledWith(
       expect.stringContaining("Order Placed & Verified")
+    );
+
+    dateNowSpy.mockRestore();
+  });
+
+  test("shows fallback alert when zap receipt validation fails", async () => {
+    const dateNowSpy = jest.spyOn(Date, "now").mockReturnValue(1700000000000);
+
+    mockNostrManager.fetch.mockResolvedValueOnce([
+      {
+        created_at: 100,
+        content: JSON.stringify({ lud16: "seller@alby.com" }),
+      },
+    ]);
+
+    (nostrHelpers.constructGiftWrappedEvent as jest.Mock).mockResolvedValueOnce(
+      { id: "gift-wrap" }
+    );
+    (nostrHelpers.constructMessageSeal as jest.Mock).mockResolvedValueOnce(
+      { id: "seal" }
+    );
+    (nostrHelpers.constructMessageGiftWrap as jest.Mock).mockResolvedValueOnce(
+      { id: "final" }
+    );
+    (nostrHelpers.sendGiftWrappedMessageEvent as jest.Mock).mockResolvedValueOnce(
+      undefined
+    );
+
+    (zapValidator.validateZapReceipt as jest.Mock).mockResolvedValue({
+      valid: false,
+      amountSats: 0,
+      errors: ["No valid zap receipt found after all retries"],
+    });
+
+    renderComponent();
+    fireEvent.click(screen.getByText(/Zap to Buy/i));
+    fireEvent.change(screen.getByLabelText("Full Name"), {
+      target: { value: "Buyer" },
+    });
+    fireEvent.change(screen.getByLabelText("Street Address"), {
+      target: { value: "Road" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Town" },
+    });
+    fireEvent.change(screen.getByLabelText("Postal / Zip Code"), {
+      target: { value: "123" },
+    });
+    fireEvent.change(screen.getByLabelText("Country"), {
+      target: { value: "US" },
+    });
+
+    const confirmBtn = screen.getByText("Confirm & Zap");
+    await act(async () => {
+      fireEvent.click(confirmBtn);
+    });
+
+    expect(window.alert).toHaveBeenCalledWith(
+      expect.stringContaining("Payment sent (Preimage received)")
     );
 
     dateNowSpy.mockRestore();
@@ -434,6 +503,42 @@ describe("ZapsnagButton Component", () => {
 
     expect(window.alert).toHaveBeenCalledWith(
       expect.stringContaining("Seller has not set up a Lightning Address")
+    );
+  });
+
+  test("shows alert when nostrManager is not available", async () => {
+    renderComponent({
+      nostrContext: { nostr: null },
+      signerContext: {
+        signer: mockSigner,
+        isLoggedIn: true,
+        pubkey: "buyer-pubkey",
+      },
+    });
+
+    fireEvent.click(screen.getByText(/Zap to Buy/i));
+    fireEvent.change(screen.getByLabelText("Full Name"), {
+      target: { value: "Buyer" },
+    });
+    fireEvent.change(screen.getByLabelText("Street Address"), {
+      target: { value: "Road" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Town" },
+    });
+    fireEvent.change(screen.getByLabelText("Postal / Zip Code"), {
+      target: { value: "123" },
+    });
+    fireEvent.change(screen.getByLabelText("Country"), {
+      target: { value: "US" },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Confirm & Zap"));
+    });
+
+    expect(window.alert).toHaveBeenCalledWith(
+      "Connection error: unable to verify payment."
     );
   });
 

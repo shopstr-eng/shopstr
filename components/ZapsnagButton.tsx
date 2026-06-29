@@ -25,7 +25,7 @@ import {
 import { generateSecretKey, getPublicKey } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
-import { validateZapReceipt } from "@/utils/nostr/zap-validator";
+import { validateZapReceipt, validateSingleReceipt } from "@/utils/nostr/zap-validator";
 
 export default function ZapsnagButton({ product }: { product: ProductData }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -63,7 +63,10 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
 
   useEffect(() => {
     const checkInventory = async () => {
-      if (!nostrManager || !product.id) return;
+      if (!nostrManager || !product.id) {
+        setIsCheckingInventory(false);
+        return;
+      }
 
       if (!product.quantity || product.quantity <= 0) {
         setIsCheckingInventory(false);
@@ -72,8 +75,20 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
 
       try {
         const filter = { kinds: [9735], "#e": [product.id] };
-        const zaps = await nostrManager.fetch([filter]);
-        setSoldCount(zaps.length);
+        const events = await nostrManager.fetch([filter]);
+        let count = 0;
+        for (const event of events) {
+          const result = validateSingleReceipt(
+            event,
+            product.id,
+            product.pubkey,
+            product.price,
+            0,
+            { skipFreshnessCheck: true }
+          );
+          if (result.valid) count++;
+        }
+        setSoldCount(count);
       } catch (e) {
         console.error("Failed to check inventory", e);
       } finally {
@@ -87,6 +102,12 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
     let originalWebLN: any;
     if (!signer || !isLoggedIn || !userPubkey) {
       alert("Please sign in to purchase.");
+      return;
+    }
+
+    if (!nostrManager) {
+      alert("Connection error: unable to verify payment.");
+      setLoading(false);
       return;
     }
 
@@ -202,13 +223,16 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
         );
 
         setStatus("Verifying receipt...");
-        const receiptFound = await validateZapReceipt(
-          nostrManager!,
+        const receiptResult = await validateZapReceipt(
+          nostrManager,
           product.id,
-          startTime
+          startTime,
+          product.pubkey,
+          product.price,
+          response.preimage
         );
 
-        if (receiptFound) {
+        if (receiptResult.valid) {
           alert(
             "Order Placed & Verified! Preimage: " +
               response.preimage.substring(0, 8) +
