@@ -42,6 +42,7 @@ jest.mock("nostr-tools", () => {
 });
 
 import {
+  approveCommunityPost,
   constructGiftWrappedEvent,
   constructMessageGiftWrap,
   constructMessageSeal,
@@ -82,7 +83,7 @@ import {
 } from "../nostr-helper-functions";
 import { finalizeEvent, nip19, nip44 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
-import { ProductFormValues } from "@/utils/types/types";
+import { Community, ProductFormValues } from "@/utils/types/types";
 import {
   cacheEventToDatabase,
   deleteEventsFromDatabase,
@@ -2813,5 +2814,105 @@ describe("publishSavedForLaterEvent", () => {
         1
       )
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("approveCommunityPost", () => {
+  const community: Community = {
+    id: "community-event-id",
+    kind: 34550,
+    pubkey: "moderator-pubkey",
+    createdAt: 1,
+    d: "my-community",
+    name: "My Community",
+    description: "A test community",
+    image: "",
+    moderators: ["moderator-pubkey"],
+    relays: { approvals: [], requests: [], metadata: [], all: [] },
+  };
+
+  const postToApprove = {
+    id: "post-event-id",
+    kind: 1,
+    pubkey: "author-pubkey",
+    created_at: 1,
+    content: "Hello community",
+    tags: [],
+    sig: "post-sig",
+  };
+
+  function makeSigner(signedId = "approval-event-id") {
+    return {
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: signedId,
+        pubkey: "moderator-pubkey",
+        sig: "approval-sig",
+      })),
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("creates a kind-4550 event with a, e, p, k tags and the stringified post as content", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await approveCommunityPost(
+      signer as any,
+      nostr as any,
+      postToApprove as any,
+      community
+    );
+
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 4550,
+        content: JSON.stringify(postToApprove),
+        tags: expect.arrayContaining([
+          ["a", "34550:moderator-pubkey:my-community"],
+          ["e", "post-event-id"],
+          ["p", "author-pubkey"],
+          ["k", "1"],
+        ]),
+      })
+    );
+  });
+
+  it("caches the signed event and returns it", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    // First call inside finalizeAndSendNostrEvent; second is the explicit cache call.
+    (cacheEventToDatabase as jest.Mock)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined);
+
+    const result = await approveCommunityPost(
+      signer as any,
+      nostr as any,
+      postToApprove as any,
+      community
+    );
+
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "approval-event-id", kind: 4550 })
+    );
+    expect(result).toEqual(
+      expect.objectContaining({ id: "approval-event-id", kind: 4550 })
+    );
   });
 });
