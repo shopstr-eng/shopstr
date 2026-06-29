@@ -316,7 +316,16 @@ test("get_company_details excludes hidden products and keeps mixed-currency pric
         ];
       }
       if (filters.some((filter) => filter.kinds?.includes(31555))) {
-        return [];
+        return [
+          reviewEvent({
+            id: hex("d"),
+            tags: [
+              ["d", `a:30402:${sellerPubkey}:hidden-coffee`],
+              ["rating", "1", "thumb"],
+            ],
+            content: "Hidden product review should not be public.",
+          }),
+        ];
       }
       return [];
     })
@@ -329,6 +338,8 @@ test("get_company_details excludes hidden products and keeps mixed-currency pric
     "Coffee EUR",
     "Coffee USD",
   ]);
+  assert.equal(body.reviews.count, 0);
+  assert.equal(body.reviews.totalMatches, 0);
   assert.equal(body.paymentInfo.priceRange, null);
   assert.deepEqual(
     body.paymentInfo.priceRanges
@@ -494,6 +505,63 @@ test("get_seller_reputation summarizes public review scores", async () => {
     count: 2,
   });
   assert.equal(body.recentReviews.length, 2);
+});
+
+test("get_seller_reputation ignores reviews for hidden products", async () => {
+  const response = await handleGetSellerReputation(
+    { sellerPubkey },
+    context((filters) => {
+      if (
+        filters.some((filter) =>
+          filter.kinds?.some((kind) => kind === 0 || kind === 30019)
+        )
+      ) {
+        return [profileEvent(), shopEvent()];
+      }
+      if (filters.some((filter) => filter.kinds?.includes(30402))) {
+        return [
+          productEvent({
+            id: hex("a"),
+            tags: [
+              ["d", "coffee"],
+              ["title", "Coffee Beans"],
+              ["price", "25", "USD"],
+            ],
+          }),
+          productEvent({
+            id: hex("c"),
+            tags: [
+              ["d", "hidden-coffee"],
+              ["title", "Hidden Coffee"],
+              ["price", "15", "USD"],
+              ["visibility", "hidden"],
+            ],
+          }),
+        ];
+      }
+      if (filters.some((filter) => filter.kinds?.includes(31555))) {
+        return [
+          reviewEvent({
+            id: hex("d"),
+            tags: [
+              ["d", `a:30402:${sellerPubkey}:hidden-coffee`],
+              ["rating", "1", "thumb"],
+            ],
+            content: "Hidden product review should not affect reputation.",
+          }),
+        ];
+      }
+      return [];
+    })
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, undefined);
+  assert.equal(body.productCount, 1);
+  assert.equal(body.reviewCount, 0);
+  assert.equal(body.recentReviews.length, 0);
+  assert.equal(body.reputation.averageScore, null);
+  assert.equal(body.reputation.trustLevel, "unknown");
 });
 
 test("get_seller_reputation treats reviews with no ratings as unknown reputation", async () => {
