@@ -1,5 +1,9 @@
 import { NostrManager, NostrEvent } from "./nostr-manager";
 import { verifyEvent } from "nostr-tools";
+import {
+  decodeInvoice,
+  validatePreimage,
+} from "@getalby/lightning-tools/bolt11";
 
 export interface ZapReceiptValidationResult {
   valid: boolean;
@@ -9,142 +13,264 @@ export interface ZapReceiptValidationResult {
   errors: string[];
 }
 
-interface ValidateOptions {
+export interface ZapReceiptValidationOptions {
+  productId: string;
+  expectedRecipientPubkey: string;
+  expectedReceiptSignerPubkey: string;
+  expectedAmountSats: number;
+  minTimestamp: number;
   skipFreshnessCheck?: boolean;
   expectedPreimage?: string;
+  expectedLnurl?: string;
 }
 
-function getTagValue(tags: string[][], tagName: string): string | undefined {
+const FRESHNESS_WINDOW_SECONDS = 120;
+
+function invalid(errors: string[]): ZapReceiptValidationResult {
+  return { valid: false, amountSats: 0, errors };
+}
+
+function getTagValue(tags: unknown, tagName: string): string | undefined {
+  if (!Array.isArray(tags)) {
+    return undefined;
+  }
+
   for (const tag of tags) {
-    if (tag[0] === tagName) {
+    if (
+      Array.isArray(tag) &&
+      tag[0] === tagName &&
+      typeof tag[1] === "string"
+    ) {
       return tag[1];
     }
   }
+
   return undefined;
+}
+
+function parsePositiveMillisats(
+  value: string | undefined,
+  label: string,
+  errors: string[]
+): number | undefined {
+  if (value === undefined || !/^\d+$/.test(value)) {
+    errors.push(`Invalid '${label}' tag in zap receipt`);
+    return undefined;
+  }
+
+  const millisats = Number(value);
+  if (!Number.isSafeInteger(millisats) || millisats <= 0) {
+    errors.push(`Invalid '${label}' value in zap receipt`);
+    return undefined;
+  }
+
+  return millisats;
+}
+
+function parsePositiveZapRequestMillisats(
+  value: string,
+  errors: string[]
+): number | undefined {
+  if (!/^\d+$/.test(value)) {
+    errors.push("Invalid 'amount' tag in zap request");
+    return undefined;
+  }
+
+  const millisats = Number(value);
+  if (!Number.isSafeInteger(millisats) || millisats <= 0) {
+    errors.push("Invalid 'amount' value in zap request");
+    return undefined;
+  }
+
+  return millisats;
+}
+
+function parseZapRequest(
+  description: string,
+  errors: string[]
+): NostrEvent | undefined {
+  try {
+    return JSON.parse(description) as NostrEvent;
+  } catch {
+    errors.push("Failed to parse 'description' tag as event JSON");
+    return undefined;
+  }
 }
 
 export function validateSingleReceipt(
   receipt: NostrEvent,
-  productId: string,
-  sellerPubkey: string,
-  expectedAmountSats: number,
-  minTimestamp: number,
-  options?: ValidateOptions
+  options: ZapReceiptValidationOptions
 ): ZapReceiptValidationResult {
   const errors: string[] = [];
-  const skipFreshnessCheck = options?.skipFreshnessCheck ?? false;
-  const expectedPreimage = options?.expectedPreimage;
+  const {
+    productId,
+    expectedRecipientPubkey,
+    expectedReceiptSignerPubkey,
+    expectedAmountSats,
+    minTimestamp,
+    skipFreshnessCheck = false,
+    expectedPreimage,
+    expectedLnurl,
+  } = options;
 
   if (!verifyEvent(receipt)) {
     errors.push("Invalid signature on zap receipt");
-    return { valid: false, amountSats: 0, errors };
+    return invalid(errors);
   }
 
   if (receipt.kind !== 9735) {
     errors.push(`Expected kind 9735, got ${receipt.kind}`);
-    return { valid: false, amountSats: 0, errors };
+    return invalid(errors);
+  }
+
+  if (receipt.pubkey !== expectedReceiptSignerPubkey) {
+    errors.push("Receipt signer does not match LNURL provider nostrPubkey");
+    return invalid(errors);
   }
 
   const pTag = getTagValue(receipt.tags, "p");
-  if (pTag !== sellerPubkey) {
-    errors.push("Receipt 'p' tag does not match seller");
-    return { valid: false, amountSats: 0, errors };
+  if (pTag !== expectedRecipientPubkey) {
+    errors.push("Receipt 'p' tag does not match LNURL recipient");
+    return invalid(errors);
   }
 
   const eTag = getTagValue(receipt.tags, "e");
   if (eTag !== productId) {
     errors.push("Receipt 'e' tag does not match product");
-    return { valid: false, amountSats: 0, errors };
+    return invalid(errors);
   }
 
-  const amountTag = getTagValue(receipt.tags, "amount");
-  if (amountTag === undefined || !/^\d+$/.test(amountTag)) {
-    errors.push("Missing or invalid 'amount' tag in zap receipt");
-    return { valid: false, amountSats: 0, errors };
+  const bolt11 = getTagValue(receipt.tags, "bolt11");
+  if (bolt11 === undefined) {
+    errors.push("Missing 'bolt11' tag in zap receipt");
+    return invalid(errors);
   }
-  const amountMsat = parseInt(amountTag, 10);
-  if (!Number.isSafeInteger(amountMsat) || amountMsat <= 0) {
-    errors.push("Invalid amount value in zap receipt");
-    return { valid: false, amountSats: 0, errors };
+
+  const decodedInvoice = decodeInvoice(bolt11);
+  if (
+    !decodedInvoice ||
+    !Number.isSafeInteger(decodedInvoice.millisatoshi) ||
+    decodedInvoice.millisatoshi <= 0 ||
+    typeof decodedInvoice.paymentHash !== "string" ||
+    decodedInvoice.paymentHash.length === 0
+  ) {
+    errors.push("Invalid 'bolt11' invoice in zap receipt");
+    return invalid(errors);
   }
-  const amountSats = Math.round(amountMsat / 1000);
-  if (Math.abs(amountSats - expectedAmountSats) > 1) {
+
+  const invoiceAmountMsat = decodedInvoice.millisatoshi;
+  const invoiceAmountSats = invoiceAmountMsat / 1000;
+  const expectedAmountMsat = expectedAmountSats * 1000;
+  if (!Number.isSafeInteger(expectedAmountMsat) || expectedAmountMsat <= 0) {
+    errors.push("Invalid expected zap amount");
+    return invalid(errors);
+  }
+
+  if (invoiceAmountMsat !== expectedAmountMsat) {
     errors.push(
-      `Zap receipt amount ${amountSats} sats does not match expected ${expectedAmountSats} sats`
+      `Invoice amount ${invoiceAmountSats} sats does not match expected ${expectedAmountSats} sats`
     );
-    return { valid: false, amountSats: 0, errors };
+    return invalid(errors);
+  }
+
+  const receiptAmountTag = getTagValue(receipt.tags, "amount");
+  if (receiptAmountTag !== undefined) {
+    const receiptAmountMsat = parsePositiveMillisats(
+      receiptAmountTag,
+      "amount",
+      errors
+    );
+    if (receiptAmountMsat === undefined) {
+      return invalid(errors);
+    }
+    if (receiptAmountMsat !== invoiceAmountMsat) {
+      errors.push("Zap receipt amount does not match invoice amount");
+      return invalid(errors);
+    }
   }
 
   if (expectedPreimage !== undefined) {
-    const preimageTag = getTagValue(receipt.tags, "preimage");
-    if (preimageTag === undefined) {
-      errors.push("Missing 'preimage' tag in zap receipt (required for verification)");
-      return { valid: false, amountSats: 0, errors };
+    if (!validatePreimage(expectedPreimage, decodedInvoice.paymentHash)) {
+      errors.push("Preimage does not match invoice payment hash");
+      return invalid(errors);
     }
-    if (preimageTag !== expectedPreimage) {
+
+    const receiptPreimage = getTagValue(receipt.tags, "preimage");
+    if (receiptPreimage !== undefined && receiptPreimage !== expectedPreimage) {
       errors.push("Preimage mismatch between receipt and payment");
-      return { valid: false, amountSats: 0, errors };
+      return invalid(errors);
     }
   }
 
   const descTag = getTagValue(receipt.tags, "description");
   if (descTag === undefined) {
     errors.push("Missing 'description' tag (zap request) in zap receipt");
-    return { valid: false, amountSats: 0, errors };
+    return invalid(errors);
   }
 
-  let zapRequest: NostrEvent;
-  try {
-    zapRequest = JSON.parse(descTag) as NostrEvent;
-  } catch {
-    errors.push("Failed to parse 'description' tag as event JSON");
-    return { valid: false, amountSats: 0, errors };
+  const zapRequest = parseZapRequest(descTag, errors);
+  if (zapRequest === undefined) {
+    return invalid(errors);
   }
 
   if (zapRequest.kind !== 9734) {
-    errors.push(`Embedded zap request has kind ${zapRequest.kind}, expected 9734`);
-    return { valid: false, amountSats: 0, errors };
+    errors.push(
+      `Embedded zap request has kind ${zapRequest.kind}, expected 9734`
+    );
+    return invalid(errors);
   }
 
   if (!verifyEvent(zapRequest)) {
     errors.push("Invalid signature on embedded zap request");
-    return { valid: false, amountSats: 0, errors };
+    return invalid(errors);
   }
 
   const reqPTag = getTagValue(zapRequest.tags, "p");
-  if (reqPTag !== sellerPubkey) {
-    errors.push("Zap request 'p' tag does not match seller");
-    return { valid: false, amountSats: 0, errors };
+  if (reqPTag !== expectedRecipientPubkey) {
+    errors.push("Zap request 'p' tag does not match LNURL recipient");
+    return invalid(errors);
   }
 
   const reqETag = getTagValue(zapRequest.tags, "e");
   if (reqETag !== productId) {
     errors.push("Zap request 'e' tag missing or does not match product");
-    return { valid: false, amountSats: 0, errors };
+    return invalid(errors);
   }
 
-  const reqAmount = getTagValue(zapRequest.tags, "amount");
-  if (reqAmount !== undefined) {
-    const reqMsat = parseInt(reqAmount, 10);
-    if (Number.isSafeInteger(reqMsat) && Math.abs(reqMsat - amountMsat) > 1000) {
-      errors.push("Zap request amount does not match receipt amount");
-      return { valid: false, amountSats: 0, errors };
+  const reqAmountTag = getTagValue(zapRequest.tags, "amount");
+  if (reqAmountTag !== undefined) {
+    const reqAmount = parsePositiveZapRequestMillisats(reqAmountTag, errors);
+    if (reqAmount === undefined) {
+      return invalid(errors);
+    }
+    if (reqAmount !== invoiceAmountMsat) {
+      errors.push("Zap request amount does not match invoice amount");
+      return invalid(errors);
     }
   }
 
+  const reqLnurl = getTagValue(zapRequest.tags, "lnurl");
+  if (
+    expectedLnurl !== undefined &&
+    reqLnurl !== undefined &&
+    reqLnurl !== expectedLnurl
+  ) {
+    errors.push("Zap request 'lnurl' tag does not match expected LNURL");
+    return invalid(errors);
+  }
+
   if (!skipFreshnessCheck) {
-    const WINDOW = 120;
-    const lowerBound = minTimestamp - WINDOW;
-    const upperBound = minTimestamp + WINDOW;
+    const lowerBound = minTimestamp - FRESHNESS_WINDOW_SECONDS;
+    const upperBound = minTimestamp + FRESHNESS_WINDOW_SECONDS;
     if (receipt.created_at < lowerBound || receipt.created_at > upperBound) {
       errors.push("Receipt timestamp is outside acceptable window");
-      return { valid: false, amountSats: 0, errors };
+      return invalid(errors);
     }
   }
 
   return {
     valid: true,
-    amountSats,
+    amountSats: invoiceAmountSats,
     payerPubkey: zapRequest.pubkey,
     receiptId: receipt.id,
     errors: [],
@@ -153,16 +279,12 @@ export function validateSingleReceipt(
 
 export async function validateZapReceipt(
   nostr: NostrManager,
-  productId: string,
-  minTimestamp: number,
-  sellerPubkey: string,
-  expectedAmountSats: number,
-  expectedPreimage?: string
+  options: ZapReceiptValidationOptions
 ): Promise<ZapReceiptValidationResult> {
   const filter = {
     kinds: [9735],
-    "#e": [productId],
-    since: minTimestamp,
+    "#e": [options.productId],
+    since: options.minTimestamp - FRESHNESS_WINDOW_SECONDS,
   };
 
   const maxRetries = 5;
@@ -171,14 +293,7 @@ export async function validateZapReceipt(
   for (let i = 0; i < maxRetries; i++) {
     const events = await nostr.fetch([filter]);
     for (const event of events) {
-      const result = validateSingleReceipt(
-        event,
-        productId,
-        sellerPubkey,
-        expectedAmountSats,
-        minTimestamp,
-        { expectedPreimage }
-      );
+      const result = validateSingleReceipt(event, options);
       if (result.valid) {
         return result;
       }
@@ -188,9 +303,5 @@ export async function validateZapReceipt(
     }
   }
 
-  return {
-    valid: false,
-    amountSats: 0,
-    errors: ["No valid zap receipt found after all retries"],
-  };
+  return invalid(["No valid zap receipt found after all retries"]);
 }
