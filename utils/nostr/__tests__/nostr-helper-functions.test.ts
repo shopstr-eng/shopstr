@@ -67,7 +67,9 @@ import {
   parseBunkerToken,
   PostListing,
   publishBlossomServerEvent,
+  publishProofEvent,
   publishSavedForLaterEvent,
+  publishSpendingHistoryEvent,
   publishWalletEvent,
   publishRelayEvent,
   publishReportEvent,
@@ -2941,5 +2943,336 @@ describe("approveCommunityPost", () => {
     expect(result).toEqual(
       expect.objectContaining({ id: "approval-event-id", kind: 4550 })
     );
+  });
+});
+
+describe("publishProofEvent", () => {
+  const mint = "https://mint.example";
+  const proofs = [{ id: "proof-1", amount: 100, secret: "s", C: "C" }] as any[];
+  const emptyProofs: any[] = [];
+
+  function makeSigner() {
+    return {
+      getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
+      encrypt: jest.fn().mockResolvedValue("encrypted-content"),
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: `signed-${event.kind}`,
+        pubkey: "user-pubkey",
+        sig: "sig",
+      })),
+    };
+  }
+
+  function encryptedProofPayload(signer: ReturnType<typeof makeSigner>) {
+    return JSON.parse(
+      (signer.encrypt as jest.Mock).mock.calls[0][1] as string
+    ) as {
+      mint: string;
+      unit: string;
+      proofs: unknown[];
+      del?: string[];
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (deleteEventsFromDatabase as jest.Mock).mockResolvedValue(undefined);
+    (buildDeleteCachedEventsProof as jest.Mock).mockReturnValue({});
+    (buildSignedHttpRequestProofTemplate as jest.Mock).mockReturnValue({
+      kind: 27235,
+      content: "",
+      tags: [],
+      created_at: 0,
+    });
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("creates a kind-7375 proof event when proofs.length > 0", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishProofEvent(
+      nostr as any,
+      signer as any,
+      mint,
+      proofs,
+      "in",
+      "100"
+    );
+
+    const signedKinds = (signer.sign as jest.Mock).mock.calls.map(
+      (call) => call[0].kind
+    );
+    expect(signedKinds).toContain(7375);
+    expect(encryptedProofPayload(signer)).toEqual({
+      mint,
+      unit: "sat",
+      proofs,
+    });
+  });
+
+  it("skips kind-7375 creation when proofs is empty", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishProofEvent(
+      nostr as any,
+      signer as any,
+      mint,
+      emptyProofs,
+      "out",
+      "0"
+    );
+
+    const signedKinds = (signer.sign as jest.Mock).mock.calls.map(
+      (call) => call[0].kind
+    );
+    expect(signedKinds).not.toContain(7375);
+  });
+
+  it("calls deleteEvent when deletedEventsArray is non-empty", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishProofEvent(
+      nostr as any,
+      signer as any,
+      mint,
+      proofs,
+      "out",
+      "100",
+      ["old-proof-event-id"]
+    );
+
+    const signedKinds = (signer.sign as jest.Mock).mock.calls.map(
+      (call) => call[0].kind
+    );
+    expect(signedKinds).toContain(5);
+    expect(encryptedProofPayload(signer)).toEqual({
+      mint,
+      unit: "sat",
+      proofs,
+      del: ["old-proof-event-id"],
+    });
+  });
+
+  it("skips deleteEvent when deletedEventsArray is absent", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishProofEvent(
+      nostr as any,
+      signer as any,
+      mint,
+      proofs,
+      "in",
+      "100"
+    );
+
+    const signedKinds = (signer.sign as jest.Mock).mock.calls.map(
+      (call) => call[0].kind
+    );
+    expect(signedKinds).not.toContain(5);
+  });
+
+  it("skips deleteEvent when deletedEventsArray is empty", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishProofEvent(
+      nostr as any,
+      signer as any,
+      mint,
+      proofs,
+      "in",
+      "100",
+      []
+    );
+
+    const signedKinds = (signer.sign as jest.Mock).mock.calls.map(
+      (call) => call[0].kind
+    );
+    expect(signedKinds).not.toContain(5);
+  });
+
+  it("always calls publishSpendingHistoryEvent", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishProofEvent(
+      nostr as any,
+      signer as any,
+      mint,
+      emptyProofs,
+      "in",
+      "50"
+    );
+
+    const signedKinds = (signer.sign as jest.Mock).mock.calls.map(
+      (call) => call[0].kind
+    );
+    expect(signedKinds).toContain(7376);
+  });
+
+  it("returns silently on any inner error", async () => {
+    const signer = {
+      getPubKey: jest.fn().mockRejectedValue(new Error("Signer unavailable")),
+      encrypt: jest.fn(),
+      sign: jest.fn(),
+    };
+    const nostr = { publish: jest.fn() };
+
+    await expect(
+      publishProofEvent(nostr as any, signer as any, mint, proofs, "in", "100")
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe("publishSpendingHistoryEvent", () => {
+  const relay = "wss://relay.example";
+
+  function makeSigner() {
+    return {
+      getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
+      encrypt: jest
+        .fn()
+        .mockImplementation(
+          async (_pubkey: string, content: string) => `encrypted:${content}`
+        ),
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: `signed-${event.kind}`,
+        pubkey: "user-pubkey",
+        sig: "sig",
+      })),
+    };
+  }
+
+  function encryptedContent(signer: ReturnType<typeof makeSigner>): string[][] {
+    return JSON.parse((signer.encrypt as jest.Mock).mock.calls[0][1] as string);
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify([relay]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("adds a destroyed tag for each sentEventId when sentEventIds is non-empty", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSpendingHistoryEvent(
+      nostr as any,
+      signer as any,
+      "out",
+      "100",
+      "kept-event-id",
+      ["old-event-1", "old-event-2"]
+    );
+
+    const content = encryptedContent(signer);
+    expect(content).toContainEqual(["e", "old-event-1", relay, "destroyed"]);
+    expect(content).toContainEqual(["e", "old-event-2", relay, "destroyed"]);
+  });
+
+  it("omits destroyed tags when sentEventIds is absent", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSpendingHistoryEvent(
+      nostr as any,
+      signer as any,
+      "in",
+      "50",
+      "kept-event-id"
+    );
+
+    const content = encryptedContent(signer);
+    expect(content.some((t) => t[3] === "destroyed")).toBe(false);
+  });
+
+  it("omits destroyed tags when sentEventIds is empty", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSpendingHistoryEvent(
+      nostr as any,
+      signer as any,
+      "in",
+      "50",
+      "kept-event-id",
+      []
+    );
+
+    const content = encryptedContent(signer);
+    expect(content.some((t) => t[3] === "destroyed")).toBe(false);
+  });
+
+  it("adds a created tag when keptEventId is non-empty", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSpendingHistoryEvent(
+      nostr as any,
+      signer as any,
+      "in",
+      "100",
+      "kept-event-id"
+    );
+
+    const content = encryptedContent(signer);
+    expect(content).toContainEqual(["e", "kept-event-id", relay, "created"]);
+  });
+
+  it("omits the created tag when keptEventId is an empty string", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSpendingHistoryEvent(
+      nostr as any,
+      signer as any,
+      "out",
+      "100",
+      ""
+    );
+
+    const content = encryptedContent(signer);
+    expect(content.some((t) => t[3] === "created")).toBe(false);
+  });
+
+  it("returns silently on any inner error", async () => {
+    const signer = {
+      getPubKey: jest.fn().mockRejectedValue(new Error("Signer unavailable")),
+      encrypt: jest.fn(),
+      sign: jest.fn(),
+    };
+    const nostr = { publish: jest.fn() };
+
+    await expect(
+      publishSpendingHistoryEvent(nostr as any, signer as any, "in", "100", "")
+    ).resolves.toBeUndefined();
   });
 });
