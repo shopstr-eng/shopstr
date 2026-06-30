@@ -2964,6 +2964,17 @@ describe("publishProofEvent", () => {
     };
   }
 
+  function encryptedProofPayload(signer: ReturnType<typeof makeSigner>) {
+    return JSON.parse(
+      (signer.encrypt as jest.Mock).mock.calls[0][1] as string
+    ) as {
+      mint: string;
+      unit: string;
+      proofs: unknown[];
+      del?: string[];
+    };
+  }
+
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
@@ -3005,6 +3016,11 @@ describe("publishProofEvent", () => {
       (call) => call[0].kind
     );
     expect(signedKinds).toContain(7375);
+    expect(encryptedProofPayload(signer)).toEqual({
+      mint,
+      unit: "sat",
+      proofs,
+    });
   });
 
   it("skips kind-7375 creation when proofs is empty", async () => {
@@ -3044,6 +3060,12 @@ describe("publishProofEvent", () => {
       (call) => call[0].kind
     );
     expect(signedKinds).toContain(5);
+    expect(encryptedProofPayload(signer)).toEqual({
+      mint,
+      unit: "sat",
+      proofs,
+      del: ["old-proof-event-id"],
+    });
   });
 
   it("skips deleteEvent when deletedEventsArray is absent", async () => {
