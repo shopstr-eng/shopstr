@@ -1,13 +1,27 @@
 import {
+  getPendingCashuProofPublishes,
   getDefaultBlossomServer,
   getDefaultMint,
   getDefaultRelays,
   getLocalStorageData,
+  getStoredLegacyCashuProofs,
+  removeStoredLegacyCashuProofs,
+  retryPendingCashuProofPublishes,
+  queuePendingCashuProofPublish,
+  setCachedCashuProofs,
 } from "../nostr-helper-functions";
+
+const mockProof = {
+  id: "00d0a1b24d1c1a53",
+  amount: 1,
+  secret: "proof-secret",
+  C: "proof-c",
+} as any;
 
 describe("getLocalStorageData", () => {
   beforeEach(() => {
     localStorage.clear();
+    setCachedCashuProofs([]);
     jest.restoreAllMocks();
   });
 
@@ -69,5 +83,83 @@ describe("getLocalStorageData", () => {
       type: "nsec",
       encryptedPrivKey: "ncryptsec1mock",
     });
+  });
+
+  it("reads volatile Cashu proofs without writing them to localStorage", () => {
+    setCachedCashuProofs([mockProof]);
+
+    const data = getLocalStorageData();
+
+    expect(data.tokens).toEqual([mockProof]);
+    expect(localStorage.getItem("tokens")).toBeNull();
+  });
+
+  it("keeps valid legacy Cashu proofs until migration removes them", () => {
+    localStorage.setItem("tokens", JSON.stringify([mockProof]));
+
+    const data = getLocalStorageData();
+
+    expect(data.tokens).toEqual([mockProof]);
+    expect(getStoredLegacyCashuProofs()).toEqual([mockProof]);
+    expect(localStorage.getItem("tokens")).toBe(JSON.stringify([mockProof]));
+  });
+
+  it("filters malformed legacy Cashu proof entries without wiping valid ones", () => {
+    localStorage.setItem(
+      "tokens",
+      JSON.stringify([mockProof, { secret: "missing-required-fields" }])
+    );
+
+    expect(getStoredLegacyCashuProofs()).toEqual([mockProof]);
+    expect(JSON.parse(localStorage.getItem("tokens") ?? "[]")).toEqual([
+      mockProof,
+    ]);
+  });
+
+  it("removes only migrated legacy Cashu proofs", () => {
+    const secondProof = { ...mockProof, secret: "second", C: "second-c" };
+    localStorage.setItem("tokens", JSON.stringify([mockProof, secondProof]));
+
+    removeStoredLegacyCashuProofs([mockProof]);
+
+    expect(getStoredLegacyCashuProofs()).toEqual([secondProof]);
+  });
+
+  it("queues encrypted Cashu proof publishes and retries them", async () => {
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true });
+    global.fetch = fetchMock;
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue("pubkey"),
+      encrypt: jest.fn().mockResolvedValue("encrypted-proofs"),
+      decrypt: jest.fn().mockResolvedValue(JSON.stringify([mockProof])),
+      sign: jest.fn(async (event) => ({
+        ...event,
+        id: `signed-${event.kind}`,
+        pubkey: "pubkey",
+        sig: "sig",
+      })),
+    } as any;
+    const nostr = {
+      publish: jest.fn().mockResolvedValue(undefined),
+    } as any;
+
+    await queuePendingCashuProofPublish(signer, {
+      mint: "https://mint.example",
+      proofs: [mockProof],
+      direction: "in",
+      amount: "1",
+    });
+
+    expect(getPendingCashuProofPublishes()).toHaveLength(1);
+
+    await expect(
+      retryPendingCashuProofPublishes(nostr, signer)
+    ).resolves.toMatchObject({ total: 1, recovered: 1, failed: 0 });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/db/cache-event",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(nostr.publish).toHaveBeenCalled();
+    expect(getPendingCashuProofPublishes()).toHaveLength(0);
   });
 });

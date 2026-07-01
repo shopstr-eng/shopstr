@@ -67,8 +67,10 @@ import {
   getSavedAddresses,
   sendGiftWrappedMessageEvent,
   generateKeys,
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
+  setCachedCashuProofs,
   saveAddress,
 } from "@/utils/nostr/nostr-helper-functions";
 import { LightningAddress } from "@getalby/lightning-tools";
@@ -133,7 +135,8 @@ export default function CartInvoiceCard({
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
 }) {
-  const { mints, tokens } = getLocalStorageData();
+  const { mints } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
   const {
     isLoggedIn,
     pubkey: userPubkey,
@@ -2490,7 +2493,6 @@ export default function CartInvoiceCard({
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
       localStorage.setItem(
         "history",
         JSON.stringify([
@@ -2507,6 +2509,7 @@ export default function CartInvoiceCard({
         price.toString(),
         deletedEventIds
       );
+      setCachedCashuProofs(proofArray);
       localStorage.setItem("cart", JSON.stringify([]));
       setOrderConfirmed(true);
       setPaymentConfirmed(true);

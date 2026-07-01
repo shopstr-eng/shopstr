@@ -54,9 +54,11 @@ import {
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
   generateKeys,
+  setCachedCashuProofs,
   getSavedAddresses,
 } from "@/utils/nostr/nostr-helper-functions";
 import { LightningAddress } from "@getalby/lightning-tools";
@@ -112,7 +114,8 @@ export default function ProductInvoiceCard({
   discountPercentage?: number;
   originalPrice?: number;
 }) {
-  const { mints, tokens } = getLocalStorageData();
+  const { mints } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
   const {
     pubkey: userPubkey,
     npub: userNPub,
@@ -1992,7 +1995,6 @@ export default function ProductInvoiceCard({
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
       localStorage.setItem(
         "history",
         JSON.stringify([
@@ -2009,6 +2011,7 @@ export default function ProductInvoiceCard({
         price.toString(),
         deletedEventIds
       );
+      setCachedCashuProofs(proofArray);
       setCashuPaymentSent(true);
       setPaymentConfirmed(true);
     } catch {

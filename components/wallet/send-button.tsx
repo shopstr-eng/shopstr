@@ -23,8 +23,10 @@ import {
 } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
+  setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   Mint as CashuMint,
@@ -53,7 +55,8 @@ const SendButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, history } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
 
   const {
     handleSubmit: handleSendSubmit,
@@ -147,7 +150,6 @@ const SendButton = () => {
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
       localStorage.setItem(
         "history",
         JSON.stringify([
@@ -164,6 +166,7 @@ const SendButton = () => {
         sendTotal.toString(),
         deletedEventIds
       );
+      setCachedCashuProofs(proofArray);
     } catch {
       setSendFailed(true);
     }

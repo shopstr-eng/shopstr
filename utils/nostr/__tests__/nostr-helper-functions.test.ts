@@ -1176,9 +1176,10 @@ describe("getLocalStorageData", () => {
     expect(data.blossomServers).toEqual([getDefaultBlossomServer()]);
   });
 
-  it("initialises tokens to [] in localStorage when the key is absent", () => {
-    getLocalStorageData();
-    expect(localStorage.getItem("tokens")).toBe("[]");
+  it("keeps tokens out of localStorage when the key is absent", () => {
+    const data = getLocalStorageData();
+    expect(data.tokens).toEqual([]);
+    expect(localStorage.getItem("tokens")).toBeNull();
   });
 
   it("initialises history to [] in localStorage when the key is absent", () => {

@@ -21,6 +21,7 @@ import {
 } from "../../utils/context/context";
 import {
   generateKeys,
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
@@ -28,6 +29,7 @@ import {
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
+  setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
@@ -81,7 +83,8 @@ export default function ClaimButton({ token }: { token: string }) {
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
   const [isP2pkKeyMissing, setIsP2pkKeyMissing] = useState(false);
   const [p2pk, setP2PK] = useState<ParsedP2PK | null>(null);
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, history } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
 
   // True when locktime has expired and the current wallet key is an
   // authorized refund signer. refundKeys are stored as "02"+x-only (66 chars)
@@ -270,10 +273,7 @@ export default function ClaimButton({ token }: { token: string }) {
           "in",
           tokenAmount.toString()
         );
-        localStorage.setItem(
-          "tokens",
-          JSON.stringify([...tokens, ...freshProofs])
-        );
+        setCachedCashuProofs([...tokens, ...freshProofs]);
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
@@ -335,7 +335,7 @@ export default function ClaimButton({ token }: { token: string }) {
           tokenAmount.toString()
         );
         const tokenArray = [...tokens, ...uniqueProofs];
-        localStorage.setItem("tokens", JSON.stringify(tokenArray));
+        setCachedCashuProofs(tokenArray);
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
