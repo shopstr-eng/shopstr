@@ -1,5 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
-
 import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
 import { ShopMapContext } from "@/utils/context/context";
