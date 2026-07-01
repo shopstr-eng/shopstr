@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { useRouter } from "next/router";
 import { Card, CardBody, Button, Image, Input } from "@heroui/react";
 import {
@@ -7,13 +7,15 @@ import {
   ExclamationCircleIcon,
 } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { saveNWCString } from "@/utils/nostr/nostr-helper-functions";
 import { NostrWebLNProvider } from "@getalby/sdk";
+import { NWCContext } from "@/components/utility-components/nostr-context-provider";
 
 const OnboardingWallet = () => {
+  const { saveConnection } = useContext(NWCContext);
   const router = useRouter();
   const { type } = router.query;
   const [nwcString, setNwcString] = useState("");
+  const [passphrase, setPassphrase] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,13 +38,15 @@ const OnboardingWallet = () => {
           "Invalid connection string. Must start with 'nostr+walletconnect://'"
         );
       }
+      if (!passphrase || passphrase.trim() === "") {
+        throw new Error("A passphrase is required to save this wallet.");
+      }
 
       nwc = new NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
       await nwc.enable();
       const info = await nwc.getInfo();
 
-      saveNWCString(nwcString);
-      localStorage.setItem("nwcInfo", JSON.stringify(info));
+      saveConnection?.(nwcString, info, passphrase.trim());
 
       handleNext();
     } catch (e: any) {
@@ -81,7 +85,8 @@ const OnboardingWallet = () => {
               </h2>
               <p className="text-light-text dark:text-dark-text">
                 Connect your NWC-enabled Lightning wallet to pay invoices
-                seamlessly.
+                seamlessly. The connection secret is stored encrypted and is
+                only unlocked in memory when you need to use it.
               </p>
             </div>
 
@@ -100,6 +105,19 @@ const OnboardingWallet = () => {
                 }}
               />
 
+              <Input
+                label="Wallet Passphrase"
+                placeholder="Enter a passphrase to encrypt this connection"
+                value={passphrase}
+                onValueChange={setPassphrase}
+                type="password"
+                variant="bordered"
+                classNames={{
+                  label: "text-light-text dark:text-dark-text",
+                  input: "text-light-text dark:text-dark-text",
+                }}
+              />
+
               {error && (
                 <div className="flex items-center rounded border border-red-400 bg-red-100 p-3 text-red-700">
                   <ExclamationCircleIcon className="mr-2 h-5 w-5" />
@@ -112,7 +130,7 @@ const OnboardingWallet = () => {
                   className={SHOPSTRBUTTONCLASSNAMES}
                   onClick={handleConnect}
                   isLoading={isLoading}
-                  isDisabled={!nwcString}
+                  isDisabled={!nwcString || !passphrase}
                 >
                   Connect & Continue
                 </Button>
