@@ -44,6 +44,7 @@ jest.mock("nostr-tools", () => {
 import {
   approveCommunityPost,
   constructGiftWrappedEvent,
+  createCommunityPost,
   createOrUpdateCommunity,
   constructMessageGiftWrap,
   constructMessageSeal,
@@ -3495,5 +3496,199 @@ describe("retractApproval", () => {
     expect(result.kind).toBe(5);
     expect(result.content).toContain("approval-event-id");
     expect(result.tags).toContainEqual(["e", "approval-event-id"]);
+  });
+});
+
+describe("createCommunityPost", () => {
+  const community: Community = {
+    id: "community-event-id",
+    kind: 34550,
+    pubkey: "community-pubkey",
+    createdAt: 1,
+    d: "my-community",
+    name: "My Community",
+    description: "A test community",
+    image: "",
+    moderators: ["community-pubkey"],
+    relays: { approvals: [], requests: [], metadata: [], all: [] },
+  };
+
+  const communityAddress = "34550:community-pubkey:my-community";
+
+  function makeSigner() {
+    return {
+      sign: jest.fn().mockImplementation(async (tpl: any) => ({
+        ...tpl,
+        id: "post-event-id",
+        pubkey: "author-pubkey",
+        sig: "sig",
+      })),
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("includes uppercase A/P/K tags and lowercase a/p/k pointing to the community for a top-level post", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createCommunityPost(
+      signer as any,
+      nostr as any,
+      community,
+      "Hello community"
+    );
+
+    expect(result.kind).toBe(1111);
+    expect(result.tags).toEqual(
+      expect.arrayContaining([
+        ["A", communityAddress],
+        ["P", community.pubkey],
+        ["K", "34550"],
+        ["a", communityAddress],
+        ["p", community.pubkey],
+        ["k", "34550"],
+      ])
+    );
+  });
+
+  it("includes uppercase A/P/K plus e/p/k tags pointing to the parent for a reply", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    const parentEvent = {
+      id: "parent-event-id",
+      kind: 1111,
+      pubkey: "parent-author-pubkey",
+      created_at: 1,
+      content: "Parent post",
+      tags: [],
+      sig: "parent-sig",
+    };
+
+    const result = await createCommunityPost(
+      signer as any,
+      nostr as any,
+      community,
+      "Replying here",
+      { parentEvent: parentEvent as any }
+    );
+
+    expect(result.tags).toEqual(
+      expect.arrayContaining([
+        ["A", communityAddress],
+        ["P", community.pubkey],
+        ["K", "34550"],
+        ["a", communityAddress],
+        ["e", "parent-event-id", ""],
+        ["p", "parent-author-pubkey", ""],
+        ["k", "1111"],
+      ])
+    );
+  });
+
+  it("adds additional a tags for each cross-posted community when crosspostCommunities is present", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    const otherCommunity: Community = {
+      ...community,
+      kind: 34550,
+      pubkey: "other-pubkey",
+      d: "other-community",
+    };
+
+    const result = await createCommunityPost(
+      signer as any,
+      nostr as any,
+      community,
+      "Cross-posted",
+      { crosspostCommunities: [otherCommunity] }
+    );
+
+    expect(result.tags).toEqual(
+      expect.arrayContaining([["a", "34550:other-pubkey:other-community"]])
+    );
+  });
+
+  it("adds an i tag when externalId is provided", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createCommunityPost(
+      signer as any,
+      nostr as any,
+      community,
+      "External content",
+      { externalId: "isbn:9781234567890" }
+    );
+
+    expect(result.tags).toContainEqual(["i", "isbn:9781234567890"]);
+  });
+
+  it("adds a k tag alongside i when contentKind is also provided", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createCommunityPost(
+      signer as any,
+      nostr as any,
+      community,
+      "External content with kind",
+      { externalId: "isbn:9781234567890", contentKind: "book" }
+    );
+
+    expect(result.tags).toContainEqual(["i", "isbn:9781234567890"]);
+    expect(result.tags).toContainEqual(["k", "book"]);
+  });
+
+  it("omits the k tag alongside i when contentKind is absent", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createCommunityPost(
+      signer as any,
+      nostr as any,
+      community,
+      "External content no kind",
+      { externalId: "isbn:9781234567890" }
+    );
+
+    const kTags = result.tags.filter((t) => t[0] === "k");
+    expect(kTags.some((t) => t[1] !== "34550" && t[1] !== "1111")).toBe(false);
+  });
+
+  it("caches the signed event and returns it", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    (cacheEventToDatabase as jest.Mock)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined);
+
+    const result = await createCommunityPost(
+      signer as any,
+      nostr as any,
+      community,
+      "Hello community"
+    );
+
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "post-event-id", kind: 1111 })
+    );
+    expect(result).toEqual(
+      expect.objectContaining({ id: "post-event-id", kind: 1111 })
+    );
   });
 });
