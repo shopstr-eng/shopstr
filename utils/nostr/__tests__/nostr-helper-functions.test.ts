@@ -44,6 +44,7 @@ jest.mock("nostr-tools", () => {
 import {
   approveCommunityPost,
   constructGiftWrappedEvent,
+  createOrUpdateCommunity,
   constructMessageGiftWrap,
   constructMessageSeal,
   createBlossomServerEvent,
@@ -73,6 +74,7 @@ import {
   publishWalletEvent,
   publishRelayEvent,
   publishReportEvent,
+  retractApproval,
   publishReviewEvent,
   REPORT_TYPES,
   saveNWCString,
@@ -3274,5 +3276,224 @@ describe("publishSpendingHistoryEvent", () => {
     await expect(
       publishSpendingHistoryEvent(nostr as any, signer as any, "in", "100", "")
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("createOrUpdateCommunity", () => {
+  function makeSigner() {
+    return {
+      sign: jest.fn().mockImplementation(async (tpl: any) => ({
+        ...tpl,
+        id: "community-event-id",
+        pubkey: "moderator-pubkey",
+        sig: "sig",
+      })),
+    };
+  }
+
+  const baseDetails = {
+    d: "my-community",
+    name: "My Community",
+    description: "A test community",
+    image: "https://example.com/img.png",
+    moderators: ["mod-pubkey-1", "mod-pubkey-2"],
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("creates a kind-34550 event with d, name, description, image, t, and p (moderator) tags", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createOrUpdateCommunity(
+      signer as any,
+      nostr as any,
+      baseDetails
+    );
+
+    expect(result.kind).toBe(34550);
+    expect(result.tags).toEqual(
+      expect.arrayContaining([
+        ["d", "my-community"],
+        ["name", "My Community"],
+        ["description", "A test community"],
+        ["image", "https://example.com/img.png"],
+        ["t", "shopstr"],
+        ["p", "mod-pubkey-1", "", "moderator"],
+        ["p", "mod-pubkey-2", "", "moderator"],
+      ])
+    );
+  });
+
+  it('adds ["relay", url, "approvals"] tags when details.relays.approvals is provided', async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createOrUpdateCommunity(signer as any, nostr as any, {
+      ...baseDetails,
+      relays: { approvals: ["wss://approvals.example"] },
+    });
+
+    expect(result.tags).toContainEqual([
+      "relay",
+      "wss://approvals.example",
+      "approvals",
+    ]);
+  });
+
+  it('adds ["relay", url, "requests"] tags when details.relays.requests is provided', async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createOrUpdateCommunity(signer as any, nostr as any, {
+      ...baseDetails,
+      relays: { requests: ["wss://requests.example"] },
+    });
+
+    expect(result.tags).toContainEqual([
+      "relay",
+      "wss://requests.example",
+      "requests",
+    ]);
+  });
+
+  it('adds ["relay", url, "metadata"] tags when details.relays.metadata is provided', async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createOrUpdateCommunity(signer as any, nostr as any, {
+      ...baseDetails,
+      relays: { metadata: ["wss://metadata.example"] },
+    });
+
+    expect(result.tags).toContainEqual([
+      "relay",
+      "wss://metadata.example",
+      "metadata",
+    ]);
+  });
+
+  it('adds ["relay", url] tags (no type) when details.relays.all is provided', async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createOrUpdateCommunity(signer as any, nostr as any, {
+      ...baseDetails,
+      relays: { all: ["wss://all.example"] },
+    });
+
+    expect(result.tags).toContainEqual(["relay", "wss://all.example"]);
+    expect(
+      result.tags.find((t) => t[0] === "relay" && t[1] === "wss://all.example")
+    ).toHaveLength(2);
+  });
+
+  it("skips all relay tags when details.relays is absent", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createOrUpdateCommunity(
+      signer as any,
+      nostr as any,
+      baseDetails
+    );
+
+    expect(result.tags.some((t) => t[0] === "relay")).toBe(false);
+  });
+
+  it("caches the signed event and returns it", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    // First call inside finalizeAndSendNostrEvent; second is the explicit cache call.
+    (cacheEventToDatabase as jest.Mock)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined);
+
+    const result = await createOrUpdateCommunity(
+      signer as any,
+      nostr as any,
+      baseDetails
+    );
+
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "community-event-id", kind: 34550 })
+    );
+    expect(result).toEqual(
+      expect.objectContaining({ id: "community-event-id", kind: 34550 })
+    );
+  });
+});
+
+describe("retractApproval", () => {
+  function makeSigner() {
+    return {
+      sign: jest.fn().mockImplementation(async (tpl: any) => ({
+        ...tpl,
+        id: "retract-event-id",
+        pubkey: "moderator-pubkey",
+        sig: "sig",
+      })),
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("creates a kind-5 event with the provided reason as content", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await retractApproval(
+      signer as any,
+      nostr as any,
+      "approval-event-id",
+      "Violated community rules"
+    );
+
+    expect(result.kind).toBe(5);
+    expect(result.content).toBe("Violated community rules");
+    expect(result.tags).toContainEqual(["e", "approval-event-id"]);
+  });
+
+  it("uses a default reason string when reason is absent", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await retractApproval(
+      signer as any,
+      nostr as any,
+      "approval-event-id"
+    );
+
+    expect(result.kind).toBe(5);
+    expect(result.content).toContain("approval-event-id");
+    expect(result.tags).toContainEqual(["e", "approval-event-id"]);
   });
 });
