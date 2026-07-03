@@ -558,7 +558,8 @@ describe("DisplayProducts search filtering", () => {
       fetch: jest.fn().mockResolvedValue([relayProduct]),
     };
     let setContextProductEvents:
-      Dispatch<SetStateAction<NostrEvent[]>> | undefined;
+      | Dispatch<SetStateAction<NostrEvent[]>>
+      | undefined;
 
     function StatefulDisplayProducts() {
       const [contextProductEvents, setProductEvents] = useState<NostrEvent[]>(
