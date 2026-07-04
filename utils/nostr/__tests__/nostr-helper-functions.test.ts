@@ -43,6 +43,7 @@ jest.mock("nostr-tools", () => {
 
 import {
   approveCommunityPost,
+  blossomUploadImages,
   constructGiftWrappedEvent,
   createCommunityPost,
   createOrUpdateCommunity,
@@ -3705,6 +3706,285 @@ describe("createCommunityPost", () => {
     );
     expect(result).toEqual(
       expect.objectContaining({ id: "post-event-id", kind: 1111 })
+    );
+  });
+});
+
+describe("blossomUploadImages", () => {
+  // jsdom does not implement File.arrayBuffer(); polyfill it so the source
+  // code can call image.arrayBuffer() during tests.
+  function makeImageFile(
+    content = "fake-image-data",
+    name = "test.png",
+    type = "image/png"
+  ) {
+    const file = new File([content], name, { type });
+    const bytes = new TextEncoder().encode(content);
+    (file as any).arrayBuffer = async () => bytes.buffer.slice(0);
+    return file;
+  }
+
+  function makeSigner() {
+    return {
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: "signed-upload-event",
+        pubkey: "user-pubkey",
+        sig: "sig",
+      })),
+    };
+  }
+
+  function makeSuccessResponse(overrides: Record<string, unknown> = {}) {
+    return {
+      ok: true,
+      json: async () => ({
+        url: "https://blossom.example/abc123",
+        sha256: "abc123sha256",
+        size: 512,
+        type: "image/png",
+        ...overrides,
+      }),
+    };
+  }
+
+  beforeEach(() => {
+    global.fetch = jest.fn();
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("throws when image.type does not include 'image'", async () => {
+    const file = makeImageFile("content", "doc.pdf", "application/pdf");
+    const signer = makeSigner();
+
+    await expect(
+      blossomUploadImages(file, signer as any, ["https://blossom.example"])
+    ).rejects.toThrow("Only images are supported");
+  });
+
+  it("skips servers with empty/blank strings and uses only the valid ones", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue(makeSuccessResponse());
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "",
+      "  ",
+      "https://blossom.example",
+    ]);
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(result).toBeDefined();
+  });
+
+  it("prepends https:// to a server URL that lacks a protocol prefix", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue(makeSuccessResponse());
+
+    await blossomUploadImages(makeImageFile(), signer as any, [
+      "blossom.example",
+    ]);
+
+    const calledUrl = (global.fetch as jest.Mock).mock.calls[0][0];
+    expect(calledUrl.toString()).toContain("https://blossom.example");
+  });
+
+  it("returns null and filters a server when the URL constructor throws (invalid format)", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue(makeSuccessResponse());
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "[invalid",
+      "https://blossom.example",
+    ]);
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(result).toBeDefined();
+  });
+
+  it("throws when no valid servers remain after filtering", async () => {
+    const signer = makeSigner();
+
+    await expect(
+      blossomUploadImages(makeImageFile(), signer as any, ["", "[invalid"])
+    ).rejects.toThrow("No valid Blossom servers configured");
+  });
+
+  it("throws when res.ok is false from the first server and includes the status code in the message", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 413,
+      text: async () => "Payload Too Large",
+    });
+
+    await expect(
+      blossomUploadImages(makeImageFile(), signer as any, [
+        "https://blossom.example",
+      ])
+    ).rejects.toThrow("413");
+  });
+
+  it("returns the [url, x, ox, size, m] tags array from a standard response", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue(makeSuccessResponse());
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://blossom.example",
+    ]);
+
+    expect(result).toEqual(
+      expect.arrayContaining([
+        ["url", "https://blossom.example/abc123"],
+        ["x", "abc123sha256"],
+        ["ox", "abc123sha256"],
+        ["size", "512"],
+        ["m", "image/png"],
+      ])
+    );
+  });
+
+  it("normalises NIP-94 format: reads url, sha256/ox, size, m from nip94_event.tags when top-level fields are absent", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        nip94_event: {
+          tags: [
+            ["url", "https://blossom.example/nip94url"],
+            ["ox", "nip94sha256"],
+            ["size", "256"],
+            ["m", "image/jpeg"],
+          ],
+        },
+      }),
+    });
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://blossom.example",
+    ]);
+
+    expect(result).toEqual(
+      expect.arrayContaining([
+        ["url", "https://blossom.example/nip94url"],
+        ["x", "nip94sha256"],
+        ["ox", "nip94sha256"],
+        ["size", "256"],
+        ["m", "image/jpeg"],
+      ])
+    );
+  });
+
+  it("constructs a fallback URL from /<sha256> when the response has no url", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ sha256: "fallbackhash" }),
+    });
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://blossom.example",
+    ]);
+
+    expect(result[0]).toEqual(["url", "https://blossom.example/fallbackhash"]);
+  });
+
+  it("throws (and logs console.error) when no url can be recovered at all", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    });
+
+    await expect(
+      blossomUploadImages(makeImageFile(), signer as any, [
+        "https://blossom.example",
+      ])
+    ).rejects.toThrow("didn't provide a media URL");
+
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("adds x/ox tags only when sha256 is present in the response", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        url: "https://blossom.example/file",
+        type: "image/png",
+      }),
+    });
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://blossom.example",
+    ]);
+
+    expect(result.some((t) => t[0] === "x")).toBe(false);
+    expect(result.some((t) => t[0] === "ox")).toBe(false);
+  });
+
+  it("adds size tag only when responseSize is defined and non-empty", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: "https://blossom.example/file" }),
+    });
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://blossom.example",
+    ]);
+
+    expect(result.some((t) => t[0] === "size")).toBe(false);
+  });
+
+  it("adds m tag only when responseType is present", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: "https://blossom.example/file" }),
+    });
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://blossom.example",
+    ]);
+
+    expect(result.some((t) => t[0] === "m")).toBe(false);
+  });
+
+  it("calls the /mirror endpoint (PUT) for every server beyond the first", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeSuccessResponse())
+      .mockResolvedValueOnce({ ok: true });
+
+    await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://primary.example",
+      "https://mirror.example",
+    ]);
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    const mirrorCall = (global.fetch as jest.Mock).mock.calls[1];
+    expect(mirrorCall[0].toString()).toBe("https://mirror.example/mirror");
+    expect(mirrorCall[1].method).toBe("PUT");
+  });
+
+  it("caches the authorization event after a successful upload", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue(makeSuccessResponse());
+
+    await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://blossom.example",
+    ]);
+
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "signed-upload-event" })
     );
   });
 });
