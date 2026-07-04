@@ -88,7 +88,11 @@ import {
 } from "../nostr-helper-functions";
 import { finalizeEvent, nip19, nip44 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
-import { Community, ProductFormValues } from "@/utils/types/types";
+import {
+  Community,
+  CommunityRelays,
+  ProductFormValues,
+} from "@/utils/types/types";
 import {
   cacheEventToDatabase,
   deleteEventsFromDatabase,
@@ -3300,6 +3304,18 @@ describe("createOrUpdateCommunity", () => {
     moderators: ["mod-pubkey-1", "mod-pubkey-2"],
   };
 
+  function communityRelays(
+    overrides: Partial<CommunityRelays>
+  ): CommunityRelays {
+    return {
+      approvals: [],
+      requests: [],
+      metadata: [],
+      all: [],
+      ...overrides,
+    };
+  }
+
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
@@ -3346,7 +3362,7 @@ describe("createOrUpdateCommunity", () => {
 
     const result = await createOrUpdateCommunity(signer as any, nostr as any, {
       ...baseDetails,
-      relays: { approvals: ["wss://approvals.example"] },
+      relays: communityRelays({ approvals: ["wss://approvals.example"] }),
     });
 
     expect(result.tags).toContainEqual([
@@ -3362,7 +3378,7 @@ describe("createOrUpdateCommunity", () => {
 
     const result = await createOrUpdateCommunity(signer as any, nostr as any, {
       ...baseDetails,
-      relays: { requests: ["wss://requests.example"] },
+      relays: communityRelays({ requests: ["wss://requests.example"] }),
     });
 
     expect(result.tags).toContainEqual([
@@ -3378,7 +3394,7 @@ describe("createOrUpdateCommunity", () => {
 
     const result = await createOrUpdateCommunity(signer as any, nostr as any, {
       ...baseDetails,
-      relays: { metadata: ["wss://metadata.example"] },
+      relays: communityRelays({ metadata: ["wss://metadata.example"] }),
     });
 
     expect(result.tags).toContainEqual([
@@ -3394,7 +3410,7 @@ describe("createOrUpdateCommunity", () => {
 
     const result = await createOrUpdateCommunity(signer as any, nostr as any, {
       ...baseDetails,
-      relays: { all: ["wss://all.example"] },
+      relays: communityRelays({ all: ["wss://all.example"] }),
     });
 
     expect(result.tags).toContainEqual(["relay", "wss://all.example"]);
