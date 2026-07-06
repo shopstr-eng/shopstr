@@ -1,6 +1,7 @@
 import {
   productSatisfiesCategoryFilter,
   productSatisfiesLocationFilter,
+  productSatisfiesPriceFilter,
   productSatisfiesSearchFilter,
   productSatisfiesAllFilters,
 } from "../product-filter-helpers";
@@ -275,9 +276,31 @@ describe("product-filter-helpers", () => {
 
       globalThis.RegExp = throwingRegExp;
 
-      expect(productSatisfiesSearchFilter(mockProduct, "bottle")).toBe(false);
+      try {
+        expect(productSatisfiesSearchFilter(mockProduct, "bottle")).toBe(false);
+      } finally {
+        globalThis.RegExp = originalRegExp;
+      }
+    });
+  });
 
-      globalThis.RegExp = originalRegExp;
+  describe("productSatisfiesPriceFilter", () => {
+    it("should return true when the product price is at least 1", () => {
+      expect(productSatisfiesPriceFilter({ ...mockProduct, price: 1 })).toBe(
+        true
+      );
+      expect(productSatisfiesPriceFilter({ ...mockProduct, price: 25 })).toBe(
+        true
+      );
+    });
+
+    it("should return false when the product price is below 1", () => {
+      expect(productSatisfiesPriceFilter({ ...mockProduct, price: 0.99 })).toBe(
+        false
+      );
+      expect(productSatisfiesPriceFilter({ ...mockProduct, price: 0 })).toBe(
+        false
+      );
     });
   });
 
@@ -298,6 +321,17 @@ describe("product-filter-helpers", () => {
         selectedSearch: "bottle",
       };
       expect(productSatisfiesAllFilters(mockProduct, filters)).toBe(false);
+    });
+
+    it("should return false if the product price is below 1", () => {
+      const filters = {
+        selectedCategories: new Set(["Outdoors"]),
+        selectedLocation: "San Francisco",
+        selectedSearch: "bottle",
+      };
+      expect(
+        productSatisfiesAllFilters({ ...mockProduct, price: 0 }, filters)
+      ).toBe(false);
     });
   });
 });
