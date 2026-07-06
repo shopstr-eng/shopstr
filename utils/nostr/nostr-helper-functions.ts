@@ -31,6 +31,8 @@ import {
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
 import { buildWalletConfigV1 } from "@/utils/cashu/wallet-config";
+import { getDefaultRelays, withBlastr } from "./relay-config";
+export { getDefaultRelays, withBlastr };
 
 export const REPORT_TYPES = [
   "nudity",
@@ -43,10 +45,6 @@ export const REPORT_TYPES = [
 ] as const;
 
 export type ReportType = (typeof REPORT_TYPES)[number];
-
-function containsRelay(relays: string[], relay: string): boolean {
-  return relays.some((r) => r.includes(relay));
-}
 
 function generateRandomTimestamp(): number {
   const now = Math.floor(Date.now() / 1000);
@@ -1770,26 +1768,6 @@ export function nostrExtensionLoaded() {
     return false;
   }
   return true;
-}
-
-export function getDefaultRelays(): string[] {
-  return [
-    "wss://relay.damus.io",
-    "wss://nos.lol",
-    "wss://purplepag.es",
-    "wss://relay.primal.net",
-    "wss://relay.nostr.band",
-  ];
-}
-
-export function withBlastr(relays: string[]): string[] {
-  const out = [...relays];
-
-  const blastrRelay = "wss://sendit.nosflare.com";
-  if (!containsRelay(out, blastrRelay)) {
-    out.push(blastrRelay);
-  }
-  return out;
 }
 
 export function getDefaultMint(): string {

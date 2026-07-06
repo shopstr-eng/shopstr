@@ -23,6 +23,7 @@ import {
   buildSignedHttpRequestProofTemplate,
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
+import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
 
 const resolveCname = promisify(dns.resolveCname);
 const resolve4 = promisify(dns.resolve4);
@@ -1402,9 +1403,6 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         } = await import("nostr-tools");
 
         const senderPubkey = signer.getPubKey();
-        const { getDefaultRelays, withBlastr } =
-          await import("@/utils/nostr/nostr-helper-functions");
-
         const defaultRelays = getDefaultRelays();
         const relayHint = defaultRelays[0] || "wss://relay.damus.io";
 
@@ -1606,8 +1604,6 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           await import("nostr-tools");
 
         const senderPubkey = signer.getPubKey();
-        const { getDefaultRelays, withBlastr } =
-          await import("@/utils/nostr/nostr-helper-functions");
         const defaultRelays = getDefaultRelays();
 
         const innerEvent = {
@@ -1759,8 +1755,6 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const { generateSecretKey, finalizeEvent, getEventHash, nip44 } =
           await import("nostr-tools");
-        const { getDefaultRelays, withBlastr } =
-          await import("@/utils/nostr/nostr-helper-functions");
 
         const senderPubkey = signer.getPubKey();
         const defaultRelays = getDefaultRelays();
@@ -1991,8 +1985,6 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           try {
             const { generateSecretKey, finalizeEvent, getEventHash, nip44 } =
               await import("nostr-tools");
-            const { getDefaultRelays, withBlastr } =
-              await import("@/utils/nostr/nostr-helper-functions");
 
             const senderPubkey = signer.getPubKey();
             const defaultRelays = getDefaultRelays();
@@ -2729,9 +2721,6 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         });
         const encryptedContent = signer.encrypt(pubkey, proofData);
 
-        const { getDefaultRelays, withBlastr } =
-          await import("@/utils/nostr/nostr-helper-functions");
-
         const relays = withBlastr(getDefaultRelays());
         const tags: string[][] = [["mint", mintUrl]];
         for (const relay of relays) {
@@ -2789,9 +2778,6 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           pubkey,
           JSON.stringify(mintTags)
         );
-
-        const { getDefaultRelays, withBlastr } =
-          await import("@/utils/nostr/nostr-helper-functions");
 
         const relays = withBlastr(getDefaultRelays());
         const tags: string[][] = [["d", pubkey]];
