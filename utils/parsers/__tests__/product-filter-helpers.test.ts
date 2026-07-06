@@ -5,6 +5,15 @@ import {
   productSatisfiesAllFilters,
 } from "../product-filter-helpers";
 import { ProductData } from "../product-parser-functions";
+import { nip19 } from "nostr-tools";
+
+jest.mock("nostr-tools", () => ({
+  nip19: {
+    decode: jest.fn(),
+  },
+}));
+
+const mockedNip19Decode = nip19.decode as jest.Mock;
 
 describe("product-filter-helpers", () => {
   const mockProduct: ProductData = {
@@ -94,8 +103,93 @@ describe("product-filter-helpers", () => {
   });
 
   describe("productSatisfiesSearchFilter", () => {
+    beforeEach(() => {
+      mockedNip19Decode.mockReset();
+    });
+
     it("should return true if search is empty", () => {
       expect(productSatisfiesSearchFilter(mockProduct, "  ")).toBe(true);
+    });
+
+    it("should return false when the product has no title", () => {
+      expect(
+        productSatisfiesSearchFilter({ ...mockProduct, title: "" }, "bottle")
+      ).toBe(false);
+    });
+
+    it("should match a valid naddr search when identifier and pubkey align", () => {
+      mockedNip19Decode.mockReturnValue({
+        type: "naddr",
+        data: {
+          identifier: "bottle-identifier",
+          pubkey: "test-pubkey",
+        },
+      });
+
+      expect(productSatisfiesSearchFilter(mockProduct, "naddr1valid")).toBe(
+        true
+      );
+    });
+
+    it("should return false for a decoded naddr that does not match the product", () => {
+      mockedNip19Decode.mockReturnValue({
+        type: "naddr",
+        data: {
+          identifier: "different-identifier",
+          pubkey: "different-pubkey",
+        },
+      });
+
+      expect(productSatisfiesSearchFilter(mockProduct, "naddr1valid")).toBe(
+        false
+      );
+    });
+
+    it("should return false when an naddr search decodes to the wrong Nip-19 type", () => {
+      mockedNip19Decode.mockReturnValue({
+        type: "npub",
+        data: "test-pubkey",
+      });
+
+      expect(productSatisfiesSearchFilter(mockProduct, "naddr1valid")).toBe(
+        false
+      );
+    });
+
+    it("should match a valid npub search when the pubkey aligns", () => {
+      mockedNip19Decode.mockReturnValue({
+        type: "npub",
+        data: "test-pubkey",
+      });
+
+      expect(productSatisfiesSearchFilter(mockProduct, "npub1valid")).toBe(
+        true
+      );
+    });
+
+    it("should return false for a decoded npub that does not match the product", () => {
+      mockedNip19Decode.mockReturnValue({
+        type: "npub",
+        data: "different-pubkey",
+      });
+
+      expect(productSatisfiesSearchFilter(mockProduct, "npub1valid")).toBe(
+        false
+      );
+    });
+
+    it("should return false when an npub search decodes to the wrong Nip-19 type", () => {
+      mockedNip19Decode.mockReturnValue({
+        type: "naddr",
+        data: {
+          identifier: "bottle-identifier",
+          pubkey: "test-pubkey",
+        },
+      });
+
+      expect(productSatisfiesSearchFilter(mockProduct, "npub1valid")).toBe(
+        false
+      );
     });
 
     it("should match text in title (case-insensitive)", () => {
@@ -105,6 +199,17 @@ describe("product-filter-helpers", () => {
 
     it("should match text in summary", () => {
       expect(productSatisfiesSearchFilter(mockProduct, "hydrated")).toBe(true);
+    });
+
+    it("should return false when the summary is empty and the title does not match", () => {
+      const productWithoutSummary = {
+        ...mockProduct,
+        summary: "",
+      };
+
+      expect(
+        productSatisfiesSearchFilter(productWithoutSummary, "hydrated")
+      ).toBe(false);
     });
 
     it("should match by exact numeric price", () => {
@@ -160,6 +265,19 @@ describe("product-filter-helpers", () => {
       expect(productSatisfiesSearchFilter(mockProduct, "npub1invalid")).toBe(
         false
       );
+    });
+
+    it("should return false when the search regex construction throws", () => {
+      const originalRegExp = globalThis.RegExp;
+      const throwingRegExp = jest.fn(() => {
+        throw new Error("regex failure");
+      }) as unknown as typeof RegExp;
+
+      globalThis.RegExp = throwingRegExp;
+
+      expect(productSatisfiesSearchFilter(mockProduct, "bottle")).toBe(false);
+
+      globalThis.RegExp = originalRegExp;
     });
   });
 
