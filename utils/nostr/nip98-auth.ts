@@ -26,7 +26,12 @@ function toBase64(value: string): string {
     return Buffer.from(value, "utf-8").toString("base64");
   }
 
-  return btoa(value);
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
 }
 
 function fromBase64(value: string): string {
