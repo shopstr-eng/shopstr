@@ -22,11 +22,11 @@ function sha256Hex(value: string): string {
 }
 
 function toBase64(value: string): string {
-  if (typeof window === "undefined") {
-    return Buffer.from(value, "utf-8").toString("base64");
+  if (typeof btoa === "function") {
+    return btoa(value);
   }
 
-  return btoa(value);
+  return Buffer.from(value, "utf-8").toString("base64");
 }
 
 function fromBase64(value: string): string {
