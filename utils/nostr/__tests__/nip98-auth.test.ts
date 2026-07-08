@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+
 import CryptoJS from "crypto-js";
 
 const verifyEventMock = jest.fn();
@@ -27,9 +31,10 @@ describe("verifyNip98Request", () => {
     verifyEventMock.mockReturnValue(true);
   });
 
-  it("creates NIP-98 authorization headers in the Node runtime", async () => {
-    const originalBtoa = (globalThis as any).btoa;
-    delete (globalThis as any).btoa;
+  it("creates UTF-8 NIP-98 authorization headers in the Node runtime", async () => {
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    delete (globalThis as { window?: unknown }).window;
+    const url = "http://localhost:3000/api/db/update-order-status?note=€";
 
     const signer = {
       sign: jest.fn().mockResolvedValue({
@@ -38,7 +43,7 @@ describe("verifyNip98Request", () => {
         kind: 27235,
         created_at: 1710000000,
         tags: [
-          ["u", "http://localhost:3000/api/db/update-order-status"],
+          ["u", url],
           ["method", "POST"],
         ],
         content: "",
@@ -47,18 +52,14 @@ describe("verifyNip98Request", () => {
     } as any;
 
     try {
-      const header = await createNip98AuthorizationHeader(
-        signer,
-        "http://localhost:3000/api/db/update-order-status",
-        "post"
-      );
+      const header = await createNip98AuthorizationHeader(signer, url, "post");
 
       expect(signer.sign).toHaveBeenCalledWith(
         expect.objectContaining({
           kind: 27235,
           content: "",
           tags: [
-            ["u", "http://localhost:3000/api/db/update-order-status"],
+            ["u", url],
             ["method", "POST"],
           ],
         })
@@ -73,12 +74,12 @@ describe("verifyNip98Request", () => {
         pubkey: "f".repeat(64),
         kind: 27235,
         tags: [
-          ["u", "http://localhost:3000/api/db/update-order-status"],
+          ["u", url],
           ["method", "POST"],
         ],
       });
     } finally {
-      (globalThis as any).btoa = originalBtoa;
+      (globalThis as { window?: unknown }).window = originalWindow;
     }
   });
 
