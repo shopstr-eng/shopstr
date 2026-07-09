@@ -64,6 +64,7 @@ import DynamicHead from "../components/dynamic-meta-head";
 import StructuredData from "../components/structured-data";
 import {
   NostrContextProvider,
+  NWCContextProvider,
   SignerContextProvider,
   NostrContext,
   SignerContext,
@@ -1130,10 +1131,12 @@ function App(props: AppProps) {
       <HeroUIProvider>
         <NextThemesProvider attribute="class">
           <NostrContextProvider>
-            <SignerContextProvider>
-              <MintRecoveryBoot />
-              <Shopstr props={props} />
-            </SignerContextProvider>
+            <NWCContextProvider>
+              <SignerContextProvider>
+                <MintRecoveryBoot />
+                <Shopstr props={props} />
+              </SignerContextProvider>
+            </NWCContextProvider>
           </NostrContextProvider>
         </NextThemesProvider>
       </HeroUIProvider>
