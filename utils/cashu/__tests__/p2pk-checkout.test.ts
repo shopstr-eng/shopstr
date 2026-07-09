@@ -1,6 +1,7 @@
 import {
   buildP2pkOutputConfig,
   checkMintP2pkSupport,
+  getArbiterPubkey,
   getBuyerReclaimKeys,
   getP2pkCheckoutPolicyError,
   isP2pkMintAllowed,
@@ -18,6 +19,8 @@ const NORMALIZED_BUYER_EXTRA_RECLAIM_KEY = "b".repeat(64);
 const BUYER_NOSTR_PUBKEY = "c".repeat(64);
 const SELLER_CASHU_PUBKEY = `02${"d".repeat(64)}`;
 const NORMALIZED_SELLER_CASHU_PUBKEY = "d".repeat(64);
+const ARBITER_CASHU_PUBKEY = `03${"f".repeat(64)}`;
+const NORMALIZED_ARBITER_CASHU_PUBKEY = "f".repeat(64);
 
 const buyerContent = (reclaimKeys?: string[]) =>
   ({
@@ -34,11 +37,15 @@ const buildP2pkProof = ({
   pubkey = SELLER_CASHU_PUBKEY,
   locktime = Math.floor(Date.now() / 1000) + 60,
   refundKeys = [BUYER_CASHU_PUBKEY],
+  pubkeys,
+  nSigs,
   id = "proof-id",
 }: {
   pubkey?: string;
   locktime?: number;
   refundKeys?: string[];
+  pubkeys?: string[];
+  nSigs?: number;
   id?: string;
 } = {}) =>
   ({
@@ -53,6 +60,8 @@ const buildP2pkProof = ({
         tags: [
           ["locktime", locktime.toString()],
           ["refund", ...refundKeys],
+          ...(pubkeys ? [["pubkeys", ...pubkeys]] : []),
+          ...(nSigs !== undefined ? [["n_sigs", nSigs.toString()]] : []),
         ],
       },
     ]),
@@ -63,7 +72,10 @@ describe("p2pk-checkout", () => {
 
   beforeEach(() => {
     jest.restoreAllMocks();
-    process.env = { ...envBackup };
+    process.env = {
+      ...envBackup,
+      NEXT_PUBLIC_ARBITER_PUBKEY: ARBITER_CASHU_PUBKEY,
+    };
   });
 
   afterAll(() => {
@@ -112,6 +124,14 @@ describe("p2pk-checkout", () => {
       expect(buildP2pkOutputConfig(sellerP2pk, undefined)).toBeUndefined();
     });
 
+    it("returns undefined when the arbiter pubkey is not configured", () => {
+      delete process.env.NEXT_PUBLIC_ARBITER_PUBKEY;
+
+      expect(
+        buildP2pkOutputConfig(sellerP2pk, undefined, BUYER_CASHU_PUBKEY)
+      ).toBeUndefined();
+    });
+
     it("uses the seller profile pubkey as the locked redeem path", () => {
       const outputConfig = buildP2pkOutputConfig(
         sellerP2pk,
@@ -122,6 +142,20 @@ describe("p2pk-checkout", () => {
       expect(outputConfig?.send.options.pubkey).toBe(
         NORMALIZED_SELLER_CASHU_PUBKEY
       );
+    });
+
+    it("locks to the buyer and arbiter as additional pubkeys with a 2-of-3 threshold", () => {
+      const outputConfig = buildP2pkOutputConfig(
+        sellerP2pk,
+        undefined,
+        BUYER_CASHU_PUBKEY
+      );
+
+      expect(outputConfig?.send.options.pubkeys).toEqual([
+        BUYER_CASHU_PUBKEY,
+        NORMALIZED_ARBITER_CASHU_PUBKEY,
+      ]);
+      expect(outputConfig?.send.options.nSigs).toBe(2);
     });
 
     it("sets refundKeys from profile reclaim keys plus the buyer Cashu pubkey", () => {
@@ -471,10 +505,32 @@ describe("p2pk-checkout", () => {
           type: "p2pk",
           options: expect.objectContaining({
             pubkey: NORMALIZED_SELLER_CASHU_PUBKEY,
+            pubkeys: [BUYER_CASHU_PUBKEY, NORMALIZED_ARBITER_CASHU_PUBKEY],
+            nSigs: 2,
             refundKeys: [BUYER_CASHU_PUBKEY],
           }),
         },
       });
+    });
+
+    it("fails when escrow is active but the arbiter pubkey is not configured", async () => {
+      process.env.NEXT_PUBLIC_P2PK_ESCROW_ENABLED = "true";
+      delete process.env.NEXT_PUBLIC_ARBITER_PUBKEY;
+
+      // Known gap: this reuses the "wallet identity missing" message even though
+      // the real cause here is a missing arbiter env var, not the buyer's wallet.
+      await expect(
+        resolveP2pkCheckoutOutputConfig({
+          sellerP2pk,
+          amountSats: 10,
+          mintUrl: "https://mint.example",
+          buyerContent: undefined,
+          buyerCashuPubkey: BUYER_CASHU_PUBKEY,
+          fetchImpl: goodMintFetch(),
+        })
+      ).rejects.toThrow(
+        "A Cashu wallet identity is required to pay for an escrow listing. Please wait for your wallet to finish loading and try again."
+      );
     });
   });
 
@@ -491,6 +547,29 @@ describe("p2pk-checkout", () => {
         NORMALIZED_BUYER_EXTRA_RECLAIM_KEY,
         BUYER_CASHU_PUBKEY,
       ]);
+    });
+
+    it("leaves pubkeys and nSigs undefined for legacy single-key proofs", () => {
+      const parsed = parseP2PK(buildP2pkProof());
+
+      expect(parsed?.pubkeys).toBeUndefined();
+      expect(parsed?.nSigs).toBeUndefined();
+    });
+
+    it("parses the pubkeys and n_sigs tags from a 2-of-3 multisig proof", () => {
+      const parsed = parseP2PK(
+        buildP2pkProof({
+          pubkeys: [BUYER_CASHU_PUBKEY, ARBITER_CASHU_PUBKEY],
+          nSigs: 2,
+        })
+      );
+
+      expect(parsed?.pubkey).toBe(NORMALIZED_SELLER_CASHU_PUBKEY);
+      expect(parsed?.pubkeys).toEqual([
+        BUYER_CASHU_PUBKEY,
+        NORMALIZED_ARBITER_CASHU_PUBKEY,
+      ]);
+      expect(parsed?.nSigs).toBe(2);
     });
 
     it("compares x-only and compressed pubkeys consistently", () => {
@@ -535,6 +614,57 @@ describe("p2pk-checkout", () => {
         p2pk: null,
         invalidReason: "Token contains inconsistent P2PK proof locks.",
       });
+    });
+
+    it("parses a consistent 2-of-3 multisig proof set", () => {
+      const locktime = Math.floor(Date.now() / 1000) + 60;
+      const multisigProof = (id: string) =>
+        buildP2pkProof({
+          id,
+          locktime,
+          pubkeys: [BUYER_CASHU_PUBKEY, ARBITER_CASHU_PUBKEY],
+          nSigs: 2,
+        });
+
+      const result = parseP2PKProofSet([
+        multisigProof("one"),
+        multisigProof("two"),
+      ]);
+
+      expect(result.invalidReason).toBeUndefined();
+      expect(result.p2pk?.pubkeys).toEqual([
+        BUYER_CASHU_PUBKEY,
+        NORMALIZED_ARBITER_CASHU_PUBKEY,
+      ]);
+      expect(result.p2pk?.nSigs).toBe(2);
+      expect(result.p2pk?.proofCount).toBe(2);
+    });
+
+    it("rejects proof sets with mismatched nSigs thresholds", () => {
+      const locktime = Math.floor(Date.now() / 1000) + 60;
+      const pubkeys = [BUYER_CASHU_PUBKEY, ARBITER_CASHU_PUBKEY];
+
+      const result = parseP2PKProofSet([
+        buildP2pkProof({ id: "one", locktime, pubkeys, nSigs: 2 }),
+        buildP2pkProof({ id: "two", locktime, pubkeys, nSigs: 3 }),
+      ]);
+
+      expect(result).toEqual({
+        p2pk: null,
+        invalidReason: "Token contains inconsistent P2PK proof locks.",
+      });
+    });
+  });
+
+  describe("getArbiterPubkey", () => {
+    it("normalizes a configured arbiter pubkey", () => {
+      expect(getArbiterPubkey()).toBe(NORMALIZED_ARBITER_CASHU_PUBKEY);
+    });
+
+    it("returns null when the arbiter pubkey is not configured", () => {
+      delete process.env.NEXT_PUBLIC_ARBITER_PUBKEY;
+
+      expect(getArbiterPubkey()).toBeNull();
     });
   });
 });

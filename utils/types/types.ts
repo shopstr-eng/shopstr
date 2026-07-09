@@ -289,6 +289,8 @@ export interface SavedAddress {
 
 export interface ParsedP2PK {
   pubkey: string;
+  pubkeys?: string[];
+  nSigs?: number;
   locktime: number;
   refundKeys: string[];
   expired: boolean;

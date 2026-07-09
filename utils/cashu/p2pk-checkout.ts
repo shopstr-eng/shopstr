@@ -285,21 +285,38 @@ export function getBuyerReclaimKeys(
 
 export function buildP2pkSwapOptions(
   sellerP2pk: P2pkProfileSettings | undefined,
-  buyerReclaimKeys: string[]
-): { pubkey: string; locktime: number; refundKeys: string[] } | undefined {
+  buyerReclaimKeys: string[],
+  buyerCashuPubkey?: string
+):
+  | {
+      pubkey: string;
+      pubkeys: string[];
+      nSigs: number;
+      locktime: number;
+      refundKeys: string[];
+    }
+  | undefined {
   const sellerPubkey = normalizeCashuPubkey(sellerP2pk?.pubkey);
   if (!sellerP2pk?.enabled || !sellerPubkey) return undefined;
 
   const days = sellerP2pk.refundDelayDays;
   if (!days || days <= 0) return undefined;
 
+  const arbiterPubkey = getArbiterPubkey();
+  if (!arbiterPubkey) return undefined;
+
+  const normalizedBuyerPubkey = normalizeCashuPubkey(buyerCashuPubkey);
+  if (!normalizedBuyerPubkey) return undefined;
+
   const testLocktimeSeconds = getP2pkTestLocktimeSeconds();
   const locktimeOffsetSeconds = testLocktimeSeconds ?? days * 24 * 60 * 60;
 
   return {
-    pubkey: sellerPubkey,
+    pubkey: sellerPubkey, // primary (data field)
+    pubkeys: [normalizedBuyerPubkey, arbiterPubkey], // additional keys
+    nSigs: 2, // 2-of-3
     locktime: Math.floor(Date.now() / 1000) + locktimeOffsetSeconds,
-    refundKeys: buyerReclaimKeys, // cashu-ts / NUT-11 reclaim path
+    refundKeys: buyerReclaimKeys,
   };
 }
 
@@ -311,7 +328,11 @@ export function buildP2pkOutputConfig(
   const reclaimKeys = getBuyerReclaimKeys(buyerContent, buyerCashuPubkey);
   if (!reclaimKeys) return undefined;
 
-  const options = buildP2pkSwapOptions(sellerP2pk, reclaimKeys);
+  const options = buildP2pkSwapOptions(
+    sellerP2pk,
+    reclaimKeys,
+    buyerCashuPubkey
+  );
   if (!options) return undefined;
 
   return {
@@ -418,9 +439,25 @@ export function parseP2PK(proof: Proof): ParsedP2PK | null {
     }
 
     const now = Math.floor(Date.now() / 1000);
+    // parse additional pubkeys for multisig
+    const additionalPubkeys: string[] = [];
+    for (const tag of tags) {
+      if (tag[0] !== "pubkeys") continue;
+      for (const value of tag.slice(1)) {
+        if (typeof value !== "string") return null;
+        const additionalKey = normalizeCashuPubkey(value);
+        if (!additionalKey) return null;
+        additionalPubkeys.push(additionalKey);
+      }
+    }
+
+    // parse nSigs for multisig threshold
+    const nSigs = getTagInt(proof.secret, "n_sigs") ?? undefined;
 
     return {
       pubkey,
+      pubkeys: additionalPubkeys.length > 0 ? additionalPubkeys : undefined,
+      nSigs,
       locktime,
       refundKeys,
       expired: locktime > 0 ? now >= locktime : false,
@@ -442,6 +479,8 @@ function hasP2pkKind(proof: Proof): boolean {
 function p2pkConstraintFingerprint(p2pk: ParsedP2PK): string {
   return JSON.stringify({
     pubkey: normalizeCashuPubkey(p2pk.pubkey),
+    pubkeys: p2pk.pubkeys?.map(normalizeCashuPubkey).sort(),
+    nSigs: p2pk.nSigs,
     locktime: p2pk.locktime,
     refundKeys: p2pk.refundKeys.map(normalizeCashuPubkey).sort(),
   });
@@ -496,4 +535,8 @@ export function parseP2PKProofSet(proofs: Proof[]): P2pkProofSetParseResult {
   return {
     p2pk: parsedP2pk ? { ...parsedP2pk, proofCount: proofs.length } : null,
   };
+}
+
+export function getArbiterPubkey(): string | null {
+  return normalizeCashuPubkey(process.env.NEXT_PUBLIC_ARBITER_PUBKEY);
 }
