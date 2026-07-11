@@ -351,3 +351,32 @@ export async function updateDisputeStatus(
   const nostr = new NostrManager();
   await persistBuyerP2pkEscrowRecord(nostr, signer, updatedRecord);
 }
+
+// Same as updateDisputeStatus, but for callers that already have the app's
+// real NostrSigner (e.g. the buyer's SignerContext.signer in-session) rather
+// than a raw privkey. This matters because the escrow record is
+// self-encrypted to whoever originally persisted it (the buyer's real Nostr
+// identity at checkout) — a Cashu-only key like cashuPrivkey has no
+// relationship to that identity and can never decrypt/update the record.
+export async function updateDisputeStatusWithSigner(
+  orderId: string,
+  status: P2pkEscrowDisputeStatus,
+  signer: NostrSigner,
+  nostr?: NostrManager
+): Promise<void> {
+  const existingRecords = await getStoredBuyerP2pkEscrowRecords(signer);
+  const existingRecord = existingRecords.find(
+    (candidate) => candidate.orderId === orderId
+  );
+
+  if (!existingRecord) {
+    throw new Error(`No escrow record found for order ${orderId}.`);
+  }
+
+  const updatedRecord: BuyerP2pkEscrowRecord = {
+    ...existingRecord,
+    disputeStatus: status,
+  };
+
+  await persistBuyerP2pkEscrowRecord(nostr, signer, updatedRecord);
+}

@@ -52,11 +52,37 @@ import {
   checkMintP2pkSupport,
   parseP2PKProofSet,
   pubkeysEqual,
+  getArbiterPubkey,
 } from "@/utils/cashu/p2pk-checkout";
 import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import { ParsedP2PK } from "@/utils/types/types";
+import {
+  createPartialRedemption,
+  combineAndRedeem,
+  findIncomingEscrowPayload,
+  EscrowPaymentRequestPayload,
+  EscrowBuyerSigPayload,
+  EscrowArbiterSigPayload,
+  EscrowDisputePayload,
+  EscrowPayload,
+} from "@/utils/cashu/dispute-redemption";
+import {
+  getStoredBuyerP2pkEscrowRecords,
+  updateDisputeStatusWithSigner,
+  P2pkEscrowDisputeStatus,
+} from "@/utils/cashu/p2pk-escrow-records";
 
-export default function ClaimButton({ token }: { token: string }) {
+export default function ClaimButton({
+  token,
+  orderId,
+  buyerPubkey,
+  sellerPubkey,
+}: {
+  token: string;
+  orderId?: string;
+  buyerPubkey?: string;
+  sellerPubkey?: string;
+}) {
   const [lnurl, setLnurl] = useState("");
   const profileContext = useContext(ProfileMapContext);
   const chatsContext = useContext(ChatsContext);
@@ -85,6 +111,14 @@ export default function ClaimButton({ token }: { token: string }) {
   const [p2pk, setP2PK] = useState<ParsedP2PK | null>(null);
   const { mints, tokens, history } = getLocalStorageData();
 
+  const [disputeStatus, setDisputeStatus] =
+    useState<P2pkEscrowDisputeStatus>("none");
+  const [isAwaitingBuyerConfirm, setIsAwaitingBuyerConfirm] = useState(false);
+  const [isDisputeInProgress, setIsDisputeInProgress] = useState(false);
+  const [escrowActionError, setEscrowActionError] = useState<string | null>(
+    null
+  );
+
   // True when locktime has expired and the current wallet key is an
   // authorized refund signer. refundKeys are stored as "02"+x-only (66 chars)
   // by cashu-ts; cashuPubkey from context is x-only (64 chars).
@@ -92,6 +126,25 @@ export default function ClaimButton({ token }: { token: string }) {
     if (!p2pk || !p2pk.expired || !cashuPubkey) return false;
     return p2pk.refundKeys.some((k) => pubkeysEqual(k, cashuPubkey));
   }, [p2pk, cashuPubkey]);
+
+  // True for a 2-of-3 dispute-escrow lock (seller + buyer + arbiter).
+  const isMultisigEscrow = useMemo(
+    () => p2pk !== null && p2pk.nSigs === 2 && (p2pk.pubkeys?.length ?? 0) > 0,
+    [p2pk]
+  );
+
+  // Compared against the token's own parsed Cashu pubkeys (p2pk.pubkey is
+  // the seller/primary signer, p2pk.pubkeys[0] is the buyer per
+  // buildP2pkSwapOptions) — NOT the buyerPubkey/sellerPubkey props, which
+  // are Nostr identity pubkeys used only for DM routing below.
+  const isSellerView = useMemo(
+    () => pubkeysEqual(p2pk?.pubkey, cashuPubkey),
+    [p2pk, cashuPubkey]
+  );
+  const isBuyerView = useMemo(
+    () => pubkeysEqual(p2pk?.pubkeys?.[0], cashuPubkey),
+    [p2pk, cashuPubkey]
+  );
 
   const assertP2pkMintSupported = async () => {
     if (!p2pk) return;
@@ -120,6 +173,58 @@ export default function ClaimButton({ token }: { token: string }) {
     }
     setP2PK(parsedP2pk.p2pk);
   }, [proofs]);
+
+  // Buyer's view: the escrow record is self-encrypted to whoever created it
+  // (the buyer, at checkout), so this is the only view where reading it
+  // directly is valid.
+  useEffect(() => {
+    if (!orderId || !isMultisigEscrow || !isBuyerView || !signer) return;
+    let isActive = true;
+
+    getStoredBuyerP2pkEscrowRecords(signer).then((records) => {
+      if (!isActive) return;
+      const record = records.find((r) => r.orderId === orderId);
+      if (record?.disputeStatus) {
+        setDisputeStatus(record.disputeStatus);
+        setIsDisputeInProgress(record.disputeStatus === "open");
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [orderId, isMultisigEscrow, isBuyerView, signer]);
+
+  // Seller/arbiter view: no readable shared record, so learn about a
+  // dispute from the escrow-dispute DM the buyer sends directly.
+  useEffect(() => {
+    if (
+      !orderId ||
+      !isMultisigEscrow ||
+      isBuyerView ||
+      !nostr ||
+      !signer ||
+      !userPubkey
+    )
+      return;
+    let isActive = true;
+
+    findIncomingEscrowPayload<EscrowDisputePayload>(
+      nostr,
+      signer,
+      userPubkey,
+      orderId,
+      "escrow-dispute"
+    ).then((disputePayload) => {
+      if (!isActive || !disputePayload) return;
+      setDisputeStatus("open");
+      setIsDisputeInProgress(true);
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [orderId, isMultisigEscrow, isBuyerView, nostr, signer, userPubkey]);
 
   const randomNpubForSenderRef = useRef<string>("");
   const randomNsecForSenderRef = useRef<string>("");
@@ -490,6 +595,225 @@ export default function ClaimButton({ token }: { token: string }) {
     await receive(false, true);
   };
 
+  // Shared DM helper for the dispute-escrow control-plane messages below.
+  // Reuses the exact ephemeral seal-and-wrap shape already used in
+  // redeem() (see the overpaid-fee-change notification above), just
+  // parameterized on an arbitrary recipient and a JSON payload instead of a
+  // plain-text message addressed to self.
+  const sendEscrowDm = async (
+    recipientPubkey: string,
+    payload: EscrowPayload
+  ) => {
+    const decodedRandomPubkeyForSender = nip19.decode(
+      randomNpubForSenderRef.current
+    );
+    const decodedRandomPrivkeyForSender = nip19.decode(
+      randomNsecForSenderRef.current
+    );
+    const decodedRandomPubkeyForReceiver = nip19.decode(
+      randomNpubForReceiverRef.current
+    );
+    const decodedRandomPrivkeyForReceiver = nip19.decode(
+      randomNsecForReceiverRef.current
+    );
+    const giftWrappedMessageEvent = await constructGiftWrappedEvent(
+      decodedRandomPubkeyForSender.data as string,
+      recipientPubkey,
+      JSON.stringify(payload),
+      payload.type
+    );
+    const sealedEvent = await constructMessageSeal(
+      signer!,
+      giftWrappedMessageEvent,
+      decodedRandomPubkeyForSender.data as string,
+      recipientPubkey,
+      decodedRandomPrivkeyForSender.data as Uint8Array
+    );
+    const giftWrappedEvent = await constructMessageGiftWrap(
+      sealedEvent,
+      decodedRandomPubkeyForReceiver.data as string,
+      decodedRandomPrivkeyForReceiver.data as Uint8Array,
+      recipientPubkey
+    );
+    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
+  };
+
+  const handleSellerRequestPayment = async () => {
+    if (!orderId || !buyerPubkey) return;
+    setEscrowActionError(null);
+    try {
+      const payload: EscrowPaymentRequestPayload = {
+        type: "escrow-payment-request",
+        orderId,
+      };
+      await sendEscrowDm(buyerPubkey, payload);
+      setIsAwaitingBuyerConfirm(true);
+    } catch (error) {
+      setEscrowActionError(
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  };
+
+  const handleBuyerConfirmReceipt = async () => {
+    if (!orderId || !sellerPubkey) return;
+    if (!cashuPrivkey) {
+      setIsP2pkKeyMissing(true);
+      return;
+    }
+    setEscrowActionError(null);
+    try {
+      // Security rules 1/2: this produces ONLY the buyer's own signature
+      // and sends it ONLY to the seller — the buyer never learns the
+      // seller's or arbiter's signature from this call.
+      const { proofs: partialProofs, partialSigs: buyerSigs } =
+        await createPartialRedemption(token, cashuPrivkey);
+      const payload: EscrowBuyerSigPayload = {
+        type: "escrow-buyer-sig",
+        orderId,
+        proofs: partialProofs,
+        buyerSigs,
+      };
+      await sendEscrowDm(sellerPubkey, payload);
+      setIsAwaitingBuyerConfirm(false);
+    } catch (error) {
+      setEscrowActionError(
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  };
+
+  const handleSellerRedeemWithBuyerSig = async () => {
+    if (!orderId || !nostr || !signer || !userPubkey) return;
+    if (!cashuPrivkey) {
+      setIsP2pkKeyMissing(true);
+      return;
+    }
+    setEscrowActionError(null);
+    setIsRedeeming(true);
+    try {
+      const buyerSigPayload =
+        await findIncomingEscrowPayload<EscrowBuyerSigPayload>(
+          nostr,
+          signer,
+          userPubkey,
+          orderId,
+          "escrow-buyer-sig"
+        );
+      if (!buyerSigPayload) {
+        setEscrowActionError("No confirmation from buyer yet.");
+        setIsRedeeming(false);
+        return;
+      }
+      const { proofs: sellerProofs, partialSigs: sellerOwnSigs } =
+        await createPartialRedemption(token, cashuPrivkey);
+      const result = await combineAndRedeem({
+        proofs: sellerProofs,
+        sig1: buyerSigPayload.buyerSigs,
+        sig2: sellerOwnSigs,
+        tokenMint,
+        tokenAmount,
+        nostr: nostr!,
+        signer: signer!,
+        mints,
+        tokens,
+        history,
+      });
+      if (result.success) {
+        setIsReceived(true);
+      } else {
+        setEscrowActionError(result.error ?? "Redemption failed.");
+      }
+    } catch (error) {
+      setEscrowActionError(
+        error instanceof Error ? error.message : String(error)
+      );
+    } finally {
+      setIsRedeeming(false);
+    }
+  };
+
+  const handleOpenDispute = async (reason: string) => {
+    if (!isBuyerView || !orderId || !sellerPubkey || !signer) return;
+    setEscrowActionError(null);
+    try {
+      // Persists via the real app signer, not cashuPrivkey — the escrow
+      // record is self-encrypted to the buyer's real Nostr identity, which
+      // cashuPrivkey (a wallet-only key) has no relationship to.
+      await updateDisputeStatusWithSigner(orderId, "open", signer, nostr);
+      const payload: EscrowDisputePayload = {
+        type: "escrow-dispute",
+        orderId,
+        reason,
+      };
+      await sendEscrowDm(sellerPubkey, payload);
+      const arbiterPubkey = getArbiterPubkey();
+      if (arbiterPubkey) {
+        await sendEscrowDm(arbiterPubkey, payload);
+      }
+      setDisputeStatus("open");
+      setIsDisputeInProgress(true);
+    } catch (error) {
+      setEscrowActionError(
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  };
+
+  const handleArbiterRedeem = async () => {
+    if (!orderId || !nostr || !signer || !userPubkey) return;
+    if (!cashuPrivkey) {
+      setIsP2pkKeyMissing(true);
+      return;
+    }
+    setEscrowActionError(null);
+    setIsRedeeming(true);
+    try {
+      // Security rule 3: an EscrowArbiterSigPayload addressed to me is
+      // itself the proof the arbiter resolved the dispute in my favor —
+      // arbiter sigs are only ever sent to the winner.
+      const arbiterSigPayload =
+        await findIncomingEscrowPayload<EscrowArbiterSigPayload>(
+          nostr,
+          signer,
+          userPubkey,
+          orderId,
+          "escrow-arbiter-sig"
+        );
+      if (!arbiterSigPayload) {
+        setEscrowActionError("No arbiter resolution found yet.");
+        setIsRedeeming(false);
+        return;
+      }
+      const { proofs: ownProofs, partialSigs: ownSigs } =
+        await createPartialRedemption(token, cashuPrivkey);
+      const result = await combineAndRedeem({
+        proofs: ownProofs,
+        sig1: arbiterSigPayload.arbiterSigs,
+        sig2: ownSigs,
+        tokenMint,
+        tokenAmount,
+        nostr: nostr!,
+        signer: signer!,
+        mints,
+        tokens,
+        history,
+      });
+      if (result.success) {
+        setDisputeStatus(isBuyerView ? "resolved:buyer" : "resolved:seller");
+        setIsReceived(true);
+      } else {
+        setEscrowActionError(result.error ?? "Redemption failed.");
+      }
+    } catch (error) {
+      setEscrowActionError(
+        error instanceof Error ? error.message : String(error)
+      );
+    } finally {
+      setIsRedeeming(false);
+    }
+  };
+
   const buttonClassName = useMemo(() => {
     const disabledStyle =
       "min-w-fit from-gray-300 to-gray-400 cursor-not-allowed";
@@ -507,56 +831,162 @@ export default function ClaimButton({ token }: { token: string }) {
           style={{ display: "none" }}
         />
       )}
-      <Button
-        className={
-          isRedeemed || isInvalidToken
-            ? "mt-2 min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
-            : buttonClassName + " mt-2 min-w-fit"
-        }
-        onClick={handleClaimButtonClick}
-        isDisabled={isRedeemed || isInvalidToken}
-      >
-        {isRedeeming ? (
-          <>
-            {theme === "dark" ? (
-              <Spinner size={"sm"} color="warning" />
+      {!isMultisigEscrow && (
+        <>
+          <Button
+            className={
+              isRedeemed || isInvalidToken
+                ? "mt-2 min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
+                : buttonClassName + " mt-2 min-w-fit"
+            }
+            onClick={handleClaimButtonClick}
+            isDisabled={isRedeemed || isInvalidToken}
+          >
+            {isRedeeming ? (
+              <>
+                {theme === "dark" ? (
+                  <Spinner size={"sm"} color="warning" />
+                ) : (
+                  <Spinner size={"sm"} color="secondary" />
+                )}
+              </>
+            ) : isInvalidToken ? (
+              <>Invalid Token</>
+            ) : isRedeemed ? (
+              <>Claimed: {formattedTokenAmount}</>
             ) : (
-              <Spinner size={"sm"} color="secondary" />
+              <>Claim: {formattedTokenAmount}</>
             )}
-          </>
-        ) : isInvalidToken ? (
-          <>Invalid Token</>
-        ) : isRedeemed ? (
-          <>Claimed: {formattedTokenAmount}</>
-        ) : (
-          <>Claim: {formattedTokenAmount}</>
-        )}
-      </Button>
-      {isRefundEligible && (
-        <Button
-          className={
-            isRefunded
-              ? "mt-2 min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
-              : SHOPSTRBUTTONCLASSNAMES + " mt-2 min-w-fit"
-          }
-          onClick={handleRefundClick}
-          isDisabled={isRefunded || isRedeeming}
-        >
-          {isRedeeming ? (
-            <>
-              {theme === "dark" ? (
-                <Spinner size={"sm"} color="warning" />
+          </Button>
+          {isRefundEligible && (
+            <Button
+              className={
+                isRefunded
+                  ? "mt-2 min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
+                  : SHOPSTRBUTTONCLASSNAMES + " mt-2 min-w-fit"
+              }
+              onClick={handleRefundClick}
+              isDisabled={isRefunded || isRedeeming}
+            >
+              {isRedeeming ? (
+                <>
+                  {theme === "dark" ? (
+                    <Spinner size={"sm"} color="warning" />
+                  ) : (
+                    <Spinner size={"sm"} color="secondary" />
+                  )}
+                </>
+              ) : isRefunded ? (
+                <>Refunded: {formattedTokenAmount}</>
               ) : (
-                <Spinner size={"sm"} color="secondary" />
+                <>Refund: {formattedTokenAmount}</>
               )}
-            </>
-          ) : isRefunded ? (
-            <>Refunded: {formattedTokenAmount}</>
-          ) : (
-            <>Refund: {formattedTokenAmount}</>
+            </Button>
           )}
-        </Button>
+        </>
       )}
+      {isMultisigEscrow && (
+        <div className="mt-2 flex flex-col gap-2">
+          {isDisputeInProgress ? (
+            <Button
+              className="min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
+              isDisabled
+            >
+              Dispute in Progress
+            </Button>
+          ) : disputeStatus === "resolved:buyer" && isBuyerView ? (
+            <Button
+              className={SHOPSTRBUTTONCLASSNAMES + " min-w-fit"}
+              onClick={handleArbiterRedeem}
+              isDisabled={isRedeeming}
+            >
+              {isRedeeming ? <Spinner size="sm" /> : <>Claim Refund</>}
+            </Button>
+          ) : disputeStatus === "resolved:seller" && isSellerView ? (
+            <Button
+              className={SHOPSTRBUTTONCLASSNAMES + " min-w-fit"}
+              onClick={handleArbiterRedeem}
+              isDisabled={isRedeeming}
+            >
+              {isRedeeming ? <Spinner size="sm" /> : <>Claim Payment</>}
+            </Button>
+          ) : isSellerView && disputeStatus === "none" ? (
+            isAwaitingBuyerConfirm ? (
+              <Button
+                className="min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
+                isDisabled
+              >
+                Waiting for Buyer...
+              </Button>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  className={SHOPSTRBUTTONCLASSNAMES + " min-w-fit"}
+                  onClick={handleSellerRequestPayment}
+                >
+                  Request Payment
+                </Button>
+                <Button
+                  className={SHOPSTRBUTTONCLASSNAMES + " min-w-fit"}
+                  onClick={handleSellerRedeemWithBuyerSig}
+                  isDisabled={isRedeeming}
+                >
+                  {isRedeeming ? (
+                    <Spinner size="sm" />
+                  ) : (
+                    <>Check for Confirmation</>
+                  )}
+                </Button>
+              </div>
+            )
+          ) : isBuyerView && disputeStatus === "none" ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                className={SHOPSTRBUTTONCLASSNAMES + " min-w-fit"}
+                onClick={handleBuyerConfirmReceipt}
+              >
+                Confirm Receipt
+              </Button>
+              <Button
+                className={SHOPSTRBUTTONCLASSNAMES + " min-w-fit"}
+                onClick={() => handleOpenDispute("Buyer-initiated dispute")}
+              >
+                Open Dispute
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      )}
+      {escrowActionError ? (
+        <Modal
+          backdrop="blur"
+          isOpen={!!escrowActionError}
+          onClose={() => setEscrowActionError(null)}
+          classNames={{
+            body: "py-6 ",
+            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+            header: "border-b-[1px] border-[#292f46]",
+            footer: "border-t-[1px] border-[#292f46]",
+            closeButton: "hover:bg-black/5 active:bg-white/10",
+          }}
+          isDismissable={true}
+          scrollBehavior={"normal"}
+          placement={"center"}
+          size="2xl"
+        >
+          <ModalContent>
+            <ModalHeader className="text-light-text dark:text-dark-text flex items-center justify-center">
+              <XCircleIcon className="h-6 w-6 text-red-500" />
+              <div className="ml-2">Escrow action failed</div>
+            </ModalHeader>
+            <ModalBody className="text-light-text dark:text-dark-text flex flex-col overflow-hidden">
+              <div className="flex items-center justify-center">
+                {escrowActionError}
+              </div>
+            </ModalBody>
+          </ModalContent>
+        </Modal>
+      ) : null}
       <Modal
         backdrop="blur"
         isOpen={openClaimTypeModal}

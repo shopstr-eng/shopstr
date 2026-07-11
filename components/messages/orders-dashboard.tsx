@@ -1722,7 +1722,15 @@ const OrdersDashboard = ({
                               Payment Sent
                             </span>
                           ) : order.paymentToken ? (
-                            <ClaimButton token={order.paymentToken} />
+                            <ClaimButton
+                              token={order.paymentToken}
+                              orderId={order.orderId}
+                              buyerPubkey={order.buyerPubkey}
+                              sellerPubkey={
+                                order.sellerPubkey ??
+                                (order.isSale ? userPubkey : undefined)
+                              }
+                            />
                           ) : (
                             <span className="text-gray-600 dark:text-gray-400">
                               {order.paymentMethod}
