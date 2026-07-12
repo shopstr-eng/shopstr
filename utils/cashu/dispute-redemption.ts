@@ -32,6 +32,10 @@ export type EscrowDisputePayload = {
   type: "escrow-dispute";
   orderId: string;
   reason: string;
+  // Populated only in the copy DMed to the arbiter, who has no other way
+  // to read the buyer's self-encrypted kind 30406 escrow record.
+  token?: string;
+  amount?: number;
 };
 
 export type EscrowPayload =

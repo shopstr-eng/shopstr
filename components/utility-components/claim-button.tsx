@@ -52,7 +52,6 @@ import {
   checkMintP2pkSupport,
   parseP2PKProofSet,
   pubkeysEqual,
-  getArbiterPubkey,
 } from "@/utils/cashu/p2pk-checkout";
 import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import { ParsedP2PK } from "@/utils/types/types";
@@ -71,6 +70,7 @@ import {
   updateDisputeStatusWithSigner,
   P2pkEscrowDisputeStatus,
 } from "@/utils/cashu/p2pk-escrow-records";
+import { publishDisputeEvent } from "@/utils/nostr/dispute-records";
 
 export default function ClaimButton({
   token,
@@ -734,23 +734,46 @@ export default function ClaimButton({
   };
 
   const handleOpenDispute = async (reason: string) => {
-    if (!isBuyerView || !orderId || !sellerPubkey || !signer) return;
+    if (!isBuyerView || !orderId || !sellerPubkey || !signer || !userPubkey)
+      return;
     setEscrowActionError(null);
     try {
       // Persists via the real app signer, not cashuPrivkey — the escrow
       // record is self-encrypted to the buyer's real Nostr identity, which
       // cashuPrivkey (a wallet-only key) has no relationship to.
       await updateDisputeStatusWithSigner(orderId, "open", signer, nostr);
-      const payload: EscrowDisputePayload = {
+
+      const sellerPayload: EscrowDisputePayload = {
         type: "escrow-dispute",
         orderId,
         reason,
       };
-      await sendEscrowDm(sellerPubkey, payload);
-      const arbiterPubkey = getArbiterPubkey();
+      await sendEscrowDm(sellerPubkey, sellerPayload);
+
+      const arbiterPubkey = process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY;
       if (arbiterPubkey) {
-        await sendEscrowDm(arbiterPubkey, payload);
+        // The arbiter has no way to decrypt either party's self-encrypted
+        // kind 30406 escrow record, so its copy of the DM also carries the
+        // Cashu token/amount it needs to rule on the dispute.
+        const arbiterPayload: EscrowDisputePayload = {
+          type: "escrow-dispute",
+          orderId,
+          reason,
+          token,
+          amount: tokenAmount,
+        };
+        await sendEscrowDm(arbiterPubkey, arbiterPayload);
+        await publishDisputeEvent({
+          orderId,
+          reason,
+          nostr: nostr!,
+          signer,
+          buyerPubkey: userPubkey,
+          sellerPubkey,
+          arbiterPubkey,
+        });
       }
+
       setDisputeStatus("open");
       setIsDisputeInProgress(true);
     } catch (error) {
