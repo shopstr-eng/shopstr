@@ -110,6 +110,40 @@ describe("fetchDisputeEvents", () => {
     expect(result[1]).toBe(otherOrder);
     expect(result).not.toContain(older);
   });
+
+  it("omits disputes whose newest event is resolved", async () => {
+    const resolved = mkDisputeEvent({
+      created_at: 300,
+      tags: [
+        ["d", "order-1"],
+        ["p", "buyer-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+        ["status", "resolved:buyer"],
+      ],
+    });
+    const open = mkDisputeEvent({
+      created_at: 200,
+      tags: [
+        ["d", "order-2"],
+        ["p", "buyer-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+        ["status", "open"],
+      ],
+    });
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([resolved, open]),
+    } as any;
+
+    const result = await fetchDisputeEvents({
+      nostr,
+      arbiterPubkey: "arbiter-pubkey",
+    });
+
+    expect(result).toEqual([open]);
+  });
 });
 
 describe("parseDisputeEvent", () => {

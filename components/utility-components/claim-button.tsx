@@ -70,7 +70,11 @@ import {
   updateDisputeStatusWithSigner,
   P2pkEscrowDisputeStatus,
 } from "@/utils/cashu/p2pk-escrow-records";
-import { publishDisputeEvent } from "@/utils/nostr/dispute-records";
+import {
+  fetchDisputeEvent,
+  parseDisputeEvent,
+  publishDisputeEvent,
+} from "@/utils/nostr/dispute-records";
 
 export default function ClaimButton({
   token,
@@ -115,6 +119,8 @@ export default function ClaimButton({
     useState<P2pkEscrowDisputeStatus>("none");
   const [isAwaitingBuyerConfirm, setIsAwaitingBuyerConfirm] = useState(false);
   const [isDisputeInProgress, setIsDisputeInProgress] = useState(false);
+  const [arbiterResolutionAvailable, setArbiterResolutionAvailable] =
+    useState(false);
   const [escrowActionError, setEscrowActionError] = useState<string | null>(
     null
   );
@@ -195,13 +201,18 @@ export default function ClaimButton({
     };
   }, [orderId, isMultisigEscrow, isBuyerView, signer]);
 
-  // Seller/arbiter view: no readable shared record, so learn about a
-  // dispute from the escrow-dispute DM the buyer sends directly.
+  useEffect(() => {
+    setArbiterResolutionAvailable(false);
+  }, [orderId, token]);
+
+  // An arbiter signature DM means the current user won the dispute. This
+  // must override the generic open-dispute disabled state so the winner can
+  // reach handleArbiterRedeem.
   useEffect(() => {
     if (
       !orderId ||
       !isMultisigEscrow ||
-      isBuyerView ||
+      (!isBuyerView && !isSellerView) ||
       !nostr ||
       !signer ||
       !userPubkey
@@ -209,22 +220,92 @@ export default function ClaimButton({
       return;
     let isActive = true;
 
-    findIncomingEscrowPayload<EscrowDisputePayload>(
+    findIncomingEscrowPayload<EscrowArbiterSigPayload>(
       nostr,
       signer,
       userPubkey,
       orderId,
-      "escrow-dispute"
-    ).then((disputePayload) => {
-      if (!isActive || !disputePayload) return;
-      setDisputeStatus("open");
-      setIsDisputeInProgress(true);
+      "escrow-arbiter-sig"
+    ).then((arbiterSigPayload) => {
+      if (!isActive || !arbiterSigPayload) return;
+      setDisputeStatus(isBuyerView ? "resolved:buyer" : "resolved:seller");
+      setIsDisputeInProgress(false);
+      setArbiterResolutionAvailable(true);
     });
 
     return () => {
       isActive = false;
     };
-  }, [orderId, isMultisigEscrow, isBuyerView, nostr, signer, userPubkey]);
+  }, [
+    orderId,
+    isMultisigEscrow,
+    isBuyerView,
+    isSellerView,
+    nostr,
+    signer,
+    userPubkey,
+  ]);
+
+  // Participants without a readable buyer escrow record (especially the
+  // seller) learn about disputes from the direct escrow-dispute DM, with a
+  // public kind 30009 fallback so a missed DM cannot leave stale claim UI.
+  useEffect(() => {
+    if (
+      !orderId ||
+      !isMultisigEscrow ||
+      !nostr ||
+      !signer ||
+      !userPubkey ||
+      arbiterResolutionAvailable
+    )
+      return;
+    let isActive = true;
+
+    const markDisputeOpen = () => {
+      setDisputeStatus("open");
+      setIsDisputeInProgress(true);
+    };
+
+    const loadDisputeStatus = async () => {
+      const disputePayload =
+        await findIncomingEscrowPayload<EscrowDisputePayload>(
+          nostr,
+          signer,
+          userPubkey,
+          orderId,
+          "escrow-dispute"
+        );
+      if (!isActive) return;
+      if (disputePayload) {
+        markDisputeOpen();
+        return;
+      }
+
+      const disputeEvent = await fetchDisputeEvent({ nostr, orderId });
+      if (!isActive || !disputeEvent) return;
+      const parsedDispute = parseDisputeEvent(disputeEvent);
+      const isParticipant =
+        parsedDispute?.buyerPubkey === userPubkey ||
+        parsedDispute?.sellerPubkey === userPubkey ||
+        parsedDispute?.arbiterPubkey === userPubkey;
+      if (isParticipant && parsedDispute?.status === "open") {
+        markDisputeOpen();
+      }
+    };
+
+    loadDisputeStatus();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    orderId,
+    isMultisigEscrow,
+    nostr,
+    signer,
+    userPubkey,
+    arbiterResolutionAvailable,
+  ]);
 
   const randomNpubForSenderRef = useRef<string>("");
   const randomNsecForSenderRef = useRef<string>("");
@@ -824,6 +905,7 @@ export default function ClaimButton({
       });
       if (result.success) {
         setDisputeStatus(isBuyerView ? "resolved:buyer" : "resolved:seller");
+        setIsDisputeInProgress(false);
         setIsReceived(true);
       } else {
         setEscrowActionError(result.error ?? "Redemption failed.");
@@ -910,14 +992,9 @@ export default function ClaimButton({
       )}
       {isMultisigEscrow && (
         <div className="mt-2 flex flex-col gap-2">
-          {isDisputeInProgress ? (
-            <Button
-              className="min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
-              isDisabled
-            >
-              Dispute in Progress
-            </Button>
-          ) : disputeStatus === "resolved:buyer" && isBuyerView ? (
+          {arbiterResolutionAvailable &&
+          disputeStatus === "resolved:buyer" &&
+          isBuyerView ? (
             <Button
               className={SHOPSTRBUTTONCLASSNAMES + " min-w-fit"}
               onClick={handleArbiterRedeem}
@@ -925,13 +1002,22 @@ export default function ClaimButton({
             >
               {isRedeeming ? <Spinner size="sm" /> : <>Claim Refund</>}
             </Button>
-          ) : disputeStatus === "resolved:seller" && isSellerView ? (
+          ) : arbiterResolutionAvailable &&
+            disputeStatus === "resolved:seller" &&
+            isSellerView ? (
             <Button
               className={SHOPSTRBUTTONCLASSNAMES + " min-w-fit"}
               onClick={handleArbiterRedeem}
               isDisabled={isRedeeming}
             >
               {isRedeeming ? <Spinner size="sm" /> : <>Claim Payment</>}
+            </Button>
+          ) : isDisputeInProgress ? (
+            <Button
+              className="min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
+              isDisabled
+            >
+              Dispute in Progress
             </Button>
           ) : isSellerView && disputeStatus === "none" ? (
             isAwaitingBuyerConfirm ? (

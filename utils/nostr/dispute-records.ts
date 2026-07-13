@@ -15,6 +15,41 @@ export interface ParsedDisputeEvent {
   createdAt: number;
 }
 
+export type DisputeEventStatus = "open" | "resolved:buyer" | "resolved:seller";
+
+export function createDisputeEventTemplate(params: {
+  orderId: string;
+  reason: string;
+  buyerPubkey: string;
+  sellerPubkey: string;
+  arbiterPubkey: string;
+  status?: DisputeEventStatus;
+  createdAt?: number;
+}): EventTemplate {
+  const {
+    orderId,
+    reason,
+    buyerPubkey,
+    sellerPubkey,
+    arbiterPubkey,
+    status = "open",
+    createdAt = Math.floor(Date.now() / 1000),
+  } = params;
+
+  return {
+    kind: DISPUTE_EVENT_KIND,
+    tags: [
+      ["d", orderId],
+      ["p", buyerPubkey, "", "buyer"],
+      ["p", sellerPubkey, "", "seller"],
+      ["p", arbiterPubkey, "", "arbiter"],
+      ["status", status],
+    ],
+    content: reason,
+    created_at: createdAt,
+  };
+}
+
 // Publishes a kind 30009 replaceable "dispute opened" event so the arbiter
 // can discover open disputes without needing read access to either party's
 // self-encrypted escrow record. Role markers (4th tag element) are used
@@ -41,18 +76,14 @@ export async function publishDisputeEvent(params: {
     arbiterPubkey,
   } = params;
 
-  const event: EventTemplate = {
-    kind: DISPUTE_EVENT_KIND,
-    tags: [
-      ["d", orderId],
-      ["p", buyerPubkey, "", "buyer"],
-      ["p", sellerPubkey, "", "seller"],
-      ["p", arbiterPubkey, "", "arbiter"],
-      ["status", "open"],
-    ],
-    content: reason,
-    created_at: Math.floor(Date.now() / 1000),
-  };
+  const event = createDisputeEventTemplate({
+    orderId,
+    reason,
+    buyerPubkey,
+    sellerPubkey,
+    arbiterPubkey,
+    status: "open",
+  });
 
   await finalizeAndSendNostrEvent(signer, nostr, event, {
     waitForRelayPublish: false,
@@ -86,21 +117,25 @@ export async function fetchDisputeEvents(params: {
     }
   }
 
-  return Array.from(newestByOrderId.values()).sort(
-    (a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)
-  );
+  return Array.from(newestByOrderId.values())
+    .filter((event) => parseDisputeEvent(event)?.status === "open")
+    .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
 }
 
 // Fetches the single newest kind 30009 dispute event for a given orderId.
 export async function fetchDisputeEvent(params: {
   nostr: NostrManager;
   orderId: string;
+  timeoutMs?: number;
 }): Promise<NostrEvent | null> {
-  const { nostr, orderId } = params;
+  const { nostr, orderId, timeoutMs } = params;
 
-  const events = await nostr.fetch([
-    { kinds: [DISPUTE_EVENT_KIND], "#d": [orderId] },
-  ]);
+  const events = await nostr.fetch(
+    [{ kinds: [DISPUTE_EVENT_KIND], "#d": [orderId] }],
+    undefined,
+    undefined,
+    timeoutMs
+  );
   if (events.length === 0) return null;
 
   return events.reduce((newest, event) =>

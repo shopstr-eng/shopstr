@@ -3,6 +3,7 @@ import { Button } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import ConfirmationModal from "@/components/utility-components/confirmation-modal";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 
 interface ArbiterControlsProps {
   orderId: string;
@@ -16,12 +17,10 @@ interface ArbiterControlsProps {
 export default function ArbiterControls({
   orderId,
   token,
-  buyerNostrPubkey,
-  sellerNostrPubkey,
   reason,
   onRuled,
 }: ArbiterControlsProps) {
-  const { pubkey: userPubkey } = useContext(SignerContext);
+  const { signer, pubkey: userPubkey } = useContext(SignerContext);
   const [pendingRuling, setPendingRuling] = useState<"buyer" | "seller" | null>(
     null
   );
@@ -38,20 +37,28 @@ export default function ArbiterControls({
     setIsSubmitting(true);
     setError(null);
     try {
-      const winnerNostrPubkey =
-        pendingRuling === "buyer" ? buyerNostrPubkey : sellerNostrPubkey;
+      if (!signer) {
+        throw new Error("Signer not available.");
+      }
+      const body = JSON.stringify({
+        orderId,
+        token,
+        rulingFor: pendingRuling,
+      });
+      const url = `${window.location.origin}/api/arbiter/rule`;
+      const authHeader = await createNip98AuthorizationHeader(
+        signer,
+        url,
+        "POST",
+        body
+      );
       const res = await fetch("/api/arbiter/rule", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_ARBITER_API_SECRET}`,
+          Authorization: authHeader,
         },
-        body: JSON.stringify({
-          orderId,
-          token,
-          rulingFor: pendingRuling,
-          winnerNostrPubkey,
-        }),
+        body,
       });
       const data = await res.json();
       if (!res.ok) {

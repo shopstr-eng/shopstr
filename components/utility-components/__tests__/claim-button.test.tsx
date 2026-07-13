@@ -28,6 +28,14 @@ import {
 } from "@/utils/cashu/p2pk-checkout";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
+import {
+  combineAndRedeem,
+  findIncomingEscrowPayload,
+} from "@/utils/cashu/dispute-redemption";
+import {
+  fetchDisputeEvent,
+  parseDisputeEvent,
+} from "@/utils/nostr/dispute-records";
 
 jest.setTimeout(15000);
 
@@ -132,6 +140,18 @@ jest.mock("@/utils/cashu/melt-retry-service", () => ({
   safeMeltProofs: jest.fn(),
 }));
 
+jest.mock("@/utils/cashu/dispute-redemption", () => ({
+  createPartialRedemption: jest.fn(),
+  combineAndRedeem: jest.fn(),
+  findIncomingEscrowPayload: jest.fn(),
+}));
+
+jest.mock("@/utils/nostr/dispute-records", () => ({
+  publishDisputeEvent: jest.fn(),
+  fetchDisputeEvent: jest.fn(),
+  parseDisputeEvent: jest.fn(),
+}));
+
 jest.mock("next-themes", () => ({
   useTheme: () => ({ theme: "light" }),
 }));
@@ -189,12 +209,17 @@ const mockConstructMessageGiftWrap =
   giftWrapHelpers.constructMessageGiftWrap as jest.Mock;
 const mockSendGiftWrappedMessageEvent =
   giftWrapHelpers.sendGiftWrappedMessageEvent as jest.Mock;
+const mockCombineAndRedeem = combineAndRedeem as jest.Mock;
+const mockFindIncomingEscrowPayload = findIncomingEscrowPayload as jest.Mock;
+const mockFetchDisputeEvent = fetchDisputeEvent as jest.Mock;
+const mockParseDisputeEvent = parseDisputeEvent as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
 
 const CASHU_PRIVKEY = "aabbccdd".repeat(8); // 64-char hex
 const CASHU_PUBKEY = "02aabbcc".padEnd(64, "0");
+const SELLER_CASHU_PUBKEY = "02seller".padEnd(64, "0");
 
 const mockProof = {
   id: "keyset1",
@@ -225,6 +250,20 @@ const mockParsedP2PK = {
   rawTags: [],
 };
 
+const mockBuyerMultisigP2PK = {
+  ...mockParsedP2PK,
+  pubkey: SELLER_CASHU_PUBKEY,
+  pubkeys: [CASHU_PUBKEY],
+  nSigs: 2,
+};
+
+const mockSellerMultisigP2PK = {
+  ...mockParsedP2PK,
+  pubkey: SELLER_CASHU_PUBKEY,
+  pubkeys: [CASHU_PUBKEY],
+  nSigs: 2,
+};
+
 const mockSigner = {
   getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
   sign: jest.fn(),
@@ -232,7 +271,7 @@ const mockSigner = {
   decrypt: jest.fn(),
 } as any;
 
-const mockNostr = { pool: {} } as any;
+const mockNostr = { pool: {}, fetch: jest.fn().mockResolvedValue([]) } as any;
 
 function makeMockWallet(overrides: Record<string, unknown> = {}) {
   return {
@@ -257,6 +296,10 @@ interface ProviderOptions {
   /** Pass false to omit cashuPrivkey from the context (simulates wallet not loaded). */
   cashuPrivkey?: string | false;
   profileLud16?: string;
+  userPubkey?: string;
+  orderId?: string;
+  buyerPubkey?: string;
+  sellerPubkey?: string;
 }
 
 function renderClaimButton(
@@ -267,12 +310,16 @@ function renderClaimButton(
     cashuPubkey = CASHU_PUBKEY,
     cashuPrivkey: cashuPrivkeyOption = CASHU_PRIVKEY,
     profileLud16,
+    userPubkey = "user-pubkey",
+    orderId,
+    buyerPubkey,
+    sellerPubkey,
   } = options;
   // false means "explicitly absent" — distinct from undefined (use default)
   const cashuPrivkey =
     cashuPrivkeyOption === false ? undefined : cashuPrivkeyOption;
   const profileData = new Map<string, any>();
-  profileData.set("user-pubkey", {
+  profileData.set(userPubkey, {
     content: { lud16: profileLud16 ?? undefined },
   });
 
@@ -280,7 +327,7 @@ function renderClaimButton(
     <NostrContext.Provider value={{ nostr: mockNostr } as any}>
       <SignerContext.Provider
         value={
-          { signer: mockSigner, pubkey: "user-pubkey", isLoggedIn: true } as any
+          { signer: mockSigner, pubkey: userPubkey, isLoggedIn: true } as any
         }
       >
         <CashuWalletContext.Provider
@@ -315,7 +362,12 @@ function renderClaimButton(
                 } as any
               }
             >
-              <ClaimButton token={token} />
+              <ClaimButton
+                token={token}
+                orderId={orderId}
+                buyerPubkey={buyerPubkey}
+                sellerPubkey={sellerPubkey}
+              />
             </ChatsContext.Provider>
           </ProfileMapContext.Provider>
         </CashuWalletContext.Provider>
@@ -361,6 +413,11 @@ beforeEach(() => {
     id: "gift-wrap-event",
   });
   mockSendGiftWrappedMessageEvent.mockResolvedValue(undefined);
+  mockNostr.fetch.mockResolvedValue([]);
+  mockFindIncomingEscrowPayload.mockResolvedValue(null);
+  mockFetchDisputeEvent.mockResolvedValue(null);
+  mockParseDisputeEvent.mockReturnValue(null);
+  mockCombineAndRedeem.mockResolvedValue({ success: true });
   // Default: plain token, no P2PK
   mockGetTokenMetadata.mockReturnValue({
     mint: "https://testmint.com",
@@ -1029,5 +1086,80 @@ describe("ClaimButton — P2PK refund path", () => {
     expect(
       screen.queryByRole("button", { name: /^Refund:/i })
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("ClaimButton — dispute escrow", () => {
+  beforeEach(() => {
+    mockGetDecodedToken.mockReturnValue({
+      mint: "https://testmint.com",
+      proofs: [mockP2PKProof],
+    });
+    MockCashuWallet.mockImplementation(() => makeMockWallet());
+  });
+
+  test("shows winner claim action when arbiter resolution DM arrives during an open dispute", async () => {
+    mockParseP2PKProofSet.mockReturnValue({ p2pk: mockBuyerMultisigP2PK });
+    mockFindIncomingEscrowPayload.mockImplementation(
+      async (
+        _nostr: unknown,
+        _signer: unknown,
+        _userPubkey: string,
+        _orderId: string,
+        type: string
+      ) =>
+        type === "escrow-arbiter-sig"
+          ? {
+              type: "escrow-arbiter-sig",
+              orderId: "order-1",
+              proofs: [mockP2PKProof],
+              arbiterSigs: ["arbiter-sig"],
+            }
+          : null
+    );
+
+    renderClaimButton("cashuAtoken", {
+      orderId: "order-1",
+      buyerPubkey: "buyer-nostr-pubkey",
+      sellerPubkey: "seller-nostr-pubkey",
+    });
+
+    await screen.findByTestId("p2pk-detected");
+    expect(
+      await screen.findByRole("button", { name: /Claim Refund/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Dispute in Progress/i })
+    ).not.toBeInTheDocument();
+  });
+
+  test("marks seller escrow disputed from the public dispute event when the direct DM is unavailable", async () => {
+    mockParseP2PKProofSet.mockReturnValue({ p2pk: mockSellerMultisigP2PK });
+    mockFindIncomingEscrowPayload.mockResolvedValue(null);
+    mockFetchDisputeEvent.mockResolvedValue({ id: "dispute-event" });
+    mockParseDisputeEvent.mockReturnValue({
+      orderId: "order-1",
+      reason: "buyer opened dispute",
+      buyerPubkey: "buyer-nostr-pubkey",
+      sellerPubkey: "seller-nostr-pubkey",
+      arbiterPubkey: "arbiter-nostr-pubkey",
+      status: "open",
+      createdAt: 100,
+    });
+
+    renderClaimButton("cashuAtoken", {
+      cashuPubkey: SELLER_CASHU_PUBKEY,
+      userPubkey: "seller-nostr-pubkey",
+      orderId: "order-1",
+      buyerPubkey: "buyer-nostr-pubkey",
+      sellerPubkey: "seller-nostr-pubkey",
+    });
+
+    await screen.findByTestId("p2pk-detected");
+    const disputeButton = await screen.findByRole("button", {
+      name: /Dispute in Progress/i,
+    });
+    expect(disputeButton).toBeDisabled();
+    expect(screen.queryByText(/Request Payment/i)).not.toBeInTheDocument();
   });
 });

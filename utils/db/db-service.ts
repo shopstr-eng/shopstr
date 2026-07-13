@@ -505,7 +505,8 @@ export function getTableForKind(kind: number): string | null {
   if ([34550, 1111, 4550].includes(kind)) return "community_events";
 
   // Config
-  if ([10002, 10063, 30405, 30406].includes(kind)) return "config_events";
+  if ([10002, 10063, 30009, 30405, 30406].includes(kind))
+    return "config_events";
 
   return null;
 }

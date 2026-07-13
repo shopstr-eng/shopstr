@@ -53,7 +53,7 @@ export default function Landing() {
           cache: "no-store",
         });
         if (!response.ok) {
-          throw new Error(`Stats request failed with ${response.status}`);
+          return;
         }
 
         const data = await response.json();
@@ -63,9 +63,8 @@ export default function Landing() {
           setListingCount(data.listingCount);
         if (typeof data.sellerCount === "number")
           setSellerCount(data.sellerCount);
-      } catch (error) {
-        if (!isCurrent) return;
-        console.error("Failed to fetch marketplace stats:", error);
+      } catch {
+        // Stats are optional; resolveMarketplaceStats falls back to loaded products.
       }
     }
 
