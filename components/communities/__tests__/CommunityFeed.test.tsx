@@ -12,11 +12,12 @@ import {
   SignerContext,
 } from "../../utility-components/nostr-context-provider";
 import * as fetchService from "@/utils/nostr/fetch-service";
-import * as nostrHelper from "@/utils/nostr/nostr-helper-functions";
+import * as communityModule from "@/utils/nostr/community";
 import { Community, CommunityPost, NostrEvent } from "@/utils/types/types";
 
 jest.mock("@/utils/nostr/fetch-service");
 jest.mock("@/utils/nostr/nostr-helper-functions");
+jest.mock("@/utils/nostr/community");
 jest.mock("@braintree/sanitize-url", () => ({
   sanitizeUrl: jest.fn((url) => url),
 }));
@@ -27,7 +28,7 @@ jest.mock("../../utility-components/profile/profile-dropdown", () => ({
 }));
 
 const mockedFetchService = fetchService as jest.Mocked<typeof fetchService>;
-const mockedNostrHelper = nostrHelper as jest.Mocked<typeof nostrHelper>;
+const mockedCommunityModule = communityModule as jest.Mocked<typeof communityModule>;
 const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
 const consoleErrorSpy = jest
   .spyOn(console, "error")
@@ -203,7 +204,7 @@ describe("CommunityFeed", () => {
     });
 
     it("allows a user to open, type, submit, and cancel a reply", async () => {
-      mockedNostrHelper.createCommunityPost.mockResolvedValue({
+      mockedCommunityModule.createCommunityPost.mockResolvedValue({
         id: "new_reply_id",
         content: "This is my new reply!",
         tags: [],
@@ -234,7 +235,7 @@ describe("CommunityFeed", () => {
       fireEvent.click(submitButton);
 
       await waitFor(() => {
-        expect(mockedNostrHelper.createCommunityPost).toHaveBeenCalledWith(
+        expect(mockedCommunityModule.createCommunityPost).toHaveBeenCalledWith(
           expect.anything(),
           expect.anything(),
           mockCommunity,
@@ -279,7 +280,7 @@ describe("CommunityFeed", () => {
     });
 
     it("allows a moderator to create and submit a new post", async () => {
-      mockedNostrHelper.createCommunityPost.mockResolvedValue({
+      mockedCommunityModule.createCommunityPost.mockResolvedValue({
         id: "new_post_id",
         content: "A new announcement!",
         tags: [],
@@ -300,7 +301,7 @@ describe("CommunityFeed", () => {
       fireEvent.click(postButton);
 
       await waitFor(() => {
-        expect(mockedNostrHelper.createCommunityPost).toHaveBeenCalledWith(
+        expect(mockedCommunityModule.createCommunityPost).toHaveBeenCalledWith(
           expect.anything(),
           expect.anything(),
           mockCommunity,
@@ -313,7 +314,7 @@ describe("CommunityFeed", () => {
     });
 
     it("allows a moderator to approve a pending post and a pending reply", async () => {
-      mockedNostrHelper.approveCommunityPost.mockResolvedValue({
+      mockedCommunityModule.approveCommunityPost.mockResolvedValue({
         id: "new_approval_event",
         pubkey: moderatorPubkey,
       } as any);
@@ -326,7 +327,7 @@ describe("CommunityFeed", () => {
       fireEvent.click(approveButtons[0]!);
 
       await waitFor(() => {
-        expect(mockedNostrHelper.approveCommunityPost).toHaveBeenCalledWith(
+        expect(mockedCommunityModule.approveCommunityPost).toHaveBeenCalledWith(
           expect.anything(),
           expect.anything(),
           expect.objectContaining({ id: mockPendingPost.id }),
@@ -338,7 +339,7 @@ describe("CommunityFeed", () => {
       fireEvent.click(approveButtons[1]!);
 
       await waitFor(() => {
-        expect(mockedNostrHelper.approveCommunityPost).toHaveBeenCalledWith(
+        expect(mockedCommunityModule.approveCommunityPost).toHaveBeenCalledWith(
           expect.anything(),
           expect.anything(),
           expect.objectContaining({ id: mockPendingReply.id }),
@@ -348,7 +349,7 @@ describe("CommunityFeed", () => {
     });
 
     it("allows a moderator to retract their own approval", async () => {
-      mockedNostrHelper.retractApproval.mockResolvedValue(undefined as any);
+      mockedCommunityModule.retractApproval.mockResolvedValue(undefined as any);
       renderComponent(moderatorPubkey);
 
       const retractButtons = await screen.findAllByRole("button", {
@@ -357,7 +358,7 @@ describe("CommunityFeed", () => {
       fireEvent.click(retractButtons[0]!);
 
       await waitFor(() => {
-        expect(mockedNostrHelper.retractApproval).toHaveBeenCalledWith(
+        expect(mockedCommunityModule.retractApproval).toHaveBeenCalledWith(
           expect.anything(),
           expect.anything(),
           mockApprovedPost.approvalEventId,
@@ -388,7 +389,7 @@ describe("CommunityFeed", () => {
 
   describe("Error Handling", () => {
     it("handles failure when creating a post", async () => {
-      mockedNostrHelper.createCommunityPost.mockRejectedValue(
+      mockedCommunityModule.createCommunityPost.mockRejectedValue(
         new Error("Post failed")
       );
       renderComponent(moderatorPubkey);
@@ -409,7 +410,7 @@ describe("CommunityFeed", () => {
     });
 
     it("handles failure when submitting a reply", async () => {
-      mockedNostrHelper.createCommunityPost.mockRejectedValue(
+      mockedCommunityModule.createCommunityPost.mockRejectedValue(
         new Error("Reply failed")
       );
       renderComponent(regularUserPubkey);
@@ -432,7 +433,7 @@ describe("CommunityFeed", () => {
     });
 
     it("handles failure when approving a post", async () => {
-      mockedNostrHelper.approveCommunityPost.mockRejectedValue(
+      mockedCommunityModule.approveCommunityPost.mockRejectedValue(
         new Error("Approval failed")
       );
       renderComponent(moderatorPubkey);
@@ -453,7 +454,7 @@ describe("CommunityFeed", () => {
     });
 
     it("handles failure when retracting approval", async () => {
-      mockedNostrHelper.retractApproval.mockRejectedValue(
+      mockedCommunityModule.retractApproval.mockRejectedValue(
         new Error("Retract failed")
       );
       renderComponent(moderatorPubkey);
