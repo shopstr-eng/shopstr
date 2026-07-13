@@ -313,4 +313,37 @@ describe("/api/arbiter/rule", () => {
     );
     expect(res.statusCode).toBe(200);
   });
+
+  it("does not leak internal ruling errors to the client", async () => {
+    const errorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    verifyNip98RequestMock.mockResolvedValue({
+      ok: true,
+      pubkey: "arbiter-nostr-pubkey",
+    });
+    createPartialRedemptionMock.mockRejectedValue(
+      new Error("mint backend private detail")
+    );
+
+    const req = {
+      method: "POST",
+      headers: { authorization: "Nostr signed-event" },
+      body: {
+        orderId: "order-1",
+        token: "cashuAtoken",
+        rulingFor: "buyer",
+      },
+    } as any;
+    const res = createResponse();
+
+    try {
+      await handler(req, res as any);
+    } finally {
+      errorSpy.mockRestore();
+    }
+
+    expect(res.statusCode).toBe(500);
+    expect(res.jsonBody).toEqual({ error: "Ruling failed" });
+  });
 });

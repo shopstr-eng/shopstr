@@ -190,8 +190,6 @@ export default async function handler(
     return res.status(200).json({ success: true });
   } catch (error) {
     console.error("Arbiter ruling failed:", error);
-    return res.status(500).json({
-      error: error instanceof Error ? error.message : "Ruling failed",
-    });
+    return res.status(500).json({ error: "Ruling failed" });
   }
 }

@@ -62,6 +62,14 @@ function getDatabaseUrl(dbName: string): string {
   return `postgres://shopstr:shopstr@${sharedPostgresHost}:${sharedPostgresPort}/${dbName}`;
 }
 
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
+}
+
 function quoteIdentifier(identifier: string): string {
   return `"${identifier.replace(/"/g, '""')}"`;
 }
@@ -125,7 +133,9 @@ async function withPostgresDbService<T>(
 ): Promise<T> {
   return withPostgresTestContainer(async (databaseUrl) => {
     const prev = process.env.DATABASE_URL;
+    const prevAutoInit = process.env.SHOPSTR_DB_AUTO_INIT_IN_TESTS;
     process.env.DATABASE_URL = databaseUrl;
+    process.env.SHOPSTR_DB_AUTO_INIT_IN_TESTS = "1";
 
     try {
       let result: T | undefined;
@@ -143,7 +153,8 @@ async function withPostgresDbService<T>(
 
       return result as T;
     } finally {
-      process.env.DATABASE_URL = prev;
+      restoreEnv("DATABASE_URL", prev);
+      restoreEnv("SHOPSTR_DB_AUTO_INIT_IN_TESTS", prevAutoInit);
     }
   });
 }
@@ -219,7 +230,9 @@ async function withLegacyPostgresDbService<T>(
 ): Promise<T> {
   return withPostgresTestContainer(async (databaseUrl) => {
     const prev = process.env.DATABASE_URL;
+    const prevAutoInit = process.env.SHOPSTR_DB_AUTO_INIT_IN_TESTS;
     process.env.DATABASE_URL = databaseUrl;
+    process.env.SHOPSTR_DB_AUTO_INIT_IN_TESTS = "1";
 
     try {
       const { Pool } = await import("pg");
@@ -284,10 +297,12 @@ async function withLegacyPostgresDbService<T>(
 
         return result as T;
       } finally {
-        process.env.DATABASE_URL = prev;
+        restoreEnv("DATABASE_URL", prev);
+        restoreEnv("SHOPSTR_DB_AUTO_INIT_IN_TESTS", prevAutoInit);
       }
     } catch (error) {
-      process.env.DATABASE_URL = prev;
+      restoreEnv("DATABASE_URL", prev);
+      restoreEnv("SHOPSTR_DB_AUTO_INIT_IN_TESTS", prevAutoInit);
       throw error;
     }
   });
@@ -996,7 +1011,7 @@ describe("db-service helpers", () => {
           }),
         ]);
 
-        expect(pool.connect).toHaveBeenCalledTimes(3);
+        expect(pool.connect).toHaveBeenCalledTimes(2);
         expect(insertAttempts).toBe(2);
       } finally {
         if (mod) {

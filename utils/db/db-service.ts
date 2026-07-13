@@ -11,8 +11,13 @@ let initializeTablesPromise: Promise<void> | null = null;
 let cacheQueue: Promise<void> = Promise.resolve();
 
 function shouldAwaitTableInitialization(): boolean {
+  return shouldAutoInitializeTables();
+}
+
+function shouldAutoInitializeTables(): boolean {
   return (
-    process.env.NODE_ENV !== "test" || process.env.RUN_TESTCONTAINERS === "1"
+    process.env.NODE_ENV !== "test" ||
+    process.env.SHOPSTR_DB_AUTO_INIT_IN_TESTS === "1"
   );
 }
 
@@ -204,7 +209,11 @@ export function getDbPool(): Pool {
     });
 
     // Auto-create tables on first connection (only once)
-    if (!tablesInitialized && !initializingTables) {
+    if (
+      shouldAutoInitializeTables() &&
+      !tablesInitialized &&
+      !initializingTables
+    ) {
       ensureTablesInitialized().catch((error) => {
         console.error("Failed to initialize database tables:", error);
       });

@@ -5,6 +5,7 @@ import {
   getPublicKey,
   nip19,
   nip44,
+  type UnsignedEvent,
 } from "nostr-tools";
 import { hexToBytes } from "@noble/hashes/utils.js";
 import { NostrEvent } from "@/utils/types/types";
@@ -62,7 +63,7 @@ export async function sendServerGiftWrappedDm(params: {
   };
   const rumor = {
     ...rumorBare,
-    id: getEventHash(rumorBare as any),
+    id: getEventHash(rumorBare as UnsignedEvent),
     sig: "",
   };
 
