@@ -22,6 +22,14 @@ const P2PK_DISALLOWED_MINT_REASON =
   "This mint is not allowed for P2PK escrow checkout.";
 const P2PK_INPUT_FEE_REASON =
   "This mint charges input fees, so P2PK escrow checkout is blocked for now.";
+const P2PK_SINGLE_USE_TAGS = new Set([
+  "sigflag",
+  "pubkeys",
+  "n_sigs",
+  "locktime",
+  "refund",
+  "n_sigs_refund",
+]);
 
 export function normalizeCashuPubkey(pubkey?: string | null): string | null {
   if (!pubkey) return null;
@@ -423,6 +431,12 @@ export function parseP2PK(proof: Proof): ParsedP2PK | null {
     if (!pubkey) return null;
 
     const tags = getTags(proof.secret) as P2PKTag[];
+    const seenTags = new Set<string>();
+    for (const tag of tags) {
+      if (!P2PK_SINGLE_USE_TAGS.has(tag[0])) continue;
+      if (seenTags.has(tag[0])) return null;
+      seenTags.add(tag[0]);
+    }
 
     const locktime = getTagInt(proof.secret, "locktime") ?? 0;
 
@@ -453,6 +467,18 @@ export function parseP2PK(proof: Proof): ParsedP2PK | null {
 
     // parse nSigs for multisig threshold
     const nSigs = getTagInt(proof.secret, "n_sigs") ?? undefined;
+    if (seenTags.has("n_sigs")) {
+      if (nSigs === undefined || !Number.isInteger(nSigs)) return null;
+      if (nSigs <= 0 || nSigs > additionalPubkeys.length + 1) return null;
+    }
+
+    const nSigsRefund = getTagInt(proof.secret, "n_sigs_refund");
+    if (seenTags.has("n_sigs_refund")) {
+      if (nSigsRefund === undefined || !Number.isInteger(nSigsRefund)) {
+        return null;
+      }
+      if (nSigsRefund <= 0 || nSigsRefund > refundKeys.length) return null;
+    }
 
     return {
       pubkey,

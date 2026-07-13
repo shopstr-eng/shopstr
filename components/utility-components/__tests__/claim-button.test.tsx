@@ -29,6 +29,7 @@ import {
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import {
+  createPartialRedemption,
   combineAndRedeem,
   findIncomingEscrowPayload,
 } from "@/utils/cashu/dispute-redemption";
@@ -209,6 +210,7 @@ const mockConstructMessageGiftWrap =
   giftWrapHelpers.constructMessageGiftWrap as jest.Mock;
 const mockSendGiftWrappedMessageEvent =
   giftWrapHelpers.sendGiftWrappedMessageEvent as jest.Mock;
+const mockCreatePartialRedemption = createPartialRedemption as jest.Mock;
 const mockCombineAndRedeem = combineAndRedeem as jest.Mock;
 const mockFindIncomingEscrowPayload = findIncomingEscrowPayload as jest.Mock;
 const mockFetchDisputeEvent = fetchDisputeEvent as jest.Mock;
@@ -417,6 +419,10 @@ beforeEach(() => {
   mockFindIncomingEscrowPayload.mockResolvedValue(null);
   mockFetchDisputeEvent.mockResolvedValue(null);
   mockParseDisputeEvent.mockReturnValue(null);
+  mockCreatePartialRedemption.mockResolvedValue({
+    proofs: [mockP2PKProof],
+    partialSigs: ["own-sig"],
+  });
   mockCombineAndRedeem.mockResolvedValue({ success: true });
   // Default: plain token, no P2PK
   mockGetTokenMetadata.mockReturnValue({
@@ -1131,6 +1137,63 @@ describe("ClaimButton — dispute escrow", () => {
     expect(
       screen.queryByRole("button", { name: /Dispute in Progress/i })
     ).not.toBeInTheDocument();
+  });
+
+  test("winner claim combines the arbiter signature with the winner's own signature", async () => {
+    mockParseP2PKProofSet.mockReturnValue({ p2pk: mockBuyerMultisigP2PK });
+    mockFindIncomingEscrowPayload.mockImplementation(
+      async (
+        _nostr: unknown,
+        _signer: unknown,
+        _userPubkey: string,
+        _orderId: string,
+        type: string
+      ) =>
+        type === "escrow-arbiter-sig"
+          ? {
+              type: "escrow-arbiter-sig",
+              orderId: "order-1",
+              proofs: [mockP2PKProof],
+              arbiterSigs: ["arbiter-sig"],
+            }
+          : null
+    );
+    mockCreatePartialRedemption.mockResolvedValue({
+      proofs: [mockP2PKProof],
+      partialSigs: ["buyer-own-sig"],
+    });
+
+    renderClaimButton("cashuAtoken", {
+      orderId: "order-1",
+      buyerPubkey: "buyer-nostr-pubkey",
+      sellerPubkey: "seller-nostr-pubkey",
+    });
+
+    await screen.findByTestId("p2pk-detected");
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Claim Refund/i })
+    );
+
+    await waitFor(() =>
+      expect(mockCombineAndRedeem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          proofs: [mockP2PKProof],
+          sig1: ["arbiter-sig"],
+          sig2: ["buyer-own-sig"],
+          tokenMint: "https://testmint.com",
+          tokenAmount: 100,
+          nostr: mockNostr,
+          signer: mockSigner,
+        })
+      )
+    );
+    expect(mockCreatePartialRedemption).toHaveBeenCalledWith(
+      "cashuAtoken",
+      CASHU_PRIVKEY
+    );
+    expect(
+      await screen.findByText("Token successfully claimed!")
+    ).toBeInTheDocument();
   });
 
   test("marks seller escrow disputed from the public dispute event when the direct DM is unavailable", async () => {

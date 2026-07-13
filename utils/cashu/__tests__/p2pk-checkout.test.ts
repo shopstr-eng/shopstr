@@ -654,6 +654,27 @@ describe("p2pk-checkout", () => {
         invalidReason: "Token contains inconsistent P2PK proof locks.",
       });
     });
+
+    it("rejects malformed P2PK proofs with duplicate spending-condition tags", () => {
+      const proof = buildP2pkProof({
+        pubkeys: [BUYER_CASHU_PUBKEY, ARBITER_CASHU_PUBKEY],
+        nSigs: 2,
+      });
+      const [, secret] = JSON.parse(proof.secret);
+      secret.tags.push(["n_sigs", "1"]);
+      proof.secret = JSON.stringify(["P2PK", secret]);
+
+      expect(parseP2PK(proof)).toBeNull();
+    });
+
+    it("rejects malformed P2PK proofs whose n_sigs exceeds available locktime keys", () => {
+      const proof = buildP2pkProof({
+        pubkeys: [BUYER_CASHU_PUBKEY],
+        nSigs: 3,
+      });
+
+      expect(parseP2PK(proof)).toBeNull();
+    });
   });
 
   describe("getArbiterPubkey", () => {
