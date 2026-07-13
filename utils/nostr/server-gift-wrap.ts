@@ -39,9 +39,15 @@ export async function sendServerGiftWrappedDm(params: {
   recipientPubkey: string;
   payload: unknown;
   relayManager?: McpRelayManager;
+  waitForRelayPublish?: boolean;
 }): Promise<void> {
-  const { senderPrivkeyHexOrNsec, recipientPubkey, payload, relayManager } =
-    params;
+  const {
+    senderPrivkeyHexOrNsec,
+    recipientPubkey,
+    payload,
+    relayManager,
+    waitForRelayPublish = true,
+  } = params;
 
   const senderPrivkeyBytes = toPrivkeyBytes(senderPrivkeyHexOrNsec);
   const senderPubkey = getPublicKey(senderPrivkeyBytes);
@@ -97,27 +103,40 @@ export async function sendServerGiftWrappedDm(params: {
   await cacheEvent(giftWrap);
 
   const manager = relayManager || new McpRelayManager();
-  try {
-    await Promise.race([
-      manager.publish(giftWrap),
-      new Promise<void>((_, reject) =>
-        setTimeout(() => reject(new Error("Relay publish timeout")), 21000)
-      ),
-    ]);
-  } catch (error) {
-    // The event is already durably cached via cacheEvent above; a relay
-    // fanout failure here is a soft degradation, not data loss. (Unlike
-    // McpNostrSigner's signAndPublishEvent, we don't call
-    // trackFailedRelayPublish: it does fetch("/api/db/track-failed-publish")
-    // with a relative URL, which is browser-only and would just fail again
-    // in this server context.)
-    console.warn(
-      "Arbiter DM relay publish timed out or failed, but event is saved to database:",
-      error
-    );
-  } finally {
-    if (!relayManager) {
-      manager.close();
+  const publish = async () => {
+    try {
+      await Promise.race([
+        manager.publish(giftWrap),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error("Relay publish timeout")), 21000)
+        ),
+      ]);
+    } catch (error) {
+      // The event is already durably cached via cacheEvent above; a relay
+      // fanout failure here is a soft degradation, not data loss. (Unlike
+      // McpNostrSigner's signAndPublishEvent, we don't call
+      // trackFailedRelayPublish: it does fetch("/api/db/track-failed-publish")
+      // with a relative URL, which is browser-only and would just fail again
+      // in this server context.)
+      console.warn(
+        "Arbiter DM relay publish timed out or failed, but event is saved to database:",
+        error
+      );
+    } finally {
+      if (!relayManager) {
+        manager.close();
+      }
     }
+  };
+
+  if (!waitForRelayPublish) {
+    void publish();
+    return;
+  }
+
+  try {
+    await publish();
+  } catch {
+    // publish() handles all relay failures.
   }
 }

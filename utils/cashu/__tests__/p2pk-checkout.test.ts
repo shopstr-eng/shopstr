@@ -4,6 +4,7 @@ import {
   getArbiterPubkey,
   getBuyerReclaimKeys,
   getP2pkCheckoutPolicyError,
+  isP2pkMintAllowlistConfigured,
   isP2pkMintAllowed,
   mintInfoSupportsP2pk,
   mintKeysetsHaveZeroInputFees,
@@ -132,30 +133,31 @@ describe("p2pk-checkout", () => {
       ).toBeUndefined();
     });
 
-    it("uses the seller profile pubkey as the locked redeem path", () => {
+    it("uses the seller profile pubkey as the primary locked redeem path", () => {
       const outputConfig = buildP2pkOutputConfig(
         sellerP2pk,
         undefined,
         BUYER_CASHU_PUBKEY
       );
 
-      expect(outputConfig?.send.options.pubkey).toBe(
+      expect(outputConfig?.send.options.pubkey[0]).toBe(
         NORMALIZED_SELLER_CASHU_PUBKEY
       );
     });
 
-    it("locks to the buyer and arbiter as additional pubkeys with a 2-of-3 threshold", () => {
+    it("builds cashu-ts 2-of-3 lock options for seller, buyer, and arbiter", () => {
       const outputConfig = buildP2pkOutputConfig(
         sellerP2pk,
         undefined,
         BUYER_CASHU_PUBKEY
       );
 
-      expect(outputConfig?.send.options.pubkeys).toEqual([
+      expect(outputConfig?.send.options.pubkey).toEqual([
+        NORMALIZED_SELLER_CASHU_PUBKEY,
         BUYER_CASHU_PUBKEY,
         NORMALIZED_ARBITER_CASHU_PUBKEY,
       ]);
-      expect(outputConfig?.send.options.nSigs).toBe(2);
+      expect(outputConfig?.send.options.requiredSignatures).toBe(2);
     });
 
     it("sets refundKeys from profile reclaim keys plus the buyer Cashu pubkey", () => {
@@ -220,6 +222,7 @@ describe("p2pk-checkout", () => {
     });
 
     it("allows P2PK mints by default when no allowlist is configured", () => {
+      expect(isP2pkMintAllowlistConfigured()).toBe(false);
       expect(isP2pkMintAllowed("https://mint.example")).toBe(true);
     });
 
@@ -227,6 +230,7 @@ describe("p2pk-checkout", () => {
       process.env.NEXT_PUBLIC_P2PK_ESCROW_ALLOWED_MINTS =
         "https://cashu.example.com, https://mint.example/path/";
 
+      expect(isP2pkMintAllowlistConfigured()).toBe(true);
       expect(isP2pkMintAllowed("https://cashu.example.com/")).toBe(true);
       expect(isP2pkMintAllowed("https://mint.example/path")).toBe(true);
       expect(isP2pkMintAllowed("https://other.example")).toBe(false);
@@ -504,9 +508,12 @@ describe("p2pk-checkout", () => {
         send: {
           type: "p2pk",
           options: expect.objectContaining({
-            pubkey: NORMALIZED_SELLER_CASHU_PUBKEY,
-            pubkeys: [BUYER_CASHU_PUBKEY, NORMALIZED_ARBITER_CASHU_PUBKEY],
-            nSigs: 2,
+            pubkey: [
+              NORMALIZED_SELLER_CASHU_PUBKEY,
+              BUYER_CASHU_PUBKEY,
+              NORMALIZED_ARBITER_CASHU_PUBKEY,
+            ],
+            requiredSignatures: 2,
             refundKeys: [BUYER_CASHU_PUBKEY],
           }),
         },

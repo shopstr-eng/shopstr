@@ -109,6 +109,10 @@ function getP2pkMintAllowlist(): Set<string> | null {
   return new Set(allowedMints);
 }
 
+export function isP2pkMintAllowlistConfigured(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_P2PK_ESCROW_ALLOWED_MINTS?.trim());
+}
+
 export function isP2pkMintAllowed(mintUrl: string): boolean {
   const allowlist = getP2pkMintAllowlist();
   if (!allowlist) return true;
@@ -297,9 +301,8 @@ export function buildP2pkSwapOptions(
   buyerCashuPubkey?: string
 ):
   | {
-      pubkey: string;
-      pubkeys: string[];
-      nSigs: number;
+      pubkey: [string, string, string];
+      requiredSignatures: number;
       locktime: number;
       refundKeys: string[];
     }
@@ -320,12 +323,18 @@ export function buildP2pkSwapOptions(
   const locktimeOffsetSeconds = testLocktimeSeconds ?? days * 24 * 60 * 60;
 
   return {
-    pubkey: sellerPubkey, // primary (data field)
-    pubkeys: [normalizedBuyerPubkey, arbiterPubkey], // additional keys
-    nSigs: 2, // 2-of-3
+    pubkey: [sellerPubkey, normalizedBuyerPubkey, arbiterPubkey],
+    requiredSignatures: 2,
     locktime: Math.floor(Date.now() / 1000) + locktimeOffsetSeconds,
     refundKeys: buyerReclaimKeys,
   };
+}
+
+export function getPrimaryP2pkLockPubkey(
+  outputConfig: ReturnType<typeof buildP2pkOutputConfig>
+): string | undefined {
+  const pubkey = outputConfig?.send.options.pubkey;
+  return Array.isArray(pubkey) ? pubkey[0] : pubkey;
 }
 
 export function buildP2pkOutputConfig(

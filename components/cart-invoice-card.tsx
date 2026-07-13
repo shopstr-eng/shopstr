@@ -43,6 +43,7 @@ import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import {
+  getPrimaryP2pkLockPubkey,
   isSellerP2pkEscrowActive,
   resolveP2pkCheckoutOutputConfig,
 } from "@/utils/cashu/p2pk-checkout";
@@ -1644,7 +1645,7 @@ export default function CartInvoiceCard({
           mint: mints[0]!,
           token: sellerToken,
           amount: sellerAmount,
-          sellerPubkey: p2pkOutputConfig.send.options.pubkey,
+          sellerPubkey: getPrimaryP2pkLockPubkey(p2pkOutputConfig)!,
           locktime: p2pkOutputConfig.send.options.locktime,
           refundKeys: p2pkOutputConfig.send.options.refundKeys,
           createdAt: Math.floor(Date.now() / 1000),

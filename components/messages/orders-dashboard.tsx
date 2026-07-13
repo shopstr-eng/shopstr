@@ -104,6 +104,7 @@ interface OrderData {
   paymentTag?: string;
   paymentProof?: string;
   subject?: string;
+  hasP2pkEscrowRecord?: boolean;
   reviewRating?: number;
   isSale?: boolean;
   currency?: string;
@@ -146,6 +147,7 @@ const OrdersDashboard = ({
   const randomNsecForSenderRef = useRef<string>("");
   const randomNpubForReceiverRef = useRef<string>("");
   const randomNsecForReceiverRef = useRef<string>("");
+  const failedStatusPersistKeysRef = useRef<Set<string>>(new Set());
 
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedThumb, setSelectedThumb] = useState<"up" | "down" | null>(
@@ -641,9 +643,12 @@ const OrdersDashboard = ({
         const order = consolidatedOrders.find(
           (item) => item.orderId === escrowRecord.orderId
         );
-        if (order && !order.paymentToken) {
-          order.paymentToken = escrowRecord.token;
-          order.paymentMethod = order.paymentMethod || "ecash";
+        if (order) {
+          order.hasP2pkEscrowRecord = true;
+          if (!order.paymentToken) {
+            order.paymentToken = escrowRecord.token;
+            order.paymentMethod = order.paymentMethod || "ecash";
+          }
         }
       }
       consolidatedOrders.sort((a, b) => b.timestamp - a.timestamp);
@@ -698,7 +703,16 @@ const OrdersDashboard = ({
         pending: 1,
       };
       for (const order of consolidatedOrders) {
-        if (order.status && order.orderId) {
+        if (order.status && order.orderId && signer) {
+          const statusPersistKey = `${order.orderId}:${
+            order.messageEvent?.id ?? ""
+          }:${order.status}`;
+          if (failedStatusPersistKeysRef.current.has(statusPersistKey)) {
+            continue;
+          }
+          if (order.subject === "order-receipt" && order.hasP2pkEscrowRecord) {
+            continue;
+          }
           const currentPriority = statusPriorityForPersist[order.status] || 0;
           const cachedStatusValue = order.statusLookupKeys
             .map((lookupKey) => cachedStatuses[lookupKey])
@@ -726,6 +740,12 @@ const OrdersDashboard = ({
                     Authorization: authHeader,
                   },
                   body,
+                }).then((response) => {
+                  if (response.status === 404) {
+                    failedStatusPersistKeysRef.current.add(statusPersistKey);
+                  } else if (!response.ok) {
+                    console.error("Failed to save order status");
+                  }
                 })
               )
               .catch((err) =>
@@ -1717,11 +1737,9 @@ const OrdersDashboard = ({
                           })()}
                         </td>
                         <td className="px-4 py-4 text-sm">
-                          {order.subject === "order-receipt" ? (
-                            <span className="text-green-600 dark:text-green-400">
-                              Payment Sent
-                            </span>
-                          ) : order.paymentToken ? (
+                          {order.paymentToken &&
+                          (order.subject !== "order-receipt" ||
+                            order.hasP2pkEscrowRecord) ? (
                             <ClaimButton
                               token={order.paymentToken}
                               orderId={order.orderId}
@@ -1731,6 +1749,10 @@ const OrdersDashboard = ({
                                 (order.isSale ? userPubkey : undefined)
                               }
                             />
+                          ) : order.subject === "order-receipt" ? (
+                            <span className="text-green-600 dark:text-green-400">
+                              Payment Sent
+                            </span>
                           ) : (
                             <span className="text-gray-600 dark:text-gray-400">
                               {order.paymentMethod}

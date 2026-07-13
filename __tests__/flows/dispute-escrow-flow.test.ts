@@ -63,6 +63,12 @@ jest.mock("@/utils/nostr/dispute-records", () => {
   };
 });
 
+jest.mock("@/utils/nostr/server-dispute-records", () => ({
+  fetchCachedDisputeEvent: jest.fn().mockImplementation(async () => {
+    return mockRelayDisputeEvents.at(-1) ?? null;
+  }),
+}));
+
 jest.mock("@/utils/mcp/nostr-signing", () => ({
   McpNostrSigner: jest.fn().mockImplementation(() => ({
     getPubKey: () => "arbiter-nostr-pubkey",
@@ -120,6 +126,9 @@ function createResponse() {
 }
 
 function buildLockedProof(outputConfig: any): Proof {
+  const [primaryPubkey, ...additionalPubkeys] =
+    outputConfig.send.options.pubkey;
+
   return {
     id: "keyset-1",
     amount: 21,
@@ -128,12 +137,12 @@ function buildLockedProof(outputConfig: any): Proof {
       "P2PK",
       {
         nonce: "proof-1",
-        data: outputConfig.send.options.pubkey,
+        data: primaryPubkey,
         tags: [
           ["locktime", String(outputConfig.send.options.locktime)],
           ["refund", ...outputConfig.send.options.refundKeys],
-          ["pubkeys", ...outputConfig.send.options.pubkeys],
-          ["n_sigs", String(outputConfig.send.options.nSigs)],
+          ["pubkeys", ...additionalPubkeys],
+          ["n_sigs", String(outputConfig.send.options.requiredSignatures)],
         ],
       },
     ]),
@@ -153,6 +162,7 @@ describe("buyer/seller/arbiter dispute escrow flow", () => {
       ...originalEnv,
       NEXT_PUBLIC_ARBITER_PUBKEY: ARBITER_CASHU_PUBKEY,
       NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY: ARBITER_NOSTR_PUBKEY,
+      NEXT_PUBLIC_P2PK_ESCROW_ALLOWED_MINTS: "https://mint.example",
       ARBITER_NOSTR_PRIVKEY: "arbiter-nostr-privkey",
       ARBITER_PRIVKEY: "arbiter-cashu-privkey",
     };
@@ -188,9 +198,12 @@ describe("buyer/seller/arbiter dispute escrow flow", () => {
       send: {
         type: "p2pk",
         options: expect.objectContaining({
-          pubkey: NORMALIZED_SELLER_CASHU_PUBKEY,
-          pubkeys: [BUYER_CASHU_PUBKEY, NORMALIZED_ARBITER_CASHU_PUBKEY],
-          nSigs: 2,
+          pubkey: [
+            NORMALIZED_SELLER_CASHU_PUBKEY,
+            BUYER_CASHU_PUBKEY,
+            NORMALIZED_ARBITER_CASHU_PUBKEY,
+          ],
+          requiredSignatures: 2,
           refundKeys: [BUYER_CASHU_PUBKEY],
         }),
       },

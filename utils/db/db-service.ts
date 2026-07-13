@@ -5,9 +5,16 @@ import { findListingBySlug } from "../url-slugs";
 let pool: Pool | null = null;
 let tablesInitialized = false;
 let initializingTables = false;
+let initializeTablesPromise: Promise<void> | null = null;
 
 // Queue for serializing cache operations
 let cacheQueue: Promise<void> = Promise.resolve();
+
+function shouldAwaitTableInitialization(): boolean {
+  return (
+    process.env.NODE_ENV !== "test" || process.env.RUN_TESTCONTAINERS === "1"
+  );
+}
 
 export async function ensureFailedRelayPublishesTable(
   client: PoolClient
@@ -53,7 +60,7 @@ export async function trackFailedRelayPublishRecord({
   event: NostrEvent;
   relays: string[];
 }): Promise<boolean> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -93,7 +100,7 @@ export async function trackFailedRelayPublishRecord({
 }
 
 export async function getFailedRelayPublishesForOwner(ownerPubkey: string) {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -136,7 +143,7 @@ export async function clearFailedRelayPublishForOwner(
   eventId: string,
   ownerPubkey: string
 ): Promise<void> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -156,7 +163,7 @@ export async function incrementFailedRelayPublishRetryForOwner(
   eventId: string,
   ownerPubkey: string
 ): Promise<void> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -198,14 +205,35 @@ export function getDbPool(): Pool {
 
     // Auto-create tables on first connection (only once)
     if (!tablesInitialized && !initializingTables) {
-      initializingTables = true;
-      initializeTables().catch((error) => {
+      ensureTablesInitialized().catch((error) => {
         console.error("Failed to initialize database tables:", error);
-        initializingTables = false;
       });
     }
   }
   return pool;
+}
+
+async function ensureTablesInitialized(): Promise<void> {
+  if (tablesInitialized) return;
+
+  if (!initializeTablesPromise) {
+    initializingTables = true;
+    initializeTablesPromise = initializeTables().finally(() => {
+      initializingTables = false;
+      if (!tablesInitialized) {
+        initializeTablesPromise = null;
+      }
+    });
+  }
+
+  await initializeTablesPromise;
+}
+
+async function getInitializedDbPool(): Promise<Pool> {
+  if (shouldAwaitTableInitialization()) {
+    await ensureTablesInitialized();
+  }
+  return getDbPool();
 }
 
 // Auto-create all tables if they don't exist
@@ -335,7 +363,7 @@ async function initializeTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_community_events_pubkey ON community_events(pubkey);
       CREATE INDEX IF NOT EXISTS idx_community_events_kind ON community_events(kind);
 
-      -- Relay/config events (kind 10002 - relays, kind 10063 - blossom servers, kind 30405 - cart/saved, kind 30406 - buyer P2PK escrow records)
+      -- Relay/config events (kind 10002 - relays, kind 10063 - blossom servers, kind 30009 - dispute records, kind 30405 - cart/saved, kind 30406 - buyer P2PK escrow records)
       CREATE TABLE IF NOT EXISTS config_events (
           id TEXT PRIMARY KEY,
           pubkey TEXT NOT NULL,
@@ -345,7 +373,7 @@ async function initializeTables(): Promise<void> {
           content TEXT NOT NULL,
           sig TEXT NOT NULL,
           cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT config_events_kind_check CHECK (kind IN (10002, 10063, 30405, 30406))
+          CONSTRAINT config_events_kind_check CHECK (kind IN (10002, 10063, 30009, 30405, 30406))
       );
 
       CREATE INDEX IF NOT EXISTS idx_config_events_pubkey ON config_events(pubkey);
@@ -439,7 +467,7 @@ async function initializeTables(): Promise<void> {
           ALTER TABLE config_events DROP CONSTRAINT config_events_kind_check;
         END IF;
         ALTER TABLE config_events
-          ADD CONSTRAINT config_events_kind_check CHECK (kind IN (10002, 10063, 30405, 30406));
+          ADD CONSTRAINT config_events_kind_check CHECK (kind IN (10002, 10063, 30009, 30405, 30406));
 
         IF NOT EXISTS (
           SELECT 1 FROM information_schema.columns 
@@ -469,10 +497,8 @@ async function initializeTables(): Promise<void> {
     await ensureFailedRelayPublishesTable(client);
 
     tablesInitialized = true;
-    initializingTables = false;
   } catch (error) {
     console.error("Failed to initialize tables:", error);
-    initializingTables = false;
     throw error;
   } finally {
     if (client) {
@@ -535,7 +561,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
     return;
   }
 
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -697,7 +723,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
     }
   }
 
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -870,7 +896,7 @@ export async function fetchCachedEvents(
   const table = getTableForKind(kind);
   if (!table) return [];
 
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -935,7 +961,7 @@ export async function deleteCachedEvent(
   const table = getTableForKind(kind);
   if (!table) return;
 
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -956,7 +982,7 @@ export async function deleteCachedEventsByIds(
 ): Promise<void> {
   if (eventIds.length === 0) return;
 
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   // All tables that can store events
@@ -1042,7 +1068,7 @@ export async function cachedEventsBelongToPubkey(
 
   const uniqueEventIds = Array.from(new Set(eventIds));
 
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   const eventTables = [
@@ -1096,7 +1122,7 @@ export async function fetchAllProductsFromDb(
   limit = 500,
   offset = 0
 ): Promise<NostrEvent[]> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -1163,7 +1189,7 @@ export async function fetchRelevantReportsFromDb(
     return [];
   }
 
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -1227,7 +1253,7 @@ export async function fetchRelevantReportsFromDb(
 export async function fetchAllMessagesFromDb(
   pubkey?: string
 ): Promise<(NostrEvent & { is_read: boolean })[]> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -1273,7 +1299,7 @@ export async function markMessagesAsRead(
 ): Promise<void> {
   if (messageIds.length === 0) return;
 
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -1303,7 +1329,7 @@ export async function markMessagesAsRead(
 
 // Get unread message count for a user
 export async function getUnreadMessageCount(pubkey: string): Promise<number> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -1337,7 +1363,7 @@ export async function getOrderParticipants(orderId: string): Promise<{
   buyerPubkey: string | null;
   sellerPubkey: string | null;
 }> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -1396,7 +1422,7 @@ export async function updateOrderStatus(
   pubkey: string,
   messageId?: string
 ): Promise<void> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -1449,7 +1475,7 @@ export async function getOrderStatuses(
 ): Promise<Record<string, string>> {
   if (orderIds.length === 0) return {};
 
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -1483,7 +1509,7 @@ export async function getOrderStatuses(
 
 // Fetch all profiles from database (both user and shop profiles)
 export async function fetchAllProfilesFromDb(): Promise<NostrEvent[]> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -1517,7 +1543,7 @@ export async function fetchAllProfilesFromDb(): Promise<NostrEvent[]> {
 export async function fetchAllWalletEventsFromDb(
   pubkey: string
 ): Promise<NostrEvent[]> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -1581,7 +1607,7 @@ export async function addDiscountCode(
   discountPercentage: number,
   expiration?: number
 ): Promise<void> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -1613,7 +1639,7 @@ export async function getDiscountCodesByPubkey(pubkey: string): Promise<
     expiration: number | null;
   }>
 > {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -1642,7 +1668,7 @@ export async function validateDiscountCode(
   code: string,
   pubkey: string
 ): Promise<{ valid: boolean; discount_percentage?: number }> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -1679,7 +1705,7 @@ export async function deleteDiscountCode(
   code: string,
   pubkey: string
 ): Promise<void> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
 
   try {
@@ -1703,7 +1729,7 @@ export async function fetchMarketplaceStats(): Promise<{
   listingCount: number;
   sellerCount: number;
 }> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
   try {
     client = await dbPool.connect();
@@ -1747,7 +1773,7 @@ export function profileNameToSlug(name: string): string {
 export async function fetchProductByIdFromDb(
   id: string
 ): Promise<NostrEvent | null> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
   try {
     client = await dbPool.connect();
@@ -1779,7 +1805,7 @@ export async function fetchProductByDTagAndPubkey(
   dTag: string,
   pubkey: string
 ): Promise<NostrEvent | null> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
   try {
     client = await dbPool.connect();
@@ -1816,7 +1842,7 @@ export async function fetchProductByDTagAndPubkey(
 export async function fetchProductByListingSlug(
   slug: string
 ): Promise<NostrEvent | null> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
   try {
     client = await dbPool.connect();
@@ -1882,7 +1908,7 @@ export async function fetchProductByListingSlug(
 export async function fetchShopProfileByPubkeyFromDb(
   pubkey: string
 ): Promise<NostrEvent | null> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
   try {
     client = await dbPool.connect();
@@ -1915,7 +1941,7 @@ export async function fetchShopProfileByPubkeyFromDb(
 export async function fetchProfilePubkeyByNameSlug(
   nameSlug: string
 ): Promise<string | null> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
   try {
     client = await dbPool.connect();
@@ -1978,7 +2004,7 @@ export async function fetchProfilePubkeyByNameSlug(
 export async function fetchShopPubkeyBySlug(
   slug: string
 ): Promise<string | null> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
   try {
     client = await dbPool.connect();
@@ -2000,7 +2026,7 @@ export async function fetchCommunityByPubkeyAndIdentifier(
   pubkey: string,
   identifier: string
 ): Promise<NostrEvent | null> {
-  const dbPool = getDbPool();
+  const dbPool = await getInitializedDbPool();
   let client;
   try {
     client = await dbPool.connect();

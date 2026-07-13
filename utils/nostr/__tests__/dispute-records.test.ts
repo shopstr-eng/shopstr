@@ -67,6 +67,19 @@ describe("publishDisputeEvent", () => {
 });
 
 describe("fetchDisputeEvents", () => {
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue([]),
+    }) as jest.Mock;
+  });
+
+  afterAll(() => {
+    global.fetch = originalFetch;
+  });
+
   it("deduplicates events by orderId (d tag), keeping the newest", async () => {
     const older = mkDisputeEvent({
       created_at: 100,
@@ -143,6 +156,36 @@ describe("fetchDisputeEvents", () => {
     });
 
     expect(result).toEqual([open]);
+  });
+
+  it("falls back to cached dispute events when relays miss them", async () => {
+    const cached = mkDisputeEvent({
+      created_at: 200,
+      tags: [
+        ["d", "order-1"],
+        ["p", "buyer-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+        ["status", "open"],
+      ],
+    });
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([]),
+    } as any;
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue([cached]),
+    });
+
+    const result = await fetchDisputeEvents({
+      nostr,
+      arbiterPubkey: "arbiter-pubkey",
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/db/fetch-disputes?arbiterPubkey=arbiter-pubkey"
+    );
+    expect(result).toEqual([cached]);
   });
 });
 

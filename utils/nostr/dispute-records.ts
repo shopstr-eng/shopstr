@@ -90,6 +90,37 @@ export async function publishDisputeEvent(params: {
   });
 }
 
+function isNostrEvent(value: unknown): value is NostrEvent {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Partial<NostrEvent>;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.pubkey === "string" &&
+    typeof candidate.created_at === "number" &&
+    candidate.kind === DISPUTE_EVENT_KIND &&
+    Array.isArray(candidate.tags) &&
+    typeof candidate.content === "string" &&
+    typeof candidate.sig === "string"
+  );
+}
+
+async function fetchCachedDisputeEvents(
+  arbiterPubkey: string
+): Promise<NostrEvent[]> {
+  try {
+    const response = await fetch(
+      `/api/db/fetch-disputes?arbiterPubkey=${encodeURIComponent(
+        arbiterPubkey
+      )}`
+    );
+    if (!response.ok) return [];
+    const events = await response.json();
+    return Array.isArray(events) ? events.filter(isNostrEvent) : [];
+  } catch {
+    return [];
+  }
+}
+
 function getDTag(event: NostrEvent): string | undefined {
   return event.tags.find((tag) => tag[0] === "d")?.[1];
 }
@@ -103,12 +134,15 @@ export async function fetchDisputeEvents(params: {
 }): Promise<NostrEvent[]> {
   const { nostr, arbiterPubkey } = params;
 
-  const events = await nostr.fetch([
-    { kinds: [DISPUTE_EVENT_KIND], "#p": [arbiterPubkey] },
+  const [relayEvents, cachedEvents] = await Promise.all([
+    nostr
+      .fetch([{ kinds: [DISPUTE_EVENT_KIND], "#p": [arbiterPubkey] }])
+      .catch(() => [] as NostrEvent[]),
+    fetchCachedDisputeEvents(arbiterPubkey),
   ]);
 
   const newestByOrderId = new Map<string, NostrEvent>();
-  for (const event of events) {
+  for (const event of [...relayEvents, ...cachedEvents]) {
     const orderId = getDTag(event);
     if (!orderId) continue;
     const existing = newestByOrderId.get(orderId);

@@ -716,7 +716,9 @@ export default function ClaimButton({
       decodedRandomPrivkeyForReceiver.data as Uint8Array,
       recipientPubkey
     );
-    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
+    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer, {
+      waitForRelayPublish: false,
+    });
   };
 
   const handleSellerRequestPayment = async () => {
@@ -823,15 +825,19 @@ export default function ClaimButton({
       // record is self-encrypted to the buyer's real Nostr identity, which
       // cashuPrivkey (a wallet-only key) has no relationship to.
       await updateDisputeStatusWithSigner(orderId, "open", signer, nostr);
+      setDisputeStatus("open");
+      setIsDisputeInProgress(true);
 
       const sellerPayload: EscrowDisputePayload = {
         type: "escrow-dispute",
         orderId,
         reason,
       };
-      await sendEscrowDm(sellerPubkey, sellerPayload);
 
       const arbiterPubkey = process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY;
+      const publishTasks: Promise<unknown>[] = [
+        sendEscrowDm(sellerPubkey, sellerPayload),
+      ];
       if (arbiterPubkey) {
         // The arbiter has no way to decrypt either party's self-encrypted
         // kind 30406 escrow record, so its copy of the DM also carries the
@@ -843,21 +849,34 @@ export default function ClaimButton({
           token,
           amount: tokenAmount,
         };
-        await sendEscrowDm(arbiterPubkey, arbiterPayload);
-        await publishDisputeEvent({
-          orderId,
-          reason,
-          nostr: nostr!,
-          signer,
-          buyerPubkey: userPubkey,
-          sellerPubkey,
-          arbiterPubkey,
-        });
+        publishTasks.push(
+          sendEscrowDm(arbiterPubkey, arbiterPayload),
+          publishDisputeEvent({
+            orderId,
+            reason,
+            nostr: nostr!,
+            signer,
+            buyerPubkey: userPubkey,
+            sellerPubkey,
+            arbiterPubkey,
+          })
+        );
       }
 
-      setDisputeStatus("open");
-      setIsDisputeInProgress(true);
+      const results = await Promise.allSettled(publishTasks);
+      const firstFailure = results.find(
+        (result): result is PromiseRejectedResult =>
+          result.status === "rejected"
+      );
+      if (firstFailure) {
+        console.warn(
+          "Failed to publish dispute notification",
+          firstFailure.reason
+        );
+      }
     } catch (error) {
+      setDisputeStatus("none");
+      setIsDisputeInProgress(false);
       setEscrowActionError(
         error instanceof Error ? error.message : String(error)
       );

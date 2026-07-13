@@ -11,6 +11,13 @@ const BROWSER_CORS_ERROR =
   "Mint does not allow browser wallet requests; use a mint with valid CORS headers.";
 const DISCOVERY_ERROR = "Could not validate mint discovery endpoints";
 
+function allowsLocalMintValidation(): boolean {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env.CASHU_MINT_VALIDATION_ALLOW_LOCAL === "true"
+  );
+}
+
 type ValidateMintSuccess = {
   ok: true;
   mintUrl: string;
@@ -100,7 +107,12 @@ function normalizeMintUrl(rawMintUrl: unknown): string | null {
   if (!["https:", "http:"].includes(parsed.protocol)) return null;
   if (parsed.username || parsed.password) return null;
   if (parsed.search || parsed.hash) return null;
-  if (parsed.port && !["80", "443"].includes(parsed.port)) return null;
+  if (
+    parsed.port &&
+    !["80", "443"].includes(parsed.port) &&
+    !allowsLocalMintValidation()
+  )
+    return null;
 
   const normalizedPath = parsed.pathname.replace(/\/+$/, "");
   return normalizedPath && normalizedPath !== "/"
@@ -288,7 +300,7 @@ export default async function handler(
     return res.status(400).json({ error: "Invalid mint URL" });
   }
 
-  if (!(await isSafePublicHostname(hostname))) {
+  if (!allowsLocalMintValidation() && !(await isSafePublicHostname(hostname))) {
     return res.status(400).json({ error: "Mint host is not allowed" });
   }
 

@@ -35,8 +35,10 @@ import {
 } from "@/utils/cashu/dispute-redemption";
 import {
   fetchDisputeEvent,
+  publishDisputeEvent,
   parseDisputeEvent,
 } from "@/utils/nostr/dispute-records";
+import { updateDisputeStatusWithSigner } from "@/utils/cashu/p2pk-escrow-records";
 
 jest.setTimeout(15000);
 
@@ -153,6 +155,11 @@ jest.mock("@/utils/nostr/dispute-records", () => ({
   parseDisputeEvent: jest.fn(),
 }));
 
+jest.mock("@/utils/cashu/p2pk-escrow-records", () => ({
+  ...jest.requireActual("@/utils/cashu/p2pk-escrow-records"),
+  updateDisputeStatusWithSigner: jest.fn(),
+}));
+
 jest.mock("next-themes", () => ({
   useTheme: () => ({ theme: "light" }),
 }));
@@ -214,7 +221,10 @@ const mockCreatePartialRedemption = createPartialRedemption as jest.Mock;
 const mockCombineAndRedeem = combineAndRedeem as jest.Mock;
 const mockFindIncomingEscrowPayload = findIncomingEscrowPayload as jest.Mock;
 const mockFetchDisputeEvent = fetchDisputeEvent as jest.Mock;
+const mockPublishDisputeEvent = publishDisputeEvent as jest.Mock;
 const mockParseDisputeEvent = parseDisputeEvent as jest.Mock;
+const mockUpdateDisputeStatusWithSigner =
+  updateDisputeStatusWithSigner as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
@@ -415,9 +425,11 @@ beforeEach(() => {
     id: "gift-wrap-event",
   });
   mockSendGiftWrappedMessageEvent.mockResolvedValue(undefined);
+  mockUpdateDisputeStatusWithSigner.mockResolvedValue(undefined);
   mockNostr.fetch.mockResolvedValue([]);
   mockFindIncomingEscrowPayload.mockResolvedValue(null);
   mockFetchDisputeEvent.mockResolvedValue(null);
+  mockPublishDisputeEvent.mockResolvedValue(undefined);
   mockParseDisputeEvent.mockReturnValue(null);
   mockCreatePartialRedemption.mockResolvedValue({
     proofs: [mockP2PKProof],
@@ -1102,6 +1114,49 @@ describe("ClaimButton — dispute escrow", () => {
       proofs: [mockP2PKProof],
     });
     MockCashuWallet.mockImplementation(() => makeMockWallet());
+  });
+
+  test("keeps buyer dispute open when escrow DMs only save locally", async () => {
+    const originalArbiterPubkey = process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY;
+    process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY = "arbiter-nostr-pubkey";
+    mockParseP2PKProofSet.mockReturnValue({ p2pk: mockBuyerMultisigP2PK });
+    mockSendGiftWrappedMessageEvent.mockRejectedValue(
+      new Error("relay timeout")
+    );
+
+    try {
+      renderClaimButton("cashuAtoken", {
+        orderId: "order-1",
+        buyerPubkey: "buyer-nostr-pubkey",
+        sellerPubkey: "seller-nostr-pubkey",
+      });
+
+      fireEvent.click(
+        await screen.findByRole("button", { name: /Open Dispute/i })
+      );
+
+      expect(
+        await screen.findByRole("button", { name: /Dispute in Progress/i })
+      ).toBeDisabled();
+      expect(mockUpdateDisputeStatusWithSigner).toHaveBeenCalledWith(
+        "order-1",
+        "open",
+        mockSigner,
+        mockNostr
+      );
+      await waitFor(() =>
+        expect(mockPublishDisputeEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            orderId: "order-1",
+            buyerPubkey: "user-pubkey",
+            sellerPubkey: "seller-nostr-pubkey",
+            arbiterPubkey: "arbiter-nostr-pubkey",
+          })
+        )
+      );
+    } finally {
+      process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY = originalArbiterPubkey;
+    }
   });
 
   test("shows winner claim action when arbiter resolution DM arrives during an open dispute", async () => {

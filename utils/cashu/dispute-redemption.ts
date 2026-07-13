@@ -6,8 +6,13 @@ import {
   signP2PKProof,
 } from "@cashu/cashu-ts";
 import { publishProofEvent } from "@/utils/nostr/nostr-helper-functions";
-import { NostrManager } from "@/utils/nostr/nostr-manager";
+import { NostrEvent, NostrManager } from "@/utils/nostr/nostr-manager";
 import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+import {
+  buildMessagesListProof,
+  buildSignedHttpRequestProofTemplate,
+  SIGNED_EVENT_HEADER,
+} from "@/utils/nostr/request-auth";
 
 export type EscrowPaymentRequestPayload = {
   type: "escrow-payment-request";
@@ -181,7 +186,58 @@ export async function findIncomingEscrowPayload<T extends EscrowPayload>(
   orderId: string,
   type: T["type"]
 ): Promise<T | null> {
-  const events = await nostr.fetch([{ kinds: [1059], "#p": [userPubkey] }]);
+  const relayEvents = await nostr.fetch([
+    { kinds: [1059], "#p": [userPubkey] },
+  ]);
+  const relayPayload = await findEscrowPayloadInEvents(
+    relayEvents,
+    signer,
+    orderId,
+    type
+  );
+  if (relayPayload) return relayPayload;
+
+  const cachedEvents = await fetchCachedGiftWrapEvents(userPubkey, signer);
+  return findEscrowPayloadInEvents(cachedEvents, signer, orderId, type);
+}
+
+async function fetchCachedGiftWrapEvents(
+  userPubkey: string,
+  signer: NostrSigner
+): Promise<NostrEvent[]> {
+  try {
+    const signedEvent = await signer.sign(
+      buildSignedHttpRequestProofTemplate(buildMessagesListProof(userPubkey))
+    );
+    const response = await fetch(
+      `/api/db/fetch-messages?pubkey=${encodeURIComponent(userPubkey)}`,
+      {
+        headers: {
+          [SIGNED_EVENT_HEADER]: JSON.stringify(signedEvent),
+        },
+      }
+    );
+    if (!response.ok) return [];
+
+    const events = (await response.json()) as unknown;
+    if (!Array.isArray(events)) return [];
+    return events.filter(
+      (event): event is NostrEvent =>
+        Boolean(event) &&
+        typeof event === "object" &&
+        (event as { kind?: unknown }).kind === 1059
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function findEscrowPayloadInEvents<T extends EscrowPayload>(
+  events: NostrEvent[],
+  signer: NostrSigner,
+  orderId: string,
+  type: T["type"]
+): Promise<T | null> {
   const sortedEvents = [...events].sort(
     (a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)
   );

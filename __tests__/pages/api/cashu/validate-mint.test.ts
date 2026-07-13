@@ -234,6 +234,67 @@ describe("/api/cashu/validate-mint", () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it("allows localhost fake mints when explicit non-production flag is set", async () => {
+    process.env.CASHU_MINT_VALIDATION_ALLOW_LOCAL = "true";
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(jsonResponse({ nuts: {} }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          keysets: [{ id: "00deadbeef", unit: "sat", active: true }],
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          keysets: [
+            {
+              id: "00deadbeef",
+              unit: "sat",
+              keys: { "1": "02".padEnd(66, "a") },
+            },
+          ],
+        })
+      );
+
+    const res = createResponse();
+    await handler(
+      createRequest({ mintUrl: "http://127.0.0.1:3338" }),
+      res as unknown as NextApiResponse
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonBody).toEqual({
+      ok: true,
+      mintUrl: "http://127.0.0.1:3338",
+      nuts: {},
+      keysetCount: 1,
+    });
+    expect(lookupMock).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      "http://127.0.0.1:3338/v1/info",
+      expect.any(Object)
+    );
+  });
+
+  it("rejects localhost fake mints in production even when local flag is set", async () => {
+    process.env.CASHU_MINT_VALIDATION_ALLOW_LOCAL = "true";
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: "production",
+      configurable: true,
+      writable: true,
+    });
+
+    const res = createResponse();
+    await handler(
+      createRequest({ mintUrl: "http://127.0.0.1:3338" }),
+      res as unknown as NextApiResponse
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonBody).toEqual({ error: "Invalid mint URL" });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it("allows any safe public mint when no server allowlist is configured", async () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce(jsonResponse({ nuts: {} }))

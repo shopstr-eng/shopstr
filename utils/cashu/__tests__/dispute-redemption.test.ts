@@ -60,6 +60,7 @@ describe("createPartialRedemption", () => {
       "sig-from-buyer-privkey-for-secret-a",
       "sig-from-buyer-privkey-for-secret-b",
     ]);
+    expect(mockLoadMint).toHaveBeenCalledTimes(1);
   });
 });
 

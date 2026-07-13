@@ -1,16 +1,22 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import { getTokenMetadata } from "@cashu/cashu-ts";
 import { applyRateLimit } from "@/utils/rate-limit";
 import { verifyNip98Request } from "@/utils/nostr/nip98-auth";
 import {
   createPartialRedemption,
   EscrowArbiterSigPayload,
 } from "@/utils/cashu/dispute-redemption";
+import {
+  isP2pkMintAllowed,
+  isP2pkMintAllowlistConfigured,
+} from "@/utils/cashu/p2pk-checkout";
 import { sendServerGiftWrappedDm } from "@/utils/nostr/server-gift-wrap";
 import {
   createDisputeEventTemplate,
   fetchDisputeEvent,
   parseDisputeEvent,
 } from "@/utils/nostr/dispute-records";
+import { fetchCachedDisputeEvent } from "@/utils/nostr/server-dispute-records";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
 import { McpNostrSigner, signAndPublishEvent } from "@/utils/mcp/nostr-signing";
@@ -53,6 +59,14 @@ function createServerNostrManager(): NostrManager {
   });
 }
 
+function getTokenMint(token: string): string | null {
+  try {
+    return getTokenMetadata(token).mint;
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<RuleSuccess | RuleError>
@@ -81,6 +95,17 @@ export default async function handler(
   }
   const { orderId, token, rulingFor } = req.body;
 
+  const tokenMint = getTokenMint(token);
+  if (
+    !tokenMint ||
+    !isP2pkMintAllowlistConfigured() ||
+    !isP2pkMintAllowed(tokenMint)
+  ) {
+    return res
+      .status(400)
+      .json({ error: "Token mint is not allowed for dispute escrow" });
+  }
+
   const arbiterCashuPrivkey = process.env.ARBITER_PRIVKEY;
   const arbiterNostrPrivkey = process.env.ARBITER_NOSTR_PRIVKEY;
   if (!arbiterCashuPrivkey || !arbiterNostrPrivkey) {
@@ -95,16 +120,18 @@ export default async function handler(
       });
     }
 
-    const nostr = createServerNostrManager();
-    let disputeEvent;
-    try {
-      disputeEvent = await fetchDisputeEvent({
-        nostr,
-        orderId,
-        timeoutMs: 10_000,
-      });
-    } finally {
-      nostr.close();
+    let disputeEvent = await fetchCachedDisputeEvent(orderId);
+    if (!disputeEvent) {
+      const nostr = createServerNostrManager();
+      try {
+        disputeEvent = await fetchDisputeEvent({
+          nostr,
+          orderId,
+          timeoutMs: 10_000,
+        });
+      } finally {
+        nostr.close();
+      }
     }
 
     if (!disputeEvent) {
@@ -143,6 +170,7 @@ export default async function handler(
       senderPrivkeyHexOrNsec: arbiterNostrPrivkey,
       recipientPubkey: winnerNostrPubkey,
       payload,
+      waitForRelayPublish: false,
     });
 
     await signAndPublishEvent(
@@ -154,11 +182,14 @@ export default async function handler(
         sellerPubkey: dispute.sellerPubkey,
         arbiterPubkey: dispute.arbiterPubkey,
         status: `resolved:${rulingFor}`,
-      })
+      }),
+      undefined,
+      { waitForRelayPublish: false }
     );
 
     return res.status(200).json({ success: true });
   } catch (error) {
+    console.error("Arbiter ruling failed:", error);
     return res.status(500).json({
       error: error instanceof Error ? error.message : "Ruling failed",
     });
