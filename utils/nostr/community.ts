@@ -1,9 +1,5 @@
 import { EventTemplate } from "nostr-tools";
-import {
-  Community,
-  CommunityRelays,
-  NostrEvent,
-} from "@/utils/types/types";
+import { Community, CommunityRelays, NostrEvent } from "@/utils/types/types";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { cacheEventToDatabase } from "@/utils/db/db-client";

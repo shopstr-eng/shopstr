@@ -28,7 +28,9 @@ jest.mock("../../utility-components/profile/profile-dropdown", () => ({
 }));
 
 const mockedFetchService = fetchService as jest.Mocked<typeof fetchService>;
-const mockedCommunityModule = communityModule as jest.Mocked<typeof communityModule>;
+const mockedCommunityModule = communityModule as jest.Mocked<
+  typeof communityModule
+>;
 const alertSpy = jest.spyOn(window, "alert").mockImplementation(() => {});
 const consoleErrorSpy = jest
   .spyOn(console, "error")

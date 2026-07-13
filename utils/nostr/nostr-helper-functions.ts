@@ -870,7 +870,6 @@ export async function publishSpendingHistoryEvent(
   }
 }
 
-
 type FinalizeAndSendOptions = {
   waitForRelayPublish?: boolean;
 };
