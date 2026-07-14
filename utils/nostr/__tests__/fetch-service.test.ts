@@ -677,7 +677,10 @@ describe("fetch-service NIP-50 search helpers", () => {
       "coffee"
     );
 
-    expectNip50RelayFetches(nostr.fetch);
+    expectNip50RelayFetches(nostr.fetch, [
+      "wss://relay.example",
+      ...DEFAULT_NIP50_SEARCH_RELAYS,
+    ]);
     expect(result.productEvents).toEqual([newer]);
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([newer]);
   });
@@ -812,7 +815,7 @@ describe("fetch-service NIP-50 search helpers", () => {
     expect(result.productEvents).toEqual([firstRelayResult, secondRelayResult]);
   });
 
-  it("routes search to curated NIP-50 relays instead of general user relays", async () => {
+  it("routes search to selected relays before curated NIP-50 fallbacks", async () => {
     const searchListing = {
       id: "fallback-product",
       pubkey: "fallback-seller",
@@ -836,7 +839,11 @@ describe("fetch-service NIP-50 search helpers", () => {
       "coffee"
     );
 
-    expectNip50RelayFetches(nostr.fetch);
+    expectNip50RelayFetches(nostr.fetch, [
+      "wss://relay.damus.io",
+      "wss://nos.lol",
+      ...DEFAULT_NIP50_SEARCH_RELAYS,
+    ]);
     expect(result.productEvents).toEqual([searchListing]);
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([searchListing]);
   });
@@ -945,10 +952,12 @@ describe("fetch-service NIP-50 search helpers", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it("keeps known selected NIP-50 relays while dropping unsupported selected relays", async () => {
+  it("queries selected relays before adding backup NIP-50 relays", async () => {
     const selectedSearchRelay = "wss://relay.nostr.band";
     const searchRelays = [
+      "wss://relay.damus.io",
       selectedSearchRelay,
+      "wss://nos.lol",
       ...DEFAULT_NIP50_SEARCH_RELAYS.filter(
         (relay) => relay !== selectedSearchRelay
       ),
@@ -970,6 +979,7 @@ describe("fetch-service NIP-50 search helpers", () => {
     const selectedSearchRelays = [
       "wss://relay.noswhere.com",
       "wss://search.nos.today",
+      "wss://relay.damus.io",
     ];
     const searchRelays = [
       ...selectedSearchRelays,

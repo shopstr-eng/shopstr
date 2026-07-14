@@ -91,12 +91,7 @@ function getUniqueRelayUrls(relays: string[]): string[] {
 }
 
 function getNip50SearchRelays(relays: string[]): string[] {
-  const knownSearchRelaySet = new Set(
-    DEFAULT_NIP50_SEARCH_RELAYS.map((relay) => relay.toLowerCase())
-  );
-  const selectedSearchRelays = getUniqueRelayUrls(relays).filter((relay) =>
-    knownSearchRelaySet.has(relay.toLowerCase())
-  );
+  const selectedSearchRelays = getUniqueRelayUrls(relays);
   const selectedSearchRelaySet = new Set(
     selectedSearchRelays.map((relay) => relay.toLowerCase())
   );
