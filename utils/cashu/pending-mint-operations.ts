@@ -4,7 +4,10 @@ import { withMintRetry } from "./mint-retry-service";
 const STORAGE_KEY = "shopstr.pendingMintQuotes";
 
 export type PendingMintQuoteStatus =
-  "awaiting_payment" | "paid_unclaimed" | "claimed" | "failed_terminal";
+  | "awaiting_payment"
+  | "paid_unclaimed"
+  | "claimed"
+  | "failed_terminal";
 
 export interface PendingMintQuote {
   quoteId: string;

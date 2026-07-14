@@ -230,7 +230,8 @@ const UserProfilePage = () => {
       }
 
       const existingP2pk = existingProfile?.p2pk as
-        { pubkey?: string; refundDelayDays?: number } | undefined;
+        | { pubkey?: string; refundDelayDays?: number }
+        | undefined;
 
       if (data?.p2pkEnabled) {
         const rawPubkey = (data?.p2pkPubkey as string) ?? "";

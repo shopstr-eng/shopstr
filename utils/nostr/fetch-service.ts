@@ -99,6 +99,12 @@ function getNip50SearchRelays(relays: string[]): string[] {
     (relay) => !selectedSearchRelaySet.has(relay.toLowerCase())
   );
 
+  // All user-selected relays are queried first, then any curated NIP-50 relays
+  // not already in the user's list are appended as fallbacks. Note: this means
+  // search terms are sent to every user-configured relay, not just those that
+  // advertise NIP-50 support. Non-NIP-50 relays may return unfiltered results,
+  // but fetchNip50ProductSearch post-filters via eventMatchesProductSearch so
+  // only matching events reach the UI — the only cost is extra bandwidth.
   return [...selectedSearchRelays, ...backupSearchRelays];
 }
 

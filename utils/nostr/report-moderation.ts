@@ -2,10 +2,13 @@ import { REPORT_TYPES, ReportType } from "@/utils/nostr/nostr-helper-functions";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { NostrEvent } from "@/utils/types/types";
 
-export type ReportTargetKind = "listing" | "profile" | "blob";
+export type ReportTargetKind = "listing" | "profile";
 
 export type ReportModerationLevel =
-  "none" | "reported_by_you" | "trusted_warning" | "trusted_blur";
+  | "none"
+  | "reported_by_you"
+  | "trusted_warning"
+  | "trusted_blur";
 
 export interface ReportModerationSignal {
   level: ReportModerationLevel;
@@ -118,7 +121,7 @@ export function summarizeReportEvents({
     return (event.tags || []).flatMap((tag): ReportSummary[] => {
       const reportType = tag[2];
       if (
-        (tag[0] !== "e" && tag[0] !== "p" && tag[0] !== "x") ||
+        (tag[0] !== "e" && tag[0] !== "p") ||
         !tag[1] ||
         !isReportType(reportType)
       ) {
@@ -129,8 +132,7 @@ export function summarizeReportEvents({
         {
           id: `${event.id}:${tag[0]}:${tag[1]}`,
           reporterPubkey: event.pubkey,
-          targetKind:
-            tag[0] === "e" ? "listing" : tag[0] === "p" ? "profile" : "blob",
+          targetKind: tag[0] === "e" ? "listing" : "profile",
           targetId: tag[1],
           reportType,
           isOwnReport,

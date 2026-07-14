@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   Chip,
   Dropdown,
@@ -54,6 +54,10 @@ export default function ProductCard({
   const [showEventIdModal, setShowEventIdModal] = useState(false);
   const [hasRevealedReportedContent, setHasRevealedReportedContent] =
     useState(false);
+
+  useEffect(() => {
+    setHasRevealedReportedContent(false);
+  }, [reportSignal.level]);
 
   const router = useRouter();
   const { pubkey: userPubkey } = useContext(SignerContext);
@@ -431,12 +435,7 @@ export default function ProductCard({
               <p className="text-base font-semibold">{reportLabel}</p>
               <p className="text-sm opacity-90">{reportDescription}</p>
             </div>
-            <Button
-              size="sm"
-              variant="flat"
-              onClick={revealReportedContent}
-              onPress={revealReportedContent}
-            >
+            <Button size="sm" variant="flat" onPress={revealReportedContent}>
               Show listing
             </Button>
           </div>
