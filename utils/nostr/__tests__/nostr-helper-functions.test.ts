@@ -42,11 +42,8 @@ jest.mock("nostr-tools", () => {
 });
 
 import {
-  approveCommunityPost,
   blossomUploadImages,
   constructGiftWrappedEvent,
-  createCommunityPost,
-  createOrUpdateCommunity,
   constructMessageGiftWrap,
   constructMessageSeal,
   createBlossomServerEvent,
@@ -76,7 +73,6 @@ import {
   publishWalletEvent,
   publishRelayEvent,
   publishReportEvent,
-  retractApproval,
   publishReviewEvent,
   REPORT_TYPES,
   saveNWCString,
@@ -87,6 +83,12 @@ import {
   verifyNip05Identifier,
   withBlastr,
 } from "../nostr-helper-functions";
+import {
+  approveCommunityPost,
+  createCommunityPost,
+  createOrUpdateCommunity,
+  retractApproval,
+} from "../community";
 import { finalizeEvent, nip19, nip44 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import {
