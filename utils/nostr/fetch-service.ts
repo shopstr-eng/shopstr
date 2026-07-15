@@ -17,6 +17,11 @@ import {
   verifyNip05Identifier,
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { isHexPubkey } from "@/utils/nostr/pubkey";
+import {
+  pickPreferredReplaceableEvent,
+  selectPreferredReplaceableEvent,
+} from "@/utils/nostr/replaceable-events";
 import {
   ProductData,
   parseTags,
@@ -27,7 +32,10 @@ import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions"
 import { hashToCurve } from "@cashu/cashu-ts";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
-import { cacheEventsToDatabase } from "@/utils/db/db-client";
+import {
+  cacheEventsToDatabase,
+  cacheEventToDatabase,
+} from "@/utils/db/db-client";
 import { mapWithConcurrency } from "@/utils/concurrency";
 import {
   applyWalletConfigContent,
@@ -1303,97 +1311,166 @@ export const fetchAllFollows = async (
   nostr: NostrManager,
   relays: string[],
   editFollowsContext: (
+    directFollowList: string[],
     followList: string[],
     firstDegreeFollowsLength: number,
     isLoading: boolean
   ) => void,
   userPubkey?: string
 ): Promise<{
+  directFollowList: string[];
   followList: string[];
+  firstDegreeFollowsLength: number;
 }> => {
   const wot = getLocalStorageData().wot;
 
   if (!userPubkey) {
-    editFollowsContext([], 0, false);
+    editFollowsContext([], [], 0, false);
     return {
+      directFollowList: [],
       followList: [],
+      firstDegreeFollowsLength: 0,
     };
   }
 
-  const fetchFollows = async (userPubkey: string) => {
-    let secondDegreeFollowsArrayFromRelay: string[] = [];
-    let firstDegreeFollowsLength = 0;
-    const followsSet: Set<string> = new Set();
+  const extractValidFollowTags = (
+    tags: string[][],
+    excluded = new Set<string>()
+  ) =>
+    tags
+      .filter((tag) => tag[0] === "p")
+      .map((tag) => tag[1])
+      .filter(
+        (pubkey) => isHexPubkey(pubkey!) && !excluded.has(pubkey!)
+      ) as string[];
 
-    // fetch first-degree follows
-    const fetchedEvents = await nostr.fetch(
-      [
-        {
-          kinds: [3],
-          authors: [userPubkey],
-        },
-      ],
-      {},
-      relays
+  const getLatestEventByAuthor = (events: NostrEvent[]) => {
+    const latestByAuthor = new Map<string, NostrEvent>();
+    for (const event of events) {
+      const existing = latestByAuthor.get(event.pubkey);
+      latestByAuthor.set(
+        event.pubkey,
+        existing ? selectPreferredReplaceableEvent(event, existing) : event
+      );
+    }
+    return latestByAuthor;
+  };
+
+  let dbContactListEvent: NostrEvent | null = null;
+  try {
+    const response = await fetch(
+      `/api/db/fetch-contacts?pubkey=${encodeURIComponent(userPubkey)}`
     );
-
-    const latestContactListEvent = fetchedEvents.reduce<NostrEvent | null>(
-      (latestEvent, event) => {
-        if (!latestEvent || event.created_at > latestEvent.created_at) {
-          return event;
+    if (response.ok) {
+      const data = await response.json();
+      if (data?.contactList) {
+        dbContactListEvent = data.contactList as NostrEvent;
+        const dbDirectFollows = Array.from(
+          new Set(extractValidFollowTags(dbContactListEvent.tags))
+        );
+        if (dbDirectFollows.length > 0) {
+          editFollowsContext(
+            dbDirectFollows,
+            dbDirectFollows,
+            dbDirectFollows.length,
+            true
+          );
         }
-        return latestEvent;
-      },
-      null
-    );
+      }
+    }
+  } catch (error) {
+    console.error("Failed to fetch contact list from database:", error);
+  }
 
-    if (!latestContactListEvent) {
-      return {
-        followsArrayFromRelay: [],
-        firstDegreeFollowsLength: 0,
-      };
+  const fetchFollows = async (authorPubkey: string) => {
+    // fetch first-degree follows
+    let fetchedFirstDegreeEvents: NostrEvent[] = [];
+    try {
+      fetchedFirstDegreeEvents = (await nostr.fetch(
+        [{ kinds: [3], authors: [authorPubkey] }],
+        {},
+        relays
+      )) as NostrEvent[];
+    } catch (error) {
+      console.error(
+        "Relay fetch for first-degree follows failed, falling back to DB:",
+        error
+      );
     }
 
-    const authors: string[] = [];
-    const directFollowsArrayFromRelay = latestContactListEvent.tags
-      .map((tag) => tag[1])
-      .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
-    directFollowsArrayFromRelay.forEach((pubkey) => followsSet.add(pubkey!));
-    firstDegreeFollowsLength = directFollowsArrayFromRelay.length;
-    authors.push(...(directFollowsArrayFromRelay as string[]));
+    const allFirstDegreeEvents = [...fetchedFirstDegreeEvents];
+    if (
+      dbContactListEvent &&
+      authorPubkey === userPubkey &&
+      dbContactListEvent.id
+    ) {
+      allFirstDegreeEvents.push(dbContactListEvent);
+    }
 
-    if (!authors.length) {
+    const latestFirstDegreeEvent =
+      pickPreferredReplaceableEvent(allFirstDegreeEvents);
+
+    if (
+      latestFirstDegreeEvent &&
+      (!dbContactListEvent ||
+        latestFirstDegreeEvent.id !== dbContactListEvent.id)
+    ) {
+      cacheEventToDatabase(latestFirstDegreeEvent).catch((error) =>
+        console.error("Failed to cache initial contact list:", error)
+      );
+    }
+
+    const directFollowList = latestFirstDegreeEvent
+      ? Array.from(new Set(extractValidFollowTags(latestFirstDegreeEvent.tags)))
+      : [];
+
+    const firstDegreeFollowsLength = directFollowList.length;
+
+    if (directFollowList.length > 0) {
+      editFollowsContext(
+        directFollowList,
+        directFollowList,
+        firstDegreeFollowsLength,
+        true
+      );
+    }
+
+    if (!directFollowList.length) {
       return {
+        directFollowList,
         followsArrayFromRelay: [],
         firstDegreeFollowsLength,
       };
     }
 
-    // Fetch second-degree follows
-    const fetchedSecondDegreeEvents = await nostr.fetch(
-      [
-        {
-          kinds: [3],
-          authors,
-        },
-      ],
-      {},
-      relays
-    );
+    const followsSet: Set<string> = new Set(directFollowList);
+    let secondDegreeFollowsArrayFromRelay: string[] = [];
 
-    const latestSecondDegreeEvents = new Map<string, NostrEvent>();
-    for (const followEvent of fetchedSecondDegreeEvents) {
-      const latestEvent = latestSecondDegreeEvents.get(followEvent.pubkey);
-      if (!latestEvent || followEvent.created_at > latestEvent.created_at) {
-        latestSecondDegreeEvents.set(followEvent.pubkey, followEvent);
-      }
+    // Fetch second-degree follows
+    let fetchedSecondDegreeEvents: NostrEvent[] = [];
+    try {
+      fetchedSecondDegreeEvents = (await nostr.fetch(
+        [
+          {
+            kinds: [3],
+            authors: directFollowList,
+          },
+        ],
+        {},
+        relays
+      )) as NostrEvent[];
+    } catch (error) {
+      console.error("Relay fetch for second-degree follows failed:", error);
     }
 
-    for (const followEvent of latestSecondDegreeEvents.values()) {
-      const validFollowTags = followEvent.tags
-        .map((tag) => tag[1])
-        .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
-      secondDegreeFollowsArrayFromRelay.push(...(validFollowTags as string[]));
+    for (const followEvent of getLatestEventByAuthor(
+      fetchedSecondDegreeEvents
+    ).values()) {
+      const validFollowTags = extractValidFollowTags(
+        followEvent.tags,
+        followsSet
+      );
+      secondDegreeFollowsArrayFromRelay.push(...validFollowTags);
     }
 
     const pubkeyCount: Map<string, number> = new Map();
@@ -1406,23 +1483,27 @@ export const fetchAllFollows = async (
       );
     // Concatenate arrays ensuring uniqueness
     const followsArrayFromRelay = Array.from(
-      new Set(
-        (directFollowsArrayFromRelay as string[]).concat(
-          secondDegreeFollowsArrayFromRelay
-        )
-      )
+      new Set(directFollowList.concat(secondDegreeFollowsArrayFromRelay))
     );
     return {
+      directFollowList,
       followsArrayFromRelay,
       firstDegreeFollowsLength,
     };
   };
 
-  const { followsArrayFromRelay, firstDegreeFollowsLength } =
+  const { directFollowList, followsArrayFromRelay, firstDegreeFollowsLength } =
     await fetchFollows(userPubkey);
-  editFollowsContext(followsArrayFromRelay, firstDegreeFollowsLength, false);
+  editFollowsContext(
+    directFollowList,
+    followsArrayFromRelay,
+    firstDegreeFollowsLength,
+    false
+  );
   return {
+    directFollowList,
     followList: followsArrayFromRelay,
+    firstDegreeFollowsLength,
   };
 };
 

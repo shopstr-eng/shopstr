@@ -53,6 +53,8 @@ jest.mock("@heroui/react", () => {
       onOpen: mockOnOpen,
       onClose: jest.fn(),
     }),
+    addToast: jest.fn(),
+    Spinner: () => <span data-testid="spinner" />,
     Dropdown: ({
       children,
       isOpen,
@@ -128,6 +130,8 @@ jest.mock("@heroicons/react/24/outline", () => ({
   ClipboardIcon: () => <div data-testid="icon-clipboard" />,
   CheckIcon: () => <div data-testid="icon-check" />,
   ExclamationTriangleIcon: () => <div data-testid="icon-report" />,
+  UserMinusIcon: () => <div data-testid="icon-user-minus" />,
+  UserPlusIcon: () => <div data-testid="icon-user-plus" />,
   CheckCircleIcon: () => <div data-testid="icon-success" />,
 }));
 

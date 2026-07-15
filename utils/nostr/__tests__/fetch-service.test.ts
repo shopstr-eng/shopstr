@@ -11,6 +11,7 @@ import {
 
 jest.mock("@/utils/db/db-client", () => ({
   cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+  cacheEventToDatabase: jest.fn().mockResolvedValue(undefined),
 }));
 
 const { cacheEventsToDatabase } = jest.requireMock("@/utils/db/db-client");
@@ -2530,8 +2531,14 @@ describe("fetchAllFollows", () => {
     }));
 
     jest.doMock("@/utils/db/db-client", () => ({
-      cacheEventsToDatabase: jest.fn(),
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+      cacheEventToDatabase: jest.fn().mockResolvedValue(undefined),
     }));
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ contactList: null }),
+    }) as typeof global.fetch;
   });
 
   it("returns empty follows for logged-out users without fetching defaults", async () => {
@@ -2549,7 +2556,7 @@ describe("fetchAllFollows", () => {
 
     expect(result.followList).toEqual([]);
     expect(nostr.fetch).not.toHaveBeenCalled();
-    expect(editFollowsContext).toHaveBeenCalledWith([], 0, false);
+    expect(editFollowsContext).toHaveBeenCalledWith([], [], 0, false);
   });
 
   it("keeps follows empty when a logged-in user has no contact list", async () => {
@@ -2573,7 +2580,7 @@ describe("fetchAllFollows", () => {
       {},
       ["wss://relay.example"]
     );
-    expect(editFollowsContext).toHaveBeenCalledWith([], 0, false);
+    expect(editFollowsContext).toHaveBeenCalledWith([], [], 0, false);
   });
 
   it("uses only the latest kind 3 contact list for direct follows", async () => {
@@ -2621,6 +2628,7 @@ describe("fetchAllFollows", () => {
       ["wss://relay.example"]
     );
     expect(editFollowsContext).toHaveBeenCalledWith(
+      [latestFollowPubkey],
       [latestFollowPubkey],
       1,
       false
@@ -2905,7 +2913,7 @@ describe("fetchAllFollows", () => {
     // Only one relay call (no second-degree fetch)
     expect(nostr.fetch).toHaveBeenCalledTimes(1);
     expect(result.followList).toEqual([]);
-    expect(editFollowsContext).toHaveBeenCalledWith([], 0, false);
+    expect(editFollowsContext).toHaveBeenCalledWith([], [], 0, false);
   });
 
   it("returns existing latestEvent when a subsequent kind 3 event has an older timestamp (line 1330)", async () => {

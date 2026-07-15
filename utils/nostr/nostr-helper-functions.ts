@@ -29,6 +29,8 @@ import {
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
 import { buildWalletConfigV1 } from "@/utils/cashu/wallet-config";
+import { isHexPubkey } from "@/utils/nostr/pubkey";
+import { pickPreferredReplaceableEvent } from "@/utils/nostr/replaceable-events";
 import { getDefaultRelays, withBlastr } from "./relay-config";
 export { getDefaultRelays, withBlastr };
 
@@ -1699,3 +1701,268 @@ export {
   deleteAddress,
   setDefaultAddress,
 } from "@/utils/nostr/saved-address-helpers";
+
+const CONTACT_LIST_FETCH_TIMEOUT_MS = 2500;
+const latestLocalContactListEvents = new Map<string, NostrEvent>();
+const contactListMutationQueues = new Map<string, Promise<void>>();
+
+export type FollowMutationFailureReason =
+  | "invalid-pubkey"
+  | "self-follow"
+  | "unverified-contact-list"
+  | "unknown";
+
+export type FollowMutationResult =
+  | {
+      ok: true;
+      event: NostrEvent;
+      alreadyApplied: boolean;
+    }
+  | {
+      ok: false;
+      reason: FollowMutationFailureReason;
+    };
+
+function getContactListRelays(): string[] {
+  const { readRelays, writeRelays, relays } = getLocalStorageData();
+  return [...new Set([...readRelays, ...writeRelays, ...relays])];
+}
+
+async function withContactListFetchTimeout<T>(
+  task: () => Promise<T>,
+  fallback: T
+): Promise<{ value: T; didRespond: boolean }> {
+  try {
+    const value = await newPromiseWithTimeout<T>(
+      (resolve, reject) => {
+        void task().then(resolve).catch(reject);
+      },
+      { timeout: CONTACT_LIST_FETCH_TIMEOUT_MS }
+    );
+    return { value, didRespond: true };
+  } catch {
+    return { value: fallback, didRespond: false };
+  }
+}
+
+async function fetchLatestContactListEvent(
+  nostr: NostrManager,
+  userPubkey: string
+): Promise<{ event: NostrEvent | null; confirmedEmpty: boolean }> {
+  const localEvent = latestLocalContactListEvents.get(userPubkey) ?? null;
+  const relays = getContactListRelays();
+
+  const relayFetchPromise = Promise.all(
+    relays.map((relay) =>
+      withContactListFetchTimeout(
+        () =>
+          nostr.fetch(
+            [{ kinds: [3], authors: [userPubkey] }],
+            {},
+            [relay],
+            CONTACT_LIST_FETCH_TIMEOUT_MS
+          ),
+        [] as NostrEvent[]
+      )
+    )
+  );
+
+  const dbFetchPromise = withContactListFetchTimeout(
+    async () => {
+      if (typeof fetch !== "function") return null;
+
+      const response = await fetch(
+        `/api/db/fetch-contacts?pubkey=${encodeURIComponent(userPubkey)}`
+      );
+      if (!response.ok) {
+        throw new Error(`DB fetch failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      return (data?.contactList as NostrEvent) ?? null;
+    },
+    null as NostrEvent | null
+  );
+
+  const [relayResults, dbFetch] = await Promise.all([
+    relayFetchPromise,
+    dbFetchPromise,
+  ]);
+
+  const relayEvents = relayResults.flatMap((result) => result.value);
+  const relayFullyResponded =
+    relays.length > 0 && relayResults.every((result) => result.didRespond);
+  const dbEvent = dbFetch.value;
+  const allExternalEvents = dbEvent?.id
+    ? [...relayEvents, dbEvent]
+    : relayEvents;
+  const externalEvent = pickPreferredReplaceableEvent(allExternalEvents);
+
+  const confirmedEmpty =
+    !externalEvent &&
+    !localEvent &&
+    relayFullyResponded &&
+    relayEvents.length === 0;
+
+  if (
+    localEvent?.id &&
+    (!externalEvent ||
+      Number(localEvent.created_at) >= Number(externalEvent.created_at))
+  ) {
+    return { event: localEvent, confirmedEmpty };
+  }
+
+  return { event: externalEvent, confirmedEmpty };
+}
+
+function getNextContactListCreatedAt(latestEvent: NostrEvent | null): number {
+  const now = Math.floor(Date.now() / 1000);
+  return latestEvent ? Math.max(now, Number(latestEvent.created_at) + 1) : now;
+}
+
+function enqueueContactListMutation(
+  userPubkey: string,
+  mutation: () => Promise<FollowMutationResult>
+): Promise<FollowMutationResult> {
+  const previous =
+    contactListMutationQueues.get(userPubkey) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(mutation);
+  contactListMutationQueues.set(
+    userPubkey,
+    next.then(
+      () => undefined,
+      () => undefined
+    )
+  );
+  return next;
+}
+
+export async function signNostrEvent(
+  signer: NostrSigner,
+  eventTemplate: EventTemplate
+): Promise<NostrEvent> {
+  return (await signer.sign(eventTemplate)) as NostrEvent;
+}
+
+async function persistContactListEvent(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  signedEvent: NostrEvent
+) {
+  const { writeRelays, relays } = getLocalStorageData();
+  const allWriteRelays = withBlastr([...writeRelays, ...relays]);
+
+  try {
+    await cacheEventToDatabase(signedEvent);
+  } catch (error) {
+    console.error(
+      "Failed to cache contact list event before relay publish:",
+      error
+    );
+  }
+
+  await publishEventWithRetryTracking(
+    nostr,
+    signer,
+    signedEvent,
+    allWriteRelays
+  );
+}
+
+export function cacheAndPublishSignedEventInBackground(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  signedEvent: NostrEvent
+) {
+  void persistContactListEvent(nostr, signer, signedEvent).catch((error) => {
+    console.error(
+      "Unexpected error while persisting contact list event:",
+      error
+    );
+  });
+}
+
+async function mutateContactList(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  targetPubkey: string,
+  action: "follow" | "unfollow"
+): Promise<FollowMutationResult> {
+  if (!isHexPubkey(targetPubkey)) {
+    return { ok: false, reason: "invalid-pubkey" };
+  }
+
+  const userPubkey = await signer.getPubKey();
+  if (action === "follow" && userPubkey === targetPubkey) {
+    return { ok: false, reason: "self-follow" };
+  }
+
+  return enqueueContactListMutation(userPubkey, async () => {
+    const { event: latestEvent, confirmedEmpty } =
+      await fetchLatestContactListEvent(nostr, userPubkey);
+
+    if (!latestEvent && !confirmedEmpty) {
+      return { ok: false, reason: "unverified-contact-list" };
+    }
+
+    const existingTags = latestEvent?.tags ?? [];
+    const existingContent = latestEvent?.content ?? "";
+    const isFollowing = existingTags.some(
+      (tag) => tag[0] === "p" && tag[1] === targetPubkey
+    );
+
+    if (action === "follow" && isFollowing && latestEvent) {
+      return { ok: true, event: latestEvent, alreadyApplied: true };
+    }
+    if (action === "unfollow" && !isFollowing) {
+      return latestEvent
+        ? { ok: true, event: latestEvent, alreadyApplied: true }
+        : { ok: false, reason: "unknown" };
+    }
+
+    const nextTags =
+      action === "follow"
+        ? [...existingTags, ["p", targetPubkey]]
+        : existingTags.filter(
+            (tag) => !(tag[0] === "p" && tag[1] === targetPubkey)
+          );
+
+    const eventTemplate: EventTemplate = {
+      kind: 3,
+      created_at: getNextContactListCreatedAt(latestEvent),
+      tags: nextTags,
+      content: existingContent,
+    };
+
+    const signedEvent = await signNostrEvent(signer, eventTemplate);
+    latestLocalContactListEvents.set(userPubkey, signedEvent);
+    cacheAndPublishSignedEventInBackground(nostr, signer, signedEvent);
+    return { ok: true, event: signedEvent, alreadyApplied: false };
+  });
+}
+
+export async function followUser(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  targetPubkey: string
+): Promise<FollowMutationResult> {
+  try {
+    return await mutateContactList(nostr, signer, targetPubkey, "follow");
+  } catch (error) {
+    console.error("followUser failed:", error);
+    return { ok: false, reason: "unknown" };
+  }
+}
+
+export async function unfollowUser(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  targetPubkey: string
+): Promise<FollowMutationResult> {
+  try {
+    return await mutateContactList(nostr, signer, targetPubkey, "unfollow");
+  } catch (error) {
+    console.error("unfollowUser failed:", error);
+    return { ok: false, reason: "unknown" };
+  }
+}
