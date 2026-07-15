@@ -40,13 +40,15 @@ import {
   resolveExplicitPaymentMethod,
 } from "@/utils/messages/order-message-utils";
 import {
+  generateKeys,
+  publishReviewEvent,
+} from "@/utils/nostr/nostr-helper-functions";
+import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
-  generateKeys,
-  publishReviewEvent,
-} from "@/utils/nostr/nostr-helper-functions";
+} from "@/utils/nostr/gift-wrap";
 import {
   NostrContext,
   SignerContext,

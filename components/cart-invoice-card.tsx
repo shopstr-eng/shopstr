@@ -61,16 +61,18 @@ import {
 } from "@/utils/cashu/wallet-recovery";
 import { persistBuyerP2pkEscrowRecord } from "@/utils/cashu/p2pk-escrow-records";
 import {
-  constructGiftWrappedEvent,
-  constructMessageSeal,
-  constructMessageGiftWrap,
   getSavedAddresses,
-  sendGiftWrappedMessageEvent,
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
   saveAddress,
 } from "@/utils/nostr/nostr-helper-functions";
+import {
+  constructGiftWrappedEvent,
+  constructMessageSeal,
+  constructMessageGiftWrap,
+  sendGiftWrappedMessageEvent,
+} from "@/utils/nostr/gift-wrap";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";

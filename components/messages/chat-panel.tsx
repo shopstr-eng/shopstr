@@ -29,13 +29,15 @@ import { ChatObject, NostrMessageEvent } from "../../utils/types/types";
 import ChatMessage from "./chat-message";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import {
+  publishReviewEvent,
+  generateKeys,
+} from "@/utils/nostr/nostr-helper-functions";
+import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
-  publishReviewEvent,
-  generateKeys,
-} from "@/utils/nostr/nostr-helper-functions";
+} from "@/utils/nostr/gift-wrap";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { ReviewsContext } from "../../utils/context/context";
 import FailureModal from "../utility-components/failure-modal";
