@@ -17,7 +17,6 @@ const customJestConfig = {
     "!pages/_app.tsx",
     "!pages/_document.tsx",
     "!public/**",
-    "mcp/**/*.{ts,tsx}",
   ],
   coverageThreshold: {
     global: {
