@@ -708,7 +708,6 @@ function Shopstr({ props }: { props: AppProps }) {
             if (userMutatedSinceFetchStarted) {
               return {
                 ...prev,
-                followList,
                 isLoading,
               };
             }

@@ -1802,17 +1802,16 @@ async function fetchLatestContactListEvent(
     !externalEvent &&
     !localEvent &&
     relayFullyResponded &&
+    dbFetch.didRespond &&
+    !dbEvent &&
     relayEvents.length === 0;
 
-  if (
-    localEvent?.id &&
-    (!externalEvent ||
-      Number(localEvent.created_at) >= Number(externalEvent.created_at))
-  ) {
-    return { event: localEvent, confirmedEmpty };
-  }
-
-  return { event: externalEvent, confirmedEmpty };
+  return {
+    event: pickPreferredReplaceableEvent(
+      [localEvent, externalEvent].filter(Boolean) as NostrEvent[]
+    ),
+    confirmedEmpty,
+  };
 }
 
 function getNextContactListCreatedAt(latestEvent: NostrEvent | null): number {
