@@ -1076,6 +1076,7 @@ export async function deleteCachedEventsByIds(
 
   // All tables that can store events
   const otherTables = [
+    "contact_list_events",
     "review_events",
     "report_events",
     "message_events",
@@ -1162,6 +1163,7 @@ export async function cachedEventsBelongToPubkey(
 
   const eventTables = [
     "product_events",
+    "contact_list_events",
     "review_events",
     "message_events",
     "profile_events",

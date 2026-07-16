@@ -2843,6 +2843,11 @@ describe("db-service helpers", () => {
       expect(
         queries.some((query) => query.includes("DELETE FROM review_events"))
       ).toBe(true);
+      expect(
+        queries.some((query) =>
+          query.includes("DELETE FROM contact_list_events")
+        )
+      ).toBe(true);
       expect(queries).toContain("COMMIT");
       expect(client.release).toHaveBeenCalled();
     });
@@ -2874,6 +2879,12 @@ describe("db-service helpers", () => {
         ).resolves.toBe(true);
       });
 
+      const unionQuery = client.query.mock.calls
+        .map(([query]) =>
+          typeof query === "string" ? query : query.text || ""
+        )
+        .find((query) => query.includes("UNION ALL"));
+      expect(unionQuery).toContain("contact_list_events");
       expect(client.release).toHaveBeenCalled();
     });
 

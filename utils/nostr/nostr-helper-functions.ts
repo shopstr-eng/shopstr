@@ -1707,10 +1707,7 @@ const latestLocalContactListEvents = new Map<string, NostrEvent>();
 const contactListMutationQueues = new Map<string, Promise<void>>();
 
 export type FollowMutationFailureReason =
-  | "invalid-pubkey"
-  | "self-follow"
-  | "unverified-contact-list"
-  | "unknown";
+  "invalid-pubkey" | "self-follow" | "unverified-contact-list" | "unknown";
 
 export type FollowMutationResult =
   | {

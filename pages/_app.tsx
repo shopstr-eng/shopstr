@@ -74,6 +74,11 @@ import {
 import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
 import { MintRecoveryBoot } from "@/components/utility-components/mint-recovery-boot";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
+import {
+  applyAuthoritativeFollowsRefresh,
+  applyOptimisticFollow,
+  applyOptimisticUnfollow,
+} from "@/utils/nostr/follow-state";
 
 const mergeReportEvents = (
   existingReports: NostrEvent[],
@@ -346,6 +351,56 @@ function Shopstr({ props }: { props: AppProps }) {
     }
   );
 
+  const refreshFollowsAfterMutation = useCallback(
+    async (mutationVersion: number) => {
+      if (!nostr || !signer) return;
+
+      try {
+        const userPubkey = await signer.getPubKey();
+        const { relays, readRelays } = getLocalStorageData();
+        const allRelays = [...new Set([...relays, ...readRelays])];
+        const effectiveRelays =
+          allRelays.length > 0 ? allRelays : getDefaultRelays();
+
+        await fetchAllFollows(
+          nostr,
+          effectiveRelays,
+          (
+            directFollowList,
+            followList,
+            firstDegreeFollowsLength,
+            isLoading
+          ) => {
+            setFollowsContext((prev) => {
+              if (followsMutationVersionRef.current !== mutationVersion) {
+                return {
+                  ...prev,
+                  isLoading,
+                };
+              }
+
+              return applyAuthoritativeFollowsRefresh(prev, {
+                directFollowList,
+                followList,
+                firstDegreeFollowsLength,
+                isLoading,
+              });
+            });
+          },
+          userPubkey
+        );
+      } catch (error) {
+        console.error("Failed to refresh follows after mutation:", error);
+        setFollowsContext((prev) =>
+          followsMutationVersionRef.current === mutationVersion
+            ? { ...prev, isLoading: false }
+            : prev
+        );
+      }
+    },
+    [nostr, signer]
+  );
+
   const addFollow = useCallback(
     async (targetPubkey: string): Promise<FollowMutationResult> => {
       if (!nostr || !signer) return { ok: false, reason: "unknown" };
@@ -353,28 +408,16 @@ function Shopstr({ props }: { props: AppProps }) {
       const result = await followUser(nostr, signer, targetPubkey);
       if (!result.ok) return result;
 
-      setFollowsContext((prev) => {
-        const alreadyDirect = prev.directFollowList.includes(targetPubkey);
-        const alreadyInWot = prev.followList.includes(targetPubkey);
-
-        return {
-          ...prev,
-          directFollowList: alreadyDirect
-            ? prev.directFollowList
-            : [...prev.directFollowList, targetPubkey],
-          followList: alreadyInWot
-            ? prev.followList
-            : [...prev.followList, targetPubkey],
-          firstDegreeFollowsLength: alreadyDirect
-            ? prev.firstDegreeFollowsLength
-            : prev.firstDegreeFollowsLength + 1,
-        };
-      });
-      followsMutationVersionRef.current++;
+      const mutationVersion = followsMutationVersionRef.current + 1;
+      followsMutationVersionRef.current = mutationVersion;
+      setFollowsContext(
+        (prev) => applyOptimisticFollow(prev, targetPubkey).state
+      );
+      void refreshFollowsAfterMutation(mutationVersion);
 
       return result;
     },
-    [nostr, signer]
+    [nostr, refreshFollowsAfterMutation, signer]
   );
 
   const removeFollow = useCallback(
@@ -384,25 +427,16 @@ function Shopstr({ props }: { props: AppProps }) {
       const result = await unfollowUser(nostr, signer, targetPubkey);
       if (!result.ok) return result;
 
-      setFollowsContext((prev) => {
-        const wasDirect = prev.directFollowList.includes(targetPubkey);
-
-        return {
-          ...prev,
-          directFollowList: prev.directFollowList.filter(
-            (pk) => pk !== targetPubkey
-          ),
-          followList: prev.followList.filter((pk) => pk !== targetPubkey),
-          firstDegreeFollowsLength: wasDirect
-            ? Math.max(0, prev.firstDegreeFollowsLength - 1)
-            : prev.firstDegreeFollowsLength,
-        };
-      });
-      followsMutationVersionRef.current++;
+      const mutationVersion = followsMutationVersionRef.current + 1;
+      followsMutationVersionRef.current = mutationVersion;
+      setFollowsContext(
+        (prev) => applyOptimisticUnfollow(prev, targetPubkey).state
+      );
+      void refreshFollowsAfterMutation(mutationVersion);
 
       return result;
     },
-    [nostr, signer]
+    [nostr, refreshFollowsAfterMutation, signer]
   );
 
   useEffect(() => {

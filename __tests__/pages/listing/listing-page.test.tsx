@@ -5,8 +5,10 @@ import { nip19 } from "nostr-tools";
 import type { ReactNode } from "react";
 
 import ListingPage from "@/pages/listing/[[...productId]]";
-import { ProductContext } from "@/utils/context/context";
+import { FollowsContext, ProductContext } from "@/utils/context/context";
 import { NostrEvent } from "@/utils/types/types";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import type { ProductData } from "@/utils/parsers/product-parser-functions";
 
 jest.mock("next/router", () => ({
   useRouter: jest.fn(),
@@ -36,10 +38,18 @@ jest.mock(
     Button: ({
       children,
       onPress,
+      onClick,
+      isDisabled,
     }: {
       children: ReactNode;
       onPress?: () => void;
-    }) => <button onClick={onPress}>{children}</button>,
+      onClick?: () => void;
+      isDisabled?: boolean;
+    }) => (
+      <button disabled={isDisabled} onClick={onPress || onClick}>
+        {children}
+      </button>
+    ),
     useDisclosure: () => ({
       isOpen: false,
       onOpen: () => undefined,
@@ -76,8 +86,12 @@ jest.mock("@/utils/parsers/product-parser-functions", () => ({
   }),
 }));
 
+const mockParseZapsnagNote = jest.fn<ProductData | undefined, [NostrEvent]>(
+  () => undefined
+);
+
 jest.mock("@/utils/parsers/zapsnag-parser", () => ({
-  parseZapsnagNote: jest.fn(() => undefined),
+  parseZapsnagNote: (event: NostrEvent) => mockParseZapsnagNote(event),
 }));
 
 jest.mock(
@@ -107,6 +121,14 @@ jest.mock("@/components/storefront/storefront-theme-wrapper", () => ({
 jest.mock("@/components/utility-components/modals/event-modals", () => ({
   RawEventModal: () => null,
   EventIdModal: () => null,
+}));
+
+jest.mock("@/components/utility-components/use-report-event-flow", () => ({
+  __esModule: true,
+  default: () => ({
+    openReportFlow: jest.fn(),
+    reportFlowUi: null,
+  }),
 }));
 
 jest.mock("../../../components/ZapsnagButton", () => () => (
@@ -167,25 +189,53 @@ function renderListingPage({
   initialProductEvent,
   productEvents,
   isLoading,
+  signerPubkey = "f".repeat(64),
 }: {
   initialProductEvent: NostrEvent | null;
   productEvents: NostrEvent[];
   isLoading: boolean;
+  signerPubkey?: string;
 }) {
   return render(
-    <ProductContext.Provider
+    <SignerContext.Provider
       value={{
-        productEvents,
-        isLoading,
-        addNewlyCreatedProductEvent: jest.fn(),
-        removeDeletedProductEvent: jest.fn(),
+        pubkey: signerPubkey,
+        isLoggedIn: true,
       }}
     >
-      <ListingPage
-        ogMeta={defaultOgMeta}
-        initialProductEvent={initialProductEvent}
-      />
-    </ProductContext.Provider>
+      <FollowsContext.Provider
+        value={{
+          directFollowList: [],
+          followList: [],
+          firstDegreeFollowsLength: 0,
+          isLoading: false,
+          addFollow: async () => ({
+            ok: true,
+            event: {} as NostrEvent,
+            alreadyApplied: false,
+          }),
+          removeFollow: async () => ({
+            ok: true,
+            event: {} as NostrEvent,
+            alreadyApplied: false,
+          }),
+        }}
+      >
+        <ProductContext.Provider
+          value={{
+            productEvents,
+            isLoading,
+            addNewlyCreatedProductEvent: jest.fn(),
+            removeDeletedProductEvent: jest.fn(),
+          }}
+        >
+          <ListingPage
+            ogMeta={defaultOgMeta}
+            initialProductEvent={initialProductEvent}
+          />
+        </ProductContext.Provider>
+      </FollowsContext.Provider>
+    </SignerContext.Provider>
   );
 }
 
@@ -199,6 +249,8 @@ describe("Listing page direct-load reconciliation", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockParseZapsnagNote.mockReset();
+    mockParseZapsnagNote.mockReturnValue(undefined);
     routerState = {
       isReady: true,
       push: jest.fn(),
@@ -206,6 +258,39 @@ describe("Listing page direct-load reconciliation", () => {
       query: { productId: [relayHintedIdentifier] },
     };
     mockUseRouter.mockImplementation(() => routerState);
+  });
+
+  test("renders a follow action on zapsnag product pages for other sellers", () => {
+    const sellerPubkey = "b".repeat(64);
+    const viewerPubkey = "c".repeat(64);
+    const zapsnagEvent: NostrEvent = {
+      id: "zapsnag-event",
+      pubkey: sellerPubkey,
+      created_at: 1710000000,
+      kind: 1,
+      tags: [],
+      content: "zapsnag listing",
+      sig: "f".repeat(128),
+    };
+
+    mockParseZapsnagNote.mockReturnValue({
+      id: zapsnagEvent.id,
+      pubkey: sellerPubkey,
+      title: "Zapsnag Follow Listing",
+      summary: "Followable zapsnag product",
+      images: ["https://example.com/zapsnag.png"],
+    } as ProductData);
+
+    renderListingPage({
+      initialProductEvent: zapsnagEvent,
+      productEvents: [],
+      isLoading: true,
+      signerPubkey: viewerPubkey,
+    });
+
+    expect(
+      screen.getByRole("button", { name: /\+ Follow/i })
+    ).toBeInTheDocument();
   });
 
   test("keeps the SSR-seeded listing visible for relay-hinted naddr routes after hydration", async () => {
