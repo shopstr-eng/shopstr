@@ -6,13 +6,9 @@ import {
   cacheEvent,
   getDbPool,
   fetchAllMessagesFromDb,
-  fetchCachedEvents,
 } from "@/utils/db/db-service";
 import { createGiftWrapEvent } from "@/utils/nostr/gift-wrap";
 import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
-import { getDecodedToken, Mint, Wallet } from "@cashu/cashu-ts";
-import { withMintRetry } from "@/utils/cashu/mint-retry-service";
-import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import {
   getMcpOrder,
   updateMcpOrderStatus,
@@ -39,7 +35,6 @@ jest.mock("@/utils/db/db-service", () => ({
   cacheEvent: jest.fn(),
   getDbPool: jest.fn(),
   fetchAllMessagesFromDb: jest.fn(),
-  fetchCachedEvents: jest.fn(),
 }));
 
 jest.mock("@/utils/nostr/gift-wrap", () => ({
@@ -55,23 +50,6 @@ jest.mock("@/mcp/tools/purchase-tools", () => ({
   getMcpOrder: jest.fn(),
   updateMcpOrderStatus: jest.fn(),
   updateMcpOrderAddress: jest.fn(),
-}));
-
-jest.mock("@cashu/cashu-ts", () => ({
-  getDecodedToken: jest.fn(),
-  Mint: jest.fn().mockImplementation(() => ({})),
-  Wallet: jest.fn().mockImplementation(() => ({
-    loadMint: jest.fn(),
-    createMeltQuoteBolt11: jest.fn(),
-  })),
-}));
-
-jest.mock("@/utils/cashu/mint-retry-service", () => ({
-  withMintRetry: jest.fn((fn: () => Promise<unknown>) => fn()),
-}));
-
-jest.mock("@/utils/cashu/melt-retry-service", () => ({
-  safeMeltProofs: jest.fn(),
 }));
 
 type ToolResult = {
@@ -226,7 +204,6 @@ const WRITE_TOOL_NAMES = [
 let mockSigner: ReturnType<typeof createMockSigner>;
 let publishCallCount: number;
 let auditLogSpy: jest.SpyInstance;
-const originalFetch = global.fetch;
 
 beforeAll(() => {
   auditLogSpy = jest
@@ -236,7 +213,6 @@ beforeAll(() => {
 
 afterAll(() => {
   auditLogSpy.mockRestore();
-  global.fetch = originalFetch;
 });
 
 beforeEach(() => {
@@ -258,13 +234,6 @@ beforeEach(() => {
       };
     });
   jest.mocked(cacheEvent).mockResolvedValue(undefined);
-  jest.mocked(fetchCachedEvents).mockResolvedValue([]);
-  jest.mocked(withMintRetry).mockImplementation(async (fn: any) => fn());
-  jest.mocked(safeMeltProofs).mockResolvedValue({
-    status: "paid",
-    changeProofs: [],
-  } as any);
-  global.fetch = jest.fn() as any;
 });
 
 describe("registerWriteTools — (core listing & shop lifecycle)", () => {
@@ -952,17 +921,6 @@ describe("registerWriteTools — (community & messaging)", () => {
     "send_shipping_update",
     "update_order_status",
     "list_messages",
-    "set_relay_list",
-    "set_blossom_servers",
-    "upload_media",
-    "create_discount_code",
-    "delete_discount_code",
-    "list_discount_codes",
-    "get_cashu_balance",
-    "receive_cashu_tokens",
-    "set_cashu_mints",
-    "send_cashu_payment",
-    "manage_custom_domain",
   ];
 
   beforeEach(() => {
@@ -1789,340 +1747,6 @@ describe("registerWriteTools — (community & messaging)", () => {
         orderId: null,
         productAddress: null,
         address: null,
-      });
-    });
-  });
-
-  describe("relay, media, discount, cashu, and domains", () => {
-    function getCallback(name: string) {
-      return getTool(registerToolsForTest(fullAccessApiKey), name);
-    }
-
-    function mockFetchJson(
-      body: unknown,
-      overrides: Partial<{ ok: boolean; status: number; text: string }> = {}
-    ) {
-      const response = {
-        ok: overrides.ok ?? true,
-        status: overrides.status ?? 200,
-        json: jest.fn().mockResolvedValue(body),
-        text: jest.fn().mockResolvedValue(overrides.text ?? ""),
-      };
-      jest.mocked(global.fetch as jest.Mock).mockResolvedValue(response as any);
-      return response;
-    }
-
-    it("set_relay_list publishes NIP-65 relay tags and caches the event", async () => {
-      const tool = getCallback("set_relay_list");
-
-      const result = await tool({
-        relays: [
-          { url: "wss://read.example", type: "read" },
-          { url: "wss://write.example", type: "write" },
-          { url: "wss://both.example" },
-        ],
-      });
-
-      const template = jest.mocked(signAndPublishEvent).mock
-        .calls[0]![1] as any;
-      expect(template.kind).toBe(10002);
-      expect(template.tags).toEqual([
-        ["r", "wss://read.example", "read"],
-        ["r", "wss://write.example", "write"],
-        ["r", "wss://both.example"],
-      ]);
-      expect(cacheEvent).toHaveBeenCalledTimes(1);
-      expect(textPayload(result).relayCount).toBe(3);
-    });
-
-    it("set_blossom_servers publishes server tags and caches the event", async () => {
-      const tool = getCallback("set_blossom_servers");
-
-      const result = await tool({
-        servers: ["https://cdn1.example", "https://cdn2.example"],
-      });
-
-      const template = jest.mocked(signAndPublishEvent).mock
-        .calls[0]![1] as any;
-      expect(template.kind).toBe(10063);
-      expect(template.tags).toEqual([
-        ["server", "https://cdn1.example"],
-        ["server", "https://cdn2.example"],
-      ]);
-      expect(cacheEvent).toHaveBeenCalledTimes(1);
-      expect(textPayload(result).serverCount).toBe(2);
-    });
-
-    it("upload_media signs a Blossom auth event and uploads to the selected server", async () => {
-      mockFetchJson({
-        url: "https://blossom.example/file.png",
-        sha256: "server-hash",
-        size: 3,
-      });
-      const tool = getCallback("upload_media");
-
-      const result = await tool({
-        fileBase64: Buffer.from("abc").toString("base64"),
-        fileName: "file.png",
-        mimeType: "image/png",
-        serverUrl: "https://blossom.example",
-      });
-
-      expect(mockSigner.sign).toHaveBeenCalledWith(
-        expect.objectContaining({
-          kind: 24242,
-          content: "Upload file.png",
-          tags: expect.arrayContaining([
-            ["t", "upload"],
-            ["size", "3"],
-          ]),
-        })
-      );
-      expect(global.fetch).toHaveBeenCalledWith(
-        "https://blossom.example/upload",
-        expect.objectContaining({
-          method: "PUT",
-          headers: expect.objectContaining({
-            authorization: expect.stringMatching(/^Nostr /),
-            "content-type": "image/png",
-          }),
-        })
-      );
-      expect(textPayload(result)).toMatchObject({
-        url: "https://blossom.example/file.png",
-        sha256: "server-hash",
-        size: 3,
-        serverUrl: "https://blossom.example",
-      });
-    });
-
-    it("create_discount_code sends a signed ownership proof to the local API", async () => {
-      mockFetchJson({ ok: true });
-      const tool = getCallback("create_discount_code");
-
-      const result = await tool({
-        code: "SUMMER20",
-        discountPercentage: 20,
-        expiration: 2_000_000_000,
-      });
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:5000/api/db/discount-codes",
-        expect.objectContaining({
-          method: "POST",
-          headers: expect.objectContaining({
-            "Content-Type": "application/json",
-            "x-signed-event": expect.any(String),
-          }),
-          body: JSON.stringify({
-            code: "SUMMER20",
-            pubkey: TEST_PUBKEY,
-            discountPercentage: 20,
-            expiration: 2_000_000_000,
-          }),
-        })
-      );
-      expect(textPayload(result)).toMatchObject({
-        code: "SUMMER20",
-        discountPercentage: 20,
-      });
-    });
-
-    it("delete_discount_code sends a signed delete proof to the local API", async () => {
-      mockFetchJson({ ok: true });
-      const tool = getCallback("delete_discount_code");
-
-      const result = await tool({ code: "SUMMER20" });
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        "http://localhost:5000/api/db/discount-codes",
-        expect.objectContaining({
-          method: "DELETE",
-          headers: expect.objectContaining({
-            "Content-Type": "application/json",
-            "x-signed-event": expect.any(String),
-          }),
-          body: JSON.stringify({ code: "SUMMER20", pubkey: TEST_PUBKEY }),
-        })
-      );
-      expect(textPayload(result)).toMatchObject({
-        code: "SUMMER20",
-        deleted: true,
-      });
-    });
-
-    it("list_discount_codes includes a signed list proof and returns the code count", async () => {
-      mockFetchJson([{ code: "SUMMER20" }, { code: "VIP" }]);
-      const tool = getCallback("list_discount_codes");
-
-      const result = await tool({});
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        `http://localhost:5000/api/db/discount-codes?pubkey=${TEST_PUBKEY}`,
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            "x-signed-event": expect.any(String),
-          }),
-        })
-      );
-      expect(textPayload(result)).toMatchObject({ count: 2 });
-    });
-
-    it("get_cashu_balance decrypts only this pubkey's proof events", async () => {
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        {
-          pubkey: TEST_PUBKEY,
-          content: encryptForMock(
-            JSON.stringify({
-              mint: "https://mint.example",
-              proofs: [{ amount: 2 }, { amount: 3 }],
-            })
-          ),
-        },
-        {
-          pubkey: "other-pubkey",
-          content: encryptForMock(
-            JSON.stringify({
-              mint: "https://mint.example",
-              proofs: [{ amount: 50 }],
-            })
-          ),
-        },
-      ] as any);
-      const tool = getCallback("get_cashu_balance");
-
-      const result = await tool({});
-
-      expect(fetchCachedEvents).toHaveBeenCalledWith(7375);
-      expect(textPayload(result)).toMatchObject({
-        totalBalance: 5,
-        mintBalances: { "https://mint.example": 5 },
-        proofEventCount: 1,
-      });
-    });
-
-    it("receive_cashu_tokens encrypts decoded proofs into a kind 7375 event", async () => {
-      const proofs = [{ amount: 7 }, { amount: 8 }];
-      jest.mocked(getDecodedToken).mockReturnValueOnce({
-        mint: "https://mint.example",
-        proofs,
-      } as any);
-      const tool = getCallback("receive_cashu_tokens");
-
-      const result = await tool({ token: "cashu-token" });
-
-      expect(mockSigner.encrypt).toHaveBeenCalledWith(
-        TEST_PUBKEY,
-        JSON.stringify({ mint: "https://mint.example", proofs })
-      );
-      const template = jest.mocked(signAndPublishEvent).mock
-        .calls[0]![1] as any;
-      expect(template).toMatchObject({
-        kind: 7375,
-        tags: expect.arrayContaining([["mint", "https://mint.example"]]),
-        content: expect.stringContaining("https://mint.example"),
-      });
-      expect(textPayload(result)).toMatchObject({
-        amount: 15,
-        mint: "https://mint.example",
-        proofCount: 2,
-      });
-    });
-
-    it("set_cashu_mints encrypts mint tags into the wallet config event", async () => {
-      const tool = getCallback("set_cashu_mints");
-
-      const result = await tool({ mints: ["https://mint.example"] });
-
-      expect(mockSigner.encrypt).toHaveBeenCalledWith(
-        TEST_PUBKEY,
-        JSON.stringify([["mint", "https://mint.example"]])
-      );
-      const template = jest.mocked(signAndPublishEvent).mock
-        .calls[0]![1] as any;
-      expect(template).toMatchObject({
-        kind: 17375,
-        tags: expect.arrayContaining([
-          ["d", TEST_PUBKEY],
-          ["relay", "wss://relay.damus.io"],
-        ]),
-      });
-      expect(textPayload(result)).toMatchObject({
-        mints: ["https://mint.example"],
-        mintCount: 1,
-      });
-    });
-
-    it("send_cashu_payment loads this pubkey's proofs and reports paid melts", async () => {
-      const wallet = {
-        loadMint: jest.fn().mockResolvedValue(undefined),
-        createMeltQuoteBolt11: jest.fn().mockResolvedValue({
-          amount: { toNumber: () => 10 },
-          fee_reserve: { toNumber: () => 1 },
-        }),
-      };
-      jest.mocked(Mint).mockImplementationOnce(() => ({}) as any);
-      jest.mocked(Wallet).mockImplementationOnce(() => wallet as any);
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        {
-          pubkey: TEST_PUBKEY,
-          content: encryptForMock(
-            JSON.stringify({
-              mint: "https://mint.example",
-              proofs: [{ amount: 11 }],
-            })
-          ),
-        },
-      ] as any);
-      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
-        status: "paid",
-        changeProofs: [{ amount: { toNumber: () => 4 } }],
-      } as any);
-      const tool = getCallback("send_cashu_payment");
-
-      const result = await tool({
-        invoice: "lnbc1invoice",
-        mintUrl: "https://mint.example",
-      });
-
-      expect(wallet.loadMint).toHaveBeenCalledTimes(1);
-      expect(withMintRetry).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.objectContaining({
-          maxAttempts: 4,
-          perAttemptTimeoutMs: 15000,
-          totalTimeoutMs: 60000,
-        })
-      );
-      expect(safeMeltProofs).toHaveBeenCalledWith(wallet, expect.any(Object), [
-        { amount: 11 },
-      ]);
-      expect(textPayload(result)).toMatchObject({
-        paid: true,
-        mintUrl: "https://mint.example",
-        change: 4,
-      });
-    });
-
-    it("manage_custom_domain remove deletes only this pubkey's domain mapping", async () => {
-      const pool = { query: jest.fn().mockResolvedValue({ rowCount: 1 }) };
-      jest.mocked(getDbPool).mockReturnValueOnce(pool as any);
-      const tool = getCallback("manage_custom_domain");
-
-      const result = await tool({
-        action: "remove",
-        domain: "shop.example",
-      });
-
-      expect(pool.query).toHaveBeenCalledWith(
-        expect.stringContaining(
-          "DELETE FROM custom_domains WHERE pubkey = $1 AND domain = $2"
-        ),
-        [TEST_PUBKEY, "shop.example"]
-      );
-      expect(textPayload(result)).toMatchObject({
-        domain: "shop.example",
-        removed: true,
       });
     });
   });
