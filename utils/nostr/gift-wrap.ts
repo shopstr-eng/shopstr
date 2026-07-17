@@ -338,39 +338,53 @@ export async function constructMessageGiftWrap(
   return signedEvent;
 }
 
+type SendGiftWrappedMessageOptions = {
+  waitForRelayPublish?: boolean;
+};
+
 export async function sendGiftWrappedMessageEvent(
   nostr: NostrManager,
   giftWrappedMessageEvent: NostrEvent,
-  signer?: NostrSigner
+  signer?: NostrSigner,
+  options: SendGiftWrappedMessageOptions = {}
 ) {
   const { relays, writeRelays } = getLocalStorageData();
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
 
   await cacheEventToDatabase(giftWrappedMessageEvent);
 
-  try {
-    await newPromiseWithTimeout(
-      async (resolve, reject) => {
-        try {
-          await nostr.publish(giftWrappedMessageEvent, allWriteRelays);
-          resolve(undefined);
-        } catch (err) {
-          reject(err as Error);
-        }
-      },
-      { timeout: 21000 }
-    );
-  } catch (error) {
-    console.warn(
-      "Relay publish timed out or failed for gift-wrapped message, but event is saved to database:",
-      error
-    );
-    const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
-    await trackFailedRelayPublish(
-      giftWrappedMessageEvent.id,
-      giftWrappedMessageEvent,
-      allWriteRelays,
-      signer
-    ).catch(console.error);
+  const publishWithRetryTracking = async () => {
+    try {
+      await newPromiseWithTimeout(
+        async (resolve, reject) => {
+          try {
+            await nostr.publish(giftWrappedMessageEvent, allWriteRelays);
+            resolve(undefined);
+          } catch (err) {
+            reject(err as Error);
+          }
+        },
+        { timeout: 21000 }
+      );
+    } catch (error) {
+      console.warn(
+        "Relay publish timed out or failed for gift-wrapped message, but event is saved to database:",
+        error
+      );
+      const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
+      await trackFailedRelayPublish(
+        giftWrappedMessageEvent.id,
+        giftWrappedMessageEvent,
+        allWriteRelays,
+        signer
+      ).catch(console.error);
+    }
+  };
+
+  if (options.waitForRelayPublish === false) {
+    void publishWithRetryTracking();
+    return;
   }
+
+  await publishWithRetryTracking();
 }
