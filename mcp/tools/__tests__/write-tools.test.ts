@@ -204,6 +204,7 @@ const WRITE_TOOL_NAMES = [
 let mockSigner: ReturnType<typeof createMockSigner>;
 let publishCallCount: number;
 let auditLogSpy: jest.SpyInstance;
+const originalFetch = global.fetch;
 
 beforeAll(() => {
   auditLogSpy = jest
@@ -213,6 +214,7 @@ beforeAll(() => {
 
 afterAll(() => {
   auditLogSpy.mockRestore();
+  global.fetch = originalFetch;
 });
 
 beforeEach(() => {
@@ -234,6 +236,7 @@ beforeEach(() => {
       };
     });
   jest.mocked(cacheEvent).mockResolvedValue(undefined);
+  global.fetch = jest.fn() as any;
 });
 
 describe("registerWriteTools — (core listing & shop lifecycle)", () => {
@@ -1814,6 +1817,271 @@ describe("registerWriteTools — (community & messaging)", () => {
       expect(client.release).toHaveBeenCalledTimes(1);
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to mark messages as read");
+    });
+  });
+});
+
+describe("registerWriteTools — (relay & media configuration)", () => {
+  const PHASE_3_TOOLS = [
+    "set_relay_list",
+    "set_blossom_servers",
+    "upload_media",
+  ];
+
+  describe.each(PHASE_3_TOOLS)("%s — shared guards", (toolName) => {
+    it("returns a permission error when apiKey.permissions is not full_access", async () => {
+      const callbacks = registerToolsForTest(readOnlyApiKey);
+      const tool = getTool(callbacks, toolName);
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toMatch(/Insufficient permissions/i);
+      expect(getAgentSigner).not.toHaveBeenCalled();
+    });
+
+    it("returns a no-signer error when getAgentSigner resolves null", async () => {
+      jest.mocked(getAgentSigner).mockResolvedValueOnce(null);
+      const callbacks = registerToolsForTest(fullAccessApiKey);
+      const tool = getTool(callbacks, toolName);
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toMatch(/No signing key configured/i);
+    });
+  });
+
+  describe("set_relay_list", () => {
+    function getCallback() {
+      return getTool(registerToolsForTest(fullAccessApiKey), "set_relay_list");
+    }
+
+    it("maps type='read'/'write' to a 3-element tag and omits the type element for 'both'/unset", async () => {
+      const tool = getCallback();
+
+      const result = await tool({
+        relays: [
+          { url: "wss://read.example", type: "read" },
+          { url: "wss://write.example", type: "write" },
+          { url: "wss://both.example", type: "both" },
+          { url: "wss://unset.example" },
+        ],
+      });
+
+      const template = jest.mocked(signAndPublishEvent).mock
+        .calls[0]![1] as any;
+      expect(template.kind).toBe(10002);
+      expect(template.tags).toEqual([
+        ["r", "wss://read.example", "read"],
+        ["r", "wss://write.example", "write"],
+        ["r", "wss://both.example"],
+        ["r", "wss://unset.example"],
+      ]);
+      expect(cacheEvent).toHaveBeenCalledTimes(1);
+      const payload = textPayload(result);
+      expect(payload.relayCount).toBe(4);
+      expect(payload.relays).toEqual([
+        { url: "wss://read.example", type: "read" },
+        { url: "wss://write.example", type: "write" },
+        { url: "wss://both.example", type: "both" },
+        { url: "wss://unset.example" },
+      ]);
+    });
+
+    it("returns errorResponse when signAndPublishEvent throws", async () => {
+      jest
+        .mocked(signAndPublishEvent)
+        .mockRejectedValueOnce(new Error("relay down"));
+      const tool = getCallback();
+
+      const result = await tool({
+        relays: [{ url: "wss://read.example", type: "read" }],
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to set relay list");
+    });
+  });
+
+  describe("set_blossom_servers", () => {
+    function getCallback() {
+      return getTool(
+        registerToolsForTest(fullAccessApiKey),
+        "set_blossom_servers"
+      );
+    }
+
+    it("builds one ['server', url] tag per server on a kind:10063 event and caches it", async () => {
+      const tool = getCallback();
+
+      const result = await tool({
+        servers: ["https://cdn1.example", "https://cdn2.example"],
+      });
+
+      const template = jest.mocked(signAndPublishEvent).mock
+        .calls[0]![1] as any;
+      expect(template.kind).toBe(10063);
+      expect(template.tags).toEqual([
+        ["server", "https://cdn1.example"],
+        ["server", "https://cdn2.example"],
+      ]);
+      expect(cacheEvent).toHaveBeenCalledTimes(1);
+      expect(textPayload(result).serverCount).toBe(2);
+    });
+
+    it("returns errorResponse when signAndPublishEvent throws", async () => {
+      jest
+        .mocked(signAndPublishEvent)
+        .mockRejectedValueOnce(new Error("relay down"));
+      const tool = getCallback();
+
+      const result = await tool({ servers: ["https://cdn1.example"] });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to set blossom servers");
+    });
+  });
+
+  describe("upload_media", () => {
+    function getCallback() {
+      return getTool(registerToolsForTest(fullAccessApiKey), "upload_media");
+    }
+
+    function mockFetchResponse(
+      body: unknown,
+      overrides: Partial<{ ok: boolean; status: number; text: string }> = {}
+    ) {
+      const response = {
+        ok: overrides.ok ?? true,
+        status: overrides.status ?? 200,
+        json: jest.fn().mockResolvedValue(body),
+        text: jest.fn().mockResolvedValue(overrides.text ?? ""),
+      };
+      jest.mocked(global.fetch as jest.Mock).mockResolvedValue(response as any);
+      return response;
+    }
+
+    it("computes the sha256 hash of the decoded base64 file and includes it in the auth event's x tag", async () => {
+      mockFetchResponse({
+        url: "https://blossom.example/file.png",
+        sha256: "server-hash",
+        size: 3,
+      });
+      const tool = getCallback();
+
+      await tool({
+        fileBase64: Buffer.from("abc").toString("base64"),
+        fileName: "file.png",
+        mimeType: "image/png",
+        serverUrl: "https://blossom.example",
+      });
+
+      expect(mockSigner.sign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 24242,
+          content: "Upload file.png",
+          tags: expect.arrayContaining([
+            ["t", "upload"],
+            [
+              "x",
+              "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            ],
+            ["size", "3"],
+          ]),
+        })
+      );
+    });
+
+    it("defaults serverUrl to https://cdn.nostrcheck.me when not provided", async () => {
+      mockFetchResponse({ url: "https://cdn.nostrcheck.me/file.png" });
+      const tool = getCallback();
+
+      await tool({
+        fileBase64: Buffer.from("abc").toString("base64"),
+        fileName: "file.png",
+        mimeType: "image/png",
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "https://cdn.nostrcheck.me/upload",
+        expect.objectContaining({ method: "PUT" })
+      );
+    });
+
+    it("returns errorResponse with the server's status and body when the upload response is not ok", async () => {
+      mockFetchResponse({}, { ok: false, status: 413, text: "file too large" });
+      const tool = getCallback();
+
+      const result = await tool({
+        fileBase64: Buffer.from("abc").toString("base64"),
+        fileName: "file.png",
+        mimeType: "image/png",
+      });
+
+      expect(result.isError).toBe(true);
+      const payload = textPayload(result);
+      expect(payload.error).toBe("Upload failed");
+      expect(payload.details).toContain("413");
+      expect(payload.details).toContain("file too large");
+    });
+
+    it("falls back to the locally-computed hash and size when the server omits them", async () => {
+      mockFetchResponse({ url: "https://blossom.example/file.png" });
+      const tool = getCallback();
+
+      const result = await tool({
+        fileBase64: Buffer.from("abc").toString("base64"),
+        fileName: "file.png",
+        mimeType: "image/png",
+        serverUrl: "https://blossom.example",
+      });
+
+      const payload = textPayload(result);
+      expect(payload.sha256).toBe(
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+      );
+      expect(payload.size).toBe(3);
+    });
+
+    it("returns the server's own url/sha256/size when provided", async () => {
+      mockFetchResponse({
+        url: "https://blossom.example/file.png",
+        sha256: "server-hash",
+        size: 999,
+      });
+      const tool = getCallback();
+
+      const result = await tool({
+        fileBase64: Buffer.from("abc").toString("base64"),
+        fileName: "file.png",
+        mimeType: "image/png",
+        serverUrl: "https://blossom.example",
+      });
+
+      const payload = textPayload(result);
+      expect(payload).toMatchObject({
+        url: "https://blossom.example/file.png",
+        sha256: "server-hash",
+        size: 999,
+        serverUrl: "https://blossom.example",
+      });
+    });
+
+    it("returns errorResponse when the upload throws (e.g. network failure)", async () => {
+      jest
+        .mocked(global.fetch as jest.Mock)
+        .mockRejectedValueOnce(new Error("network down"));
+      const tool = getCallback();
+
+      const result = await tool({
+        fileBase64: Buffer.from("abc").toString("base64"),
+        fileName: "file.png",
+        mimeType: "image/png",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to upload media");
     });
   });
 });
