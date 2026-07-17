@@ -2,11 +2,13 @@ const applyRateLimitMock = jest.fn();
 const verifyNip98RequestMock = jest.fn();
 const createPartialRedemptionMock = jest.fn();
 const sendServerGiftWrappedDmMock = jest.fn();
-const fetchCachedDisputeEventMock = jest.fn();
-const fetchDisputeEventMock = jest.fn();
+const fetchCachedDisputeEventsMock = jest.fn();
+const fetchDisputeEventCandidatesMock = jest.fn();
 const parseDisputeEventMock = jest.fn();
+const selectAuthoritativeDisputeEventMock = jest.fn();
 const signAndPublishEventMock = jest.fn();
 const getTokenMetadataMock = jest.fn();
+const getOrderParticipantsMock = jest.fn();
 
 jest.mock("@cashu/cashu-ts", () => ({
   getTokenMetadata: (...args: unknown[]) => getTokenMetadataMock(...args),
@@ -31,8 +33,11 @@ jest.mock("@/utils/nostr/server-gift-wrap", () => ({
 }));
 
 jest.mock("@/utils/nostr/dispute-records", () => ({
-  fetchDisputeEvent: (...args: unknown[]) => fetchDisputeEventMock(...args),
+  fetchDisputeEventCandidates: (...args: unknown[]) =>
+    fetchDisputeEventCandidatesMock(...args),
   parseDisputeEvent: (...args: unknown[]) => parseDisputeEventMock(...args),
+  selectAuthoritativeDisputeEvent: (...args: unknown[]) =>
+    selectAuthoritativeDisputeEventMock(...args),
   createDisputeEventTemplate: (params: any) => ({
     kind: 30009,
     tags: [
@@ -45,8 +50,13 @@ jest.mock("@/utils/nostr/dispute-records", () => ({
 }));
 
 jest.mock("@/utils/nostr/server-dispute-records", () => ({
-  fetchCachedDisputeEvent: (...args: unknown[]) =>
-    fetchCachedDisputeEventMock(...args),
+  fetchCachedDisputeEvents: (...args: unknown[]) =>
+    fetchCachedDisputeEventsMock(...args),
+}));
+
+jest.mock("@/utils/db/db-service", () => ({
+  getOrderParticipants: (...args: unknown[]) =>
+    getOrderParticipantsMock(...args),
 }));
 
 jest.mock("@/utils/mcp/nostr-signing", () => ({
@@ -102,8 +112,17 @@ describe("/api/arbiter/rule", () => {
       partialSigs: ["arbiter-sig"],
     });
     sendServerGiftWrappedDmMock.mockResolvedValue(undefined);
-    fetchCachedDisputeEventMock.mockResolvedValue({ id: "cached-dispute" });
-    fetchDisputeEventMock.mockResolvedValue({ id: "dispute-event" });
+    fetchCachedDisputeEventsMock.mockResolvedValue([{ id: "cached-dispute" }]);
+    fetchDisputeEventCandidatesMock.mockResolvedValue([
+      { id: "dispute-event" },
+    ]);
+    getOrderParticipantsMock.mockResolvedValue({
+      buyerPubkey: "buyer-nostr-pubkey",
+      sellerPubkey: "seller-nostr-pubkey",
+    });
+    selectAuthoritativeDisputeEventMock.mockImplementation(
+      (candidates: unknown[]) => candidates[0] ?? null
+    );
     parseDisputeEventMock.mockReturnValue({
       orderId: "order-1",
       reason: "buyer opened dispute",
@@ -166,8 +185,13 @@ describe("/api/arbiter/rule", () => {
     await handler(req, res as any);
 
     expect(verifyNip98RequestMock).toHaveBeenCalledWith(req, "POST");
-    expect(fetchCachedDisputeEventMock).toHaveBeenCalledWith("order-1");
-    expect(fetchDisputeEventMock).not.toHaveBeenCalled();
+    expect(fetchCachedDisputeEventsMock).toHaveBeenCalledWith("order-1");
+    expect(fetchDisputeEventCandidatesMock).not.toHaveBeenCalled();
+    expect(getOrderParticipantsMock).toHaveBeenCalledWith("order-1");
+    expect(selectAuthoritativeDisputeEventMock).toHaveBeenCalledWith(
+      [{ id: "cached-dispute" }],
+      { buyerPubkey: "buyer-nostr-pubkey", sellerPubkey: "seller-nostr-pubkey" }
+    );
     expect(createPartialRedemptionMock).toHaveBeenCalledWith(
       "cashuAtoken",
       "arbiter-cashu-privkey"
@@ -228,7 +252,7 @@ describe("/api/arbiter/rule", () => {
     expect(res.jsonBody).toEqual({
       error: "Token mint is not allowed for dispute escrow",
     });
-    expect(fetchCachedDisputeEventMock).not.toHaveBeenCalled();
+    expect(fetchCachedDisputeEventsMock).not.toHaveBeenCalled();
     expect(createPartialRedemptionMock).not.toHaveBeenCalled();
   });
 
@@ -293,7 +317,7 @@ describe("/api/arbiter/rule", () => {
       ok: true,
       pubkey: "arbiter-nostr-pubkey",
     });
-    fetchCachedDisputeEventMock.mockResolvedValue(null);
+    fetchCachedDisputeEventsMock.mockResolvedValue([]);
 
     const req = {
       method: "POST",
@@ -308,10 +332,68 @@ describe("/api/arbiter/rule", () => {
 
     await handler(req, res as any);
 
-    expect(fetchDisputeEventMock).toHaveBeenCalledWith(
+    expect(fetchDisputeEventCandidatesMock).toHaveBeenCalledWith(
       expect.objectContaining({ orderId: "order-1", timeoutMs: 10_000 })
     );
     expect(res.statusCode).toBe(200);
+  });
+
+  it("rejects rulings when no dispute candidate is found at all", async () => {
+    verifyNip98RequestMock.mockResolvedValue({
+      ok: true,
+      pubkey: "arbiter-nostr-pubkey",
+    });
+    fetchCachedDisputeEventsMock.mockResolvedValue([]);
+    fetchDisputeEventCandidatesMock.mockResolvedValue([]);
+
+    const req = {
+      method: "POST",
+      headers: { authorization: "Nostr signed-event" },
+      body: {
+        orderId: "order-1",
+        token: "cashuAtoken",
+        rulingFor: "buyer",
+      },
+    } as any;
+    const res = createResponse();
+
+    await handler(req, res as any);
+
+    expect(res.statusCode).toBe(404);
+    expect(getOrderParticipantsMock).not.toHaveBeenCalled();
+    expect(createPartialRedemptionMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects rulings when no candidate matches the order's authoritative buyer/seller records", async () => {
+    verifyNip98RequestMock.mockResolvedValue({
+      ok: true,
+      pubkey: "arbiter-nostr-pubkey",
+    });
+    getOrderParticipantsMock.mockResolvedValue({
+      buyerPubkey: "real-buyer-pubkey",
+      sellerPubkey: "seller-nostr-pubkey",
+    });
+    selectAuthoritativeDisputeEventMock.mockReturnValue(null);
+
+    const req = {
+      method: "POST",
+      headers: { authorization: "Nostr signed-event" },
+      body: {
+        orderId: "order-1",
+        token: "cashuAtoken",
+        rulingFor: "buyer",
+      },
+    } as any;
+    const res = createResponse();
+
+    await handler(req, res as any);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.jsonBody).toEqual({
+      error: "Dispute event does not match order records",
+    });
+    expect(createPartialRedemptionMock).not.toHaveBeenCalled();
+    expect(sendServerGiftWrappedDmMock).not.toHaveBeenCalled();
   });
 
   it("does not leak internal ruling errors to the client", async () => {

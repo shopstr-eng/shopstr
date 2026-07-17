@@ -4,11 +4,19 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   finalizeAndSendNostrEvent: jest.fn().mockResolvedValue({ id: "event-id" }),
 }));
 
+const verifyEventMock = jest.fn().mockReturnValue(true);
+jest.mock("nostr-tools", () => ({
+  ...jest.requireActual("nostr-tools"),
+  verifyEvent: (...args: unknown[]) => verifyEventMock(...args),
+}));
+
 import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions";
 import {
   DISPUTE_EVENT_KIND,
   publishDisputeEvent,
   fetchDisputeEvents,
+  fetchDisputeEventCandidates,
+  selectAuthoritativeDisputeEvent,
   parseDisputeEvent,
 } from "../dispute-records";
 
@@ -70,6 +78,7 @@ describe("fetchDisputeEvents", () => {
   const originalFetch = global.fetch;
 
   beforeEach(() => {
+    verifyEventMock.mockReturnValue(true);
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: jest.fn().mockResolvedValue([]),
@@ -186,6 +195,173 @@ describe("fetchDisputeEvents", () => {
       "/api/db/fetch-disputes?arbiterPubkey=arbiter-pubkey"
     );
     expect(result).toEqual([cached]);
+  });
+
+  it("drops cached events that fail signature verification", async () => {
+    const forged = mkDisputeEvent({
+      created_at: 200,
+      tags: [
+        ["d", "order-1"],
+        ["p", "buyer-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+        ["status", "open"],
+      ],
+    });
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([]),
+    } as any;
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue([forged]),
+    });
+    verifyEventMock.mockReturnValue(false);
+
+    const result = await fetchDisputeEvents({
+      nostr,
+      arbiterPubkey: "arbiter-pubkey",
+    });
+
+    expect(result).toEqual([]);
+  });
+
+  it("does not let a forged event from a different author clobber a legitimate one for the same orderId", async () => {
+    const legit = mkDisputeEvent({
+      pubkey: "buyer-pubkey",
+      created_at: 100,
+      tags: [
+        ["d", "order-1"],
+        ["p", "buyer-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+        ["status", "open"],
+      ],
+    });
+    const forged = mkDisputeEvent({
+      pubkey: "attacker-pubkey",
+      created_at: 999,
+      tags: [
+        ["d", "order-1"],
+        ["p", "attacker-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+        ["status", "open"],
+      ],
+    });
+
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([legit, forged]),
+    } as any;
+
+    const result = await fetchDisputeEvents({
+      nostr,
+      arbiterPubkey: "arbiter-pubkey",
+    });
+
+    expect(result).toContain(legit);
+    expect(result).toContain(forged);
+    expect(result).toHaveLength(2);
+  });
+});
+
+describe("fetchDisputeEventCandidates", () => {
+  it("returns one candidate per author, keeping the newest for each", async () => {
+    const olderFromAuthor = mkDisputeEvent({
+      pubkey: "buyer-pubkey",
+      created_at: 100,
+      tags: [
+        ["d", "order-1"],
+        ["p", "buyer-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+      ],
+    });
+    const newerFromAuthor = mkDisputeEvent({
+      pubkey: "buyer-pubkey",
+      created_at: 200,
+      tags: [
+        ["d", "order-1"],
+        ["p", "buyer-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+      ],
+    });
+    const otherAuthor = mkDisputeEvent({
+      pubkey: "attacker-pubkey",
+      created_at: 999,
+      tags: [
+        ["d", "order-1"],
+        ["p", "attacker-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+      ],
+    });
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValue([olderFromAuthor, newerFromAuthor, otherAuthor]),
+    } as any;
+
+    const result = await fetchDisputeEventCandidates({
+      nostr,
+      orderId: "order-1",
+    });
+
+    expect(result).toHaveLength(2);
+    expect(result).toContain(newerFromAuthor);
+    expect(result).toContain(otherAuthor);
+    expect(result).not.toContain(olderFromAuthor);
+  });
+});
+
+describe("selectAuthoritativeDisputeEvent", () => {
+  const legitBuyerEvent = mkDisputeEvent({
+    pubkey: "buyer-pubkey",
+    created_at: 100,
+    tags: [
+      ["d", "order-1"],
+      ["p", "buyer-pubkey", "", "buyer"],
+      ["p", "seller-pubkey", "", "seller"],
+      ["p", "arbiter-pubkey", "", "arbiter"],
+    ],
+  });
+  const forgedByAttacker = mkDisputeEvent({
+    pubkey: "attacker-pubkey",
+    created_at: 999,
+    tags: [
+      ["d", "order-1"],
+      ["p", "attacker-pubkey", "", "buyer"],
+      ["p", "seller-pubkey", "", "seller"],
+      ["p", "arbiter-pubkey", "", "arbiter"],
+    ],
+  });
+
+  it("picks the candidate whose buyer/seller match the authoritative order record, ignoring a newer forged one", () => {
+    const result = selectAuthoritativeDisputeEvent(
+      [legitBuyerEvent, forgedByAttacker],
+      { buyerPubkey: "buyer-pubkey", sellerPubkey: "seller-pubkey" }
+    );
+
+    expect(result).toBe(legitBuyerEvent);
+  });
+
+  it("returns null when no candidate matches the authoritative order record", () => {
+    const result = selectAuthoritativeDisputeEvent([forgedByAttacker], {
+      buyerPubkey: "buyer-pubkey",
+      sellerPubkey: "seller-pubkey",
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it("falls back to newest-overall when the order record has no known participants", () => {
+    const result = selectAuthoritativeDisputeEvent(
+      [legitBuyerEvent, forgedByAttacker],
+      { buyerPubkey: null, sellerPubkey: null }
+    );
+
+    expect(result).toBe(forgedByAttacker);
   });
 });
 

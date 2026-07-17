@@ -1,4 +1,5 @@
 import type { EventTemplate } from "nostr-tools";
+import { verifyEvent } from "nostr-tools";
 import { NostrManager, type NostrEvent } from "@/utils/nostr/nostr-manager";
 import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions";
@@ -115,7 +116,9 @@ async function fetchCachedDisputeEvents(
     );
     if (!response.ok) return [];
     const events = await response.json();
-    return Array.isArray(events) ? events.filter(isNostrEvent) : [];
+    return Array.isArray(events)
+      ? events.filter(isNostrEvent).filter(verifyEvent)
+      : [];
   } catch {
     return [];
   }
@@ -126,8 +129,13 @@ function getDTag(event: NostrEvent): string | undefined {
 }
 
 // Fetches all open kind 30009 dispute events tagging arbiterPubkey,
-// deduplicated by orderId (the d tag) keeping the newest per orderId, sorted
-// newest first.
+// deduplicated by (orderId, author) keeping the newest per author, sorted
+// newest first. Deduplication is scoped per-author (not globally per
+// orderId) so a forged event from a different pubkey can't silently
+// supersede a legitimate party's event for the same order in the map --
+// each author's claim for an orderId is kept independent, and it's up to
+// downstream consumers (e.g. the arbiter ruling endpoint) to validate which
+// claim is authoritative before acting on it.
 export async function fetchDisputeEvents(params: {
   nostr: NostrManager;
   arbiterPubkey: string;
@@ -141,17 +149,18 @@ export async function fetchDisputeEvents(params: {
     fetchCachedDisputeEvents(arbiterPubkey),
   ]);
 
-  const newestByOrderId = new Map<string, NostrEvent>();
+  const newestByOrderIdAndAuthor = new Map<string, NostrEvent>();
   for (const event of [...relayEvents, ...cachedEvents]) {
     const orderId = getDTag(event);
     if (!orderId) continue;
-    const existing = newestByOrderId.get(orderId);
+    const key = `${orderId}::${event.pubkey}`;
+    const existing = newestByOrderIdAndAuthor.get(key);
     if (!existing || (event.created_at ?? 0) > (existing.created_at ?? 0)) {
-      newestByOrderId.set(orderId, event);
+      newestByOrderIdAndAuthor.set(key, event);
     }
   }
 
-  return Array.from(newestByOrderId.values())
+  return Array.from(newestByOrderIdAndAuthor.values())
     .filter((event) => parseDisputeEvent(event)?.status === "open")
     .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
 }
@@ -174,6 +183,70 @@ export async function fetchDisputeEvent(params: {
 
   return events.reduce((newest, event) =>
     (event.created_at ?? 0) > (newest.created_at ?? 0) ? event : newest
+  );
+}
+
+// Fetches every kind 30009 dispute-event candidate for a given orderId from
+// relays, deduplicated by author (newest per author). Unlike
+// fetchDisputeEvent, this does not collapse candidates down to a single
+// "newest overall" event -- a forged event from an unrelated pubkey with a
+// later timestamp would otherwise be indistinguishable from the real one.
+// Callers that need to act on the dispute (e.g. paying out a ruling) should
+// pick the authoritative candidate via selectAuthoritativeDisputeEvent
+// instead of trusting whichever one happens to be newest.
+export async function fetchDisputeEventCandidates(params: {
+  nostr: NostrManager;
+  orderId: string;
+  timeoutMs?: number;
+}): Promise<NostrEvent[]> {
+  const { nostr, orderId, timeoutMs } = params;
+
+  const events = await nostr.fetch(
+    [{ kinds: [DISPUTE_EVENT_KIND], "#d": [orderId] }],
+    undefined,
+    undefined,
+    timeoutMs
+  );
+
+  const newestByAuthor = new Map<string, NostrEvent>();
+  for (const event of events) {
+    const existing = newestByAuthor.get(event.pubkey);
+    if (!existing || (event.created_at ?? 0) > (existing.created_at ?? 0)) {
+      newestByAuthor.set(event.pubkey, event);
+    }
+  }
+
+  return Array.from(newestByAuthor.values());
+}
+
+// Picks the dispute event that should actually be acted on out of a set of
+// candidates for the same orderId, cross-checked against the authoritative
+// buyer/seller pubkeys recorded for the order (independent of anything in
+// the dispute event's own tags, which an attacker fully controls for events
+// they sign themselves). If the order record has no known buyer/seller
+// (e.g. it was never cached), falls back to newest-overall so legitimate
+// disputes for those orders aren't blocked.
+export function selectAuthoritativeDisputeEvent(
+  candidates: NostrEvent[],
+  orderParticipants: { buyerPubkey: string | null; sellerPubkey: string | null }
+): NostrEvent | null {
+  const sorted = [...candidates].sort(
+    (a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)
+  );
+
+  const { buyerPubkey, sellerPubkey } = orderParticipants;
+  if (!buyerPubkey && !sellerPubkey) {
+    return sorted[0] ?? null;
+  }
+
+  return (
+    sorted.find((event) => {
+      const parsed = parseDisputeEvent(event);
+      if (!parsed) return false;
+      if (buyerPubkey && parsed.buyerPubkey !== buyerPubkey) return false;
+      if (sellerPubkey && parsed.sellerPubkey !== sellerPubkey) return false;
+      return true;
+    }) ?? null
   );
 }
 

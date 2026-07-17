@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import { verifyEvent } from "nostr-tools";
 import { fetchCachedEvents } from "@/utils/db/db-service";
 import { applyRateLimit } from "@/utils/rate-limit";
 import {
@@ -33,6 +34,7 @@ export default async function handler(
     const events = await fetchCachedEvents(DISPUTE_EVENT_KIND, { limit: 100 });
     const disputes = events.filter(
       (event) =>
+        verifyEvent(event) &&
         parseDisputeEvent(event)?.arbiterPubkey === normalizedArbiterPubkey
     );
     res.status(200).json(disputes);

@@ -13,10 +13,12 @@ import {
 import { sendServerGiftWrappedDm } from "@/utils/nostr/server-gift-wrap";
 import {
   createDisputeEventTemplate,
-  fetchDisputeEvent,
+  fetchDisputeEventCandidates,
   parseDisputeEvent,
+  selectAuthoritativeDisputeEvent,
 } from "@/utils/nostr/dispute-records";
-import { fetchCachedDisputeEvent } from "@/utils/nostr/server-dispute-records";
+import { fetchCachedDisputeEvents } from "@/utils/nostr/server-dispute-records";
+import { getOrderParticipants } from "@/utils/db/db-service";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
 import { McpNostrSigner, signAndPublishEvent } from "@/utils/mcp/nostr-signing";
@@ -120,11 +122,11 @@ export default async function handler(
       });
     }
 
-    let disputeEvent = await fetchCachedDisputeEvent(orderId);
-    if (!disputeEvent) {
+    let candidates = await fetchCachedDisputeEvents(orderId);
+    if (candidates.length === 0) {
       const nostr = createServerNostrManager();
       try {
-        disputeEvent = await fetchDisputeEvent({
+        candidates = await fetchDisputeEventCandidates({
           nostr,
           orderId,
           timeoutMs: 10_000,
@@ -134,8 +136,23 @@ export default async function handler(
       }
     }
 
-    if (!disputeEvent) {
+    if (candidates.length === 0) {
       return res.status(404).json({ error: "Dispute not found" });
+    }
+
+    // Cross-check candidates against the order's authoritative buyer/seller
+    // pubkeys (independent of anything in the dispute events' own tags,
+    // which an attacker fully controls for events they sign themselves)
+    // before trusting any of them for payout.
+    const orderParticipants = await getOrderParticipants(orderId);
+    const disputeEvent = selectAuthoritativeDisputeEvent(
+      candidates,
+      orderParticipants
+    );
+    if (!disputeEvent) {
+      return res
+        .status(403)
+        .json({ error: "Dispute event does not match order records" });
     }
 
     const dispute = parseDisputeEvent(disputeEvent);

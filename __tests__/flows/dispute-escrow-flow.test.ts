@@ -57,15 +57,22 @@ jest.mock("@/utils/nostr/dispute-records", () => {
   const actual = jest.requireActual("@/utils/nostr/dispute-records");
   return {
     ...actual,
-    fetchDisputeEvent: jest.fn().mockImplementation(async () => {
-      return mockRelayDisputeEvents.at(-1) ?? null;
+    fetchDisputeEventCandidates: jest.fn().mockImplementation(async () => {
+      return [...mockRelayDisputeEvents];
     }),
   };
 });
 
 jest.mock("@/utils/nostr/server-dispute-records", () => ({
-  fetchCachedDisputeEvent: jest.fn().mockImplementation(async () => {
-    return mockRelayDisputeEvents.at(-1) ?? null;
+  fetchCachedDisputeEvents: jest.fn().mockImplementation(async () => {
+    return [...mockRelayDisputeEvents];
+  }),
+}));
+
+jest.mock("@/utils/db/db-service", () => ({
+  getOrderParticipants: jest.fn().mockResolvedValue({
+    buyerPubkey: null,
+    sellerPubkey: null,
   }),
 }));
 

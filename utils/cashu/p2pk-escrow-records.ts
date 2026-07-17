@@ -15,7 +15,10 @@ export const BUYER_P2PK_ESCROW_EVENT_KIND = 30406;
 const BUYER_P2PK_ESCROW_D_PREFIX = "shopstr:p2pk-escrow";
 
 export type P2pkEscrowDisputeStatus =
-  "none" | "open" | "resolved:buyer" | "resolved:seller";
+  | "none"
+  | "open"
+  | "resolved:buyer"
+  | "resolved:seller";
 
 const DISPUTE_STATUSES: readonly P2pkEscrowDisputeStatus[] = [
   "none",
