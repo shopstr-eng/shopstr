@@ -8,7 +8,7 @@ import {
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
-} from "@/utils/nostr/nostr-helper-functions";
+} from "@/utils/nostr/gift-wrap";
 import { ChatsContext } from "../../utils/context/context";
 import ShopstrSpinner from "../utility-components/shopstr-spinner";
 import ChatPanel from "./chat-panel";

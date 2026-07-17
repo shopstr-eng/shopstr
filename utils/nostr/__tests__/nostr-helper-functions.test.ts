@@ -51,9 +51,6 @@ import {
 } from "../key-utilities";
 import {
   blossomUploadImages,
-  constructGiftWrappedEvent,
-  constructMessageGiftWrap,
-  constructMessageSeal,
   createBlossomServerEvent,
   createNostrDeleteEvent,
   createNostrProfileEvent,
@@ -80,11 +77,16 @@ import {
   publishReviewEvent,
   REPORT_TYPES,
   saveNWCString,
-  sendGiftWrappedMessageEvent,
   setLocalStorageDataOnSignIn,
   verifyNip05Identifier,
   withBlastr,
 } from "../nostr-helper-functions";
+import {
+  constructGiftWrappedEvent,
+  constructMessageGiftWrap,
+  constructMessageSeal,
+  sendGiftWrappedMessageEvent,
+} from "../gift-wrap";
 import {
   approveCommunityPost,
   createCommunityPost,

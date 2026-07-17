@@ -6,6 +6,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import * as nostrHelpers from "@/utils/nostr/nostr-helper-functions";
+import * as giftWrapHelpers from "@/utils/nostr/gift-wrap";
 import * as zapValidator from "@/utils/nostr/zap-validator";
 import { LightningAddress } from "@getalby/lightning-tools";
 
@@ -79,6 +80,9 @@ jest.mock("nostr-tools", () => ({
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalStorageData: jest.fn(),
+}));
+
+jest.mock("@/utils/nostr/gift-wrap", () => ({
   constructGiftWrappedEvent: jest.fn(),
   constructMessageSeal: jest.fn(),
   constructMessageGiftWrap: jest.fn(),
@@ -271,17 +275,17 @@ describe("ZapsnagButton Component", () => {
     const sealEvent = { id: "seal-event" };
     const finalEvent = { id: "final-event" };
 
-    (nostrHelpers.constructGiftWrappedEvent as jest.Mock).mockResolvedValueOnce(
-      giftWrapEvent
-    );
-    (nostrHelpers.constructMessageSeal as jest.Mock).mockResolvedValueOnce(
+    (
+      giftWrapHelpers.constructGiftWrappedEvent as jest.Mock
+    ).mockResolvedValueOnce(giftWrapEvent);
+    (giftWrapHelpers.constructMessageSeal as jest.Mock).mockResolvedValueOnce(
       sealEvent
     );
-    (nostrHelpers.constructMessageGiftWrap as jest.Mock).mockResolvedValueOnce(
-      finalEvent
-    );
     (
-      nostrHelpers.sendGiftWrappedMessageEvent as jest.Mock
+      giftWrapHelpers.constructMessageGiftWrap as jest.Mock
+    ).mockResolvedValueOnce(finalEvent);
+    (
+      giftWrapHelpers.sendGiftWrappedMessageEvent as jest.Mock
     ).mockResolvedValueOnce(undefined);
 
     (zapValidator.validateZapReceipt as jest.Mock).mockResolvedValue(true);
@@ -318,9 +322,10 @@ describe("ZapsnagButton Component", () => {
       },
     ]);
 
-    expect(nostrHelpers.constructGiftWrappedEvent).toHaveBeenCalledTimes(1);
-    const giftWrapCall = (nostrHelpers.constructGiftWrappedEvent as jest.Mock)
-      .mock.calls[0];
+    expect(giftWrapHelpers.constructGiftWrappedEvent).toHaveBeenCalledTimes(1);
+    const giftWrapCall = (
+      giftWrapHelpers.constructGiftWrappedEvent as jest.Mock
+    ).mock.calls[0];
     expect(giftWrapCall).toEqual(
       expect.arrayContaining([
         "buyer-pubkey",
@@ -345,13 +350,13 @@ describe("ZapsnagButton Component", () => {
       },
     });
 
-    expect(nostrHelpers.constructMessageSeal).toHaveBeenCalledWith(
+    expect(giftWrapHelpers.constructMessageSeal).toHaveBeenCalledWith(
       mockSigner,
       giftWrapEvent,
       "buyer-pubkey",
       "seller-pubkey"
     );
-    expect(nostrHelpers.constructMessageGiftWrap).toHaveBeenCalledWith(
+    expect(giftWrapHelpers.constructMessageGiftWrap).toHaveBeenCalledWith(
       sealEvent,
       "ephemeral-pubkey-hex",
       expect.any(Uint8Array),
@@ -359,18 +364,18 @@ describe("ZapsnagButton Component", () => {
     );
     expect(
       Array.from(
-        (nostrHelpers.constructMessageGiftWrap as jest.Mock).mock.calls[0][2]
+        (giftWrapHelpers.constructMessageGiftWrap as jest.Mock).mock.calls[0][2]
       )
     ).toEqual([1, 2, 3]);
 
-    expect(nostrHelpers.constructGiftWrappedEvent).toHaveBeenCalledWith(
+    expect(giftWrapHelpers.constructGiftWrappedEvent).toHaveBeenCalledWith(
       "buyer-pubkey",
       "seller-pubkey",
       expect.any(String),
       "zapsnag-order",
       expect.objectContaining({ isOrder: true })
     );
-    expect(nostrHelpers.sendGiftWrappedMessageEvent).toHaveBeenCalledWith(
+    expect(giftWrapHelpers.sendGiftWrappedMessageEvent).toHaveBeenCalledWith(
       mockNostrManager,
       finalEvent,
       mockSigner

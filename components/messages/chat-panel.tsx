@@ -30,12 +30,14 @@ import ChatMessage from "./chat-message";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
+  publishReviewEvent,
+} from "@/utils/nostr/nostr-helper-functions";
+import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
-  publishReviewEvent,
-} from "@/utils/nostr/nostr-helper-functions";
+} from "@/utils/nostr/gift-wrap";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { ReviewsContext } from "../../utils/context/context";
 import FailureModal from "../utility-components/failure-modal";

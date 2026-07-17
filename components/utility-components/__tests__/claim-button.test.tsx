@@ -21,6 +21,7 @@ import {
   publishProofEvent,
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import * as giftWrapHelpers from "@/utils/nostr/gift-wrap";
 import {
   checkMintP2pkSupport,
   parseP2PKProofSet,
@@ -39,6 +40,9 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalStorageData: jest.fn(),
   publishProofEvent: jest.fn(),
   publishWalletEvent: jest.fn(),
+}));
+
+jest.mock("@/utils/nostr/gift-wrap", () => ({
   constructGiftWrappedEvent: jest.fn(),
   constructMessageSeal: jest.fn(),
   constructMessageGiftWrap: jest.fn(),
@@ -136,7 +140,18 @@ jest.mock("next-themes", () => ({
 
 jest.mock("nostr-tools", () => ({
   nip19: {
-    decode: jest.fn().mockReturnValue({ type: "npub", data: "decoded-key" }),
+    decode: jest.fn((key: string) => {
+      const decoded = new Map<
+        string,
+        { type: string; data: string | Uint8Array }
+      >([
+        ["npub1sender", { type: "npub", data: "sender-random-pubkey" }],
+        ["nsec1sender", { type: "nsec", data: new Uint8Array([1, 2, 3]) }],
+        ["npub1receiver", { type: "npub", data: "receiver-random-pubkey" }],
+        ["nsec1receiver", { type: "nsec", data: new Uint8Array([4, 5, 6]) }],
+      ]);
+      return decoded.get(key) ?? { type: "npub", data: "decoded-key" };
+    }),
   },
 }));
 
@@ -168,6 +183,14 @@ const mockCheckMintP2pkSupport = checkMintP2pkSupport as jest.Mock;
 const mockParseP2PKProofSet = parseP2PKProofSet as jest.Mock;
 const mockSafeSwap = safeSwap as jest.Mock;
 const mockSafeMeltProofs = safeMeltProofs as jest.Mock;
+const mockConstructGiftWrappedEvent =
+  giftWrapHelpers.constructGiftWrappedEvent as jest.Mock;
+const mockConstructMessageSeal =
+  giftWrapHelpers.constructMessageSeal as jest.Mock;
+const mockConstructMessageGiftWrap =
+  giftWrapHelpers.constructMessageGiftWrap as jest.Mock;
+const mockSendGiftWrappedMessageEvent =
+  giftWrapHelpers.sendGiftWrappedMessageEvent as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
 
 // ── Shared fixtures ───────────────────────────────────────────────────────────
@@ -316,10 +339,30 @@ beforeEach(() => {
   mockPublishProofEvent.mockResolvedValue(undefined);
   mockPublishWalletEvent.mockResolvedValue(undefined);
   mockCheckMintP2pkSupport.mockResolvedValue({ supported: true });
-  mockGenerateKeys.mockResolvedValue({
-    nsec: "nsec1test",
-    npub: "npub1test",
+  let generatedKeyPairIndex = 0;
+  mockGenerateKeys.mockImplementation(async () => {
+    const keyPair =
+      generatedKeyPairIndex === 0
+        ? { nsec: "nsec1sender", npub: "npub1sender" }
+        : { nsec: "nsec1receiver", npub: "npub1receiver" };
+    generatedKeyPairIndex += 1;
+    return keyPair;
   });
+  mockConstructGiftWrappedEvent.mockResolvedValue({
+    id: "gift-wrapped-message-event",
+    content: "Overpaid fee change: cashuAtoken",
+    kind: 14,
+    pubkey: "sender-random-pubkey",
+    created_at: 1,
+    tags: [],
+  });
+  mockConstructMessageSeal.mockResolvedValue({
+    id: "sealed-event",
+  });
+  mockConstructMessageGiftWrap.mockResolvedValue({
+    id: "gift-wrap-event",
+  });
+  mockSendGiftWrappedMessageEvent.mockResolvedValue(undefined);
   // Default: plain token, no P2PK
   mockGetTokenMetadata.mockReturnValue({
     mint: "https://testmint.com",
@@ -686,6 +729,52 @@ describe("ClaimButton — P2PK redeem path", () => {
     expect(
       await screen.findByText("Token successfully redeemed!")
     ).toBeInTheDocument();
+  });
+
+  test("sends overpaid fee change through gift-wrapped messaging", async () => {
+    mockSafeSwap.mockResolvedValue({
+      status: "swapped",
+      keep: [mockFreshProof],
+      send: [mockP2PKProof],
+    });
+    mockSafeMeltProofs.mockResolvedValue({
+      status: "paid",
+      changeProofs: [],
+    });
+
+    renderClaimButton("cashuAtoken", { profileLud16: "seller@getalby.com" });
+
+    fireEvent.click(await screen.findByRole("button", { name: /Claim/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Redeem$/i }));
+
+    await waitFor(() =>
+      expect(mockConstructGiftWrappedEvent).toHaveBeenCalledWith(
+        "sender-random-pubkey",
+        "user-pubkey",
+        "Overpaid fee change: cashuAtoken",
+        "payment-change"
+      )
+    );
+    expect(mockConstructMessageSeal).toHaveBeenCalledWith(
+      mockSigner,
+      expect.objectContaining({ id: "gift-wrapped-message-event" }),
+      "sender-random-pubkey",
+      "user-pubkey",
+      new Uint8Array([1, 2, 3])
+    );
+    expect(mockConstructMessageGiftWrap).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "sealed-event" }),
+      "receiver-random-pubkey",
+      new Uint8Array([4, 5, 6]),
+      "user-pubkey"
+    );
+    await waitFor(() =>
+      expect(mockSendGiftWrappedMessageEvent).toHaveBeenCalledWith(
+        mockNostr,
+        expect.objectContaining({ id: "gift-wrap-event" }),
+        mockSigner
+      )
+    );
   });
 
   test("redeem without lnurl falls back to receive path using wallet.receive()", async () => {

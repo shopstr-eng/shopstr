@@ -41,12 +41,14 @@ import {
 } from "@/utils/messages/order-message-utils";
 import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
+  publishReviewEvent,
+} from "@/utils/nostr/nostr-helper-functions";
+import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
-  publishReviewEvent,
-} from "@/utils/nostr/nostr-helper-functions";
+} from "@/utils/nostr/gift-wrap";
 import {
   NostrContext,
   SignerContext,
