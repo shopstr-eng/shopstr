@@ -118,12 +118,39 @@ export default function ClaimButton({
   const [disputeStatus, setDisputeStatus] =
     useState<P2pkEscrowDisputeStatus>("none");
   const [isAwaitingBuyerConfirm, setIsAwaitingBuyerConfirm] = useState(false);
+  const [requestSentAt, setRequestSentAt] = useState<number | null>(null);
   const [isDisputeInProgress, setIsDisputeInProgress] = useState(false);
   const [arbiterResolutionAvailable, setArbiterResolutionAvailable] =
     useState(false);
   const [escrowActionError, setEscrowActionError] = useState<string | null>(
     null
   );
+
+  // Grace period a buyer gets to respond to a seller's payment request
+  // before the seller may escalate to the arbiter. Kept generous so
+  // escalation can't be used to rush a buyer who just hasn't checked in yet.
+  const SELLER_ESCALATION_GRACE_PERIOD_MS = 48 * 60 * 60 * 1000;
+
+  const paymentRequestSentAtKey = (id: string) =>
+    `shopstr.escrow.paymentRequestSentAt.${id}`;
+
+  // Restores "awaiting buyer confirmation" state across reloads. The DM
+  // timestamp isn't a reliable client-independent clock, so this trusts the
+  // seller's own local record of when they sent the request — it only
+  // gates a client-side UI affordance (the escalate button), not payout.
+  useEffect(() => {
+    if (!orderId) return;
+    const stored = localStorage.getItem(paymentRequestSentAtKey(orderId));
+    if (stored) {
+      setRequestSentAt(Number(stored));
+      setIsAwaitingBuyerConfirm(true);
+    }
+  }, [orderId]);
+
+  const canEscalate = useMemo(() => {
+    if (!isAwaitingBuyerConfirm || requestSentAt === null) return false;
+    return Date.now() - requestSentAt >= SELLER_ESCALATION_GRACE_PERIOD_MS;
+  }, [isAwaitingBuyerConfirm, requestSentAt]);
 
   // True when locktime has expired and the current wallet key is an
   // authorized refund signer. refundKeys are stored as "02"+x-only (66 chars)
@@ -730,6 +757,9 @@ export default function ClaimButton({
         orderId,
       };
       await sendEscrowDm(buyerPubkey, payload);
+      const sentAt = Date.now();
+      localStorage.setItem(paymentRequestSentAtKey(orderId), String(sentAt));
+      setRequestSentAt(sentAt);
       setIsAwaitingBuyerConfirm(true);
     } catch (error) {
       setEscrowActionError(
@@ -804,6 +834,8 @@ export default function ClaimButton({
       });
       if (result.success) {
         setIsReceived(true);
+        localStorage.removeItem(paymentRequestSentAtKey(orderId));
+        setIsAwaitingBuyerConfirm(false);
       } else {
         setEscrowActionError(result.error ?? "Redemption failed.");
       }
@@ -874,6 +906,84 @@ export default function ClaimButton({
           firstFailure.reason
         );
       }
+    } catch (error) {
+      setDisputeStatus("none");
+      setIsDisputeInProgress(false);
+      setEscrowActionError(
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  };
+
+  // Lets a seller who shipped but got no buyer response (no "Confirm
+  // Receipt", no dispute) after the grace period pull the arbiter in
+  // themselves, so a silent buyer can't just wait out the locktime and
+  // reclaim via refundKeys while also keeping the item. Reuses the same
+  // kind 30009 dispute-event + escrow-dispute DM path buyer-opened disputes
+  // use, so it lands on the arbiter's existing /disputes queue and goes
+  // through the same authorship cross-checks in /api/arbiter/rule.
+  const handleSellerEscalate = async () => {
+    if (
+      !isSellerView ||
+      !canEscalate ||
+      !orderId ||
+      !buyerPubkey ||
+      !signer ||
+      !userPubkey
+    )
+      return;
+    setEscrowActionError(null);
+    try {
+      setDisputeStatus("open");
+      setIsDisputeInProgress(true);
+
+      const reason =
+        "Seller escalation: buyer unresponsive after payment request.";
+      const buyerPayload: EscrowDisputePayload = {
+        type: "escrow-dispute",
+        orderId,
+        reason,
+      };
+
+      const arbiterPubkey = process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY;
+      const publishTasks: Promise<unknown>[] = [
+        sendEscrowDm(buyerPubkey, buyerPayload),
+      ];
+      if (arbiterPubkey) {
+        const arbiterPayload: EscrowDisputePayload = {
+          type: "escrow-dispute",
+          orderId,
+          reason,
+          token,
+          amount: tokenAmount,
+        };
+        publishTasks.push(
+          sendEscrowDm(arbiterPubkey, arbiterPayload),
+          publishDisputeEvent({
+            orderId,
+            reason,
+            nostr: nostr!,
+            signer,
+            buyerPubkey,
+            sellerPubkey: userPubkey,
+            arbiterPubkey,
+          })
+        );
+      }
+
+      const results = await Promise.allSettled(publishTasks);
+      const firstFailure = results.find(
+        (result): result is PromiseRejectedResult =>
+          result.status === "rejected"
+      );
+      if (firstFailure) {
+        console.warn(
+          "Failed to publish seller escalation",
+          firstFailure.reason
+        );
+      }
+
+      localStorage.removeItem(paymentRequestSentAtKey(orderId));
     } catch (error) {
       setDisputeStatus("none");
       setIsDisputeInProgress(false);
@@ -1040,12 +1150,33 @@ export default function ClaimButton({
             </Button>
           ) : isSellerView && disputeStatus === "none" ? (
             isAwaitingBuyerConfirm ? (
-              <Button
-                className="min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
-                isDisabled
-              >
-                Waiting for Buyer...
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  className="min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
+                  isDisabled
+                >
+                  Waiting for Buyer...
+                </Button>
+                <Button
+                  className={SHOPSTRBUTTONCLASSNAMES + " min-w-fit"}
+                  onClick={handleSellerRedeemWithBuyerSig}
+                  isDisabled={isRedeeming}
+                >
+                  {isRedeeming ? (
+                    <Spinner size="sm" />
+                  ) : (
+                    <>Check for Confirmation</>
+                  )}
+                </Button>
+                {canEscalate ? (
+                  <Button
+                    className={SHOPSTRBUTTONCLASSNAMES + " min-w-fit"}
+                    onClick={handleSellerEscalate}
+                  >
+                    Escalate to Arbiter
+                  </Button>
+                ) : null}
+              </div>
             ) : (
               <div className="flex flex-wrap gap-2">
                 <Button
