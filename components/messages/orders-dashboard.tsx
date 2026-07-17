@@ -40,9 +40,7 @@ import {
   resolveExplicitPaymentMethod,
 } from "@/utils/messages/order-message-utils";
 import { generateKeys } from "@/utils/nostr/key-utilities";
-import {
-  publishReviewEvent,
-} from "@/utils/nostr/nostr-helper-functions";
+import { publishReviewEvent } from "@/utils/nostr/nostr-helper-functions";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,

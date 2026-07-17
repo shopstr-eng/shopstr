@@ -1,4 +1,4 @@
-import { EventTemplate, finalizeEvent, getEventHash, nip44 } from "nostr-tools";
+import { EventTemplate } from "nostr-tools";
 import { v4 as uuidv4 } from "uuid";
 import CryptoJS from "crypto-js";
 import {
@@ -35,14 +35,6 @@ export const REPORT_TYPES = [
 ] as const;
 
 export type ReportType = (typeof REPORT_TYPES)[number];
-
-function generateRandomTimestamp(): number {
-  const now = Math.floor(Date.now() / 1000);
-  const twoDaysInMilliseconds = 172800;
-  const randomSeconds = Math.floor(Math.random() * (twoDaysInMilliseconds + 1));
-  const randomTimestamp = now - randomSeconds;
-  return randomTimestamp;
-}
 
 export async function deleteEvent(
   nostr: NostrManager,
