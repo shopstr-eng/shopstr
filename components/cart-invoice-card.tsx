@@ -60,13 +60,13 @@ import {
   isTimeoutError,
 } from "@/utils/cashu/wallet-recovery";
 import { persistBuyerP2pkEscrowRecord } from "@/utils/cashu/p2pk-escrow-records";
+import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   getSavedAddresses,
   sendGiftWrappedMessageEvent,
-  generateKeys,
   getLocalStorageData,
   publishProofEvent,
   saveAddress,

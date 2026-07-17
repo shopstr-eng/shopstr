@@ -37,10 +37,12 @@ jest.mock("@/components/utility-components/profile/profile-dropdown", () => ({
   ),
 }));
 
-jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+jest.mock("@/utils/nostr/key-utilities", () => ({
   generateKeys: jest
     .fn()
     .mockResolvedValue({ npub: "mock-npub", nsec: "mock-nsec" }),
+}));
+jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   constructGiftWrappedEvent: jest.fn().mockResolvedValue({}),
   constructMessageSeal: jest.fn().mockResolvedValue({}),
   constructMessageGiftWrap: jest.fn().mockResolvedValue({}),

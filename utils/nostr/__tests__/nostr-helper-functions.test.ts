@@ -42,6 +42,14 @@ jest.mock("nostr-tools", () => {
 });
 
 import {
+  decryptNpub,
+  generateKeys,
+  nostrExtensionLoaded,
+  parseBunkerToken,
+  validateNPubKey,
+  validateNSecKey,
+} from "../key-utilities";
+import {
   blossomUploadImages,
   constructGiftWrappedEvent,
   constructMessageGiftWrap,
@@ -51,10 +59,8 @@ import {
   createNostrProfileEvent,
   createNostrRelayEvent,
   createNostrShopEvent,
-  decryptNpub,
   deleteEvent,
   finalizeAndSendNostrEvent,
-  generateKeys,
   getDefaultBlossomServer,
   getDefaultMint,
   getDefaultRelays,
@@ -62,9 +68,7 @@ import {
   getLocalUserProfileKey,
   isProfileContentPopulated,
   LogOut,
-  nostrExtensionLoaded,
   parseLocalProfileFallback,
-  parseBunkerToken,
   PostListing,
   publishBlossomServerEvent,
   publishProofEvent,
@@ -78,8 +82,6 @@ import {
   saveNWCString,
   sendGiftWrappedMessageEvent,
   setLocalStorageDataOnSignIn,
-  validateNPubKey,
-  validateNSecKey,
   verifyNip05Identifier,
   withBlastr,
 } from "../nostr-helper-functions";

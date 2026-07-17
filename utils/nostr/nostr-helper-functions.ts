@@ -1,12 +1,4 @@
-import {
-  EventTemplate,
-  finalizeEvent,
-  generateSecretKey,
-  getPublicKey,
-  getEventHash,
-  nip19,
-  nip44,
-} from "nostr-tools";
+import { EventTemplate, finalizeEvent, getEventHash, nip44 } from "nostr-tools";
 import { v4 as uuidv4 } from "uuid";
 import CryptoJS from "crypto-js";
 import {
@@ -50,16 +42,6 @@ function generateRandomTimestamp(): number {
   const randomSeconds = Math.floor(Math.random() * (twoDaysInMilliseconds + 1));
   const randomTimestamp = now - randomSeconds;
   return randomTimestamp;
-}
-
-export async function generateKeys(): Promise<{ nsec: string; npub: string }> {
-  const sk = generateSecretKey();
-  const nsec = nip19.nsecEncode(sk);
-
-  const pk = getPublicKey(sk);
-  const npub = nip19.npubEncode(pk);
-
-  return { nsec, npub };
 }
 
 export async function deleteEvent(
@@ -108,41 +90,6 @@ export function createNostrDeleteEvent(
   };
 
   return msg;
-}
-
-interface BunkerTokenParams {
-  remotePubkey: string;
-  relays: string[];
-  secret?: string;
-}
-
-export function parseBunkerToken(token: string): BunkerTokenParams | null {
-  try {
-    if (!token.startsWith("bunker://")) {
-      return null;
-    }
-
-    // Extract the basic parts using URL
-    const url = new URL(token.replace("bunker://", "https://"));
-
-    // Get pubkey (hostname in URL)
-    const remotePubkey = url.hostname;
-
-    // Get relays from query params (can have multiple relay params)
-    const relays = url.searchParams.getAll("relay");
-
-    // Get optional secret
-    const secret = url.searchParams.get("secret") || undefined;
-
-    return {
-      remotePubkey,
-      relays,
-      secret,
-    };
-  } catch (error) {
-    console.error("Failed to parse bunker token:", error);
-    return null;
-  }
 }
 
 export async function createNostrProfileEvent(
@@ -1126,15 +1073,6 @@ export async function blossomUploadImages(
 /***** HELPER FUNCTIONS *****/
 
 // function to validate public and private keys
-export function validateNPubKey(publicKey: string) {
-  const validPubKey = /^npub[a-zA-Z0-9]{59}$/;
-  return publicKey.match(validPubKey) !== null;
-}
-export function validateNSecKey(privateKey: string) {
-  const validPrivKey = /^nsec[a-zA-Z0-9]{59}$/;
-  return privateKey.match(validPrivKey) !== null;
-}
-
 const LOCALSTORAGECONSTANTS = {
   signInMethod: "signInMethod",
   userNPub: "userNPub",
@@ -1566,24 +1504,6 @@ export const LogOut = () => {
 
   window.dispatchEvent(new Event("storage"));
 };
-
-export const decryptNpub = (npub: string): string | null => {
-  try {
-    const decoded = nip19.decode(npub);
-    return decoded.type === "npub" && typeof decoded.data === "string"
-      ? decoded.data
-      : null;
-  } catch {
-    return null;
-  }
-};
-
-export function nostrExtensionLoaded() {
-  if (!window.nostr) {
-    return false;
-  }
-  return true;
-}
 
 export function getDefaultMint(): string {
   return "https://mint.minibits.cash/Bitcoin";

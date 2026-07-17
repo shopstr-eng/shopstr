@@ -2,13 +2,12 @@ import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import { useRouter } from "next/router";
 import { Button, useDisclosure } from "@heroui/react";
+import { decryptNpub, generateKeys } from "@/utils/nostr/key-utilities";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
-  decryptNpub,
-  generateKeys,
 } from "@/utils/nostr/nostr-helper-functions";
 import { ChatsContext } from "../../utils/context/context";
 import ShopstrSpinner from "../utility-components/shopstr-spinner";
@@ -96,8 +95,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
             }
             enterChat(pubkey);
             const productTitle = router.query.productTitle as
-              | string
-              | undefined;
+              string | undefined;
             const productUrl = router.query.productUrl as string | undefined;
             if (productTitle) {
               const draftText = productUrl

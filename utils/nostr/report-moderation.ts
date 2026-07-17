@@ -5,10 +5,7 @@ import { NostrEvent } from "@/utils/types/types";
 export type ReportTargetKind = "listing" | "profile";
 
 export type ReportModerationLevel =
-  | "none"
-  | "reported_by_you"
-  | "trusted_warning"
-  | "trusted_blur";
+  "none" | "reported_by_you" | "trusted_warning" | "trusted_blur";
 
 export interface ReportModerationSignal {
   level: ReportModerationLevel;

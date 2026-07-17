@@ -39,12 +39,12 @@ import {
   registerTaggedOrderGroupingKey,
   resolveExplicitPaymentMethod,
 } from "@/utils/messages/order-message-utils";
+import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
-  generateKeys,
   publishReviewEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
