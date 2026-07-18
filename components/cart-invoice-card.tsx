@@ -61,11 +61,7 @@ import {
 } from "@/utils/cashu/wallet-recovery";
 import { persistBuyerP2pkEscrowRecord } from "@/utils/cashu/p2pk-escrow-records";
 import {
-  constructGiftWrappedEvent,
-  constructMessageSeal,
-  constructMessageGiftWrap,
   getSavedAddresses,
-  sendGiftWrappedMessageEvent,
   generateKeys,
   getCachedCashuProofs,
   getLocalStorageData,
@@ -73,6 +69,12 @@ import {
   setCachedCashuProofs,
   saveAddress,
 } from "@/utils/nostr/nostr-helper-functions";
+import {
+  constructGiftWrappedEvent,
+  constructMessageSeal,
+  constructMessageGiftWrap,
+  sendGiftWrappedMessageEvent,
+} from "@/utils/nostr/gift-wrap";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
@@ -102,6 +104,9 @@ import {
   ProductTotalsInSats,
   sumProductTotalsInSats,
 } from "@/utils/cart-totals";
+import { mapWithConcurrency } from "@/utils/concurrency";
+
+const CART_SHIPPING_CONVERSION_CONCURRENCY = 6;
 
 export default function CartInvoiceCard({
   products,
@@ -1028,13 +1033,13 @@ export default function CartInvoiceCard({
   };
 
   const buildShippingCostsInSats = async () => {
-    const shippingCostsInSats: { [productId: string]: number } = {};
-
-    for (const product of products) {
-      shippingCostsInSats[product.id] = await convertShippingToSats(product);
-    }
-
-    return shippingCostsInSats;
+    const entries = await mapWithConcurrency(
+      products,
+      CART_SHIPPING_CONVERSION_CONCURRENCY,
+      async (product) =>
+        [product.id, await convertShippingToSats(product)] as const
+    );
+    return Object.fromEntries(entries);
   };
 
   const applyCurrentProductTotals = async (

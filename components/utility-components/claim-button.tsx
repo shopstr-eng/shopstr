@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useMemo } from "react";
+import { useState, useEffect, useContext, useMemo, useRef } from "react";
 import {
   Modal,
   ModalContent,
@@ -25,12 +25,14 @@ import {
   getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
+  setCachedCashuProofs,
+} from "@/utils/nostr/nostr-helper-functions";
+import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
-  setCachedCashuProofs,
-} from "@/utils/nostr/nostr-helper-functions";
+} from "@/utils/nostr/gift-wrap";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
 import { nip19 } from "nostr-tools";
@@ -122,22 +124,20 @@ export default function ClaimButton({ token }: { token: string }) {
     setP2PK(parsedP2pk.p2pk);
   }, [proofs]);
 
-  const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
-  const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
-  const [randomNpubForReceiver, setRandomNpubForReceiver] =
-    useState<string>("");
-  const [randomNsecForReceiver, setRandomNsecForReceiver] =
-    useState<string>("");
+  const randomNpubForSenderRef = useRef<string>("");
+  const randomNsecForSenderRef = useRef<string>("");
+  const randomNpubForReceiverRef = useRef<string>("");
+  const randomNsecForReceiverRef = useRef<string>("");
 
   useEffect(() => {
     const fetchKeys = async () => {
       const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
-      setRandomNpubForSender(npubForSender);
-      setRandomNsecForSender(nsecForSender);
+      randomNpubForSenderRef.current = npubForSender;
+      randomNsecForSenderRef.current = nsecForSender;
       const { nsec: nsecForReceiver, npub: npubForReceiver } =
         await generateKeys();
-      setRandomNpubForReceiver(npubForReceiver);
-      setRandomNsecForReceiver(nsecForReceiver);
+      randomNpubForReceiverRef.current = npubForReceiver;
+      randomNsecForReceiverRef.current = nsecForReceiver;
     };
 
     fetchKeys();
@@ -422,15 +422,17 @@ export default function ClaimButton({ token }: { token: string }) {
               ? sumProofAmounts(changeProofs)
               : 0;
           if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
-            const decodedRandomPubkeyForSender =
-              nip19.decode(randomNpubForSender);
-            const decodedRandomPrivkeyForSender =
-              nip19.decode(randomNsecForSender);
+            const decodedRandomPubkeyForSender = nip19.decode(
+              randomNpubForSenderRef.current
+            );
+            const decodedRandomPrivkeyForSender = nip19.decode(
+              randomNsecForSenderRef.current
+            );
             const decodedRandomPubkeyForReceiver = nip19.decode(
-              randomNpubForReceiver
+              randomNpubForReceiverRef.current
             );
             const decodedRandomPrivkeyForReceiver = nip19.decode(
-              randomNsecForReceiver
+              randomNsecForReceiverRef.current
             );
             const encodedChange = getEncodedToken({
               mint: tokenMint,

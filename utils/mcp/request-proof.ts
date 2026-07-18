@@ -1,5 +1,6 @@
 import { type Event } from "nostr-tools";
 import { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
+import { getTagValue } from "@/utils/nostr/tag-utils";
 
 export const MCP_SIGNED_EVENT_HEADER = "x-mcp-signed-event";
 export const MCP_REQUEST_PROOF_KIND = 27235;
@@ -60,10 +61,6 @@ export function buildMcpRequestProofTemplate(
   };
 }
 
-function getTagValue(event: Event, tagName: string): string | undefined {
-  return event.tags.find((tag) => tag[0] === tagName)?.[1];
-}
-
 export function matchesMcpRequestProof(
   event: Event,
   proof: McpRequestProof
@@ -74,7 +71,7 @@ export function matchesMcpRequestProof(
 
   const expectedTags = buildMcpRequestProofTags(proof);
   return expectedTags.every(
-    ([tagName, tagValue]) => getTagValue(event, tagName) === tagValue
+    ([tagName, tagValue]) => getTagValue(event.tags, tagName) === tagValue
   );
 }
 

@@ -18,9 +18,9 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 - [x] NIP-46: Nostr Remote Signing
 - [x] NIP-47: Wallet Connect
 - [x] NIP-49: Private Key Encryption
-- [ ] NIP-50: Search Capability
+- [ ] NIP-50: Search Capability (partial: product search)
 - [x] NIP-51: Lists
-- [ ] NIP-56: Reporting
+- [ ] NIP-56: Reporting (partial: profile/listing reports)
 - [x] NIP-57: Lightning Zaps
 - [ ] NIP-58: Badges
 - [x] NIP-60: Cashu Wallet

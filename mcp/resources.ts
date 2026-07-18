@@ -5,18 +5,7 @@ import {
   parseShippingFromTags,
 } from "@/utils/parsers/product-tag-helpers";
 import { NostrEvent } from "@/utils/types/types";
-
-function getTagValue(tags: string[][], key: string): string | undefined {
-  const tag = tags.find((t) => t[0] === key);
-  return tag ? tag[1] : undefined;
-}
-
-function getAllTagValues(tags: string[][], key: string): string[] {
-  return tags
-    .filter((t) => t[0] === key)
-    .map((t) => t[1]!)
-    .filter(Boolean);
-}
+import { getTagValue, getAllTagValues } from "@/utils/nostr/tag-utils";
 
 function buildCatalogEntry(event: NostrEvent) {
   const tags = event.tags || [];

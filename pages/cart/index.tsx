@@ -31,6 +31,13 @@ import ProtectedRoute from "@/components/utility-components/protected-route";
 import { getLocalStorageJson } from "@/utils/safe-json";
 import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
 import { isSellerP2pkEscrowActive } from "@/utils/cashu/p2pk-checkout";
+import { mapWithConcurrency } from "@/utils/concurrency";
+import {
+  computeProductPricing,
+  ProductPricingResult,
+} from "@/utils/cart-totals";
+
+const CART_PRICE_CONVERSION_CONCURRENCY = 6;
 
 interface QuantitySelectorProps {
   value: number;
@@ -361,50 +368,44 @@ export default function Component() {
       const shipping: { [key: string]: number } = {};
       const totals: { [key: string]: number } = {};
       let subtotalAmount = 0;
-
-      for (const product of products) {
-        try {
-          const priceSats = await convertPriceToSats(product);
-          const shippingSatPrice = await convertShippingToSats(product);
-          const discount = appliedDiscounts[product.pubkey] || 0;
-          let discountedPrice = priceSats;
-          let productSubtotal = 0;
-          let productShipping = 0;
-
-          if (discount > 0) {
-            discountedPrice = Math.ceil(priceSats * (1 - discount / 100));
+      const results = await mapWithConcurrency(
+        products,
+        CART_PRICE_CONVERSION_CONCURRENCY,
+        async (product): Promise<ProductPricingResult> => {
+          try {
+            const priceSats = await convertPriceToSats(product);
+            const shippingSats = await convertShippingToSats(product);
+            return computeProductPricing({
+              id: product.id,
+              priceSats,
+              shippingSats,
+              discountPercent: appliedDiscounts[product.pubkey] || 0,
+              quantity: quantities[product.id],
+            });
+          } catch (error) {
+            // Outer guard for any unexpected failure during cart pricing.
+            // console.warn (not console.error) keeps the Next.js dev overlay
+            // from popping for a benign per-row failure — the row simply
+            // renders as un-priced and is excluded from checkout.
+            console.warn(
+              `Error converting price for product ${product.id}:`,
+              error
+            );
+            return { id: product.id, status: "error" };
           }
+        }
+      );
 
-          if (discountedPrice !== null || shippingSatPrice !== null) {
-            if (quantities[product.id]) {
-              productSubtotal = Math.ceil(
-                discountedPrice * quantities[product.id]!
-              );
-              productShipping = Math.ceil(
-                shippingSatPrice * quantities[product.id]!
-              );
-              subtotalAmount += productSubtotal;
-            } else {
-              productSubtotal = discountedPrice;
-              productShipping = shippingSatPrice;
-              subtotalAmount += discountedPrice;
-            }
-            prices[product.id] = productSubtotal;
-            shipping[product.id] = productShipping;
-            // Store per-product totals so checkout can apply shipping later.
-            totals[product.id] = productSubtotal;
-          }
-        } catch (error) {
-          // Outer guard for any unexpected failure during cart pricing.
-          // console.warn (not console.error) keeps the Next.js dev overlay
-          // from popping for a benign per-row failure — the row simply
-          // renders as un-priced and is excluded from checkout.
-          console.warn(
-            `Error converting price for product ${product.id}:`,
-            error
-          );
-          prices[product.id] = null;
-          shipping[product.id] = 0;
+      for (const result of results) {
+        if (result.status === "priced") {
+          prices[result.id] = result.price;
+          shipping[result.id] = result.shipping;
+          // Store per-product totals so checkout can apply shipping later.
+          totals[result.id] = result.price;
+          subtotalAmount += result.price;
+        } else if (result.status === "error") {
+          prices[result.id] = null;
+          shipping[result.id] = 0;
         }
       }
 

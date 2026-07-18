@@ -42,9 +42,7 @@ jest.mock("nostr-tools", () => {
 });
 
 import {
-  constructGiftWrappedEvent,
-  constructMessageGiftWrap,
-  constructMessageSeal,
+  blossomUploadImages,
   createBlossomServerEvent,
   createNostrDeleteEvent,
   createNostrProfileEvent,
@@ -65,22 +63,41 @@ import {
   parseLocalProfileFallback,
   parseBunkerToken,
   PostListing,
+  publishBlossomServerEvent,
+  publishProofEvent,
+  publishSavedForLaterEvent,
+  publishSpendingHistoryEvent,
   publishWalletEvent,
   publishRelayEvent,
   publishReportEvent,
   publishReviewEvent,
   REPORT_TYPES,
   saveNWCString,
-  sendGiftWrappedMessageEvent,
   setLocalStorageDataOnSignIn,
   validateNPubKey,
   validateNSecKey,
   verifyNip05Identifier,
   withBlastr,
 } from "../nostr-helper-functions";
+import {
+  constructGiftWrappedEvent,
+  constructMessageGiftWrap,
+  constructMessageSeal,
+  sendGiftWrappedMessageEvent,
+} from "../gift-wrap";
+import {
+  approveCommunityPost,
+  createCommunityPost,
+  createOrUpdateCommunity,
+  retractApproval,
+} from "../community";
 import { finalizeEvent, nip19, nip44 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
-import { ProductFormValues } from "@/utils/types/types";
+import {
+  Community,
+  CommunityRelays,
+  ProductFormValues,
+} from "@/utils/types/types";
 import {
   cacheEventToDatabase,
   deleteEventsFromDatabase,
@@ -1875,6 +1892,105 @@ describe("publishWalletEvent", () => {
       expect.arrayContaining(["wss://relay.example"])
     );
   });
+
+  it("deduplicates mints via Set, creates a kind-17375 event, and caches it when signedEvent is truthy", async () => {
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const cashuPrivkey =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      encrypt: jest
+        .fn()
+        .mockImplementation(async (_pubkey: string, content: string) => {
+          return `encrypted:${content}`;
+        }),
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: "wallet-event-id",
+        pubkey: userPubkey,
+        sig: "sig",
+      })),
+    };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishWalletEvent(
+      nostr as any,
+      signer as any,
+      { cashuPrivkey },
+      { mints: ["https://mint.a", "https://mint.a", "https://mint.b"] }
+    );
+
+    const expectedContent = JSON.stringify([
+      ["privkey", cashuPrivkey],
+      ["mint", "https://mint.a"],
+      ["mint", "https://mint.b"],
+    ]);
+    expect(signer.encrypt).toHaveBeenCalledWith(userPubkey, expectedContent);
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 17375 })
+    );
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 17375, id: "wallet-event-id" })
+    );
+  });
+
+  it("logs console.error when caching rejects", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const userPubkey =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const cashuPrivkey =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      encrypt: jest
+        .fn()
+        .mockImplementation(async (_pubkey: string, content: string) => {
+          return `encrypted:${content}`;
+        }),
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: "wallet-event-id",
+        pubkey: userPubkey,
+        sig: "sig",
+      })),
+    };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    // First call inside finalizeAndSendNostrEvent succeeds; second explicit call rejects.
+    (cacheEventToDatabase as jest.Mock)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Cache write failed"));
+
+    await publishWalletEvent(
+      nostr as any,
+      signer as any,
+      { cashuPrivkey },
+      { mints: ["https://mint.example"] }
+    );
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to cache wallet event to database:",
+      expect.any(Error)
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("returns silently on any inner error", async () => {
+    const signer = {
+      getPubKey: jest.fn().mockRejectedValue(new Error("Signer unavailable")),
+      encrypt: jest.fn(),
+      sign: jest.fn(),
+    };
+    const nostr = { publish: jest.fn() };
+
+    await expect(
+      publishWalletEvent(nostr as any, signer as any, {
+        cashuPrivkey: "b".repeat(64),
+      })
+    ).resolves.toBeUndefined();
+  });
 });
 
 describe("PostListing", () => {
@@ -2480,5 +2596,1400 @@ describe("finalizeAndSendNostrEvent", () => {
 
     consoleWarnSpy.mockRestore();
     consoleErrorSpy.mockRestore();
+  });
+});
+
+describe("publishBlossomServerEvent", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("creates a kind-10063 event with server tags and caches it when signedEvent is truthy", async () => {
+    const servers = ["https://blossom1.example", "https://blossom2.example"];
+    const signedEvent = {
+      kind: 10063,
+      id: "blossom-event-id",
+      pubkey: "user-pubkey",
+      sig: "sig",
+      content: "",
+      created_at: 1,
+      tags: servers.map((s) => ["server", s]),
+    };
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishBlossomServerEvent(nostr as any, signer as any, servers);
+
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 10063,
+        tags: expect.arrayContaining([
+          ["server", "https://blossom1.example"],
+          ["server", "https://blossom2.example"],
+        ]),
+      })
+    );
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(signedEvent);
+  });
+
+  it("logs console.error (fire-and-forget) when caching rejects", async () => {
+    const servers = ["https://blossom.example"];
+    const signedEvent = {
+      kind: 10063,
+      id: "blossom-event-id",
+      pubkey: "user-pubkey",
+      sig: "sig",
+      content: "",
+      created_at: 1,
+      tags: [["server", "https://blossom.example"]],
+    };
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    // First call is inside finalizeAndSendNostrEvent (succeeds); second is the
+    // explicit cache call in publishBlossomServerEvent (rejects).
+    (cacheEventToDatabase as jest.Mock)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Cache write failed"));
+
+    await publishBlossomServerEvent(nostr as any, signer as any, servers);
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to cache blossom server event to database:",
+      expect.any(Error)
+    );
+    consoleErrorSpy.mockRestore();
+  });
+});
+
+describe("publishSavedForLaterEvent", () => {
+  const userPubkey =
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const product = { pubkey: "seller-pubkey", d: "listing-1" } as any;
+
+  function makeSigner(encryptedResult = "encrypted-content") {
+    return {
+      encrypt: jest.fn().mockResolvedValue(encryptedResult),
+      sign: jest.fn().mockImplementation(async (tpl: any) => ({
+        ...tpl,
+        id: "saved-event-id",
+        pubkey: userPubkey,
+        sig: "sig",
+      })),
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("filters out the exact product address when quantity < 0", async () => {
+    const cartAddresses = [
+      ["a", "30402:seller-pubkey:listing-1"],
+      ["a", "30402:seller-pubkey:listing-2"],
+    ];
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSavedForLaterEvent(
+      nostr as any,
+      signer as any,
+      "cart",
+      userPubkey,
+      cartAddresses,
+      product,
+      -1
+    );
+
+    const encryptedArg = signer.encrypt.mock.calls[0][1] as string;
+    const tags: string[][] = JSON.parse(encryptedArg);
+    const aTags = tags.filter((t) => t[0] === "a");
+    expect(aTags).not.toContainEqual(["a", "30402:seller-pubkey:listing-1"]);
+    expect(aTags).toContainEqual(["a", "30402:seller-pubkey:listing-2"]);
+  });
+
+  it("keeps cart addresses for other sellers when removing a product with the same d tag", async () => {
+    const cartAddresses = [
+      ["a", "30402:seller-pubkey:listing-1"],
+      ["a", "30402:other-seller-pubkey:listing-1"],
+      ["a", "30402:seller-pubkey:listing-2"],
+    ];
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSavedForLaterEvent(
+      nostr as any,
+      signer as any,
+      "cart",
+      userPubkey,
+      cartAddresses,
+      product,
+      -1
+    );
+
+    const encryptedArg = signer.encrypt.mock.calls[0][1] as string;
+    const tags: string[][] = JSON.parse(encryptedArg);
+    const aTags = tags.filter((t) => t[0] === "a");
+    expect(aTags).not.toContainEqual(["a", "30402:seller-pubkey:listing-1"]);
+    expect(aTags).toContainEqual(["a", "30402:other-seller-pubkey:listing-1"]);
+    expect(aTags).toContainEqual(["a", "30402:seller-pubkey:listing-2"]);
+  });
+
+  it("pushes quantity copies of the a tag when quantity > 0", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSavedForLaterEvent(
+      nostr as any,
+      signer as any,
+      "cart",
+      userPubkey,
+      [],
+      product,
+      3
+    );
+
+    const encryptedArg = signer.encrypt.mock.calls[0][1] as string;
+    const tags: string[][] = JSON.parse(encryptedArg);
+    const aTags = tags.filter((t) => t[0] === "a");
+    expect(aTags).toHaveLength(3);
+    aTags.forEach((t) => expect(t[1]).toBe("30402:seller-pubkey:listing-1"));
+  });
+
+  it("builds only d/title tags (no a tags) when quantity is absent", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSavedForLaterEvent(
+      nostr as any,
+      signer as any,
+      "saved",
+      userPubkey,
+      [],
+      product
+    );
+
+    const encryptedArg = signer.encrypt.mock.calls[0][1] as string;
+    const tags: string[][] = JSON.parse(encryptedArg);
+    expect(tags.some((t) => t[0] === "a")).toBe(false);
+    expect(tags.some((t) => t[0] === "d")).toBe(true);
+    expect(tags.some((t) => t[0] === "title")).toBe(true);
+  });
+
+  it("builds only d/title tags (no a tags) when quantity is zero", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSavedForLaterEvent(
+      nostr as any,
+      signer as any,
+      "cart",
+      userPubkey,
+      [],
+      product,
+      0
+    );
+
+    const encryptedArg = signer.encrypt.mock.calls[0][1] as string;
+    const tags: string[][] = JSON.parse(encryptedArg);
+    expect(tags.some((t) => t[0] === "a")).toBe(false);
+  });
+
+  it("returns without throwing on success", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await expect(
+      publishSavedForLaterEvent(
+        nostr as any,
+        signer as any,
+        "cart",
+        userPubkey,
+        [],
+        product,
+        1
+      )
+    ).resolves.toBeUndefined();
+  });
+
+  it("returns silently when an inner error occurs", async () => {
+    const signer = {
+      encrypt: jest.fn().mockRejectedValue(new Error("Encrypt failed")),
+      sign: jest.fn(),
+    };
+    const nostr = { publish: jest.fn() };
+
+    await expect(
+      publishSavedForLaterEvent(
+        nostr as any,
+        signer as any,
+        "cart",
+        userPubkey,
+        [],
+        product,
+        1
+      )
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe("approveCommunityPost", () => {
+  const community: Community = {
+    id: "community-event-id",
+    kind: 34550,
+    pubkey: "moderator-pubkey",
+    createdAt: 1,
+    d: "my-community",
+    name: "My Community",
+    description: "A test community",
+    image: "",
+    moderators: ["moderator-pubkey"],
+    relays: { approvals: [], requests: [], metadata: [], all: [] },
+  };
+
+  const postToApprove = {
+    id: "post-event-id",
+    kind: 1,
+    pubkey: "author-pubkey",
+    created_at: 1,
+    content: "Hello community",
+    tags: [],
+    sig: "post-sig",
+  };
+
+  function makeSigner(signedId = "approval-event-id") {
+    return {
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: signedId,
+        pubkey: "moderator-pubkey",
+        sig: "approval-sig",
+      })),
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("creates a kind-4550 event with a, e, p, k tags and the stringified post as content", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await approveCommunityPost(
+      signer as any,
+      nostr as any,
+      postToApprove as any,
+      community
+    );
+
+    expect(signer.sign).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 4550,
+        content: JSON.stringify(postToApprove),
+        tags: expect.arrayContaining([
+          ["a", "34550:moderator-pubkey:my-community"],
+          ["e", "post-event-id"],
+          ["p", "author-pubkey"],
+          ["k", "1"],
+        ]),
+      })
+    );
+  });
+
+  it("caches the signed event and returns it", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    // First call inside finalizeAndSendNostrEvent; second is the explicit cache call.
+    (cacheEventToDatabase as jest.Mock)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined);
+
+    const result = await approveCommunityPost(
+      signer as any,
+      nostr as any,
+      postToApprove as any,
+      community
+    );
+
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "approval-event-id", kind: 4550 })
+    );
+    expect(result).toEqual(
+      expect.objectContaining({ id: "approval-event-id", kind: 4550 })
+    );
+  });
+});
+
+describe("publishProofEvent", () => {
+  const mint = "https://mint.example";
+  const proofs = [{ id: "proof-1", amount: 100, secret: "s", C: "C" }] as any[];
+  const emptyProofs: any[] = [];
+
+  function makeSigner() {
+    return {
+      getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
+      encrypt: jest.fn().mockResolvedValue("encrypted-content"),
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: `signed-${event.kind}`,
+        pubkey: "user-pubkey",
+        sig: "sig",
+      })),
+    };
+  }
+
+  function encryptedProofPayload(signer: ReturnType<typeof makeSigner>) {
+    return JSON.parse(
+      (signer.encrypt as jest.Mock).mock.calls[0][1] as string
+    ) as {
+      mint: string;
+      unit: string;
+      proofs: unknown[];
+      del?: string[];
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (deleteEventsFromDatabase as jest.Mock).mockResolvedValue(undefined);
+    (buildDeleteCachedEventsProof as jest.Mock).mockReturnValue({});
+    (buildSignedHttpRequestProofTemplate as jest.Mock).mockReturnValue({
+      kind: 27235,
+      content: "",
+      tags: [],
+      created_at: 0,
+    });
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("creates a kind-7375 proof event when proofs.length > 0", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishProofEvent(
+      nostr as any,
+      signer as any,
+      mint,
+      proofs,
+      "in",
+      "100"
+    );
+
+    const signedKinds = (signer.sign as jest.Mock).mock.calls.map(
+      (call) => call[0].kind
+    );
+    expect(signedKinds).toContain(7375);
+    expect(encryptedProofPayload(signer)).toEqual({
+      mint,
+      unit: "sat",
+      proofs,
+    });
+  });
+
+  it("skips kind-7375 creation when proofs is empty", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishProofEvent(
+      nostr as any,
+      signer as any,
+      mint,
+      emptyProofs,
+      "out",
+      "0"
+    );
+
+    const signedKinds = (signer.sign as jest.Mock).mock.calls.map(
+      (call) => call[0].kind
+    );
+    expect(signedKinds).not.toContain(7375);
+  });
+
+  it("calls deleteEvent when deletedEventsArray is non-empty", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishProofEvent(
+      nostr as any,
+      signer as any,
+      mint,
+      proofs,
+      "out",
+      "100",
+      ["old-proof-event-id"]
+    );
+
+    const signedKinds = (signer.sign as jest.Mock).mock.calls.map(
+      (call) => call[0].kind
+    );
+    expect(signedKinds).toContain(5);
+    expect(encryptedProofPayload(signer)).toEqual({
+      mint,
+      unit: "sat",
+      proofs,
+      del: ["old-proof-event-id"],
+    });
+  });
+
+  it("skips deleteEvent when deletedEventsArray is absent", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishProofEvent(
+      nostr as any,
+      signer as any,
+      mint,
+      proofs,
+      "in",
+      "100"
+    );
+
+    const signedKinds = (signer.sign as jest.Mock).mock.calls.map(
+      (call) => call[0].kind
+    );
+    expect(signedKinds).not.toContain(5);
+  });
+
+  it("skips deleteEvent when deletedEventsArray is empty", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishProofEvent(
+      nostr as any,
+      signer as any,
+      mint,
+      proofs,
+      "in",
+      "100",
+      []
+    );
+
+    const signedKinds = (signer.sign as jest.Mock).mock.calls.map(
+      (call) => call[0].kind
+    );
+    expect(signedKinds).not.toContain(5);
+  });
+
+  it("always calls publishSpendingHistoryEvent", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishProofEvent(
+      nostr as any,
+      signer as any,
+      mint,
+      emptyProofs,
+      "in",
+      "50"
+    );
+
+    const signedKinds = (signer.sign as jest.Mock).mock.calls.map(
+      (call) => call[0].kind
+    );
+    expect(signedKinds).toContain(7376);
+  });
+
+  it("rejects when proof publishing cannot access the signer", async () => {
+    const signer = {
+      getPubKey: jest.fn().mockRejectedValue(new Error("Signer unavailable")),
+      encrypt: jest.fn(),
+      sign: jest.fn(),
+    };
+    const nostr = { publish: jest.fn() };
+
+    await expect(
+      publishProofEvent(nostr as any, signer as any, mint, proofs, "in", "100")
+    ).rejects.toThrow("Signer unavailable");
+  });
+});
+
+describe("publishSpendingHistoryEvent", () => {
+  const relay = "wss://relay.example";
+
+  function makeSigner() {
+    return {
+      getPubKey: jest.fn().mockResolvedValue("user-pubkey"),
+      encrypt: jest
+        .fn()
+        .mockImplementation(
+          async (_pubkey: string, content: string) => `encrypted:${content}`
+        ),
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: `signed-${event.kind}`,
+        pubkey: "user-pubkey",
+        sig: "sig",
+      })),
+    };
+  }
+
+  function encryptedContent(signer: ReturnType<typeof makeSigner>): string[][] {
+    return JSON.parse((signer.encrypt as jest.Mock).mock.calls[0][1] as string);
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify([relay]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("adds a destroyed tag for each sentEventId when sentEventIds is non-empty", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSpendingHistoryEvent(
+      nostr as any,
+      signer as any,
+      "out",
+      "100",
+      "kept-event-id",
+      ["old-event-1", "old-event-2"]
+    );
+
+    const content = encryptedContent(signer);
+    expect(content).toContainEqual(["e", "old-event-1", relay, "destroyed"]);
+    expect(content).toContainEqual(["e", "old-event-2", relay, "destroyed"]);
+  });
+
+  it("omits destroyed tags when sentEventIds is absent", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSpendingHistoryEvent(
+      nostr as any,
+      signer as any,
+      "in",
+      "50",
+      "kept-event-id"
+    );
+
+    const content = encryptedContent(signer);
+    expect(content.some((t) => t[3] === "destroyed")).toBe(false);
+  });
+
+  it("omits destroyed tags when sentEventIds is empty", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSpendingHistoryEvent(
+      nostr as any,
+      signer as any,
+      "in",
+      "50",
+      "kept-event-id",
+      []
+    );
+
+    const content = encryptedContent(signer);
+    expect(content.some((t) => t[3] === "destroyed")).toBe(false);
+  });
+
+  it("adds a created tag when keptEventId is non-empty", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSpendingHistoryEvent(
+      nostr as any,
+      signer as any,
+      "in",
+      "100",
+      "kept-event-id"
+    );
+
+    const content = encryptedContent(signer);
+    expect(content).toContainEqual(["e", "kept-event-id", relay, "created"]);
+  });
+
+  it("omits the created tag when keptEventId is an empty string", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await publishSpendingHistoryEvent(
+      nostr as any,
+      signer as any,
+      "out",
+      "100",
+      ""
+    );
+
+    const content = encryptedContent(signer);
+    expect(content.some((t) => t[3] === "created")).toBe(false);
+  });
+
+  it("returns silently on any inner error", async () => {
+    const signer = {
+      getPubKey: jest.fn().mockRejectedValue(new Error("Signer unavailable")),
+      encrypt: jest.fn(),
+      sign: jest.fn(),
+    };
+    const nostr = { publish: jest.fn() };
+
+    await expect(
+      publishSpendingHistoryEvent(nostr as any, signer as any, "in", "100", "")
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe("createOrUpdateCommunity", () => {
+  function makeSigner() {
+    return {
+      sign: jest.fn().mockImplementation(async (tpl: any) => ({
+        ...tpl,
+        id: "community-event-id",
+        pubkey: "moderator-pubkey",
+        sig: "sig",
+      })),
+    };
+  }
+
+  const baseDetails = {
+    d: "my-community",
+    name: "My Community",
+    description: "A test community",
+    image: "https://example.com/img.png",
+    moderators: ["mod-pubkey-1", "mod-pubkey-2"],
+  };
+
+  function communityRelays(
+    overrides: Partial<CommunityRelays>
+  ): CommunityRelays {
+    return {
+      approvals: [],
+      requests: [],
+      metadata: [],
+      all: [],
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("creates a kind-34550 event with d, name, description, image, t, and p (moderator) tags", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createOrUpdateCommunity(
+      signer as any,
+      nostr as any,
+      baseDetails
+    );
+
+    expect(result.kind).toBe(34550);
+    expect(result.tags).toEqual(
+      expect.arrayContaining([
+        ["d", "my-community"],
+        ["name", "My Community"],
+        ["description", "A test community"],
+        ["image", "https://example.com/img.png"],
+        ["t", "shopstr"],
+        ["p", "mod-pubkey-1", "", "moderator"],
+        ["p", "mod-pubkey-2", "", "moderator"],
+      ])
+    );
+  });
+
+  it('adds ["relay", url, "approvals"] tags when details.relays.approvals is provided', async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createOrUpdateCommunity(signer as any, nostr as any, {
+      ...baseDetails,
+      relays: communityRelays({ approvals: ["wss://approvals.example"] }),
+    });
+
+    expect(result.tags).toContainEqual([
+      "relay",
+      "wss://approvals.example",
+      "approvals",
+    ]);
+  });
+
+  it('adds ["relay", url, "requests"] tags when details.relays.requests is provided', async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createOrUpdateCommunity(signer as any, nostr as any, {
+      ...baseDetails,
+      relays: communityRelays({ requests: ["wss://requests.example"] }),
+    });
+
+    expect(result.tags).toContainEqual([
+      "relay",
+      "wss://requests.example",
+      "requests",
+    ]);
+  });
+
+  it('adds ["relay", url, "metadata"] tags when details.relays.metadata is provided', async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createOrUpdateCommunity(signer as any, nostr as any, {
+      ...baseDetails,
+      relays: communityRelays({ metadata: ["wss://metadata.example"] }),
+    });
+
+    expect(result.tags).toContainEqual([
+      "relay",
+      "wss://metadata.example",
+      "metadata",
+    ]);
+  });
+
+  it('adds ["relay", url] tags (no type) when details.relays.all is provided', async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createOrUpdateCommunity(signer as any, nostr as any, {
+      ...baseDetails,
+      relays: communityRelays({ all: ["wss://all.example"] }),
+    });
+
+    expect(result.tags).toContainEqual(["relay", "wss://all.example"]);
+    expect(
+      result.tags.find((t) => t[0] === "relay" && t[1] === "wss://all.example")
+    ).toHaveLength(2);
+  });
+
+  it("skips all relay tags when details.relays is absent", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createOrUpdateCommunity(
+      signer as any,
+      nostr as any,
+      baseDetails
+    );
+
+    expect(result.tags.some((t) => t[0] === "relay")).toBe(false);
+  });
+
+  it("caches the signed event and returns it", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    // First call inside finalizeAndSendNostrEvent; second is the explicit cache call.
+    (cacheEventToDatabase as jest.Mock)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined);
+
+    const result = await createOrUpdateCommunity(
+      signer as any,
+      nostr as any,
+      baseDetails
+    );
+
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "community-event-id", kind: 34550 })
+    );
+    expect(result).toEqual(
+      expect.objectContaining({ id: "community-event-id", kind: 34550 })
+    );
+  });
+});
+
+describe("retractApproval", () => {
+  function makeSigner() {
+    return {
+      sign: jest.fn().mockImplementation(async (tpl: any) => ({
+        ...tpl,
+        id: "retract-event-id",
+        pubkey: "moderator-pubkey",
+        sig: "sig",
+      })),
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("creates a kind-5 event with the provided reason as content", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await retractApproval(
+      signer as any,
+      nostr as any,
+      "approval-event-id",
+      "Violated community rules"
+    );
+
+    expect(result.kind).toBe(5);
+    expect(result.content).toBe("Violated community rules");
+    expect(result.tags).toContainEqual(["e", "approval-event-id"]);
+  });
+
+  it("uses a default reason string when reason is absent", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await retractApproval(
+      signer as any,
+      nostr as any,
+      "approval-event-id"
+    );
+
+    expect(result.kind).toBe(5);
+    expect(result.content).toContain("approval-event-id");
+    expect(result.tags).toContainEqual(["e", "approval-event-id"]);
+  });
+});
+
+describe("createCommunityPost", () => {
+  const community: Community = {
+    id: "community-event-id",
+    kind: 34550,
+    pubkey: "community-pubkey",
+    createdAt: 1,
+    d: "my-community",
+    name: "My Community",
+    description: "A test community",
+    image: "",
+    moderators: ["community-pubkey"],
+    relays: { approvals: [], requests: [], metadata: [], all: [] },
+  };
+
+  const communityAddress = "34550:community-pubkey:my-community";
+
+  function makeSigner() {
+    return {
+      sign: jest.fn().mockImplementation(async (tpl: any) => ({
+        ...tpl,
+        id: "post-event-id",
+        pubkey: "author-pubkey",
+        sig: "sig",
+      })),
+    };
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("relays", JSON.stringify(["wss://relay.example"]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("includes uppercase A/P/K tags and lowercase a/p/k pointing to the community for a top-level post", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createCommunityPost(
+      signer as any,
+      nostr as any,
+      community,
+      "Hello community"
+    );
+
+    expect(result.kind).toBe(1111);
+    expect(result.tags).toEqual(
+      expect.arrayContaining([
+        ["A", communityAddress],
+        ["P", community.pubkey],
+        ["K", "34550"],
+        ["a", communityAddress],
+        ["p", community.pubkey],
+        ["k", "34550"],
+      ])
+    );
+  });
+
+  it("includes uppercase A/P/K plus e/p/k tags pointing to the parent for a reply", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    const parentEvent = {
+      id: "parent-event-id",
+      kind: 1111,
+      pubkey: "parent-author-pubkey",
+      created_at: 1,
+      content: "Parent post",
+      tags: [],
+      sig: "parent-sig",
+    };
+
+    const result = await createCommunityPost(
+      signer as any,
+      nostr as any,
+      community,
+      "Replying here",
+      { parentEvent: parentEvent as any }
+    );
+
+    expect(result.tags).toEqual(
+      expect.arrayContaining([
+        ["A", communityAddress],
+        ["P", community.pubkey],
+        ["K", "34550"],
+        ["a", communityAddress],
+        ["e", "parent-event-id", ""],
+        ["p", "parent-author-pubkey", ""],
+        ["k", "1111"],
+      ])
+    );
+  });
+
+  it("adds additional a tags for each cross-posted community when crosspostCommunities is present", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    const otherCommunity: Community = {
+      ...community,
+      kind: 34550,
+      pubkey: "other-pubkey",
+      d: "other-community",
+    };
+
+    const result = await createCommunityPost(
+      signer as any,
+      nostr as any,
+      community,
+      "Cross-posted",
+      { crosspostCommunities: [otherCommunity] }
+    );
+
+    expect(result.tags).toEqual(
+      expect.arrayContaining([["a", "34550:other-pubkey:other-community"]])
+    );
+  });
+
+  it("adds an i tag when externalId is provided", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createCommunityPost(
+      signer as any,
+      nostr as any,
+      community,
+      "External content",
+      { externalId: "isbn:9781234567890" }
+    );
+
+    expect(result.tags).toContainEqual(["i", "isbn:9781234567890"]);
+  });
+
+  it("adds a k tag alongside i when contentKind is also provided", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createCommunityPost(
+      signer as any,
+      nostr as any,
+      community,
+      "External content with kind",
+      { externalId: "isbn:9781234567890", contentKind: "book" }
+    );
+
+    expect(result.tags).toContainEqual(["i", "isbn:9781234567890"]);
+    expect(result.tags).toContainEqual(["k", "book"]);
+  });
+
+  it("omits the k tag alongside i when contentKind is absent", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    const result = await createCommunityPost(
+      signer as any,
+      nostr as any,
+      community,
+      "External content no kind",
+      { externalId: "isbn:9781234567890" }
+    );
+
+    const kTags = result.tags.filter((t) => t[0] === "k");
+    expect(kTags.some((t) => t[1] !== "34550" && t[1] !== "1111")).toBe(false);
+  });
+
+  it("caches the signed event and returns it", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    (cacheEventToDatabase as jest.Mock)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined);
+
+    const result = await createCommunityPost(
+      signer as any,
+      nostr as any,
+      community,
+      "Hello community"
+    );
+
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "post-event-id", kind: 1111 })
+    );
+    expect(result).toEqual(
+      expect.objectContaining({ id: "post-event-id", kind: 1111 })
+    );
+  });
+});
+
+describe("blossomUploadImages", () => {
+  // jsdom does not implement File.arrayBuffer(); polyfill it so the source
+  // code can call image.arrayBuffer() during tests.
+  function makeImageFile(
+    content = "fake-image-data",
+    name = "test.png",
+    type = "image/png"
+  ) {
+    const file = new File([content], name, { type });
+    const bytes = new TextEncoder().encode(content);
+    (file as any).arrayBuffer = async () => bytes.buffer.slice(0);
+    return file;
+  }
+
+  function makeSigner() {
+    return {
+      sign: jest.fn().mockImplementation(async (event: any) => ({
+        ...event,
+        id: "signed-upload-event",
+        pubkey: "user-pubkey",
+        sig: "sig",
+      })),
+    };
+  }
+
+  function makeSuccessResponse(overrides: Record<string, unknown> = {}) {
+    return {
+      ok: true,
+      json: async () => ({
+        url: "https://blossom.example/abc123",
+        sha256: "abc123sha256",
+        size: 512,
+        type: "image/png",
+        ...overrides,
+      }),
+    };
+  }
+
+  beforeEach(() => {
+    global.fetch = jest.fn();
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("throws when image.type does not include 'image'", async () => {
+    const file = makeImageFile("content", "doc.pdf", "application/pdf");
+    const signer = makeSigner();
+
+    await expect(
+      blossomUploadImages(file, signer as any, ["https://blossom.example"])
+    ).rejects.toThrow("Only images are supported");
+  });
+
+  it("skips servers with empty/blank strings and uses only the valid ones", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue(makeSuccessResponse());
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "",
+      "  ",
+      "https://blossom.example",
+    ]);
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(result).toBeDefined();
+  });
+
+  it("prepends https:// to a server URL that lacks a protocol prefix", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue(makeSuccessResponse());
+
+    await blossomUploadImages(makeImageFile(), signer as any, [
+      "blossom.example",
+    ]);
+
+    const calledUrl = (global.fetch as jest.Mock).mock.calls[0][0];
+    expect(calledUrl.toString()).toContain("https://blossom.example");
+  });
+
+  it("returns null and filters a server when the URL constructor throws (invalid format)", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue(makeSuccessResponse());
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "[invalid",
+      "https://blossom.example",
+    ]);
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(result).toBeDefined();
+  });
+
+  it("throws when no valid servers remain after filtering", async () => {
+    const signer = makeSigner();
+
+    await expect(
+      blossomUploadImages(makeImageFile(), signer as any, ["", "[invalid"])
+    ).rejects.toThrow("No valid Blossom servers configured");
+  });
+
+  it("throws when res.ok is false from the first server and includes the status code in the message", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 413,
+      text: async () => "Payload Too Large",
+    });
+
+    await expect(
+      blossomUploadImages(makeImageFile(), signer as any, [
+        "https://blossom.example",
+      ])
+    ).rejects.toThrow("413");
+  });
+
+  it("returns the [url, x, ox, size, m] tags array from a standard response", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue(makeSuccessResponse());
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://blossom.example",
+    ]);
+
+    expect(result).toEqual(
+      expect.arrayContaining([
+        ["url", "https://blossom.example/abc123"],
+        ["x", "abc123sha256"],
+        ["ox", "abc123sha256"],
+        ["size", "512"],
+        ["m", "image/png"],
+      ])
+    );
+  });
+
+  it("normalises NIP-94 format: reads url, sha256/ox, size, m from nip94_event.tags when top-level fields are absent", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        nip94_event: {
+          tags: [
+            ["url", "https://blossom.example/nip94url"],
+            ["ox", "nip94sha256"],
+            ["size", "256"],
+            ["m", "image/jpeg"],
+          ],
+        },
+      }),
+    });
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://blossom.example",
+    ]);
+
+    expect(result).toEqual(
+      expect.arrayContaining([
+        ["url", "https://blossom.example/nip94url"],
+        ["x", "nip94sha256"],
+        ["ox", "nip94sha256"],
+        ["size", "256"],
+        ["m", "image/jpeg"],
+      ])
+    );
+  });
+
+  it("constructs a fallback URL from /<sha256> when the response has no url", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ sha256: "fallbackhash" }),
+    });
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://blossom.example",
+    ]);
+
+    expect(result[0]).toEqual(["url", "https://blossom.example/fallbackhash"]);
+  });
+
+  it("throws (and logs console.error) when no url can be recovered at all", async () => {
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    });
+
+    await expect(
+      blossomUploadImages(makeImageFile(), signer as any, [
+        "https://blossom.example",
+      ])
+    ).rejects.toThrow("didn't provide a media URL");
+
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("adds x/ox tags only when sha256 is present in the response", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        url: "https://blossom.example/file",
+        type: "image/png",
+      }),
+    });
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://blossom.example",
+    ]);
+
+    expect(result.some((t) => t[0] === "x")).toBe(false);
+    expect(result.some((t) => t[0] === "ox")).toBe(false);
+  });
+
+  it("adds size tag only when responseSize is defined and non-empty", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: "https://blossom.example/file" }),
+    });
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://blossom.example",
+    ]);
+
+    expect(result.some((t) => t[0] === "size")).toBe(false);
+  });
+
+  it("adds m tag only when responseType is present", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: "https://blossom.example/file" }),
+    });
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://blossom.example",
+    ]);
+
+    expect(result.some((t) => t[0] === "m")).toBe(false);
+  });
+
+  it("calls the /mirror endpoint (PUT) for every server beyond the first", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(makeSuccessResponse())
+      .mockResolvedValueOnce({ ok: true });
+
+    await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://primary.example",
+      "https://mirror.example",
+    ]);
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    const mirrorCall = (global.fetch as jest.Mock).mock.calls[1];
+    expect(mirrorCall[0].toString()).toBe("https://mirror.example/mirror");
+    expect(mirrorCall[1].method).toBe("PUT");
+  });
+
+  it("caches the authorization event after a successful upload", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue(makeSuccessResponse());
+
+    await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://blossom.example",
+    ]);
+
+    expect(cacheEventToDatabase).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "signed-upload-event" })
+    );
   });
 });

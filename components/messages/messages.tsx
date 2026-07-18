@@ -3,13 +3,15 @@ import { nip19 } from "nostr-tools";
 import { useRouter } from "next/router";
 import { Button, useDisclosure } from "@heroui/react";
 import {
+  decryptNpub,
+  generateKeys,
+} from "@/utils/nostr/nostr-helper-functions";
+import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
-  decryptNpub,
-  generateKeys,
-} from "@/utils/nostr/nostr-helper-functions";
+} from "@/utils/nostr/gift-wrap";
 import { ChatsContext } from "../../utils/context/context";
 import ShopstrSpinner from "../utility-components/shopstr-spinner";
 import ChatPanel from "./chat-panel";

@@ -1,17 +1,12 @@
 import {
   EventTemplate,
-  finalizeEvent,
   generateSecretKey,
   getPublicKey,
-  getEventHash,
   nip19,
-  nip44,
 } from "nostr-tools";
 import { v4 as uuidv4 } from "uuid";
 import CryptoJS from "crypto-js";
 import {
-  Community,
-  CommunityRelays,
   NostrEvent,
   ProductFormValues,
   SavedAddress,
@@ -31,6 +26,8 @@ import {
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
 import { buildWalletConfigV1 } from "@/utils/cashu/wallet-config";
+import { getDefaultRelays, withBlastr } from "./relay-config";
+export { getDefaultRelays, withBlastr };
 
 export const REPORT_TYPES = [
   "nudity",
@@ -43,18 +40,6 @@ export const REPORT_TYPES = [
 ] as const;
 
 export type ReportType = (typeof REPORT_TYPES)[number];
-
-function containsRelay(relays: string[], relay: string): boolean {
-  return relays.some((r) => r.includes(relay));
-}
-
-function generateRandomTimestamp(): number {
-  const now = Math.floor(Date.now() / 1000);
-  const twoDaysInMilliseconds = 172800;
-  const randomSeconds = Math.floor(Math.random() * (twoDaysInMilliseconds + 1));
-  const randomTimestamp = now - randomSeconds;
-  return randomTimestamp;
-}
 
 export async function generateKeys(): Promise<{ nsec: string; npub: string }> {
   const sk = generateSecretKey();
@@ -249,266 +234,6 @@ export async function createNostrShopEvent(
     await cacheEventToDatabase(signedEvent).catch((error) =>
       console.error("Failed to cache shop profile event to database:", error)
     );
-  }
-}
-
-interface GiftWrappedMessageEvent {
-  id: string;
-  pubkey: string;
-  created_at: number;
-  content: string;
-  kind: number;
-  tags: string[][];
-}
-
-export async function constructGiftWrappedEvent(
-  senderPubkey: string,
-  recipientPubkey: string,
-  message: string,
-  subject: string,
-  options: {
-    kind?: number;
-    orderId?: string;
-    type?: number;
-    paymentType?: string;
-    paymentReference?: string;
-    paymentProof?: string;
-    orderAmount?: number;
-    status?: string;
-    productData?: ProductData;
-    quantity?: number;
-    productAddress?: string;
-    tracking?: string;
-    carrier?: string;
-    eta?: number;
-    isOrder?: boolean;
-    contact?: string;
-    address?: string;
-    pickup?: string;
-    buyerPubkey?: string;
-    donationAmount?: number;
-    donationPercentage?: number;
-    selectedSize?: string;
-    selectedVolume?: string;
-    selectedWeight?: string;
-    selectedBulkOption?: number;
-  } = {}
-): Promise<GiftWrappedMessageEvent> {
-  const { relays } = getLocalStorageData();
-  const {
-    kind,
-    orderId,
-    type,
-    paymentType,
-    paymentReference,
-    paymentProof,
-    orderAmount,
-    status,
-    productData,
-    quantity,
-    productAddress,
-    tracking,
-    carrier,
-    eta,
-    isOrder,
-    contact,
-    address,
-    pickup,
-    buyerPubkey,
-    donationAmount,
-    donationPercentage,
-    selectedSize,
-    selectedVolume,
-    selectedWeight,
-    selectedBulkOption,
-  } = options;
-
-  const tags = [
-    ["p", recipientPubkey, relays[0]!],
-    ["subject", subject],
-  ];
-
-  // Add order-specific tags
-  if (isOrder) {
-    tags.push(["order", orderId ? orderId : uuidv4()]);
-
-    if (buyerPubkey) tags.push(["b", buyerPubkey]);
-    if (type) tags.push(["type", type.toString()]);
-    if (orderAmount) tags.push(["amount", orderAmount.toString()]);
-    // Add payment tag with format: ["payment", paymentType, paymentReference, paymentProof?]
-    // For order-payment: ["payment", type, destination/token]
-    // For order-receipt: ["payment", type, reference, proof]
-    if (paymentType && paymentReference) {
-      if (paymentProof) {
-        tags.push(["payment", paymentType, paymentReference, paymentProof]);
-      } else {
-        tags.push(["payment", paymentType, paymentReference]);
-      }
-    }
-    if (status) tags.push(["status", status]);
-    if (tracking) tags.push(["tracking", tracking]);
-    if (carrier) tags.push(["carrier", carrier]);
-    if (eta) tags.push(["eta", eta.toString()]);
-    if (contact) tags.push(["contact", contact]);
-    if (address) tags.push(["address", address]);
-    if (pickup) tags.push(["pickup", pickup]);
-    if (selectedSize) tags.push(["size", selectedSize]);
-    if (selectedVolume) tags.push(["volume", selectedVolume]);
-    if (selectedWeight) tags.push(["weight", selectedWeight]);
-    if (selectedBulkOption) tags.push(["bulk", selectedBulkOption.toString()]);
-    if (
-      donationAmount &&
-      donationAmount > 0 &&
-      donationPercentage !== undefined
-    ) {
-      tags.push([
-        "donation_amount",
-        donationAmount.toString(),
-        donationPercentage.toString(),
-      ]);
-    }
-
-    // Handle product information for orders
-    if (productData || productAddress) {
-      tags.push([
-        "item",
-        productData
-          ? `30402:${productData.pubkey}:${productData.d}`
-          : productAddress!,
-        quantity ? quantity.toString() : "1",
-      ]);
-    }
-  } else {
-    // Handle regular message product references
-    if (productData) {
-      tags.push([
-        "a",
-        `30402:${productData.pubkey}:${productData.d}`,
-        relays[0]!,
-      ]);
-    } else if (productAddress) {
-      tags.push(["a", productAddress, relays[0]!]);
-    }
-  }
-
-  const bareEvent = {
-    pubkey: senderPubkey,
-    created_at: Math.floor(Date.now() / 1000),
-    content: message,
-    kind: kind ? kind : 14,
-    tags,
-  };
-
-  // To generate a predictable ID before signing (as required by NIP-17 gift wrap structure),
-  // we create a temporary full event object and hash it using the official NIP-01 method.
-  const eventToHash: NostrEvent = {
-    ...bareEvent,
-    id: "", // dummy value for hashing
-    sig: "", // dummy value for hashing
-  };
-  const eventId = getEventHash(eventToHash);
-  return {
-    id: eventId,
-    ...bareEvent,
-  } as GiftWrappedMessageEvent;
-}
-
-export async function constructMessageSeal(
-  signer: NostrSigner,
-  messageEvent: GiftWrappedMessageEvent,
-  senderPubkey: string,
-  recipientPubkey: string,
-  randomPrivkey?: Uint8Array
-): Promise<NostrEvent> {
-  const stringifiedEvent = JSON.stringify(messageEvent);
-  let encryptedContent;
-  if (randomPrivkey) {
-    const conversationKey = nip44.getConversationKey(
-      randomPrivkey,
-      recipientPubkey
-    );
-    encryptedContent = nip44.encrypt(stringifiedEvent, conversationKey);
-  } else {
-    encryptedContent = await signer.encrypt(recipientPubkey, stringifiedEvent);
-  }
-
-  const sealEvent = {
-    pubkey: senderPubkey,
-    created_at: generateRandomTimestamp(),
-    content: encryptedContent,
-    kind: 13,
-    tags: [],
-  };
-  let signedEvent;
-  if (randomPrivkey) {
-    signedEvent = finalizeEvent(sealEvent, randomPrivkey);
-  } else {
-    signedEvent = await signer.sign(sealEvent);
-  }
-  return signedEvent;
-}
-
-export async function constructMessageGiftWrap(
-  sealEvent: NostrEvent,
-  randomPubkey: string,
-  randomPrivkey: Uint8Array,
-  recipientPubkey: string
-): Promise<NostrEvent> {
-  const { relays } = getLocalStorageData();
-  const stringifiedEvent = JSON.stringify(sealEvent);
-  const conversationKey = nip44.getConversationKey(
-    randomPrivkey,
-    recipientPubkey
-  );
-  const encryptedEvent = nip44.encrypt(stringifiedEvent, conversationKey);
-  const giftWrapEvent = {
-    pubkey: randomPubkey,
-    created_at: generateRandomTimestamp(),
-    content: encryptedEvent,
-    kind: 1059,
-    tags: [["p", recipientPubkey, relays[0]!]],
-  };
-  const signedEvent = finalizeEvent(giftWrapEvent, randomPrivkey);
-  return signedEvent;
-}
-
-export async function sendGiftWrappedMessageEvent(
-  nostr: NostrManager,
-  giftWrappedMessageEvent: NostrEvent,
-  signer?: NostrSigner
-) {
-  const { relays, writeRelays } = getLocalStorageData();
-  const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-
-  // Cache the gift-wrapped event to database first and wait for confirmation
-  await cacheEventToDatabase(giftWrappedMessageEvent);
-
-  // After DB confirmation, attempt to publish to relays with timeout
-  try {
-    await newPromiseWithTimeout(
-      async (resolve, reject) => {
-        try {
-          await nostr.publish(giftWrappedMessageEvent, allWriteRelays);
-          resolve(undefined);
-        } catch (err) {
-          reject(err as Error);
-        }
-      },
-      { timeout: 21000 } // 21 second timeout
-    );
-  } catch (error) {
-    // Timeout or relay publish error - track for retry
-    console.warn(
-      "Relay publish timed out or failed for gift-wrapped message, but event is saved to database:",
-      error
-    );
-    const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
-    await trackFailedRelayPublish(
-      giftWrappedMessageEvent.id,
-      giftWrappedMessageEvent,
-      allWriteRelays,
-      signer
-    ).catch(console.error);
   }
 }
 
@@ -708,14 +433,15 @@ export async function publishSavedForLaterEvent(
 ) {
   try {
     let cartTags: string[][] = [];
+    const productAddress = `30402:${product.pubkey}:${product.d}`;
 
     if (quantity && quantity < 0) {
       cartTags = [...cartAddresses].filter(
-        (address) => !address[1]!.includes(`:${product.d}`)
+        (address) => !(address[0] === "a" && address[1] === productAddress)
       );
     } else if (quantity && quantity > 0) {
       for (let i = 0; i < quantity; i++) {
-        const productTag = ["a", "30402:" + product.pubkey + ":" + product.d];
+        const productTag = ["a", productAddress];
         cartTags.push(productTag);
       }
     }
@@ -890,189 +616,6 @@ export async function publishSpendingHistoryEvent(
   } catch {
     return;
   }
-}
-
-export async function createOrUpdateCommunity(
-  signer: NostrSigner,
-  nostr: NostrManager,
-  details: {
-    d: string; // The unique identifier, should be constant for a community
-    name: string;
-    description: string;
-    image: string;
-    moderators: string[];
-    relays?: CommunityRelays; // optional relay declarations
-  }
-) {
-  const tags: string[][] = [
-    ["d", details.d],
-    ["name", details.name],
-    ["description", details.description],
-    ["image", details.image],
-    ["t", "shopstr"],
-  ];
-
-  // moderators as p tags with role marker
-  for (const mod_pk of details.moderators) {
-    tags.push(["p", mod_pk, "", "moderator"]);
-  }
-
-  // include relay tags if provided: ["relay", url, type]
-  if (details.relays) {
-    const {
-      approvals = [],
-      requests = [],
-      metadata = [],
-      all = [],
-    } = details.relays;
-    for (const r of approvals) tags.push(["relay", r, "approvals"]);
-    for (const r of requests) tags.push(["relay", r, "requests"]);
-    for (const r of metadata) tags.push(["relay", r, "metadata"]);
-    for (const r of all) tags.push(["relay", r]);
-  }
-
-  const eventTemplate: EventTemplate = {
-    kind: 34550,
-    created_at: Math.floor(Date.now() / 1000),
-    tags,
-    content: "",
-  };
-
-  const signedEvent = await finalizeAndSendNostrEvent(
-    signer,
-    nostr,
-    eventTemplate
-  );
-  // Cache community event to database
-  if (signedEvent) {
-    await cacheEventToDatabase(signedEvent).catch((error) =>
-      console.error("Failed to cache community event to database:", error)
-    );
-  }
-  return signedEvent;
-}
-
-export async function createCommunityPost(
-  signer: NostrSigner,
-  nostr: NostrManager,
-  community: Community,
-  content: string,
-  options?: {
-    parentEvent?: NostrEvent; // reply
-    crosspostCommunities?: Community[]; // cross-post to other communities (NIP-18)
-    externalId?: string; // NIP-73 external content id
-    contentKind?: string; // optional k/i usage
-  }
-) {
-  const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
-  const tags: string[][] = [];
-
-  // Always include uppercase A/P tags pointing to the community address/pubkey
-  tags.push(["A", communityAddress]);
-  tags.push(["P", community.pubkey]);
-  tags.push(["K", String(community.kind)]);
-
-  if (options?.parentEvent) {
-    // reply: reference parent event via e and p tags and include parent kind
-    tags.push(["a", communityAddress]);
-    tags.push(["e", options.parentEvent.id, ""]);
-    tags.push(["p", options.parentEvent.pubkey, ""]);
-    tags.push(["k", String(options.parentEvent.kind)]);
-  } else {
-    // top-level announcement: include lowercase a/p/k pointing to the community address/kind
-    tags.push(["a", communityAddress]);
-    tags.push(["p", community.pubkey]);
-    tags.push(["k", String(community.kind)]);
-  }
-
-  // cross-posting: include additional lowercase a tags pointing to other communities' addresses
-  if (options?.crosspostCommunities) {
-    for (const c of options.crosspostCommunities) {
-      const addr = `${c.kind}:${c.pubkey}:${c.d}`;
-      tags.push(["a", addr]);
-    }
-  }
-
-  // NIP-73 external ID support (i tag)
-  if (options?.externalId) {
-    tags.push(["i", options.externalId]);
-    if (options?.contentKind) tags.push(["k", options.contentKind]);
-  }
-
-  const eventTemplate: EventTemplate = {
-    kind: 1111,
-    created_at: Math.floor(Date.now() / 1000),
-    tags,
-    content,
-  };
-
-  // returns signed event (so caller can know id)
-  const signedEvent = await finalizeAndSendNostrEvent(
-    signer,
-    nostr,
-    eventTemplate
-  );
-  // Cache community post event to database
-  if (signedEvent) {
-    await cacheEventToDatabase(signedEvent).catch((error) =>
-      console.error("Failed to cache community post event to database:", error)
-    );
-  }
-  return signedEvent;
-}
-
-export async function approveCommunityPost(
-  signer: NostrSigner,
-  nostr: NostrManager,
-  postToApprove: NostrEvent,
-  community: Community
-) {
-  const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
-  const tags: string[][] = [
-    ["a", communityAddress],
-    ["e", postToApprove.id],
-    ["p", postToApprove.pubkey],
-    ["k", String(postToApprove.kind)],
-  ];
-  const eventTemplate: EventTemplate = {
-    kind: 4550,
-    created_at: Math.floor(Date.now() / 1000),
-    tags,
-    content: JSON.stringify(postToApprove),
-  };
-
-  // returns signed approval event (so caller can persist approval id)
-  const signedEvent = await finalizeAndSendNostrEvent(
-    signer,
-    nostr,
-    eventTemplate
-  );
-  // Cache community approval event to database
-  if (signedEvent) {
-    await cacheEventToDatabase(signedEvent).catch((error) =>
-      console.error(
-        "Failed to cache community approval event to database:",
-        error
-      )
-    );
-  }
-  return signedEvent;
-}
-
-// Moderator retract of approval -> publish deletion event (NIP-09, kind 5)
-export async function retractApproval(
-  signer: NostrSigner,
-  nostr: NostrManager,
-  approvalEventId: string,
-  reason?: string
-) {
-  const eventTemplate: EventTemplate = {
-    kind: 5,
-    created_at: Math.floor(Date.now() / 1000),
-    tags: [["e", approvalEventId]],
-    content: reason || `Retract approval ${approvalEventId}`,
-  };
-  return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
 }
 
 type FinalizeAndSendOptions = {
@@ -2084,26 +1627,6 @@ export function nostrExtensionLoaded() {
     return false;
   }
   return true;
-}
-
-export function getDefaultRelays(): string[] {
-  return [
-    "wss://relay.damus.io",
-    "wss://nos.lol",
-    "wss://purplepag.es",
-    "wss://relay.primal.net",
-    "wss://relay.nostr.band",
-  ];
-}
-
-export function withBlastr(relays: string[]): string[] {
-  const out = [...relays];
-
-  const blastrRelay = "wss://sendit.nosflare.com";
-  if (!containsRelay(out, blastrRelay)) {
-    out.push(blastrRelay);
-  }
-  return out;
 }
 
 export function getDefaultMint(): string {

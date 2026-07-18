@@ -10,6 +10,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { ReviewsContext } from "@/utils/context/context";
 import * as nostrHelpers from "@/utils/nostr/nostr-helper-functions";
+import * as giftWrapHelpers from "@/utils/nostr/gift-wrap";
 import * as nostrTools from "nostr-tools";
 import ChatMessage from "../chat-message";
 
@@ -41,11 +42,14 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   generateKeys: jest
     .fn()
     .mockResolvedValue({ npub: "mock-npub", nsec: "mock-nsec" }),
+  publishReviewEvent: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("@/utils/nostr/gift-wrap", () => ({
   constructGiftWrappedEvent: jest.fn().mockResolvedValue({}),
   constructMessageSeal: jest.fn().mockResolvedValue({}),
   constructMessageGiftWrap: jest.fn().mockResolvedValue({}),
   sendGiftWrappedMessageEvent: jest.fn().mockResolvedValue(undefined),
-  publishReviewEvent: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock("nostr-tools", () => ({
@@ -314,7 +318,7 @@ describe("ChatPanel Component", () => {
       );
 
       await waitFor(() => {
-        expect(nostrHelpers.constructGiftWrappedEvent).toHaveBeenCalledWith(
+        expect(giftWrapHelpers.constructGiftWrappedEvent).toHaveBeenCalledWith(
           expect.anything(),
           "mock-buyer-pubkey",
           expect.stringContaining("has been completed"),
@@ -331,7 +335,7 @@ describe("ChatPanel Component", () => {
         .spyOn(console, "error")
         .mockImplementation(() => {});
       (
-        nostrHelpers.sendGiftWrappedMessageEvent as jest.Mock
+        giftWrapHelpers.sendGiftWrappedMessageEvent as jest.Mock
       ).mockRejectedValueOnce(new Error("Nostr error"));
 
       await renderComponent({ isPayment: true });
@@ -363,7 +367,7 @@ describe("ChatPanel Component", () => {
         .spyOn(console, "error")
         .mockImplementation(() => {});
       (
-        nostrHelpers.constructGiftWrappedEvent as jest.Mock
+        giftWrapHelpers.constructGiftWrappedEvent as jest.Mock
       ).mockRejectedValueOnce(new Error("Construction failed"));
 
       await renderComponent({ isPayment: true });

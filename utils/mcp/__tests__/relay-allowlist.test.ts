@@ -13,20 +13,6 @@ jest.mock("nostr-tools", () => ({
   },
 }));
 
-jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
-  getDefaultRelays: jest.fn(() => [
-    "wss://relay.damus.io",
-    "wss://nos.lol",
-    "wss://purplepag.es",
-    "wss://relay.primal.net",
-    "wss://relay.nostr.band",
-  ]),
-  withBlastr: jest.fn((relays: string[]) => [
-    ...relays,
-    "wss://sendit.nosflare.com",
-  ]),
-}));
-
 jest.mock("@/utils/db/db-service", () => ({ cacheEvent: jest.fn() }));
 
 import { McpRelayManager, MCP_RELAY_ALLOWLIST } from "../nostr-signing";
