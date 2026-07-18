@@ -1188,9 +1188,10 @@ describe("getLocalStorageData", () => {
     expect(data.blossomServers).toEqual([getDefaultBlossomServer()]);
   });
 
-  it("initialises tokens to [] in localStorage when the key is absent", () => {
-    getLocalStorageData();
-    expect(localStorage.getItem("tokens")).toBe("[]");
+  it("keeps tokens out of localStorage when the key is absent", () => {
+    const data = getLocalStorageData();
+    expect(data.tokens).toEqual([]);
+    expect(localStorage.getItem("tokens")).toBeNull();
   });
 
   it("initialises history to [] in localStorage when the key is absent", () => {
@@ -3138,7 +3139,7 @@ describe("publishProofEvent", () => {
     expect(signedKinds).toContain(7376);
   });
 
-  it("returns silently on any inner error", async () => {
+  it("rejects when proof publishing cannot access the signer", async () => {
     const signer = {
       getPubKey: jest.fn().mockRejectedValue(new Error("Signer unavailable")),
       encrypt: jest.fn(),
@@ -3148,7 +3149,7 @@ describe("publishProofEvent", () => {
 
     await expect(
       publishProofEvent(nostr as any, signer as any, mint, proofs, "in", "100")
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow("Signer unavailable");
   });
 });
 

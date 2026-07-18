@@ -4838,8 +4838,11 @@ describe("fetchCashuWallet", () => {
 
   it("returns empty wallet state without touching relays or cache when no signer pubkey is available", async () => {
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => [
+        { id: "local-proof", secret: "local-secret" },
+      ]),
       getLocalStorageData: jest.fn(() => ({
-        tokens: [{ id: "local-proof", secret: "local-secret" }],
+        tokens: [],
       })),
       deleteEvent: jest.fn(),
       verifyNip05Identifier: jest.fn(),
@@ -4890,6 +4893,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -4969,6 +4973,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -5042,6 +5047,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -5118,6 +5124,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -5259,6 +5266,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -5325,6 +5333,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -5409,6 +5418,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -5504,6 +5514,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -5576,6 +5587,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -5671,6 +5683,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -5744,6 +5757,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -5855,6 +5869,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent,
       verifyNip05Identifier: jest.fn(),
@@ -5926,6 +5941,7 @@ describe("fetchCashuWallet", () => {
       .mockImplementation(() => {});
 
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -5998,6 +6014,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -6097,6 +6114,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -6159,6 +6177,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -6214,6 +6233,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -6287,6 +6307,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -6355,6 +6376,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -6437,6 +6459,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -6508,6 +6531,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -6578,6 +6602,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -6646,6 +6671,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -6721,6 +6747,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -6803,6 +6830,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -6873,6 +6901,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockResolvedValue(undefined),
       verifyNip05Identifier: jest.fn(),
@@ -6945,6 +6974,7 @@ describe("fetchCashuWallet", () => {
       })),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn().mockRejectedValue(deleteError),
       verifyNip05Identifier: jest.fn(),
@@ -7016,6 +7046,7 @@ describe("fetchCashuWallet", () => {
       hashToCurve: jest.fn(),
     }));
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getCachedCashuProofs: jest.fn(() => []),
       getLocalStorageData: jest.fn(() => ({ tokens: [] })),
       deleteEvent: jest.fn(),
       verifyNip05Identifier: jest.fn(),

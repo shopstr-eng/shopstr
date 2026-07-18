@@ -10,8 +10,10 @@ import {
 import { CashuWalletContext } from "@/utils/context/context";
 import { Wallet as CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
+  setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
@@ -50,7 +52,9 @@ jest.mock("@heroicons/react/24/outline", () => ({
 }));
 
 const mockGetLocalStorageData = getLocalStorageData as jest.Mock;
+const mockGetCachedCashuProofs = getCachedCashuProofs as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
+const mockSetCachedCashuProofs = setCachedCashuProofs as jest.Mock;
 const mockGetEncodedToken = getEncodedToken as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
 
@@ -119,9 +123,12 @@ describe("SendButton", () => {
 
     setItemSpy = jest.spyOn(Storage.prototype, "setItem");
     mockPublishProofEvent.mockResolvedValue(undefined);
+    mockGetCachedCashuProofs.mockReturnValue([
+      { id: "keyset_id_1", amount: 1000, C: "C1" },
+    ]);
     mockGetLocalStorageData.mockReturnValue({
       mints: ["https://legend.lnbits.com/cashu/api/v1/4_sadf7asdf78"],
-      tokens: [{ id: "keyset_id_1", amount: 1000, C: "C1" }],
+      tokens: [],
       history: [],
     });
     Object.defineProperty(navigator, "clipboard", {
@@ -277,13 +284,14 @@ describe("SendButton", () => {
   });
 
   test("handles tokens with different keyset IDs", async () => {
+    mockGetCachedCashuProofs.mockReturnValue([
+      { id: "keyset_id_1", amount: 500, C: "C1" },
+      { id: "keyset_id_2", amount: 300, C: "C2" },
+      { id: "keyset_id_3", amount: 200, C: "C3" },
+    ]);
     mockGetLocalStorageData.mockReturnValue({
       mints: ["https://legend.lnbits.com/cashu/api/v1/4_sadf7asdf78"],
-      tokens: [
-        { id: "keyset_id_1", amount: 500, C: "C1" },
-        { id: "keyset_id_2", amount: 300, C: "C2" },
-        { id: "keyset_id_3", amount: 200, C: "C3" },
-      ],
+      tokens: [],
       history: [],
     });
 
@@ -313,11 +321,11 @@ describe("SendButton", () => {
 
     await screen.findByText("New token string is ready to be copied and sent!");
 
-    // Verify that tokens are filtered and stored correctly
-    // Should include the remaining proof with keyset_id_3 plus the change proof
-    expect(localStorage.setItem).toHaveBeenCalledWith(
-      "tokens",
-      expect.stringContaining("keyset_id_3")
+    expect(mockSetCachedCashuProofs).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "keyset_id_3" }),
+        expect.objectContaining({ amount: 400 }),
+      ])
     );
   });
 

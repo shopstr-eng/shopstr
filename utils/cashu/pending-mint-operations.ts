@@ -118,8 +118,8 @@ export interface RecoveryDeps {
   buildWallet: (mintUrl: string) => Promise<CashuWallet>;
   /**
    * Persist newly-recovered proofs (typically: append to local tokens,
-   * publish a kind-7375 wallet event). Throwing aborts the recovery so the
-   * pending record is preserved for the next attempt.
+   * then best-effort publish a kind-7375 wallet event). Throwing aborts
+   * recovery only when local proof persistence did not complete.
    */
   onProofsClaimed: (quote: PendingMintQuote, proofs: Proof[]) => Promise<void>;
   /** Optional structured logger; defaults to console. */

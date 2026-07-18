@@ -16,10 +16,12 @@ import {
   Wallet as CashuWallet,
 } from "@cashu/cashu-ts";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
   generateKeys,
+  setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
 import * as giftWrapHelpers from "@/utils/nostr/gift-wrap";
 import {
@@ -34,10 +36,12 @@ jest.setTimeout(15000);
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+  getCachedCashuProofs: jest.fn(),
   getLocalStorageData: jest.fn(),
   publishProofEvent: jest.fn(),
   publishWalletEvent: jest.fn(),
   generateKeys: jest.fn(),
+  setCachedCashuProofs: jest.fn(),
 }));
 
 jest.mock("@/utils/nostr/gift-wrap", () => ({
@@ -171,12 +175,14 @@ jest.mock("@heroicons/react/24/outline", () => ({
 
 // ── Typed mock handles ────────────────────────────────────────────────────────
 
+const mockGetCachedCashuProofs = getCachedCashuProofs as jest.Mock;
 const mockGetLocalStorageData = getLocalStorageData as jest.Mock;
 const mockGetDecodedToken = getDecodedToken as jest.Mock;
 const mockGetTokenMetadata = getTokenMetadata as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const mockPublishWalletEvent = publishWalletEvent as jest.Mock;
 const mockGenerateKeys = generateKeys as jest.Mock;
+const mockSetCachedCashuProofs = setCachedCashuProofs as jest.Mock;
 const mockCheckMintP2pkSupport = checkMintP2pkSupport as jest.Mock;
 const mockParseP2PKProofSet = parseP2PKProofSet as jest.Mock;
 const mockSafeSwap = safeSwap as jest.Mock;
@@ -334,8 +340,10 @@ beforeEach(() => {
     tokens: [],
     history: [],
   });
+  mockGetCachedCashuProofs.mockReturnValue([]);
   mockPublishProofEvent.mockResolvedValue(undefined);
   mockPublishWalletEvent.mockResolvedValue(undefined);
+  mockSetCachedCashuProofs.mockReturnValue(undefined);
   mockCheckMintP2pkSupport.mockResolvedValue({ supported: true });
   let generatedKeyPairIndex = 0;
   mockGenerateKeys.mockImplementation(async () => {
@@ -450,10 +458,7 @@ describe("ClaimButton — non-P2PK token (regression)", () => {
         "100"
       )
     );
-    expect(Storage.prototype.setItem).toHaveBeenCalledWith(
-      "tokens",
-      JSON.stringify([mockProof])
-    );
+    expect(mockSetCachedCashuProofs).toHaveBeenCalledWith([mockProof]);
     // wallet.receive must NOT be called for plain proofs
     const walletInstance = MockCashuWallet.mock.results[0]!.value;
     expect(walletInstance.receive).not.toHaveBeenCalled();
@@ -610,23 +615,17 @@ describe("ClaimButton — P2PK receive path", () => {
     );
   });
 
-  test("stores freshProofs (not locked proofs) in localStorage", async () => {
+  test("stores freshProofs (not locked proofs) in the local proof cache", async () => {
     renderClaimButton();
 
     fireEvent.click(await screen.findByRole("button", { name: /Claim/i }));
     fireEvent.click(await screen.findByRole("button", { name: /^Receive$/i }));
 
     await waitFor(() =>
-      expect(Storage.prototype.setItem).toHaveBeenCalledWith(
-        "tokens",
-        JSON.stringify([mockFreshProof])
-      )
+      expect(mockSetCachedCashuProofs).toHaveBeenCalledWith([mockFreshProof])
     );
     // Original locked proof must not be stored
-    expect(Storage.prototype.setItem).not.toHaveBeenCalledWith(
-      "tokens",
-      JSON.stringify([mockP2PKProof])
-    );
+    expect(mockSetCachedCashuProofs).not.toHaveBeenCalledWith([mockP2PKProof]);
   });
 
   test("shows success modal after P2PK receive", async () => {
@@ -911,20 +910,14 @@ describe("ClaimButton — P2PK refund path", () => {
     expect(config.privkey).toBe(CASHU_PRIVKEY);
   });
 
-  test("stores freshProofs (not locked proofs) in localStorage after refund", async () => {
+  test("stores freshProofs (not locked proofs) in the local proof cache after refund", async () => {
     await renderExpiredRefundScenario();
     fireEvent.click(screen.getByRole("button", { name: /^Refund:/i }));
 
     await waitFor(() =>
-      expect(Storage.prototype.setItem).toHaveBeenCalledWith(
-        "tokens",
-        JSON.stringify([mockFreshProof])
-      )
+      expect(mockSetCachedCashuProofs).toHaveBeenCalledWith([mockFreshProof])
     );
-    expect(Storage.prototype.setItem).not.toHaveBeenCalledWith(
-      "tokens",
-      JSON.stringify([mockP2PKProof])
-    );
+    expect(mockSetCachedCashuProofs).not.toHaveBeenCalledWith([mockP2PKProof]);
   });
 
   test("publishes freshProofs (not locked proofs) to Nostr after refund", async () => {
