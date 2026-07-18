@@ -38,7 +38,7 @@ describe("publishDisputeEvent", () => {
     jest.clearAllMocks();
   });
 
-  it("publishes a kind 30009 event with the correct tags and content", async () => {
+  it("publishes a kind 30407 event with the correct tags and content", async () => {
     const nostr = {} as any;
     const signer = {} as any;
 

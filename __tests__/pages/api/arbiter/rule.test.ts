@@ -39,7 +39,7 @@ jest.mock("@/utils/nostr/dispute-records", () => ({
   selectAuthoritativeDisputeEvent: (...args: unknown[]) =>
     selectAuthoritativeDisputeEventMock(...args),
   createDisputeEventTemplate: (params: any) => ({
-    kind: 30009,
+    kind: 30407,
     tags: [
       ["d", params.orderId],
       ["status", params.status],
@@ -215,7 +215,7 @@ describe("/api/arbiter/rule", () => {
     expect(signAndPublishEventMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        kind: 30009,
+        kind: 30407,
         tags: expect.arrayContaining([["status", "resolved:seller"]]),
       }),
       undefined,

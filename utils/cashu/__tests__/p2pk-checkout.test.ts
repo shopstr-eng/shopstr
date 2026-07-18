@@ -520,12 +520,10 @@ describe("p2pk-checkout", () => {
       });
     });
 
-    it("fails when escrow is active but the arbiter pubkey is not configured", async () => {
+    it("fails with an explicit arbiter-not-configured error when escrow is active but the arbiter pubkey is not configured", async () => {
       process.env.NEXT_PUBLIC_P2PK_ESCROW_ENABLED = "true";
       delete process.env.NEXT_PUBLIC_ARBITER_PUBKEY;
 
-      // Known gap: this reuses the "wallet identity missing" message even though
-      // the real cause here is a missing arbiter env var, not the buyer's wallet.
       await expect(
         resolveP2pkCheckoutOutputConfig({
           sellerP2pk,
@@ -536,7 +534,7 @@ describe("p2pk-checkout", () => {
           fetchImpl: goodMintFetch(),
         })
       ).rejects.toThrow(
-        "A Cashu wallet identity is required to pay for an escrow listing. Please wait for your wallet to finish loading and try again."
+        "Escrow checkout is unavailable: the dispute arbiter is not configured on this server. Please contact the marketplace operator."
       );
     });
   });

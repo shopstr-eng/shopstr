@@ -10,7 +10,7 @@ function getDTag(event: NostrEvent): string | undefined {
   return event.tags.find((tag) => tag[0] === "d")?.[1];
 }
 
-// Fetches every cached kind 30009 dispute-event candidate for a given
+// Fetches every cached kind 30407 dispute-event candidate for a given
 // orderId, deduplicated by author (newest per author). Signatures are
 // re-verified here rather than trusted from the cache write path, since a
 // forged event and a legitimate one can otherwise be indistinguishable once

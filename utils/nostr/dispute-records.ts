@@ -4,7 +4,10 @@ import { NostrManager, type NostrEvent } from "@/utils/nostr/nostr-manager";
 import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions";
 
-export const DISPUTE_EVENT_KIND = 30009;
+// NOTE: kind 30009 collides with NIP-58 Badge Definitions; 30407 is
+// unassigned in the parameterized-replaceable range and matches the
+// numbering already used by the neighboring 30405/30406 custom kinds.
+export const DISPUTE_EVENT_KIND = 30407;
 
 export interface ParsedDisputeEvent {
   orderId: string;
@@ -51,7 +54,7 @@ export function createDisputeEventTemplate(params: {
   };
 }
 
-// Publishes a kind 30009 replaceable "dispute opened" event so the arbiter
+// Publishes a kind 30407 replaceable "dispute opened" event so the arbiter
 // can discover open disputes without needing read access to either party's
 // self-encrypted escrow record. Role markers (4th tag element) are used
 // instead of relying on p-tag order, so parsing survives future tag
@@ -128,7 +131,7 @@ function getDTag(event: NostrEvent): string | undefined {
   return event.tags.find((tag) => tag[0] === "d")?.[1];
 }
 
-// Fetches all open kind 30009 dispute events tagging arbiterPubkey,
+// Fetches all open kind 30407 dispute events tagging arbiterPubkey,
 // deduplicated by (orderId, author) keeping the newest per author, sorted
 // newest first. Deduplication is scoped per-author (not globally per
 // orderId) so a forged event from a different pubkey can't silently
@@ -165,7 +168,7 @@ export async function fetchDisputeEvents(params: {
     .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
 }
 
-// Fetches the single newest kind 30009 dispute event for a given orderId.
+// Fetches the single newest kind 30407 dispute event for a given orderId.
 export async function fetchDisputeEvent(params: {
   nostr: NostrManager;
   orderId: string;
@@ -186,7 +189,7 @@ export async function fetchDisputeEvent(params: {
   );
 }
 
-// Fetches every kind 30009 dispute-event candidate for a given orderId from
+// Fetches every kind 30407 dispute-event candidate for a given orderId from
 // relays, deduplicated by author (newest per author). Unlike
 // fetchDisputeEvent, this does not collapse candidates down to a single
 // "newest overall" event -- a forged event from an unrelated pubkey with a

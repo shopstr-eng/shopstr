@@ -313,6 +313,9 @@ export function buildP2pkSwapOptions(
   const days = sellerP2pk.refundDelayDays;
   if (!days || days <= 0) return undefined;
 
+  // resolveP2pkCheckoutOutputConfig throws an explicit "arbiter not
+  // configured" error before reaching this function; this branch only
+  // guards direct callers that skip that gate.
   const arbiterPubkey = getArbiterPubkey();
   if (!arbiterPubkey) return undefined;
 
@@ -401,6 +404,12 @@ export async function resolveP2pkCheckoutOutputConfig(params: {
 
   if (!isSellerP2pkEscrowActive(sellerP2pk)) {
     return undefined;
+  }
+
+  if (!getArbiterPubkey()) {
+    throw new Error(
+      "Escrow checkout is unavailable: the dispute arbiter is not configured on this server. Please contact the marketplace operator."
+    );
   }
 
   if (!mintUrl) {

@@ -275,7 +275,7 @@ export default function ClaimButton({
 
   // Participants without a readable buyer escrow record (especially the
   // seller) learn about disputes from the direct escrow-dispute DM, with a
-  // public kind 30009 fallback so a missed DM cannot leave stale claim UI.
+  // public kind 30407 fallback so a missed DM cannot leave stale claim UI.
   useEffect(() => {
     if (
       !orderId ||
@@ -919,7 +919,7 @@ export default function ClaimButton({
   // Receipt", no dispute) after the grace period pull the arbiter in
   // themselves, so a silent buyer can't just wait out the locktime and
   // reclaim via refundKeys while also keeping the item. Reuses the same
-  // kind 30009 dispute-event + escrow-dispute DM path buyer-opened disputes
+  // kind 30407 dispute-event + escrow-dispute DM path buyer-opened disputes
   // use, so it lands on the arbiter's existing /disputes queue and goes
   // through the same authorship cross-checks in /api/arbiter/rule.
   const handleSellerEscalate = async () => {
