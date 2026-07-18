@@ -25,11 +25,7 @@ export const CATEGORIES = [
 ];
 
 export type ShippingOptionsType =
-  | "N/A"
-  | "Free"
-  | "Pickup"
-  | "Free/Pickup"
-  | "Added Cost";
+  "N/A" | "Free" | "Pickup" | "Free/Pickup" | "Added Cost";
 
 export const SHIPPING_OPTIONS = [
   "N/A",

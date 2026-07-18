@@ -145,8 +145,7 @@ const MintButton = () => {
 
     while (roundsConsumed < pollMaxRounds && !claimDone) {
       let quoteState:
-        | Awaited<ReturnType<typeof wallet.checkMintQuoteBolt11>>
-        | undefined;
+        Awaited<ReturnType<typeof wallet.checkMintQuoteBolt11>> | undefined;
       try {
         quoteState = await withMintRetry(
           () => wallet.checkMintQuoteBolt11(hash),
