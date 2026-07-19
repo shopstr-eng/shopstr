@@ -2085,3 +2085,273 @@ describe("registerWriteTools — (relay & media configuration)", () => {
     });
   });
 });
+
+describe("registerWriteTools — (discount codes)", () => {
+  const PHASE_4_TOOLS = [
+    "create_discount_code",
+    "delete_discount_code",
+    "list_discount_codes",
+  ];
+
+  function mockFetchJson(
+    body: unknown,
+    overrides: Partial<{ ok: boolean; status: number }> = {}
+  ) {
+    const response = {
+      ok: overrides.ok ?? true,
+      status: overrides.status ?? 200,
+      json: jest.fn().mockResolvedValue(body),
+    };
+    jest.mocked(global.fetch as jest.Mock).mockResolvedValue(response as any);
+    return response;
+  }
+
+  describe.each(PHASE_4_TOOLS)("%s — shared guards", (toolName) => {
+    it("returns a permission error when apiKey.permissions is not full_access", async () => {
+      const callbacks = registerToolsForTest(readOnlyApiKey);
+      const tool = getTool(callbacks, toolName);
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toMatch(/Insufficient permissions/i);
+      expect(getAgentSigner).not.toHaveBeenCalled();
+    });
+
+    it("returns a no-signer error when getAgentSigner resolves null", async () => {
+      jest.mocked(getAgentSigner).mockResolvedValueOnce(null);
+      const callbacks = registerToolsForTest(fullAccessApiKey);
+      const tool = getTool(callbacks, toolName);
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toMatch(/No signing key configured/i);
+    });
+  });
+
+  describe("create_discount_code", () => {
+    function getCallback() {
+      return getTool(
+        registerToolsForTest(fullAccessApiKey),
+        "create_discount_code"
+      );
+    }
+
+    it("POSTs the signed create-proof header and code/pubkey/discountPercentage/expiration in the body", async () => {
+      mockFetchJson({});
+      const tool = getCallback();
+
+      const result = await tool({
+        code: "SUMMER20",
+        discountPercentage: 20,
+        expiration: 2_000_000_000,
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "http://localhost:5000/api/db/discount-codes",
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({
+            code: "SUMMER20",
+            pubkey: TEST_PUBKEY,
+            discountPercentage: 20,
+            expiration: 2_000_000_000,
+          }),
+        })
+      );
+      const [, init] = jest.mocked(global.fetch as jest.Mock).mock.calls[0]!;
+      const signedEvent = JSON.parse(init.headers["x-signed-event"]);
+      expect(signedEvent.tags).toEqual(
+        expect.arrayContaining([
+          ["action", "create_discount_code"],
+          ["method", "POST"],
+          ["path", "/api/db/discount-codes"],
+          ["pubkey", TEST_PUBKEY],
+          ["code", "SUMMER20"],
+          ["discountPercentage", "20"],
+        ])
+      );
+      const payload = textPayload(result);
+      expect(payload).toMatchObject({
+        code: "SUMMER20",
+        discountPercentage: 20,
+        expiration: 2_000_000_000,
+      });
+    });
+
+    it("omits the expiration field from the signed proof when not provided", async () => {
+      mockFetchJson({});
+      const tool = getCallback();
+
+      await tool({ code: "SUMMER20", discountPercentage: 20 });
+
+      const [, init] = jest.mocked(global.fetch as jest.Mock).mock.calls[0]!;
+      const signedEvent = JSON.parse(init.headers["x-signed-event"]);
+      expect(
+        signedEvent.tags.some((t: string[]) => t[0] === "expiration")
+      ).toBe(false);
+    });
+
+    it("returns errorResponse with the API's error message when the response is not ok", async () => {
+      mockFetchJson(
+        { error: "Code already exists" },
+        { ok: false, status: 409 }
+      );
+      const tool = getCallback();
+
+      const result = await tool({ code: "SUMMER20", discountPercentage: 20 });
+
+      expect(result.isError).toBe(true);
+      const payload = textPayload(result);
+      expect(payload.error).toBe("Failed to create discount code");
+      expect(payload.details).toBe("Code already exists");
+    });
+
+    it("returns errorResponse when fetch throws", async () => {
+      jest
+        .mocked(global.fetch as jest.Mock)
+        .mockRejectedValueOnce(new Error("network down"));
+      const tool = getCallback();
+
+      const result = await tool({ code: "SUMMER20", discountPercentage: 20 });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to create discount code");
+    });
+  });
+
+  describe("delete_discount_code", () => {
+    function getCallback() {
+      return getTool(
+        registerToolsForTest(fullAccessApiKey),
+        "delete_discount_code"
+      );
+    }
+
+    it("sends a DELETE with the signed delete-proof header and code/pubkey in the body", async () => {
+      mockFetchJson({});
+      const tool = getCallback();
+
+      const result = await tool({ code: "SUMMER20" });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "http://localhost:5000/api/db/discount-codes",
+        expect.objectContaining({
+          method: "DELETE",
+          body: JSON.stringify({ code: "SUMMER20", pubkey: TEST_PUBKEY }),
+        })
+      );
+      const [, init] = jest.mocked(global.fetch as jest.Mock).mock.calls[0]!;
+      const signedEvent = JSON.parse(init.headers["x-signed-event"]);
+      expect(signedEvent.tags).toEqual(
+        expect.arrayContaining([
+          ["action", "delete_discount_code"],
+          ["method", "DELETE"],
+          ["code", "SUMMER20"],
+        ])
+      );
+      expect(textPayload(result)).toMatchObject({
+        code: "SUMMER20",
+        deleted: true,
+      });
+    });
+
+    it("returns errorResponse with the API's error message when the response is not ok", async () => {
+      mockFetchJson({ error: "Code not found" }, { ok: false, status: 404 });
+      const tool = getCallback();
+
+      const result = await tool({ code: "UNKNOWN" });
+
+      expect(result.isError).toBe(true);
+      const payload = textPayload(result);
+      expect(payload.error).toBe("Failed to delete discount code");
+      expect(payload.details).toBe("Code not found");
+    });
+
+    it("returns errorResponse when fetch throws", async () => {
+      jest
+        .mocked(global.fetch as jest.Mock)
+        .mockRejectedValueOnce(new Error("network down"));
+      const tool = getCallback();
+
+      const result = await tool({ code: "SUMMER20" });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to delete discount code");
+    });
+  });
+
+  describe("list_discount_codes", () => {
+    function getCallback() {
+      return getTool(
+        registerToolsForTest(fullAccessApiKey),
+        "list_discount_codes"
+      );
+    }
+
+    it("requests with pubkey as a query param and a signed list-proof header", async () => {
+      mockFetchJson([]);
+      const tool = getCallback();
+
+      await tool({});
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        `http://localhost:5000/api/db/discount-codes?pubkey=${TEST_PUBKEY}`,
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            "x-signed-event": expect.any(String),
+          }),
+        })
+      );
+      const [, init] = jest.mocked(global.fetch as jest.Mock).mock.calls[0]!;
+      const signedEvent = JSON.parse(init.headers["x-signed-event"]);
+      expect(signedEvent.tags).toEqual(
+        expect.arrayContaining([
+          ["action", "list_discount_codes"],
+          ["method", "GET"],
+          ["pubkey", TEST_PUBKEY],
+        ])
+      );
+    });
+
+    it("returns count=data.length and codes=data for a normal array response", async () => {
+      mockFetchJson([{ code: "SUMMER20" }, { code: "VIP" }]);
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(textPayload(result)).toMatchObject({
+        count: 2,
+        codes: [{ code: "SUMMER20" }, { code: "VIP" }],
+      });
+    });
+
+    it("returns count=0 and codes=data when the API response is not an array", async () => {
+      mockFetchJson({ error: "unexpected shape" });
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(textPayload(result)).toMatchObject({
+        count: 0,
+        codes: { error: "unexpected shape" },
+      });
+    });
+
+    it("returns errorResponse when fetch throws", async () => {
+      jest
+        .mocked(global.fetch as jest.Mock)
+        .mockRejectedValueOnce(new Error("network down"));
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to list discount codes");
+    });
+  });
+});
