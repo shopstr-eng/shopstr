@@ -49,10 +49,10 @@ import {
   isTimeoutError,
 } from "@/utils/cashu/wallet-recovery";
 import { persistBuyerP2pkEscrowRecord } from "@/utils/cashu/p2pk-escrow-records";
+import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
   getLocalStorageData,
   publishProofEvent,
-  generateKeys,
   getSavedAddresses,
 } from "@/utils/nostr/nostr-helper-functions";
 import {

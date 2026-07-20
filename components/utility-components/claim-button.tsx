@@ -19,8 +19,8 @@ import {
   ChatsContext,
   CashuWalletContext,
 } from "../../utils/context/context";
+import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
-  generateKeys,
   getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
