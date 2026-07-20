@@ -204,6 +204,7 @@ const WRITE_TOOL_NAMES = [
 let mockSigner: ReturnType<typeof createMockSigner>;
 let publishCallCount: number;
 let auditLogSpy: jest.SpyInstance;
+const originalFetch = global.fetch;
 
 beforeAll(() => {
   auditLogSpy = jest
@@ -213,6 +214,7 @@ beforeAll(() => {
 
 afterAll(() => {
   auditLogSpy.mockRestore();
+  global.fetch = originalFetch;
 });
 
 beforeEach(() => {
@@ -234,6 +236,7 @@ beforeEach(() => {
       };
     });
   jest.mocked(cacheEvent).mockResolvedValue(undefined);
+  global.fetch = jest.fn() as any;
 });
 
 describe("registerWriteTools — (core listing & shop lifecycle)", () => {
@@ -1814,6 +1817,541 @@ describe("registerWriteTools — (community & messaging)", () => {
       expect(client.release).toHaveBeenCalledTimes(1);
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to mark messages as read");
+    });
+  });
+});
+
+describe("registerWriteTools — (relay & media configuration)", () => {
+  const PHASE_3_TOOLS = [
+    "set_relay_list",
+    "set_blossom_servers",
+    "upload_media",
+  ];
+
+  describe.each(PHASE_3_TOOLS)("%s — shared guards", (toolName) => {
+    it("returns a permission error when apiKey.permissions is not full_access", async () => {
+      const callbacks = registerToolsForTest(readOnlyApiKey);
+      const tool = getTool(callbacks, toolName);
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toMatch(/Insufficient permissions/i);
+      expect(getAgentSigner).not.toHaveBeenCalled();
+    });
+
+    it("returns a no-signer error when getAgentSigner resolves null", async () => {
+      jest.mocked(getAgentSigner).mockResolvedValueOnce(null);
+      const callbacks = registerToolsForTest(fullAccessApiKey);
+      const tool = getTool(callbacks, toolName);
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toMatch(/No signing key configured/i);
+    });
+  });
+
+  describe("set_relay_list", () => {
+    function getCallback() {
+      return getTool(registerToolsForTest(fullAccessApiKey), "set_relay_list");
+    }
+
+    it("maps type='read'/'write' to a 3-element tag and omits the type element for 'both'/unset", async () => {
+      const tool = getCallback();
+
+      const result = await tool({
+        relays: [
+          { url: "wss://read.example", type: "read" },
+          { url: "wss://write.example", type: "write" },
+          { url: "wss://both.example", type: "both" },
+          { url: "wss://unset.example" },
+        ],
+      });
+
+      const template = jest.mocked(signAndPublishEvent).mock
+        .calls[0]![1] as any;
+      expect(template.kind).toBe(10002);
+      expect(template.tags).toEqual([
+        ["r", "wss://read.example", "read"],
+        ["r", "wss://write.example", "write"],
+        ["r", "wss://both.example"],
+        ["r", "wss://unset.example"],
+      ]);
+      expect(cacheEvent).toHaveBeenCalledTimes(1);
+      const payload = textPayload(result);
+      expect(payload.relayCount).toBe(4);
+      expect(payload.relays).toEqual([
+        { url: "wss://read.example", type: "read" },
+        { url: "wss://write.example", type: "write" },
+        { url: "wss://both.example", type: "both" },
+        { url: "wss://unset.example" },
+      ]);
+    });
+
+    it("returns errorResponse when signAndPublishEvent throws", async () => {
+      jest
+        .mocked(signAndPublishEvent)
+        .mockRejectedValueOnce(new Error("relay down"));
+      const tool = getCallback();
+
+      const result = await tool({
+        relays: [{ url: "wss://read.example", type: "read" }],
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to set relay list");
+    });
+  });
+
+  describe("set_blossom_servers", () => {
+    function getCallback() {
+      return getTool(
+        registerToolsForTest(fullAccessApiKey),
+        "set_blossom_servers"
+      );
+    }
+
+    it("builds one ['server', url] tag per server on a kind:10063 event and caches it", async () => {
+      const tool = getCallback();
+
+      const result = await tool({
+        servers: ["https://cdn1.example", "https://cdn2.example"],
+      });
+
+      const template = jest.mocked(signAndPublishEvent).mock
+        .calls[0]![1] as any;
+      expect(template.kind).toBe(10063);
+      expect(template.tags).toEqual([
+        ["server", "https://cdn1.example"],
+        ["server", "https://cdn2.example"],
+      ]);
+      expect(cacheEvent).toHaveBeenCalledTimes(1);
+      expect(textPayload(result).serverCount).toBe(2);
+    });
+
+    it("returns errorResponse when signAndPublishEvent throws", async () => {
+      jest
+        .mocked(signAndPublishEvent)
+        .mockRejectedValueOnce(new Error("relay down"));
+      const tool = getCallback();
+
+      const result = await tool({ servers: ["https://cdn1.example"] });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to set blossom servers");
+    });
+  });
+
+  describe("upload_media", () => {
+    function getCallback() {
+      return getTool(registerToolsForTest(fullAccessApiKey), "upload_media");
+    }
+
+    function mockFetchResponse(
+      body: unknown,
+      overrides: Partial<{ ok: boolean; status: number; text: string }> = {}
+    ) {
+      const response = {
+        ok: overrides.ok ?? true,
+        status: overrides.status ?? 200,
+        json: jest.fn().mockResolvedValue(body),
+        text: jest.fn().mockResolvedValue(overrides.text ?? ""),
+      };
+      jest.mocked(global.fetch as jest.Mock).mockResolvedValue(response as any);
+      return response;
+    }
+
+    it("computes the sha256 hash of the decoded base64 file and includes it in the auth event's x tag", async () => {
+      mockFetchResponse({
+        url: "https://blossom.example/file.png",
+        sha256: "server-hash",
+        size: 3,
+      });
+      const tool = getCallback();
+
+      await tool({
+        fileBase64: Buffer.from("abc").toString("base64"),
+        fileName: "file.png",
+        mimeType: "image/png",
+        serverUrl: "https://blossom.example",
+      });
+
+      expect(mockSigner.sign).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 24242,
+          content: "Upload file.png",
+          tags: expect.arrayContaining([
+            ["t", "upload"],
+            [
+              "x",
+              "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            ],
+            ["size", "3"],
+          ]),
+        })
+      );
+    });
+
+    it("defaults serverUrl to https://cdn.nostrcheck.me when not provided", async () => {
+      mockFetchResponse({ url: "https://cdn.nostrcheck.me/file.png" });
+      const tool = getCallback();
+
+      await tool({
+        fileBase64: Buffer.from("abc").toString("base64"),
+        fileName: "file.png",
+        mimeType: "image/png",
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "https://cdn.nostrcheck.me/upload",
+        expect.objectContaining({ method: "PUT" })
+      );
+    });
+
+    it("returns errorResponse with the server's status and body when the upload response is not ok", async () => {
+      mockFetchResponse({}, { ok: false, status: 413, text: "file too large" });
+      const tool = getCallback();
+
+      const result = await tool({
+        fileBase64: Buffer.from("abc").toString("base64"),
+        fileName: "file.png",
+        mimeType: "image/png",
+      });
+
+      expect(result.isError).toBe(true);
+      const payload = textPayload(result);
+      expect(payload.error).toBe("Upload failed");
+      expect(payload.details).toContain("413");
+      expect(payload.details).toContain("file too large");
+    });
+
+    it("falls back to the locally-computed hash and size when the server omits them", async () => {
+      mockFetchResponse({ url: "https://blossom.example/file.png" });
+      const tool = getCallback();
+
+      const result = await tool({
+        fileBase64: Buffer.from("abc").toString("base64"),
+        fileName: "file.png",
+        mimeType: "image/png",
+        serverUrl: "https://blossom.example",
+      });
+
+      const payload = textPayload(result);
+      expect(payload.sha256).toBe(
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+      );
+      expect(payload.size).toBe(3);
+    });
+
+    it("returns the server's own url/sha256/size when provided", async () => {
+      mockFetchResponse({
+        url: "https://blossom.example/file.png",
+        sha256: "server-hash",
+        size: 999,
+      });
+      const tool = getCallback();
+
+      const result = await tool({
+        fileBase64: Buffer.from("abc").toString("base64"),
+        fileName: "file.png",
+        mimeType: "image/png",
+        serverUrl: "https://blossom.example",
+      });
+
+      const payload = textPayload(result);
+      expect(payload).toMatchObject({
+        url: "https://blossom.example/file.png",
+        sha256: "server-hash",
+        size: 999,
+        serverUrl: "https://blossom.example",
+      });
+    });
+
+    it("returns errorResponse when the upload throws (e.g. network failure)", async () => {
+      jest
+        .mocked(global.fetch as jest.Mock)
+        .mockRejectedValueOnce(new Error("network down"));
+      const tool = getCallback();
+
+      const result = await tool({
+        fileBase64: Buffer.from("abc").toString("base64"),
+        fileName: "file.png",
+        mimeType: "image/png",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to upload media");
+    });
+  });
+});
+
+describe("registerWriteTools — (discount codes)", () => {
+  const PHASE_4_TOOLS = [
+    "create_discount_code",
+    "delete_discount_code",
+    "list_discount_codes",
+  ];
+
+  function mockFetchJson(
+    body: unknown,
+    overrides: Partial<{ ok: boolean; status: number }> = {}
+  ) {
+    const response = {
+      ok: overrides.ok ?? true,
+      status: overrides.status ?? 200,
+      json: jest.fn().mockResolvedValue(body),
+    };
+    jest.mocked(global.fetch as jest.Mock).mockResolvedValue(response as any);
+    return response;
+  }
+
+  describe.each(PHASE_4_TOOLS)("%s — shared guards", (toolName) => {
+    it("returns a permission error when apiKey.permissions is not full_access", async () => {
+      const callbacks = registerToolsForTest(readOnlyApiKey);
+      const tool = getTool(callbacks, toolName);
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toMatch(/Insufficient permissions/i);
+      expect(getAgentSigner).not.toHaveBeenCalled();
+    });
+
+    it("returns a no-signer error when getAgentSigner resolves null", async () => {
+      jest.mocked(getAgentSigner).mockResolvedValueOnce(null);
+      const callbacks = registerToolsForTest(fullAccessApiKey);
+      const tool = getTool(callbacks, toolName);
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toMatch(/No signing key configured/i);
+    });
+  });
+
+  describe("create_discount_code", () => {
+    function getCallback() {
+      return getTool(
+        registerToolsForTest(fullAccessApiKey),
+        "create_discount_code"
+      );
+    }
+
+    it("POSTs the signed create-proof header and code/pubkey/discountPercentage/expiration in the body", async () => {
+      mockFetchJson({});
+      const tool = getCallback();
+
+      const result = await tool({
+        code: "SUMMER20",
+        discountPercentage: 20,
+        expiration: 2_000_000_000,
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "http://localhost:5000/api/db/discount-codes",
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({
+            code: "SUMMER20",
+            pubkey: TEST_PUBKEY,
+            discountPercentage: 20,
+            expiration: 2_000_000_000,
+          }),
+        })
+      );
+      const [, init] = jest.mocked(global.fetch as jest.Mock).mock.calls[0]!;
+      const signedEvent = JSON.parse(init.headers["x-signed-event"]);
+      expect(signedEvent.tags).toEqual(
+        expect.arrayContaining([
+          ["action", "create_discount_code"],
+          ["method", "POST"],
+          ["path", "/api/db/discount-codes"],
+          ["pubkey", TEST_PUBKEY],
+          ["code", "SUMMER20"],
+          ["discountPercentage", "20"],
+        ])
+      );
+      const payload = textPayload(result);
+      expect(payload).toMatchObject({
+        code: "SUMMER20",
+        discountPercentage: 20,
+        expiration: 2_000_000_000,
+      });
+    });
+
+    it("omits the expiration field from the signed proof when not provided", async () => {
+      mockFetchJson({});
+      const tool = getCallback();
+
+      await tool({ code: "SUMMER20", discountPercentage: 20 });
+
+      const [, init] = jest.mocked(global.fetch as jest.Mock).mock.calls[0]!;
+      const signedEvent = JSON.parse(init.headers["x-signed-event"]);
+      expect(
+        signedEvent.tags.some((t: string[]) => t[0] === "expiration")
+      ).toBe(false);
+    });
+
+    it("returns errorResponse with the API's error message when the response is not ok", async () => {
+      mockFetchJson(
+        { error: "Code already exists" },
+        { ok: false, status: 409 }
+      );
+      const tool = getCallback();
+
+      const result = await tool({ code: "SUMMER20", discountPercentage: 20 });
+
+      expect(result.isError).toBe(true);
+      const payload = textPayload(result);
+      expect(payload.error).toBe("Failed to create discount code");
+      expect(payload.details).toBe("Code already exists");
+    });
+
+    it("returns errorResponse when fetch throws", async () => {
+      jest
+        .mocked(global.fetch as jest.Mock)
+        .mockRejectedValueOnce(new Error("network down"));
+      const tool = getCallback();
+
+      const result = await tool({ code: "SUMMER20", discountPercentage: 20 });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to create discount code");
+    });
+  });
+
+  describe("delete_discount_code", () => {
+    function getCallback() {
+      return getTool(
+        registerToolsForTest(fullAccessApiKey),
+        "delete_discount_code"
+      );
+    }
+
+    it("sends a DELETE with the signed delete-proof header and code/pubkey in the body", async () => {
+      mockFetchJson({});
+      const tool = getCallback();
+
+      const result = await tool({ code: "SUMMER20" });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "http://localhost:5000/api/db/discount-codes",
+        expect.objectContaining({
+          method: "DELETE",
+          body: JSON.stringify({ code: "SUMMER20", pubkey: TEST_PUBKEY }),
+        })
+      );
+      const [, init] = jest.mocked(global.fetch as jest.Mock).mock.calls[0]!;
+      const signedEvent = JSON.parse(init.headers["x-signed-event"]);
+      expect(signedEvent.tags).toEqual(
+        expect.arrayContaining([
+          ["action", "delete_discount_code"],
+          ["method", "DELETE"],
+          ["code", "SUMMER20"],
+        ])
+      );
+      expect(textPayload(result)).toMatchObject({
+        code: "SUMMER20",
+        deleted: true,
+      });
+    });
+
+    it("returns errorResponse with the API's error message when the response is not ok", async () => {
+      mockFetchJson({ error: "Code not found" }, { ok: false, status: 404 });
+      const tool = getCallback();
+
+      const result = await tool({ code: "UNKNOWN" });
+
+      expect(result.isError).toBe(true);
+      const payload = textPayload(result);
+      expect(payload.error).toBe("Failed to delete discount code");
+      expect(payload.details).toBe("Code not found");
+    });
+
+    it("returns errorResponse when fetch throws", async () => {
+      jest
+        .mocked(global.fetch as jest.Mock)
+        .mockRejectedValueOnce(new Error("network down"));
+      const tool = getCallback();
+
+      const result = await tool({ code: "SUMMER20" });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to delete discount code");
+    });
+  });
+
+  describe("list_discount_codes", () => {
+    function getCallback() {
+      return getTool(
+        registerToolsForTest(fullAccessApiKey),
+        "list_discount_codes"
+      );
+    }
+
+    it("requests with pubkey as a query param and a signed list-proof header", async () => {
+      mockFetchJson([]);
+      const tool = getCallback();
+
+      await tool({});
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        `http://localhost:5000/api/db/discount-codes?pubkey=${TEST_PUBKEY}`,
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            "x-signed-event": expect.any(String),
+          }),
+        })
+      );
+      const [, init] = jest.mocked(global.fetch as jest.Mock).mock.calls[0]!;
+      const signedEvent = JSON.parse(init.headers["x-signed-event"]);
+      expect(signedEvent.tags).toEqual(
+        expect.arrayContaining([
+          ["action", "list_discount_codes"],
+          ["method", "GET"],
+          ["pubkey", TEST_PUBKEY],
+        ])
+      );
+    });
+
+    it("returns count=data.length and codes=data for a normal array response", async () => {
+      mockFetchJson([{ code: "SUMMER20" }, { code: "VIP" }]);
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(textPayload(result)).toMatchObject({
+        count: 2,
+        codes: [{ code: "SUMMER20" }, { code: "VIP" }],
+      });
+    });
+
+    it("returns count=0 and codes=data when the API response is not an array", async () => {
+      mockFetchJson({ error: "unexpected shape" });
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(textPayload(result)).toMatchObject({
+        count: 0,
+        codes: { error: "unexpected shape" },
+      });
+    });
+
+    it("returns errorResponse when fetch throws", async () => {
+      jest
+        .mocked(global.fetch as jest.Mock)
+        .mockRejectedValueOnce(new Error("network down"));
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to list discount codes");
     });
   });
 });
