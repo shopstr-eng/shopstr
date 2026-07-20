@@ -6,6 +6,7 @@ import {
   cacheEvent,
   getDbPool,
   fetchAllMessagesFromDb,
+  fetchCachedEvents,
 } from "@/utils/db/db-service";
 import { createGiftWrapEvent } from "@/utils/nostr/gift-wrap";
 import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
@@ -14,6 +15,9 @@ import {
   updateMcpOrderStatus,
   updateMcpOrderAddress,
 } from "@/mcp/tools/purchase-tools";
+import { getDecodedToken, Mint, Wallet } from "@cashu/cashu-ts";
+import { withMintRetry } from "@/utils/cashu/mint-retry-service";
+import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { registerWriteTools } from "@/mcp/tools/write-tools";
 
 jest.mock("@/utils/mcp/auth", () => ({
@@ -35,6 +39,7 @@ jest.mock("@/utils/db/db-service", () => ({
   cacheEvent: jest.fn(),
   getDbPool: jest.fn(),
   fetchAllMessagesFromDb: jest.fn(),
+  fetchCachedEvents: jest.fn(),
 }));
 
 jest.mock("@/utils/nostr/gift-wrap", () => ({
@@ -50,6 +55,23 @@ jest.mock("@/mcp/tools/purchase-tools", () => ({
   getMcpOrder: jest.fn(),
   updateMcpOrderStatus: jest.fn(),
   updateMcpOrderAddress: jest.fn(),
+}));
+
+jest.mock("@cashu/cashu-ts", () => ({
+  getDecodedToken: jest.fn(),
+  Mint: jest.fn().mockImplementation(() => ({})),
+  Wallet: jest.fn().mockImplementation(() => ({
+    loadMint: jest.fn(),
+    createMeltQuoteBolt11: jest.fn(),
+  })),
+}));
+
+jest.mock("@/utils/cashu/mint-retry-service", () => ({
+  withMintRetry: jest.fn((fn: () => Promise<unknown>) => fn()),
+}));
+
+jest.mock("@/utils/cashu/melt-retry-service", () => ({
+  safeMeltProofs: jest.fn(),
 }));
 
 type ToolResult = {
@@ -148,6 +170,22 @@ function encryptForMock(plainText: string) {
   return `encrypted(${plainText})`;
 }
 
+function buildMockProofEvent(overrides: {
+  pubkey?: string;
+  mint?: string;
+  proofs?: Array<{ amount: number }>;
+}) {
+  const {
+    pubkey = TEST_PUBKEY,
+    mint = "https://mint.example",
+    proofs = [],
+  } = overrides;
+  return {
+    pubkey,
+    content: encryptForMock(JSON.stringify({ mint, proofs })),
+  };
+}
+
 function buildMockMessage(
   overrides: Partial<{
     id: string;
@@ -236,6 +274,8 @@ beforeEach(() => {
       };
     });
   jest.mocked(cacheEvent).mockResolvedValue(undefined);
+  jest.mocked(fetchCachedEvents).mockResolvedValue([]);
+  jest.mocked(withMintRetry).mockImplementation((fn: any) => fn());
   global.fetch = jest.fn() as any;
 });
 
@@ -2352,6 +2392,463 @@ describe("registerWriteTools — (discount codes)", () => {
 
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to list discount codes");
+    });
+  });
+});
+
+describe("registerWriteTools — (Cashu payments)", () => {
+  const PHASE_5_TOOLS = [
+    "get_cashu_balance",
+    "receive_cashu_tokens",
+    "set_cashu_mints",
+    "send_cashu_payment",
+  ];
+
+  beforeEach(() => {
+    jest
+      .mocked(getDefaultRelays)
+      .mockReturnValue(["wss://relay.damus.io", "wss://nos.lol"]);
+  });
+
+  function mockCashuWallet(meltQuote: {
+    amount: number;
+    fee_reserve?: number;
+  }) {
+    const wallet = {
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      createMeltQuoteBolt11: jest.fn().mockResolvedValue(meltQuote),
+    };
+    jest.mocked(Mint).mockImplementationOnce(() => ({}) as any);
+    jest.mocked(Wallet).mockImplementationOnce(() => wallet as any);
+    return wallet;
+  }
+
+  describe.each(PHASE_5_TOOLS)("%s — shared guards", (toolName) => {
+    it("returns a permission error when apiKey.permissions is not full_access", async () => {
+      const callbacks = registerToolsForTest(readOnlyApiKey);
+      const tool = getTool(callbacks, toolName);
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toMatch(/Insufficient permissions/i);
+      expect(getAgentSigner).not.toHaveBeenCalled();
+    });
+
+    it("returns a no-signer error when getAgentSigner resolves null", async () => {
+      jest.mocked(getAgentSigner).mockResolvedValueOnce(null);
+      const callbacks = registerToolsForTest(fullAccessApiKey);
+      const tool = getTool(callbacks, toolName);
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toMatch(/No signing key configured/i);
+    });
+  });
+
+  describe("get_cashu_balance", () => {
+    function getCallback() {
+      return getTool(
+        registerToolsForTest(fullAccessApiKey),
+        "get_cashu_balance"
+      );
+    }
+
+    it("filters proof events to only ones authored by the signer's own pubkey", async () => {
+      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
+        buildMockProofEvent({
+          pubkey: TEST_PUBKEY,
+          proofs: [{ amount: 5 }],
+        }),
+        buildMockProofEvent({
+          pubkey: "other-pubkey",
+          proofs: [{ amount: 999 }],
+        }),
+      ] as any);
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(fetchCachedEvents).toHaveBeenCalledWith(7375);
+      const payload = textPayload(result);
+      expect(payload.totalBalance).toBe(5);
+      expect(payload.proofEventCount).toBe(1);
+    });
+
+    it("skips a proof event when decrypt/JSON.parse fails, without failing the whole call", async () => {
+      jest
+        .mocked(fetchCachedEvents)
+        .mockResolvedValueOnce([
+          { pubkey: TEST_PUBKEY, content: "not encrypted json" },
+          buildMockProofEvent({ proofs: [{ amount: 7 }] }),
+        ] as any);
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(textPayload(result).totalBalance).toBe(7);
+    });
+
+    it("aggregates across mints by default, and filters to one mint when mintUrl is provided", async () => {
+      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
+        buildMockProofEvent({
+          mint: "https://mint-a.example",
+          proofs: [{ amount: 3 }],
+        }),
+        buildMockProofEvent({
+          mint: "https://mint-b.example",
+          proofs: [{ amount: 4 }],
+        }),
+      ] as any);
+      const tool = getCallback();
+
+      const all = await tool({});
+      expect(textPayload(all)).toMatchObject({
+        totalBalance: 7,
+        mintBalances: {
+          "https://mint-a.example": 3,
+          "https://mint-b.example": 4,
+        },
+      });
+
+      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
+        buildMockProofEvent({
+          mint: "https://mint-a.example",
+          proofs: [{ amount: 3 }],
+        }),
+        buildMockProofEvent({
+          mint: "https://mint-b.example",
+          proofs: [{ amount: 4 }],
+        }),
+      ] as any);
+      const filtered = await tool({ mintUrl: "https://mint-a.example" });
+      expect(textPayload(filtered)).toMatchObject({
+        totalBalance: 3,
+        mintBalances: { "https://mint-a.example": 3 },
+      });
+    });
+
+    it("returns errorResponse when fetchCachedEvents throws", async () => {
+      jest
+        .mocked(fetchCachedEvents)
+        .mockRejectedValueOnce(new Error("db offline"));
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to get Cashu balance");
+    });
+  });
+
+  describe("receive_cashu_tokens", () => {
+    function getCallback() {
+      return getTool(
+        registerToolsForTest(fullAccessApiKey),
+        "receive_cashu_tokens"
+      );
+    }
+
+    it("decodes the token, sums proof amounts, and publishes an encrypted kind:7375 event tagged with mint + relay hints", async () => {
+      const proofs = [{ amount: 7 }, { amount: 8 }];
+      jest.mocked(getDecodedToken).mockReturnValueOnce({
+        mint: "https://mint.example",
+        proofs,
+      } as any);
+      const tool = getCallback();
+
+      const result = await tool({ token: "cashu-token" });
+
+      expect(mockSigner.encrypt).toHaveBeenCalledWith(
+        TEST_PUBKEY,
+        JSON.stringify({ mint: "https://mint.example", proofs })
+      );
+      const template = jest.mocked(signAndPublishEvent).mock
+        .calls[0]![1] as any;
+      expect(template.kind).toBe(7375);
+      expect(template.tags).toEqual([
+        ["mint", "https://mint.example"],
+        ["relay", "wss://relay.damus.io"],
+        ["relay", "wss://nos.lol"],
+      ]);
+      expect(textPayload(result)).toMatchObject({
+        amount: 15,
+        mint: "https://mint.example",
+        proofCount: 2,
+      });
+    });
+
+    it("returns errorResponse when getDecodedToken throws on a malformed token", async () => {
+      jest.mocked(getDecodedToken).mockImplementationOnce(() => {
+        throw new Error("invalid token encoding");
+      });
+      const tool = getCallback();
+
+      const result = await tool({ token: "garbage" });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to receive Cashu tokens");
+    });
+  });
+
+  describe("set_cashu_mints", () => {
+    function getCallback() {
+      return getTool(registerToolsForTest(fullAccessApiKey), "set_cashu_mints");
+    }
+
+    it("encrypts the mint list to self and tags relay hints on a kind:17375 event keyed by d=pubkey", async () => {
+      const tool = getCallback();
+
+      const result = await tool({ mints: ["https://mint.example"] });
+
+      expect(mockSigner.encrypt).toHaveBeenCalledWith(
+        TEST_PUBKEY,
+        JSON.stringify([["mint", "https://mint.example"]])
+      );
+      const template = jest.mocked(signAndPublishEvent).mock
+        .calls[0]![1] as any;
+      expect(template.kind).toBe(17375);
+      expect(template.tags).toEqual([
+        ["d", TEST_PUBKEY],
+        ["relay", "wss://relay.damus.io"],
+        ["relay", "wss://nos.lol"],
+      ]);
+      expect(textPayload(result)).toMatchObject({
+        mints: ["https://mint.example"],
+        mintCount: 1,
+      });
+    });
+
+    it("returns errorResponse when signAndPublishEvent throws", async () => {
+      jest
+        .mocked(signAndPublishEvent)
+        .mockRejectedValueOnce(new Error("relay down"));
+      const tool = getCallback();
+
+      const result = await tool({ mints: ["https://mint.example"] });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to set Cashu mints");
+    });
+  });
+
+  describe("send_cashu_payment", () => {
+    function getCallback() {
+      return getTool(
+        registerToolsForTest(fullAccessApiKey),
+        "send_cashu_payment"
+      );
+    }
+
+    it("returns 'No available proofs' when no cached proof event matches the target mint", async () => {
+      mockCashuWallet({ amount: 10, fee_reserve: 1 });
+      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
+        buildMockProofEvent({
+          mint: "https://other-mint.example",
+          proofs: [{ amount: 100 }],
+        }),
+      ] as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        invoice: "lnbc1invoice",
+        mintUrl: "https://mint.example",
+      });
+
+      expect(result.isError).toBe(true);
+      const payload = textPayload(result);
+      expect(payload.error).toBe("No available proofs");
+      expect(safeMeltProofs).not.toHaveBeenCalled();
+    });
+
+    it("returns 'Insufficient balance' with needed vs. available amounts, without melting", async () => {
+      mockCashuWallet({ amount: 100, fee_reserve: 5 });
+      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
+        buildMockProofEvent({
+          mint: "https://mint.example",
+          proofs: [{ amount: 10 }],
+        }),
+      ] as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        invoice: "lnbc1invoice",
+        mintUrl: "https://mint.example",
+      });
+
+      expect(result.isError).toBe(true);
+      const payload = textPayload(result);
+      expect(payload.error).toBe("Insufficient balance");
+      expect(payload.details).toBe("Need 105 sats but only have 10 sats");
+      expect(safeMeltProofs).not.toHaveBeenCalled();
+    });
+
+    it("skips a malformed proof event while aggregating available proofs", async () => {
+      mockCashuWallet({ amount: 5, fee_reserve: 0 });
+      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
+        { pubkey: TEST_PUBKEY, content: "not encrypted json" },
+        buildMockProofEvent({
+          mint: "https://mint.example",
+          proofs: [{ amount: 5 }],
+        }),
+      ] as any);
+      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
+        status: "paid",
+        changeProofs: [],
+      } as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        invoice: "lnbc1invoice",
+        mintUrl: "https://mint.example",
+      });
+
+      expect(safeMeltProofs).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.any(Object),
+        [{ amount: 5 }]
+      );
+      expect(textPayload(result).paid).toBe(true);
+    });
+
+    it.each([
+      ["pending", "Mint payment pending"],
+      ["unknown", "Cashu payment outcome unknown"],
+      ["failed", "Cashu payment failed"],
+    ])(
+      "maps a '%s' melt outcome to the error '%s'",
+      async (status, expectedError) => {
+        mockCashuWallet({ amount: 5, fee_reserve: 0 });
+        jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
+          buildMockProofEvent({
+            mint: "https://mint.example",
+            proofs: [{ amount: 5 }],
+          }),
+        ] as any);
+        jest.mocked(safeMeltProofs).mockResolvedValueOnce({
+          status,
+          changeProofs: [],
+        } as any);
+        const tool = getCallback();
+
+        const result = await tool({
+          invoice: "lnbc1invoice",
+          mintUrl: "https://mint.example",
+        });
+
+        expect(result.isError).toBe(true);
+        expect(textPayload(result).error).toBe(expectedError);
+      }
+    );
+
+    it("surfaces meltOutcome.errorMessage as details when the mint provides one", async () => {
+      mockCashuWallet({ amount: 5, fee_reserve: 0 });
+      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
+        buildMockProofEvent({
+          mint: "https://mint.example",
+          proofs: [{ amount: 5 }],
+        }),
+      ] as any);
+      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
+        status: "failed",
+        changeProofs: [],
+        errorMessage: "mint rejected the melt request",
+      } as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        invoice: "lnbc1invoice",
+        mintUrl: "https://mint.example",
+      });
+
+      expect(textPayload(result).details).toBe(
+        "mint rejected the melt request"
+      );
+    });
+
+    it("sums changeProofs, handling both plain-number and .toNumber()-style amounts", async () => {
+      mockCashuWallet({ amount: 5, fee_reserve: 0 });
+      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
+        buildMockProofEvent({
+          mint: "https://mint.example",
+          proofs: [{ amount: 5 }],
+        }),
+      ] as any);
+      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
+        status: "paid",
+        changeProofs: [{ amount: 4 }, { amount: { toNumber: () => 6 } }],
+      } as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        invoice: "lnbc1invoice",
+        mintUrl: "https://mint.example",
+      });
+
+      expect(textPayload(result).change).toBe(10);
+    });
+
+    it("defaults mintUrl to https://mint.minibits.cash/Bitcoin when not provided", async () => {
+      mockCashuWallet({ amount: 5, fee_reserve: 0 });
+      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
+        buildMockProofEvent({
+          mint: "https://mint.minibits.cash/Bitcoin",
+          proofs: [{ amount: 5 }],
+        }),
+      ] as any);
+      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
+        status: "paid",
+        changeProofs: [],
+      } as any);
+      const tool = getCallback();
+
+      const result = await tool({ invoice: "lnbc1invoice" });
+
+      expect(Mint).toHaveBeenCalledWith("https://mint.minibits.cash/Bitcoin");
+      expect(textPayload(result).mintUrl).toBe(
+        "https://mint.minibits.cash/Bitcoin"
+      );
+    });
+
+    it("calls withMintRetry with the documented retry configuration", async () => {
+      mockCashuWallet({ amount: 5, fee_reserve: 0 });
+      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
+        buildMockProofEvent({
+          mint: "https://mint.example",
+          proofs: [{ amount: 5 }],
+        }),
+      ] as any);
+      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
+        status: "paid",
+        changeProofs: [],
+      } as any);
+      const tool = getCallback();
+
+      await tool({ invoice: "lnbc1invoice", mintUrl: "https://mint.example" });
+
+      expect(withMintRetry).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({
+          maxAttempts: 4,
+          perAttemptTimeoutMs: 15000,
+          totalTimeoutMs: 60000,
+        })
+      );
+    });
+
+    it("returns errorResponse when wallet.loadMint throws", async () => {
+      const wallet = mockCashuWallet({ amount: 5, fee_reserve: 0 });
+      wallet.loadMint.mockRejectedValueOnce(new Error("mint unreachable"));
+      const tool = getCallback();
+
+      const result = await tool({
+        invoice: "lnbc1invoice",
+        mintUrl: "https://mint.example",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to send Cashu payment");
     });
   });
 });
