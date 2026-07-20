@@ -1,6 +1,6 @@
 import { generateSecretKey, getPublicKey, nip19 } from "nostr-tools";
 
-interface BunkerTokenParams {
+export interface BunkerTokenParams {
   remotePubkey: string;
   relays: string[];
   secret?: string;
@@ -38,7 +38,7 @@ export const decryptNpub = (npub: string): string | null => {
 };
 
 export function nostrExtensionLoaded() {
-  if (!window.nostr) {
+  if (typeof window === "undefined" || !window.nostr) {
     return false;
   }
   return true;
