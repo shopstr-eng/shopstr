@@ -95,8 +95,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
             }
             enterChat(pubkey);
             const productTitle = router.query.productTitle as
-              | string
-              | undefined;
+              string | undefined;
             const productUrl = router.query.productUrl as string | undefined;
             if (productTitle) {
               const draftText = productUrl
