@@ -1720,6 +1720,12 @@ export type FollowMutationResult =
       reason: FollowMutationFailureReason;
     };
 
+export function getLatestLocalContactListEvent(
+  userPubkey: string
+): NostrEvent | null {
+  return latestLocalContactListEvents.get(userPubkey) ?? null;
+}
+
 function getContactListRelays(): string[] {
   const { readRelays, writeRelays, relays } = getLocalStorageData();
   return [...new Set([...readRelays, ...writeRelays, ...relays])];
@@ -1787,8 +1793,8 @@ async function fetchLatestContactListEvent(
   ]);
 
   const relayEvents = relayResults.flatMap((result) => result.value);
-  const relayFullyResponded =
-    relays.length > 0 && relayResults.every((result) => result.didRespond);
+  const relayConfirmedEmpty =
+    relays.length === 0 || relayResults.some((result) => result.didRespond);
   const dbEvent = dbFetch.value;
   const allExternalEvents = dbEvent?.id
     ? [...relayEvents, dbEvent]
@@ -1798,7 +1804,7 @@ async function fetchLatestContactListEvent(
   const confirmedEmpty =
     !externalEvent &&
     !localEvent &&
-    relayFullyResponded &&
+    relayConfirmedEmpty &&
     dbFetch.didRespond &&
     !dbEvent &&
     relayEvents.length === 0;

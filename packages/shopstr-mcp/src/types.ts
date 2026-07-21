@@ -4,7 +4,11 @@ export type NostrEvent = Event;
 export type NostrFilter = Filter;
 
 export type ShippingOptionsType =
-  "N/A" | "Free" | "Pickup" | "Free/Pickup" | "Added Cost";
+  | "N/A"
+  | "Free"
+  | "Pickup"
+  | "Free/Pickup"
+  | "Added Cost";
 
 export type PricingBlock = {
   amount: number;

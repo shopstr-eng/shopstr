@@ -126,7 +126,7 @@ export function getRequestIp(req: NextApiRequest): string {
   const remoteAddress = normalizeIp(req.socket?.remoteAddress);
 
   if (shouldTrustForwardedFor(remoteAddress)) {
-    const forwardedIp = getForwardedForIp(req.headers?.["x-forwarded-for"]);
+    const forwardedIp = getForwardedForIp(req.headers["x-forwarded-for"]);
     if (forwardedIp) return forwardedIp;
   }
 

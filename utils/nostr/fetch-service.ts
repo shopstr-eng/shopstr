@@ -13,6 +13,7 @@ import {
 import { ChatsMap } from "@/utils/context/context";
 import {
   getLocalStorageData,
+  getLatestLocalContactListEvent,
   deleteEvent,
   verifyNip05Identifier,
   publishWalletEvent,
@@ -1333,6 +1334,8 @@ export const fetchAllFollows = async (
     };
   }
 
+  const localContactListEvent = getLatestLocalContactListEvent(userPubkey);
+
   const extractValidFollowTags = (
     tags: string[][],
     excluded = new Set<string>()
@@ -1357,6 +1360,18 @@ export const fetchAllFollows = async (
   };
 
   let dbContactListEvent: NostrEvent | null = null;
+  if (localContactListEvent?.id) {
+    const localDirectFollows = Array.from(
+      new Set(extractValidFollowTags(localContactListEvent.tags))
+    );
+    editFollowsContext(
+      localDirectFollows,
+      localDirectFollows,
+      localDirectFollows.length,
+      true
+    );
+  }
+
   try {
     const response = await fetch(
       `/api/db/fetch-contacts?pubkey=${encodeURIComponent(userPubkey)}`
@@ -1368,7 +1383,7 @@ export const fetchAllFollows = async (
         const dbDirectFollows = Array.from(
           new Set(extractValidFollowTags(dbContactListEvent.tags))
         );
-        if (dbDirectFollows.length > 0) {
+        if (!localContactListEvent?.id && dbDirectFollows.length > 0) {
           editFollowsContext(
             dbDirectFollows,
             dbDirectFollows,
@@ -1405,6 +1420,13 @@ export const fetchAllFollows = async (
       dbContactListEvent.id
     ) {
       allFirstDegreeEvents.push(dbContactListEvent);
+    }
+    if (
+      localContactListEvent &&
+      authorPubkey === userPubkey &&
+      localContactListEvent.id
+    ) {
+      allFirstDegreeEvents.push(localContactListEvent);
     }
 
     const latestFirstDegreeEvent =

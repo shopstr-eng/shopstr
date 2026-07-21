@@ -2526,6 +2526,7 @@ describe("fetchAllFollows", () => {
 
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
       getLocalStorageData: jest.fn(() => ({ wot: 2 })),
+      getLatestLocalContactListEvent: jest.fn(() => null),
       deleteEvent: jest.fn(),
       verifyNip05Identifier: jest.fn(),
     }));
@@ -2635,10 +2636,97 @@ describe("fetchAllFollows", () => {
     );
   });
 
+  it("prefers the locally signed contact list while relay and DB still have stale data", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(() => ({ wot: 2 })),
+      getLatestLocalContactListEvent: jest.fn(() => ({
+        id: "local-contact-list",
+        pubkey: userPubkey,
+        created_at: 300,
+        kind: 3,
+        tags: [["p", latestFollowPubkey]],
+        content: "",
+        sig: "sig-local",
+      })),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn(),
+    }));
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        contactList: {
+          id: "db-contact-list",
+          pubkey: userPubkey,
+          created_at: 200,
+          kind: 3,
+          tags: [["p", olderFollowPubkey]],
+          content: "",
+          sig: "sig-db",
+        },
+      }),
+    }) as typeof global.fetch;
+
+    const { fetchAllFollows } = await import("../fetch-service");
+    const editFollowsContext = jest.fn();
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            id: "relay-contact-list",
+            pubkey: userPubkey,
+            created_at: 200,
+            kind: 3,
+            tags: [["p", olderFollowPubkey]],
+            content: "",
+            sig: "sig-relay",
+          },
+        ])
+        .mockResolvedValueOnce([]),
+    } as any;
+
+    const result = await fetchAllFollows(
+      nostr,
+      ["wss://relay.example"],
+      editFollowsContext,
+      userPubkey
+    );
+
+    expect(result.directFollowList).toEqual([latestFollowPubkey]);
+    expect(result.followList).toEqual([latestFollowPubkey]);
+    expect(editFollowsContext).toHaveBeenNthCalledWith(
+      1,
+      [latestFollowPubkey],
+      [latestFollowPubkey],
+      1,
+      true
+    );
+    expect(editFollowsContext).toHaveBeenLastCalledWith(
+      [latestFollowPubkey],
+      [latestFollowPubkey],
+      1,
+      false
+    );
+    expect(editFollowsContext).not.toHaveBeenCalledWith(
+      [olderFollowPubkey],
+      [olderFollowPubkey],
+      1,
+      true
+    );
+    expect(nostr.fetch).toHaveBeenNthCalledWith(
+      2,
+      [{ kinds: [3], authors: [latestFollowPubkey] }],
+      {},
+      ["wss://relay.example"]
+    );
+  });
+
   it("fetches second-degree follows using the direct follow pubkeys as authors", async () => {
     // wot = 1 so a single endorsement is enough
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
       getLocalStorageData: jest.fn(() => ({ wot: 1 })),
+      getLatestLocalContactListEvent: jest.fn(() => null),
       deleteEvent: jest.fn(),
       verifyNip05Identifier: jest.fn(),
     }));
@@ -2770,6 +2858,7 @@ describe("fetchAllFollows", () => {
     // wot = 1 so C qualifies even with one endorsement; but two direct follows both endorse C
     jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
       getLocalStorageData: jest.fn(() => ({ wot: 1 })),
+      getLatestLocalContactListEvent: jest.fn(() => null),
       deleteEvent: jest.fn(),
       verifyNip05Identifier: jest.fn(),
     }));
