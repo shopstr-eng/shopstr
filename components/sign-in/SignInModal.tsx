@@ -9,11 +9,8 @@ import {
   InputProps,
 } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import {
-  setLocalStorageDataOnSignIn,
-  validateNSecKey,
-  parseBunkerToken,
-} from "@/utils/nostr/nostr-helper-functions";
+import { validateNSecKey, parseBunkerToken } from "@/utils/nostr/key-utilities";
+import { setLocalStorageDataOnSignIn } from "@/utils/nostr/nostr-helper-functions";
 import * as nip49 from "nostr-tools/nip49";
 import { getPublicKey } from "nostr-tools";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";

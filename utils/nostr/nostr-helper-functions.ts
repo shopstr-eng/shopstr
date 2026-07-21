@@ -1,12 +1,4 @@
-import {
-  EventTemplate,
-  finalizeEvent,
-  generateSecretKey,
-  getPublicKey,
-  getEventHash,
-  nip19,
-  nip44,
-} from "nostr-tools";
+import { EventTemplate } from "nostr-tools";
 import { v4 as uuidv4 } from "uuid";
 import CryptoJS from "crypto-js";
 import {
@@ -45,24 +37,6 @@ export const REPORT_TYPES = [
 ] as const;
 
 export type ReportType = (typeof REPORT_TYPES)[number];
-
-function generateRandomTimestamp(): number {
-  const now = Math.floor(Date.now() / 1000);
-  const twoDaysInMilliseconds = 172800;
-  const randomSeconds = Math.floor(Math.random() * (twoDaysInMilliseconds + 1));
-  const randomTimestamp = now - randomSeconds;
-  return randomTimestamp;
-}
-
-export async function generateKeys(): Promise<{ nsec: string; npub: string }> {
-  const sk = generateSecretKey();
-  const nsec = nip19.nsecEncode(sk);
-
-  const pk = getPublicKey(sk);
-  const npub = nip19.npubEncode(pk);
-
-  return { nsec, npub };
-}
 
 export async function deleteEvent(
   nostr: NostrManager,
@@ -110,41 +84,6 @@ export function createNostrDeleteEvent(
   };
 
   return msg;
-}
-
-interface BunkerTokenParams {
-  remotePubkey: string;
-  relays: string[];
-  secret?: string;
-}
-
-export function parseBunkerToken(token: string): BunkerTokenParams | null {
-  try {
-    if (!token.startsWith("bunker://")) {
-      return null;
-    }
-
-    // Extract the basic parts using URL
-    const url = new URL(token.replace("bunker://", "https://"));
-
-    // Get pubkey (hostname in URL)
-    const remotePubkey = url.hostname;
-
-    // Get relays from query params (can have multiple relay params)
-    const relays = url.searchParams.getAll("relay");
-
-    // Get optional secret
-    const secret = url.searchParams.get("secret") || undefined;
-
-    return {
-      remotePubkey,
-      relays,
-      secret,
-    };
-  } catch (error) {
-    console.error("Failed to parse bunker token:", error);
-    return null;
-  }
 }
 
 export async function createNostrProfileEvent(
@@ -247,266 +186,6 @@ export async function createNostrShopEvent(
     await cacheEventToDatabase(signedEvent).catch((error) =>
       console.error("Failed to cache shop profile event to database:", error)
     );
-  }
-}
-
-interface GiftWrappedMessageEvent {
-  id: string;
-  pubkey: string;
-  created_at: number;
-  content: string;
-  kind: number;
-  tags: string[][];
-}
-
-export async function constructGiftWrappedEvent(
-  senderPubkey: string,
-  recipientPubkey: string,
-  message: string,
-  subject: string,
-  options: {
-    kind?: number;
-    orderId?: string;
-    type?: number;
-    paymentType?: string;
-    paymentReference?: string;
-    paymentProof?: string;
-    orderAmount?: number;
-    status?: string;
-    productData?: ProductData;
-    quantity?: number;
-    productAddress?: string;
-    tracking?: string;
-    carrier?: string;
-    eta?: number;
-    isOrder?: boolean;
-    contact?: string;
-    address?: string;
-    pickup?: string;
-    buyerPubkey?: string;
-    donationAmount?: number;
-    donationPercentage?: number;
-    selectedSize?: string;
-    selectedVolume?: string;
-    selectedWeight?: string;
-    selectedBulkOption?: number;
-  } = {}
-): Promise<GiftWrappedMessageEvent> {
-  const { relays } = getLocalStorageData();
-  const {
-    kind,
-    orderId,
-    type,
-    paymentType,
-    paymentReference,
-    paymentProof,
-    orderAmount,
-    status,
-    productData,
-    quantity,
-    productAddress,
-    tracking,
-    carrier,
-    eta,
-    isOrder,
-    contact,
-    address,
-    pickup,
-    buyerPubkey,
-    donationAmount,
-    donationPercentage,
-    selectedSize,
-    selectedVolume,
-    selectedWeight,
-    selectedBulkOption,
-  } = options;
-
-  const tags = [
-    ["p", recipientPubkey, relays[0]!],
-    ["subject", subject],
-  ];
-
-  // Add order-specific tags
-  if (isOrder) {
-    tags.push(["order", orderId ? orderId : uuidv4()]);
-
-    if (buyerPubkey) tags.push(["b", buyerPubkey]);
-    if (type) tags.push(["type", type.toString()]);
-    if (orderAmount) tags.push(["amount", orderAmount.toString()]);
-    // Add payment tag with format: ["payment", paymentType, paymentReference, paymentProof?]
-    // For order-payment: ["payment", type, destination/token]
-    // For order-receipt: ["payment", type, reference, proof]
-    if (paymentType && paymentReference) {
-      if (paymentProof) {
-        tags.push(["payment", paymentType, paymentReference, paymentProof]);
-      } else {
-        tags.push(["payment", paymentType, paymentReference]);
-      }
-    }
-    if (status) tags.push(["status", status]);
-    if (tracking) tags.push(["tracking", tracking]);
-    if (carrier) tags.push(["carrier", carrier]);
-    if (eta) tags.push(["eta", eta.toString()]);
-    if (contact) tags.push(["contact", contact]);
-    if (address) tags.push(["address", address]);
-    if (pickup) tags.push(["pickup", pickup]);
-    if (selectedSize) tags.push(["size", selectedSize]);
-    if (selectedVolume) tags.push(["volume", selectedVolume]);
-    if (selectedWeight) tags.push(["weight", selectedWeight]);
-    if (selectedBulkOption) tags.push(["bulk", selectedBulkOption.toString()]);
-    if (
-      donationAmount &&
-      donationAmount > 0 &&
-      donationPercentage !== undefined
-    ) {
-      tags.push([
-        "donation_amount",
-        donationAmount.toString(),
-        donationPercentage.toString(),
-      ]);
-    }
-
-    // Handle product information for orders
-    if (productData || productAddress) {
-      tags.push([
-        "item",
-        productData
-          ? `30402:${productData.pubkey}:${productData.d}`
-          : productAddress!,
-        quantity ? quantity.toString() : "1",
-      ]);
-    }
-  } else {
-    // Handle regular message product references
-    if (productData) {
-      tags.push([
-        "a",
-        `30402:${productData.pubkey}:${productData.d}`,
-        relays[0]!,
-      ]);
-    } else if (productAddress) {
-      tags.push(["a", productAddress, relays[0]!]);
-    }
-  }
-
-  const bareEvent = {
-    pubkey: senderPubkey,
-    created_at: Math.floor(Date.now() / 1000),
-    content: message,
-    kind: kind ? kind : 14,
-    tags,
-  };
-
-  // To generate a predictable ID before signing (as required by NIP-17 gift wrap structure),
-  // we create a temporary full event object and hash it using the official NIP-01 method.
-  const eventToHash: NostrEvent = {
-    ...bareEvent,
-    id: "", // dummy value for hashing
-    sig: "", // dummy value for hashing
-  };
-  const eventId = getEventHash(eventToHash);
-  return {
-    id: eventId,
-    ...bareEvent,
-  } as GiftWrappedMessageEvent;
-}
-
-export async function constructMessageSeal(
-  signer: NostrSigner,
-  messageEvent: GiftWrappedMessageEvent,
-  senderPubkey: string,
-  recipientPubkey: string,
-  randomPrivkey?: Uint8Array
-): Promise<NostrEvent> {
-  const stringifiedEvent = JSON.stringify(messageEvent);
-  let encryptedContent;
-  if (randomPrivkey) {
-    const conversationKey = nip44.getConversationKey(
-      randomPrivkey,
-      recipientPubkey
-    );
-    encryptedContent = nip44.encrypt(stringifiedEvent, conversationKey);
-  } else {
-    encryptedContent = await signer.encrypt(recipientPubkey, stringifiedEvent);
-  }
-
-  const sealEvent = {
-    pubkey: senderPubkey,
-    created_at: generateRandomTimestamp(),
-    content: encryptedContent,
-    kind: 13,
-    tags: [],
-  };
-  let signedEvent;
-  if (randomPrivkey) {
-    signedEvent = finalizeEvent(sealEvent, randomPrivkey);
-  } else {
-    signedEvent = await signer.sign(sealEvent);
-  }
-  return signedEvent;
-}
-
-export async function constructMessageGiftWrap(
-  sealEvent: NostrEvent,
-  randomPubkey: string,
-  randomPrivkey: Uint8Array,
-  recipientPubkey: string
-): Promise<NostrEvent> {
-  const { relays } = getLocalStorageData();
-  const stringifiedEvent = JSON.stringify(sealEvent);
-  const conversationKey = nip44.getConversationKey(
-    randomPrivkey,
-    recipientPubkey
-  );
-  const encryptedEvent = nip44.encrypt(stringifiedEvent, conversationKey);
-  const giftWrapEvent = {
-    pubkey: randomPubkey,
-    created_at: generateRandomTimestamp(),
-    content: encryptedEvent,
-    kind: 1059,
-    tags: [["p", recipientPubkey, relays[0]!]],
-  };
-  const signedEvent = finalizeEvent(giftWrapEvent, randomPrivkey);
-  return signedEvent;
-}
-
-export async function sendGiftWrappedMessageEvent(
-  nostr: NostrManager,
-  giftWrappedMessageEvent: NostrEvent,
-  signer?: NostrSigner
-) {
-  const { relays, writeRelays } = getLocalStorageData();
-  const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-
-  // Cache the gift-wrapped event to database first and wait for confirmation
-  await cacheEventToDatabase(giftWrappedMessageEvent);
-
-  // After DB confirmation, attempt to publish to relays with timeout
-  try {
-    await newPromiseWithTimeout(
-      async (resolve, reject) => {
-        try {
-          await nostr.publish(giftWrappedMessageEvent, allWriteRelays);
-          resolve(undefined);
-        } catch (err) {
-          reject(err as Error);
-        }
-      },
-      { timeout: 21000 } // 21 second timeout
-    );
-  } catch (error) {
-    // Timeout or relay publish error - track for retry
-    console.warn(
-      "Relay publish timed out or failed for gift-wrapped message, but event is saved to database:",
-      error
-    );
-    const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
-    await trackFailedRelayPublish(
-      giftWrappedMessageEvent.id,
-      giftWrappedMessageEvent,
-      allWriteRelays,
-      signer
-    ).catch(console.error);
   }
 }
 
@@ -1128,15 +807,6 @@ export async function blossomUploadImages(
 /***** HELPER FUNCTIONS *****/
 
 // function to validate public and private keys
-export function validateNPubKey(publicKey: string) {
-  const validPubKey = /^npub[a-zA-Z0-9]{59}$/;
-  return publicKey.match(validPubKey) !== null;
-}
-export function validateNSecKey(privateKey: string) {
-  const validPrivKey = /^nsec[a-zA-Z0-9]{59}$/;
-  return privateKey.match(validPrivKey) !== null;
-}
-
 const LOCALSTORAGECONSTANTS = {
   signInMethod: "signInMethod",
   userNPub: "userNPub",
@@ -1568,24 +1238,6 @@ export const LogOut = () => {
 
   window.dispatchEvent(new Event("storage"));
 };
-
-export const decryptNpub = (npub: string): string | null => {
-  try {
-    const decoded = nip19.decode(npub);
-    return decoded.type === "npub" && typeof decoded.data === "string"
-      ? decoded.data
-      : null;
-  } catch {
-    return null;
-  }
-};
-
-export function nostrExtensionLoaded() {
-  if (!window.nostr) {
-    return false;
-  }
-  return true;
-}
 
 export function getDefaultMint(): string {
   return "https://mint.minibits.cash/Bitcoin";

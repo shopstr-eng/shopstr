@@ -1,11 +1,18 @@
 import React from "react";
-import { render, screen, fireEvent, act } from "@testing-library/react";
-import ZapsnagButton from "../ZapsnagButton";
+import {
+  render,
+  screen,
+  fireEvent,
+  act,
+  waitFor,
+} from "@testing-library/react";
+import ZapsnagButton, { clearSellerZapContextCache } from "../ZapsnagButton";
 import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import * as nostrHelpers from "@/utils/nostr/nostr-helper-functions";
+import * as giftWrapHelpers from "@/utils/nostr/gift-wrap";
 import * as zapValidator from "@/utils/nostr/zap-validator";
 import { LightningAddress } from "@getalby/lightning-tools";
 
@@ -55,16 +62,26 @@ jest.mock("@heroicons/react/24/outline", () => ({
   BoltIcon: () => <span data-testid="bolt-icon">⚡</span>,
 }));
 
+const mockLightningAddressInstances: any[] = [];
+
 jest.mock("@getalby/lightning-tools", () => {
   return {
-    LightningAddress: jest.fn().mockImplementation(() => ({
-      fetch: jest.fn().mockResolvedValue(true),
-      zap: jest.fn().mockResolvedValue({ preimage: "test-preimage" }),
-    })),
+    LightningAddress: jest.fn().mockImplementation(() => {
+      const instance = {
+        nostrPubkey: "lnurl-provider-pubkey",
+        fetch: jest.fn().mockResolvedValue(true),
+        zap: jest.fn().mockResolvedValue({ preimage: "test-preimage" }),
+      };
+      mockLightningAddressInstances.push(instance);
+      return instance;
+    }),
   };
 });
 
 jest.mock("@getalby/sdk", () => ({
+  NostrWebLNProvider: jest.fn().mockImplementation(() => ({
+    enable: jest.fn().mockResolvedValue(true),
+  })),
   webln: {
     NostrWebLNProvider: jest.fn().mockImplementation(() => ({
       enable: jest.fn().mockResolvedValue(true),
@@ -79,6 +96,9 @@ jest.mock("nostr-tools", () => ({
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalStorageData: jest.fn(),
+}));
+
+jest.mock("@/utils/nostr/gift-wrap", () => ({
   constructGiftWrappedEvent: jest.fn(),
   constructMessageSeal: jest.fn(),
   constructMessageGiftWrap: jest.fn(),
@@ -87,6 +107,9 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 
 jest.mock("@/utils/nostr/zap-validator", () => ({
   validateZapReceipt: jest.fn(),
+  validateSingleReceipt: jest
+    .fn()
+    .mockReturnValue({ valid: true, amountSats: 100, errors: [] }),
 }));
 
 Object.defineProperty(global, "crypto", {
@@ -111,10 +134,11 @@ const mockProduct = {
   totalCost: 100,
 };
 
+const LNURL_NOSTR_PUBKEY = "lnurl-provider-pubkey";
 const mockSigner = { signEvent: jest.fn() };
 const mockNostrManager = { fetch: jest.fn() };
 
-const renderComponent = (contextOverrides = {}) => {
+const renderComponent = (contextOverrides = {}, product = mockProduct) => {
   const defaultContext = {
     nostrContext: { nostr: mockNostrManager },
     signerContext: {
@@ -128,7 +152,7 @@ const renderComponent = (contextOverrides = {}) => {
   return render(
     <NostrContext.Provider value={defaultContext.nostrContext as any}>
       <SignerContext.Provider value={defaultContext.signerContext as any}>
-        <ZapsnagButton product={mockProduct} />
+        <ZapsnagButton product={product as any} />
       </SignerContext.Provider>
     </NostrContext.Provider>
   );
@@ -137,9 +161,21 @@ const renderComponent = (contextOverrides = {}) => {
 describe("ZapsnagButton Component", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    clearSellerZapContextCache();
+    mockLightningAddressInstances.length = 0;
     mockNostrManager.fetch.mockReset();
     mockSigner.signEvent.mockReset();
     window.alert = jest.fn();
+
+    (LightningAddress as unknown as jest.Mock).mockImplementation(() => {
+      const instance = {
+        nostrPubkey: LNURL_NOSTR_PUBKEY,
+        fetch: jest.fn().mockResolvedValue(true),
+        zap: jest.fn().mockResolvedValue({ preimage: "test-preimage" }),
+      };
+      mockLightningAddressInstances.push(instance);
+      return instance;
+    });
 
     Storage.prototype.getItem = jest.fn(() => null);
     Storage.prototype.setItem = jest.fn();
@@ -271,20 +307,26 @@ describe("ZapsnagButton Component", () => {
     const sealEvent = { id: "seal-event" };
     const finalEvent = { id: "final-event" };
 
-    (nostrHelpers.constructGiftWrappedEvent as jest.Mock).mockResolvedValueOnce(
-      giftWrapEvent
-    );
-    (nostrHelpers.constructMessageSeal as jest.Mock).mockResolvedValueOnce(
+    (
+      giftWrapHelpers.constructGiftWrappedEvent as jest.Mock
+    ).mockResolvedValueOnce(giftWrapEvent);
+    (giftWrapHelpers.constructMessageSeal as jest.Mock).mockResolvedValueOnce(
       sealEvent
     );
-    (nostrHelpers.constructMessageGiftWrap as jest.Mock).mockResolvedValueOnce(
-      finalEvent
-    );
     (
-      nostrHelpers.sendGiftWrappedMessageEvent as jest.Mock
+      giftWrapHelpers.constructMessageGiftWrap as jest.Mock
+    ).mockResolvedValueOnce(finalEvent);
+    (
+      giftWrapHelpers.sendGiftWrappedMessageEvent as jest.Mock
     ).mockResolvedValueOnce(undefined);
 
-    (zapValidator.validateZapReceipt as jest.Mock).mockResolvedValue(true);
+    (zapValidator.validateZapReceipt as jest.Mock).mockResolvedValue({
+      valid: true,
+      amountSats: 100,
+      payerPubkey: "buyer-pubkey",
+      receiptId: "receipt-id",
+      errors: [],
+    });
 
     renderComponent();
 
@@ -318,9 +360,10 @@ describe("ZapsnagButton Component", () => {
       },
     ]);
 
-    expect(nostrHelpers.constructGiftWrappedEvent).toHaveBeenCalledTimes(1);
-    const giftWrapCall = (nostrHelpers.constructGiftWrappedEvent as jest.Mock)
-      .mock.calls[0];
+    expect(giftWrapHelpers.constructGiftWrappedEvent).toHaveBeenCalledTimes(1);
+    const giftWrapCall = (
+      giftWrapHelpers.constructGiftWrappedEvent as jest.Mock
+    ).mock.calls[0];
     expect(giftWrapCall).toEqual(
       expect.arrayContaining([
         "buyer-pubkey",
@@ -345,13 +388,13 @@ describe("ZapsnagButton Component", () => {
       },
     });
 
-    expect(nostrHelpers.constructMessageSeal).toHaveBeenCalledWith(
+    expect(giftWrapHelpers.constructMessageSeal).toHaveBeenCalledWith(
       mockSigner,
       giftWrapEvent,
       "buyer-pubkey",
       "seller-pubkey"
     );
-    expect(nostrHelpers.constructMessageGiftWrap).toHaveBeenCalledWith(
+    expect(giftWrapHelpers.constructMessageGiftWrap).toHaveBeenCalledWith(
       sealEvent,
       "ephemeral-pubkey-hex",
       expect.any(Uint8Array),
@@ -359,18 +402,18 @@ describe("ZapsnagButton Component", () => {
     );
     expect(
       Array.from(
-        (nostrHelpers.constructMessageGiftWrap as jest.Mock).mock.calls[0][2]
+        (giftWrapHelpers.constructMessageGiftWrap as jest.Mock).mock.calls[0][2]
       )
     ).toEqual([1, 2, 3]);
 
-    expect(nostrHelpers.constructGiftWrappedEvent).toHaveBeenCalledWith(
+    expect(giftWrapHelpers.constructGiftWrappedEvent).toHaveBeenCalledWith(
       "buyer-pubkey",
       "seller-pubkey",
       expect.any(String),
       "zapsnag-order",
       expect.objectContaining({ isOrder: true })
     );
-    expect(nostrHelpers.sendGiftWrappedMessageEvent).toHaveBeenCalledWith(
+    expect(giftWrapHelpers.sendGiftWrappedMessageEvent).toHaveBeenCalledWith(
       mockNostrManager,
       finalEvent,
       mockSigner
@@ -389,8 +432,14 @@ describe("ZapsnagButton Component", () => {
     expect(zapValidator.validateZapReceipt).toHaveBeenCalled();
     expect(zapValidator.validateZapReceipt).toHaveBeenCalledWith(
       mockNostrManager,
-      mockProduct.id,
-      1700000000
+      expect.objectContaining({
+        productId: mockProduct.id,
+        minTimestamp: 1700000000,
+        expectedRecipientPubkey: LNURL_NOSTR_PUBKEY,
+        expectedReceiptSignerPubkey: LNURL_NOSTR_PUBKEY,
+        expectedAmountSats: mockProduct.price,
+        expectedPreimage: "test-preimage",
+      })
     );
 
     expect(localStorage.setItem).toHaveBeenCalledWith(
@@ -399,6 +448,67 @@ describe("ZapsnagButton Component", () => {
     );
     expect(window.alert).toHaveBeenCalledWith(
       expect.stringContaining("Order Placed & Verified")
+    );
+
+    dateNowSpy.mockRestore();
+  });
+
+  test("shows fallback alert when zap receipt validation fails", async () => {
+    const dateNowSpy = jest.spyOn(Date, "now").mockReturnValue(1700000000000);
+
+    mockNostrManager.fetch.mockResolvedValueOnce([
+      {
+        created_at: 100,
+        content: JSON.stringify({ lud16: "seller@alby.com" }),
+      },
+    ]);
+
+    (
+      giftWrapHelpers.constructGiftWrappedEvent as jest.Mock
+    ).mockResolvedValueOnce({ id: "gift-wrap" });
+    (giftWrapHelpers.constructMessageSeal as jest.Mock).mockResolvedValueOnce({
+      id: "seal",
+    });
+    (
+      giftWrapHelpers.constructMessageGiftWrap as jest.Mock
+    ).mockResolvedValueOnce({
+      id: "final",
+    });
+    (
+      giftWrapHelpers.sendGiftWrappedMessageEvent as jest.Mock
+    ).mockResolvedValueOnce(undefined);
+
+    (zapValidator.validateZapReceipt as jest.Mock).mockResolvedValue({
+      valid: false,
+      amountSats: 0,
+      errors: ["No valid zap receipt found after all retries"],
+    });
+
+    renderComponent();
+    fireEvent.click(screen.getByText(/Zap to Buy/i));
+    fireEvent.change(screen.getByLabelText("Full Name"), {
+      target: { value: "Buyer" },
+    });
+    fireEvent.change(screen.getByLabelText("Street Address"), {
+      target: { value: "Road" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Town" },
+    });
+    fireEvent.change(screen.getByLabelText("Postal / Zip Code"), {
+      target: { value: "123" },
+    });
+    fireEvent.change(screen.getByLabelText("Country"), {
+      target: { value: "US" },
+    });
+
+    const confirmBtn = screen.getByText("Confirm & Zap");
+    await act(async () => {
+      fireEvent.click(confirmBtn);
+    });
+
+    expect(window.alert).toHaveBeenCalledWith(
+      expect.stringContaining("Payment sent (Preimage received)")
     );
 
     dateNowSpy.mockRestore();
@@ -434,6 +544,154 @@ describe("ZapsnagButton Component", () => {
 
     expect(window.alert).toHaveBeenCalledWith(
       expect.stringContaining("Seller has not set up a Lightning Address")
+    );
+  });
+
+  test("shows alert if seller Lightning Address does not support NIP-57 zaps", async () => {
+    (LightningAddress as unknown as jest.Mock).mockImplementationOnce(() => ({
+      nostrPubkey: "",
+      fetch: jest.fn().mockResolvedValue(true),
+      zap: jest.fn(),
+    }));
+
+    mockNostrManager.fetch.mockResolvedValueOnce([
+      {
+        created_at: 100,
+        content: JSON.stringify({ lud16: "seller@alby.com" }),
+      },
+    ]);
+
+    renderComponent();
+    fireEvent.click(screen.getByText(/Zap to Buy/i));
+
+    fireEvent.change(screen.getByLabelText("Full Name"), {
+      target: { value: "Buyer" },
+    });
+    fireEvent.change(screen.getByLabelText("Street Address"), {
+      target: { value: "Road" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Town" },
+    });
+    fireEvent.change(screen.getByLabelText("Postal / Zip Code"), {
+      target: { value: "123" },
+    });
+    fireEvent.change(screen.getByLabelText("Country"), {
+      target: { value: "US" },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Confirm & Zap"));
+    });
+
+    expect(window.alert).toHaveBeenCalledWith(
+      expect.stringContaining("does not support NIP-57 zaps")
+    );
+    expect(zapValidator.validateZapReceipt).not.toHaveBeenCalled();
+  });
+
+  test("uses LNURL provider pubkey when validating inventory receipts", async () => {
+    const quantityProduct = { ...mockProduct, quantity: 3 };
+    const receipt = { id: "receipt-id" };
+
+    mockNostrManager.fetch
+      .mockResolvedValueOnce([
+        {
+          created_at: 100,
+          content: JSON.stringify({ lud16: "seller@alby.com" }),
+        },
+      ])
+      .mockResolvedValueOnce([receipt]);
+
+    renderComponent({}, quantityProduct);
+
+    await waitFor(() => {
+      expect(zapValidator.validateSingleReceipt).toHaveBeenCalledWith(
+        receipt,
+        expect.objectContaining({
+          productId: quantityProduct.id,
+          expectedRecipientPubkey: LNURL_NOSTR_PUBKEY,
+          expectedReceiptSignerPubkey: LNURL_NOSTR_PUBKEY,
+          alternateRecipientPubkeys: [quantityProduct.pubkey],
+          expectedAmountSats: quantityProduct.price,
+          allowOverpayment: true,
+          minTimestamp: 0,
+          skipFreshnessCheck: true,
+        })
+      );
+    });
+
+    expect(screen.getByText(/Zap to Buy \(2 left\)/i)).toBeInTheDocument();
+  });
+
+  test("reuses cached seller zap context across inventory checks for the same seller", async () => {
+    const quantityProduct = { ...mockProduct, quantity: 3 };
+    const receipt = { id: "receipt-id" };
+
+    mockNostrManager.fetch
+      .mockResolvedValueOnce([
+        {
+          created_at: 100,
+          content: JSON.stringify({ lud16: "seller@alby.com" }),
+        },
+      ])
+      .mockResolvedValue([receipt]);
+
+    const { unmount } = renderComponent({}, quantityProduct);
+
+    await waitFor(() => {
+      expect(zapValidator.validateSingleReceipt).toHaveBeenCalled();
+    });
+
+    const lightningInstancesAfterFirstRender =
+      mockLightningAddressInstances.length;
+    expect(lightningInstancesAfterFirstRender).toBe(1);
+
+    unmount();
+    renderComponent({}, quantityProduct);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Zap to Buy/i)).toBeInTheDocument();
+    });
+
+    expect(mockLightningAddressInstances.length).toBe(
+      lightningInstancesAfterFirstRender
+    );
+  });
+
+  test("shows alert when nostrManager is not available", async () => {
+    renderComponent({
+      nostrContext: { nostr: null },
+      signerContext: {
+        signer: mockSigner,
+        isLoggedIn: true,
+        pubkey: "buyer-pubkey",
+      },
+    });
+
+    fireEvent.click(screen.getByText(/Zap to Buy/i));
+    fireEvent.change(screen.getByLabelText("Full Name"), {
+      target: { value: "Buyer" },
+    });
+    fireEvent.change(screen.getByLabelText("Street Address"), {
+      target: { value: "Road" },
+    });
+    fireEvent.change(screen.getByLabelText("City"), {
+      target: { value: "Town" },
+    });
+    fireEvent.change(screen.getByLabelText("Postal / Zip Code"), {
+      target: { value: "123" },
+    });
+    fireEvent.change(screen.getByLabelText("Country"), {
+      target: { value: "US" },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Confirm & Zap"));
+    });
+
+    expect(window.alert).toHaveBeenCalledWith(
+      "Connection error: unable to verify payment."
     );
   });
 
