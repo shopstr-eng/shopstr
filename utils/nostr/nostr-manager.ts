@@ -35,26 +35,30 @@ export type NostrEvent = NToolEvent;
 export type NostrEventTemplate = NToolEvenTemplate;
 export type NostrManagerParams = {
   connectionTimeout?: number;
-  keepAliveTime: number;
-  gcInterval: number;
+  keepAliveTime?: number;
+  gcInterval?: number;
   readable?: boolean;
   writable?: boolean;
 };
 
+const DEFAULT_CONNECTION_TIMEOUT_MS = 4000;
+const DEFAULT_KEEP_ALIVE_MS = 1000 * 60 * 5;
+const DEFAULT_GC_INTERVAL_MS = 1000 * 60 * 5;
+
 export class NostrManager {
   private readonly pool: SimplePool;
-  private readonly params: NostrManagerParams;
+  private readonly params: Required<NostrManagerParams>;
   private readonly relays: Array<NostrRelay> = [];
-  private gcTimeout: any;
+  private gcTimeout?: ReturnType<typeof setTimeout>;
 
-  constructor(relays: Array<string> = [], params?: NostrManagerParams) {
+  constructor(relays: Array<string> = [], params: NostrManagerParams = {}) {
     const {
-      keepAliveTime = 1000 * 60 * 5,
-      gcInterval = 1000 * 60 * 5,
-      connectionTimeout = undefined,
+      keepAliveTime = DEFAULT_KEEP_ALIVE_MS,
+      gcInterval = DEFAULT_GC_INTERVAL_MS,
+      connectionTimeout = DEFAULT_CONNECTION_TIMEOUT_MS,
       readable = true,
       writable = true,
-    } = params || {};
+    } = params;
 
     this.pool = new SimplePool();
     this.params = {
@@ -139,14 +143,15 @@ export class NostrManager {
     }
     if (relayUrls) {
       for (const relayUrl of relayUrls) {
-        this.addRelay(relayUrl);
+        this.addRelay(relayUrl, {
+          connectionTimeout: this.params.connectionTimeout,
+        });
       }
     }
 
     const relays = relayUrls
       ? this.relays.filter((r) => relayUrls.includes(r.url))
       : this.relays;
-    await this.keepAlive(relays);
     const requests = relays.flatMap((r) =>
       filters.map((f) => ({ url: r.url, filter: f }))
     );
@@ -164,7 +169,7 @@ export class NostrManager {
     for (const relay of relays) {
       relay.activeSubs.push(sub);
     }
-    await this.keepAlive(relays);
+    void this.keepAlive(relays);
     return sub;
   }
 
@@ -195,6 +200,13 @@ export class NostrManager {
         let didCloseSub = false;
         let didResolve = false;
 
+        const resolveFetchedEvents = () => {
+          if (!didResolve) {
+            didResolve = true;
+            resolve(fetchedEvents);
+          }
+        };
+
         const closeSubIfNeeded = async () => {
           if (!sub || didCloseSub) return;
           didCloseSub = true;
@@ -203,6 +215,7 @@ export class NostrManager {
 
         abortSignal.addEventListener("abort", () => {
           closeSubIfNeeded().catch(console.error);
+          resolveFetchedEvents();
         });
 
         params.onevent = (event: NostrEvent) => {
@@ -212,10 +225,7 @@ export class NostrManager {
 
         params.oneose = () => {
           closeSubIfNeeded().catch(console.error);
-          if (!didResolve) {
-            didResolve = true;
-            resolve(fetchedEvents);
-          }
+          resolveFetchedEvents();
           return onEose!();
         };
 
@@ -255,15 +265,30 @@ export class NostrManager {
     }
   ): void {
     if (this.relays.find((r) => r.url === relayUrl)) return;
-    const r = this.pool.ensureRelay(relayUrl, params);
+    const relayParams = {
+      connectionTimeout:
+        params?.connectionTimeout ??
+        this.params.connectionTimeout ??
+        DEFAULT_CONNECTION_TIMEOUT_MS,
+    };
+
+    let relayPromise = this.pool.ensureRelay(relayUrl, relayParams);
+    relayPromise.catch(() => undefined);
+
+    const ensureRelaySafely = (): typeof relayPromise => {
+      relayPromise = this.pool.ensureRelay(relayUrl, relayParams);
+      relayPromise.catch(() => undefined);
+      return relayPromise;
+    };
+
     const relay: NostrRelay = {
       url: relayUrl,
       connect: async () => {
-        this.pool.ensureRelay(relayUrl, params);
-        await (await r).connect();
+        await ensureRelaySafely();
       },
       disconnect: async () => {
-        (await r).close();
+        const relayHandle = await relayPromise.catch(() => null);
+        relayHandle?.close();
       },
       activeSubs: [],
       sleeping: true,

@@ -29,6 +29,17 @@ describe("NostrManager", () => {
     relayCloseMock = jest.fn().mockResolvedValue(undefined);
     timeoutOptionsMock = [];
     latestAbortController = undefined;
+    fakePoolInstance.ensureRelay.mockReset();
+    fakePoolInstance.ensureRelay.mockImplementation(() =>
+      Promise.resolve({
+        connect: relayConnectMock,
+        close: relayCloseMock,
+      })
+    );
+    fakePoolInstance.subscribeMap.mockReset();
+    fakePoolInstance.subscribeMap.mockReturnValue({ close: jest.fn() });
+    fakePoolInstance.publish.mockReset();
+    fakePoolInstance.publish.mockReturnValue([Promise.resolve("ok")]);
 
     jest.doMock("nostr-tools", () => ({
       SimplePool: FakePool,
@@ -97,6 +108,16 @@ describe("NostrManager", () => {
   });
 
   describe("relay management", () => {
+    it("defaults relay connection attempts to a bounded timeout", () => {
+      const mgr = new NostrManager(["r1"]);
+
+      expect(fakePoolInstance.ensureRelay).toHaveBeenCalledWith("r1", {
+        connectionTimeout: 4000,
+      });
+
+      mgr.close();
+    });
+
     it("addRelay/addRelays avoids duplicates", () => {
       const mgr = new NostrManager([], { keepAliveTime: 10, gcInterval: 10 });
       mgr.addRelay("r1");
@@ -113,6 +134,23 @@ describe("NostrManager", () => {
       mgr.close();
       expect(mgr.relays.length).toBe(0);
       expect(sub.close).toHaveBeenCalled();
+    });
+
+    it("retries with a fresh relay promise after an initial connection failure", async () => {
+      const firstFailure = Promise.reject(new Error("first relay failed"));
+      firstFailure.catch(() => undefined);
+      const nextRelayHandle = {
+        connect: relayConnectMock,
+        close: relayCloseMock,
+      };
+      fakePoolInstance.ensureRelay
+        .mockReturnValueOnce(firstFailure)
+        .mockResolvedValue(nextRelayHandle);
+
+      const mgr = new NostrManager(["flaky"]);
+
+      await expect(mgr.relays[0].connect()).resolves.toBeUndefined();
+      expect(fakePoolInstance.ensureRelay).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -147,7 +185,7 @@ describe("NostrManager", () => {
       expect(mgr.relays[0].activeSubs).not.toContain(sub);
     });
 
-    it("awaits reconnect before subscribing on sleeping relays", async () => {
+    it("subscribes immediately while reconnecting sleeping relays", async () => {
       let resolveConnect!: () => void;
       relayConnectMock.mockReturnValueOnce(
         new Promise<void>((resolve) => {
@@ -158,12 +196,22 @@ describe("NostrManager", () => {
       const subscribePromise = mgr.subscribe([], {}, ["u1"]);
       await Promise.resolve();
 
-      expect(fakePoolInstance.subscribeMap).not.toHaveBeenCalled();
+      expect(fakePoolInstance.subscribeMap).toHaveBeenCalledTimes(1);
 
       resolveConnect();
       await subscribePromise;
 
       expect(fakePoolInstance.subscribeMap).toHaveBeenCalledTimes(1);
+    });
+
+    it("adds relay URLs with the default connection timeout before subscribing", async () => {
+      mgr = new NostrManager([], { readable: true });
+
+      await mgr.subscribe([], {}, ["u2"]);
+
+      expect(fakePoolInstance.ensureRelay).toHaveBeenCalledWith("u2", {
+        connectionTimeout: 4000,
+      });
     });
   });
 
@@ -258,6 +306,32 @@ describe("NostrManager", () => {
       params.oneose();
       await fetchPromise;
 
+      expect(subClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("resolves collected events when the fetch timeout aborts", async () => {
+      const subClose = jest.fn();
+      fakePoolInstance.subscribeMap.mockReturnValueOnce({ close: subClose });
+
+      const fetchPromise = mgr.fetch([{ kinds: [30402] }], {}, ["u1"], 1234);
+      await waitForSubscribeMap();
+
+      const params = fakePoolInstance.subscribeMap.mock.calls[0][1];
+      params.onevent({ id: "product-1" });
+      latestAbortController!.abort();
+      await Promise.resolve();
+
+      const raceResult = await Promise.race([
+        fetchPromise.then((events: unknown[]) => ({ events })),
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ pending: true }), 0)
+        ),
+      ]);
+
+      params.oneose();
+      await fetchPromise;
+
+      expect(raceResult).toEqual({ events: [{ id: "product-1" }] });
       expect(subClose).toHaveBeenCalledTimes(1);
     });
   });
