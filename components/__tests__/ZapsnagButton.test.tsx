@@ -6,7 +6,7 @@ import {
   act,
   waitFor,
 } from "@testing-library/react";
-import ZapsnagButton from "../ZapsnagButton";
+import ZapsnagButton, { clearSellerZapContextCache } from "../ZapsnagButton";
 import {
   NostrContext,
   SignerContext,
@@ -161,6 +161,7 @@ const renderComponent = (contextOverrides = {}, product = mockProduct) => {
 describe("ZapsnagButton Component", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    clearSellerZapContextCache();
     mockLightningAddressInstances.length = 0;
     mockNostrManager.fetch.mockReset();
     mockSigner.signEvent.mockReset();
@@ -462,17 +463,19 @@ describe("ZapsnagButton Component", () => {
       },
     ]);
 
-    (nostrHelpers.constructGiftWrappedEvent as jest.Mock).mockResolvedValueOnce(
-      { id: "gift-wrap" }
-    );
-    (nostrHelpers.constructMessageSeal as jest.Mock).mockResolvedValueOnce({
+    (
+      giftWrapHelpers.constructGiftWrappedEvent as jest.Mock
+    ).mockResolvedValueOnce({ id: "gift-wrap" });
+    (giftWrapHelpers.constructMessageSeal as jest.Mock).mockResolvedValueOnce({
       id: "seal",
     });
-    (nostrHelpers.constructMessageGiftWrap as jest.Mock).mockResolvedValueOnce({
+    (
+      giftWrapHelpers.constructMessageGiftWrap as jest.Mock
+    ).mockResolvedValueOnce({
       id: "final",
     });
     (
-      nostrHelpers.sendGiftWrappedMessageEvent as jest.Mock
+      giftWrapHelpers.sendGiftWrappedMessageEvent as jest.Mock
     ).mockResolvedValueOnce(undefined);
 
     (zapValidator.validateZapReceipt as jest.Mock).mockResolvedValue({
@@ -609,7 +612,9 @@ describe("ZapsnagButton Component", () => {
           productId: quantityProduct.id,
           expectedRecipientPubkey: LNURL_NOSTR_PUBKEY,
           expectedReceiptSignerPubkey: LNURL_NOSTR_PUBKEY,
+          alternateRecipientPubkeys: [quantityProduct.pubkey],
           expectedAmountSats: quantityProduct.price,
+          allowOverpayment: true,
           minTimestamp: 0,
           skipFreshnessCheck: true,
         })
@@ -617,6 +622,41 @@ describe("ZapsnagButton Component", () => {
     });
 
     expect(screen.getByText(/Zap to Buy \(2 left\)/i)).toBeInTheDocument();
+  });
+
+  test("reuses cached seller zap context across inventory checks for the same seller", async () => {
+    const quantityProduct = { ...mockProduct, quantity: 3 };
+    const receipt = { id: "receipt-id" };
+
+    mockNostrManager.fetch
+      .mockResolvedValueOnce([
+        {
+          created_at: 100,
+          content: JSON.stringify({ lud16: "seller@alby.com" }),
+        },
+      ])
+      .mockResolvedValue([receipt]);
+
+    const { unmount } = renderComponent({}, quantityProduct);
+
+    await waitFor(() => {
+      expect(zapValidator.validateSingleReceipt).toHaveBeenCalled();
+    });
+
+    const lightningInstancesAfterFirstRender =
+      mockLightningAddressInstances.length;
+    expect(lightningInstancesAfterFirstRender).toBe(1);
+
+    unmount();
+    renderComponent({}, quantityProduct);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Zap to Buy/i)).toBeInTheDocument();
+    });
+
+    expect(mockLightningAddressInstances.length).toBe(
+      lightningInstancesAfterFirstRender
+    );
   });
 
   test("shows alert when nostrManager is not available", async () => {

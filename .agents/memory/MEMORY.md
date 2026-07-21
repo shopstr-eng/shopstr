@@ -1,1 +1,2 @@
 - [HeroUI version pin](heroui-version-pin.md) — keep @heroui/react on v2.8.10; v3 removes ModalContent/useDisclosure; deploy npm ci installs the lockfile exactly, so stale node_modules hides the break.
+- [Zap receipt validation](zap-receipt-validation.md) — purchase flow stays strict (preimage binding); inventory counts min-amount receipts from any client's p-tag; freshness upper bound is now-based, not startTime-based.

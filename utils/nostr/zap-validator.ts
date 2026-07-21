@@ -22,6 +22,23 @@ export interface ZapReceiptValidationOptions {
   skipFreshnessCheck?: boolean;
   expectedPreimage?: string;
   expectedLnurl?: string;
+  /**
+   * Additional pubkeys accepted in the receipt/zap-request 'p' tag besides
+   * expectedRecipientPubkey. Most NIP-57 clients put the seller's own nostr
+   * pubkey in 'p' (not the LNURL provider's signing key), so inventory
+   * counting passes the seller pubkey here to count zaps made outside
+   * Shopstr's own purchase flow.
+   */
+  alternateRecipientPubkeys?: string[];
+  /**
+   * Treat expectedAmountSats as a minimum instead of an exact match. Used
+   * for inventory counting, where a buyer may have tipped above the listed
+   * price. Requiring at least the product price keeps sold-out griefing
+   * expensive (a forged "sale" costs a real zap of the full price), unlike
+   * skipping the amount check entirely. Internal consistency checks
+   * (receipt/request amount tags vs the invoice) still apply.
+   */
+  allowOverpayment?: boolean;
 }
 
 const FRESHNESS_WINDOW_SECONDS = 120;
@@ -111,7 +128,14 @@ export function validateSingleReceipt(
     skipFreshnessCheck = false,
     expectedPreimage,
     expectedLnurl,
+    alternateRecipientPubkeys = [],
+    allowOverpayment = false,
   } = options;
+
+  const acceptedRecipientPubkeys = new Set<string>([
+    expectedRecipientPubkey,
+    ...alternateRecipientPubkeys,
+  ]);
 
   if (!verifyEvent(receipt)) {
     errors.push("Invalid signature on zap receipt");
@@ -129,8 +153,8 @@ export function validateSingleReceipt(
   }
 
   const pTag = getTagValue(receipt.tags, "p");
-  if (pTag !== expectedRecipientPubkey) {
-    errors.push("Receipt 'p' tag does not match LNURL recipient");
+  if (pTag === undefined || !acceptedRecipientPubkeys.has(pTag)) {
+    errors.push("Receipt 'p' tag does not match an accepted zap recipient");
     return invalid(errors);
   }
 
@@ -166,7 +190,14 @@ export function validateSingleReceipt(
     return invalid(errors);
   }
 
-  if (invoiceAmountMsat !== expectedAmountMsat) {
+  if (allowOverpayment) {
+    if (invoiceAmountMsat < expectedAmountMsat) {
+      errors.push(
+        `Invoice amount ${invoiceAmountSats} sats is below expected minimum ${expectedAmountSats} sats`
+      );
+      return invalid(errors);
+    }
+  } else if (invoiceAmountMsat !== expectedAmountMsat) {
     errors.push(
       `Invoice amount ${invoiceAmountSats} sats does not match expected ${expectedAmountSats} sats`
     );
@@ -226,8 +257,8 @@ export function validateSingleReceipt(
   }
 
   const reqPTag = getTagValue(zapRequest.tags, "p");
-  if (reqPTag !== expectedRecipientPubkey) {
-    errors.push("Zap request 'p' tag does not match LNURL recipient");
+  if (reqPTag === undefined || !acceptedRecipientPubkeys.has(reqPTag)) {
+    errors.push("Zap request 'p' tag does not match an accepted zap recipient");
     return invalid(errors);
   }
 
@@ -260,8 +291,14 @@ export function validateSingleReceipt(
   }
 
   if (!skipFreshnessCheck) {
+    // Lower bound: the receipt must not predate the payment attempt (modulo
+    // clock skew) — this blocks replays of receipts from earlier purchases.
+    // Upper bound: only guard against future-dated events. A slow payer can
+    // legitimately settle the invoice minutes after the flow started, and
+    // replay protection already comes from the lower bound plus the
+    // preimage/payment-hash binding above.
     const lowerBound = minTimestamp - FRESHNESS_WINDOW_SECONDS;
-    const upperBound = minTimestamp + FRESHNESS_WINDOW_SECONDS;
+    const upperBound = Math.floor(Date.now() / 1000) + FRESHNESS_WINDOW_SECONDS;
     if (receipt.created_at < lowerBound || receipt.created_at > upperBound) {
       errors.push("Receipt timestamp is outside acceptable window");
       return invalid(errors);

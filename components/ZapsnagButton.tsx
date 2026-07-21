@@ -36,6 +36,43 @@ type SellerZapContext = {
   zapRecipientPubkey: string;
 };
 
+const SELLER_ZAP_CONTEXT_TTL_MS = 5 * 60 * 1000;
+
+const sellerZapContextCache = new Map<
+  string,
+  { promise: Promise<SellerZapContext>; expiresAt: number }
+>();
+
+export function clearSellerZapContextCache(): void {
+  sellerZapContextCache.clear();
+}
+
+function getSellerZapContext(
+  nostrManager: NostrManager,
+  sellerPubkey: string
+): Promise<SellerZapContext> {
+  const now = Date.now();
+  const cached = sellerZapContextCache.get(sellerPubkey);
+  if (cached && cached.expiresAt > now) {
+    return cached.promise;
+  }
+
+  const promise = resolveSellerZapContext(nostrManager, sellerPubkey);
+  const entry = {
+    promise,
+    expiresAt: now + SELLER_ZAP_CONTEXT_TTL_MS,
+  };
+  sellerZapContextCache.set(sellerPubkey, entry);
+
+  promise.catch(() => {
+    if (sellerZapContextCache.get(sellerPubkey) === entry) {
+      sellerZapContextCache.delete(sellerPubkey);
+    }
+  });
+
+  return promise;
+}
+
 async function resolveSellerZapContext(
   nostrManager: NostrManager,
   sellerPubkey: string
@@ -120,7 +157,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       }
 
       try {
-        const { zapRecipientPubkey } = await resolveSellerZapContext(
+        const { zapRecipientPubkey } = await getSellerZapContext(
           nostrManager,
           product.pubkey
         );
@@ -132,7 +169,16 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
             productId: product.id,
             expectedRecipientPubkey: zapRecipientPubkey,
             expectedReceiptSignerPubkey: zapRecipientPubkey,
+            // Most NIP-57 clients put the seller's own pubkey in 'p', not
+            // the LNURL provider's signing key — accept both so zaps made
+            // outside Shopstr still count toward inventory.
+            alternateRecipientPubkeys: [product.pubkey],
             expectedAmountSats: product.price,
+            // Buyers may tip above the listed price; require at least the
+            // product price so a forged "sale" still costs a real full-price
+            // zap (prevents cheap sold-out griefing). Note: sales made
+            // before a price increase will no longer count.
+            allowOverpayment: true,
             minTimestamp: 0,
             skipFreshnessCheck: true,
           });
@@ -176,7 +222,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
     setStatus("Finding seller address...");
     try {
       const { lightningAddress: ln, zapRecipientPubkey } =
-        await resolveSellerZapContext(nostrManager, product.pubkey);
+        await getSellerZapContext(nostrManager, product.pubkey);
 
       originalWebLN = (window as any).webln;
       const { nwcString } = getLocalStorageData();

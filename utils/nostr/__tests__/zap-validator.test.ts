@@ -139,6 +139,8 @@ function validationOptions(
     skipFreshnessCheck: boolean;
     expectedPreimage: string;
     expectedLnurl: string;
+    alternateRecipientPubkeys: string[];
+    allowOverpayment: boolean;
   }>
 ): Record<string, unknown> {
   return {
@@ -245,7 +247,9 @@ describe("validateSingleReceipt", () => {
     );
 
     expect(result.valid).toBe(false);
-    expect(result.errors[0]).toMatch(/does not match LNURL recipient/);
+    expect(result.errors[0]).toMatch(
+      /does not match an accepted zap recipient/
+    );
   });
 
   it("rejects receipt with wrong product id", () => {
@@ -383,7 +387,9 @@ describe("validateSingleReceipt", () => {
     );
 
     expect(result.valid).toBe(false);
-    expect(result.errors[0]).toMatch(/does not match LNURL recipient/);
+    expect(result.errors[0]).toMatch(
+      /does not match an accepted zap recipient/
+    );
   });
 
   it("rejects receipt where zap request has missing e tag", () => {
@@ -503,6 +509,26 @@ describe("validateSingleReceipt", () => {
     expect(result.errors[0]).toMatch(/outside acceptable window/);
   });
 
+  it("accepts a receipt created well after minTimestamp (slow payer)", () => {
+    const result = validateSingleReceipt(
+      makeReceipt({ created_at: MIN_TIMESTAMP + 3600 }) as any,
+      validationOptions() as any
+    );
+
+    expect(result.valid).toBe(true);
+  });
+
+  it("rejects a future-dated receipt beyond the clock-skew allowance", () => {
+    const futureCreatedAt = Math.floor(Date.now() / 1000) + 300;
+    const result = validateSingleReceipt(
+      makeReceipt({ created_at: futureCreatedAt }) as any,
+      validationOptions() as any
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toMatch(/outside acceptable window/);
+  });
+
   it("skips freshness check when skipFreshnessCheck is true", () => {
     const result = validateSingleReceipt(
       makeReceipt({ created_at: 0 }) as any,
@@ -510,6 +536,129 @@ describe("validateSingleReceipt", () => {
     );
 
     expect(result.valid).toBe(true);
+  });
+
+  it("accepts 'p' tags matching an alternate recipient pubkey", () => {
+    const zapRequest = makeZapRequest({
+      tags: [
+        ["p", OTHER_PUBKEY],
+        ["e", PRODUCT_ID],
+        ["amount", String(AMOUNT_MSAT)],
+        ["lnurl", EXPECTED_LNURL],
+      ],
+    });
+    const receipt = makeReceipt({
+      tags: replaceTag(defaultTags(zapRequest), "p", ["p", OTHER_PUBKEY]),
+    });
+
+    const strictResult = validateSingleReceipt(
+      receipt as any,
+      validationOptions() as any
+    );
+    expect(strictResult.valid).toBe(false);
+
+    const relaxedResult = validateSingleReceipt(
+      receipt as any,
+      validationOptions({
+        alternateRecipientPubkeys: [OTHER_PUBKEY],
+      }) as any
+    );
+    expect(relaxedResult.valid).toBe(true);
+  });
+
+  it("rejects 'p' tags not in the accepted recipient set even with alternates", () => {
+    const receipt = makeReceipt({
+      tags: replaceTag(defaultTags(), "p", ["p", "unrelated-pubkey"]),
+    });
+
+    const result = validateSingleReceipt(
+      receipt as any,
+      validationOptions({
+        alternateRecipientPubkeys: [OTHER_PUBKEY],
+      }) as any
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toMatch(/accepted zap recipient/);
+  });
+
+  it("accepts an invoice above the expected amount when allowOverpayment is true", () => {
+    mockDecodeInvoice.mockReturnValue(
+      makeDecodedInvoice({ millisatoshi: 250000, satoshi: 250 })
+    );
+    const differentAmountTags = replaceTag(
+      defaultTags(
+        makeZapRequest({
+          tags: [
+            ["p", LNURL_NOSTR_PUBKEY],
+            ["e", PRODUCT_ID],
+            ["amount", "250000"],
+            ["lnurl", EXPECTED_LNURL],
+          ],
+        })
+      ),
+      "amount",
+      ["amount", "250000"]
+    );
+    const receipt = makeReceipt({ tags: differentAmountTags });
+
+    const strictResult = validateSingleReceipt(
+      receipt as any,
+      validationOptions() as any
+    );
+    expect(strictResult.valid).toBe(false);
+
+    const relaxedResult = validateSingleReceipt(
+      receipt as any,
+      validationOptions({ allowOverpayment: true }) as any
+    );
+    expect(relaxedResult.valid).toBe(true);
+    expect(relaxedResult.amountSats).toBe(250);
+  });
+
+  it("rejects an invoice below the expected amount even when allowOverpayment is true", () => {
+    mockDecodeInvoice.mockReturnValue(
+      makeDecodedInvoice({ millisatoshi: 1000, satoshi: 1 })
+    );
+    const lowAmountTags = replaceTag(
+      defaultTags(
+        makeZapRequest({
+          tags: [
+            ["p", LNURL_NOSTR_PUBKEY],
+            ["e", PRODUCT_ID],
+            ["amount", "1000"],
+            ["lnurl", EXPECTED_LNURL],
+          ],
+        })
+      ),
+      "amount",
+      ["amount", "1000"]
+    );
+    const receipt = makeReceipt({ tags: lowAmountTags });
+
+    const result = validateSingleReceipt(
+      receipt as any,
+      validationOptions({ allowOverpayment: true }) as any
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toMatch(/below expected minimum/);
+  });
+
+  it("still rejects receipt amount tag mismatching the invoice when allowOverpayment is true", () => {
+    const receipt = makeReceipt({
+      tags: replaceTag(defaultTags(), "amount", ["amount", "999000"]),
+    });
+
+    const result = validateSingleReceipt(
+      receipt as any,
+      validationOptions({ allowOverpayment: true }) as any
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toMatch(
+      /Zap receipt amount does not match invoice amount/
+    );
   });
 
   it("rejects receipt when expectedPreimage does not match invoice payment hash", () => {
