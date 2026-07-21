@@ -10,6 +10,7 @@ const fakePoolInstance = {
   ),
   subscribeMap: jest.fn().mockReturnValue({ close: jest.fn() }),
   publish: jest.fn().mockReturnValue([Promise.resolve("ok")]),
+  close: jest.fn(),
 };
 const FakePool = jest.fn().mockImplementation(() => fakePoolInstance);
 
@@ -148,7 +149,6 @@ describe("NostrManager", () => {
         .mockResolvedValue(nextRelayHandle);
 
       const mgr = new NostrManager(["flaky"]);
-
       await expect(mgr.relays[0].connect()).resolves.toBeUndefined();
       expect(fakePoolInstance.ensureRelay).toHaveBeenCalledTimes(2);
     });
@@ -185,21 +185,12 @@ describe("NostrManager", () => {
       expect(mgr.relays[0].activeSubs).not.toContain(sub);
     });
 
-    it("subscribes immediately while reconnecting sleeping relays", async () => {
-      let resolveConnect!: () => void;
-      relayConnectMock.mockReturnValueOnce(
-        new Promise<void>((resolve) => {
-          resolveConnect = resolve;
-        })
+    it("subscribes immediately without waiting for slow relay connections", async () => {
+      fakePoolInstance.ensureRelay.mockReturnValueOnce(
+        new Promise(() => {}) // connection attempt that never settles
       );
 
-      const subscribePromise = mgr.subscribe([], {}, ["u1"]);
-      await Promise.resolve();
-
-      expect(fakePoolInstance.subscribeMap).toHaveBeenCalledTimes(1);
-
-      resolveConnect();
-      await subscribePromise;
+      await mgr.subscribe([], {}, ["u1"]);
 
       expect(fakePoolInstance.subscribeMap).toHaveBeenCalledTimes(1);
     });
@@ -233,21 +224,12 @@ describe("NostrManager", () => {
       expect(fakePoolInstance.publish).toHaveBeenCalledWith(["p1"], evt);
     });
 
-    it("awaits reconnect before publishing on sleeping relays", async () => {
-      let resolveConnect!: () => void;
-      relayConnectMock.mockReturnValueOnce(
-        new Promise<void>((resolve) => {
-          resolveConnect = resolve;
-        })
+    it("publishes immediately without waiting for slow relay connections", async () => {
+      fakePoolInstance.ensureRelay.mockReturnValueOnce(
+        new Promise(() => {}) // connection attempt that never settles
       );
 
-      const publishPromise = mgr.publish(evt, ["p1"]);
-      await Promise.resolve();
-
-      expect(fakePoolInstance.publish).not.toHaveBeenCalled();
-
-      resolveConnect();
-      await publishPromise;
+      await expect(mgr.publish(evt, ["p1"])).resolves.toBeUndefined();
 
       expect(fakePoolInstance.publish).toHaveBeenCalledWith(["p1"], evt);
     });
@@ -317,21 +299,11 @@ describe("NostrManager", () => {
       await waitForSubscribeMap();
 
       const params = fakePoolInstance.subscribeMap.mock.calls[0][1];
-      params.onevent({ id: "product-1" });
+      params.onevent({ id: "partial-1" });
+
       latestAbortController!.abort();
-      await Promise.resolve();
 
-      const raceResult = await Promise.race([
-        fetchPromise.then((events: unknown[]) => ({ events })),
-        new Promise((resolve) =>
-          setTimeout(() => resolve({ pending: true }), 0)
-        ),
-      ]);
-
-      params.oneose();
-      await fetchPromise;
-
-      expect(raceResult).toEqual({ events: [{ id: "product-1" }] });
+      await expect(fetchPromise).resolves.toEqual([{ id: "partial-1" }]);
       expect(subClose).toHaveBeenCalledTimes(1);
     });
   });

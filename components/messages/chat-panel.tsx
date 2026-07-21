@@ -28,14 +28,14 @@ import {
 import { ChatObject, NostrMessageEvent } from "../../utils/types/types";
 import ChatMessage from "./chat-message";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
+import { generateKeys } from "@/utils/nostr/key-utilities";
+import { publishReviewEvent } from "@/utils/nostr/nostr-helper-functions";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
-  publishReviewEvent,
-  generateKeys,
-} from "@/utils/nostr/nostr-helper-functions";
+} from "@/utils/nostr/gift-wrap";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { ReviewsContext } from "../../utils/context/context";
 import FailureModal from "../utility-components/failure-modal";
@@ -72,12 +72,10 @@ const ChatPanel = ({
   const [showShippingModal, setShowShippingModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
 
-  const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
-  const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
-  const [randomNpubForReceiver, setRandomNpubForReceiver] =
-    useState<string>("");
-  const [randomNsecForReceiver, setRandomNsecForReceiver] =
-    useState<string>("");
+  const randomNpubForSenderRef = useRef<string>("");
+  const randomNsecForSenderRef = useRef<string>("");
+  const randomNpubForReceiverRef = useRef<string>("");
+  const randomNsecForReceiverRef = useRef<string>("");
 
   const [buyerPubkey, setBuyerPubkey] = useState<string>("");
 
@@ -135,12 +133,12 @@ const ChatPanel = ({
   useEffect(() => {
     const fetchKeys = async () => {
       const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
-      setRandomNpubForSender(npubForSender);
-      setRandomNsecForSender(nsecForSender);
+      randomNpubForSenderRef.current = npubForSender;
+      randomNsecForSenderRef.current = nsecForSender;
       const { nsec: nsecForReceiver, npub: npubForReceiver } =
         await generateKeys();
-      setRandomNpubForReceiver(npubForReceiver);
-      setRandomNsecForReceiver(nsecForReceiver);
+      randomNpubForReceiverRef.current = npubForReceiver;
+      randomNsecForReceiverRef.current = nsecForReceiver;
     };
 
     fetchKeys();
@@ -169,13 +167,17 @@ const ChatPanel = ({
     try {
       if (!signer || !nostr || !buyerPubkey) return;
 
-      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
-      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      const decodedRandomPubkeyForSender = nip19.decode(
+        randomNpubForSenderRef.current
+      );
+      const decodedRandomPrivkeyForSender = nip19.decode(
+        randomNsecForSenderRef.current
+      );
       const decodedRandomPubkeyForReceiver = nip19.decode(
-        randomNpubForReceiver
+        randomNpubForReceiverRef.current
       );
       const decodedRandomPrivkeyForReceiver = nip19.decode(
-        randomNsecForReceiver
+        randomNsecForReceiverRef.current
       );
 
       const shippingInfo = getLatestShippingInfo(messages);
@@ -245,13 +247,17 @@ const ChatPanel = ({
 
   const onShippingSubmit = async (data: { [x: string]: string }) => {
     try {
-      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
-      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      const decodedRandomPubkeyForSender = nip19.decode(
+        randomNpubForSenderRef.current
+      );
+      const decodedRandomPrivkeyForSender = nip19.decode(
+        randomNsecForSenderRef.current
+      );
       const decodedRandomPubkeyForReceiver = nip19.decode(
-        randomNpubForReceiver
+        randomNpubForReceiverRef.current
       );
       const decodedRandomPrivkeyForReceiver = nip19.decode(
-        randomNsecForReceiver
+        randomNsecForReceiverRef.current
       );
 
       // Convert delivery days to future unix timestamp

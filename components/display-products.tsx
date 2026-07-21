@@ -1,10 +1,11 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useMemo } from "react";
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import {
   ProductContext,
   FollowsContext,
   RelaysContext,
+  ReportsContext,
 } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
@@ -27,6 +28,11 @@ import {
   fetchNip50ProductSearch,
   getProductEventKey,
 } from "@/utils/nostr/fetch-service";
+import {
+  getDirectFollowPubkeys,
+  getListingReportSignal,
+  summarizeReportEvents,
+} from "@/utils/nostr/report-moderation";
 import { nip19 } from "nostr-tools";
 
 const isNip19SearchQuery = (search: string) => {
@@ -65,6 +71,7 @@ const DisplayProducts = ({
   const [isNip50SearchLoading, setIsNip50SearchLoading] = useState(false);
   const productEventContext = useContext(ProductContext);
   const followsContext = useContext(FollowsContext);
+  const reportsContext = useContext(ReportsContext);
   const relaysContext = useContext(RelaysContext);
   const [focusedProduct, setFocusedProduct] = useState<ProductData>();
   const [showModal, setShowModal] = useState(false);
@@ -79,6 +86,23 @@ const DisplayProducts = ({
 
   const { nostr } = useContext(NostrContext);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
+  const directFollowPubkeys = useMemo(
+    () =>
+      getDirectFollowPubkeys(
+        followsContext.followList,
+        followsContext.firstDegreeFollowsLength
+      ),
+    [followsContext.followList, followsContext.firstDegreeFollowsLength]
+  );
+  const reportSummaries = useMemo(
+    () =>
+      summarizeReportEvents({
+        reportEvents: reportsContext.reportEvents,
+        directFollowPubkeys,
+        userPubkey,
+      }),
+    [reportsContext.reportEvents, directFollowPubkeys, userPubkey]
+  );
 
   const searchRelaysKey = Array.from(
     new Set([
@@ -109,7 +133,12 @@ const DisplayProducts = ({
   useEffect(() => {
     const normalizedSearch = selectedSearch.trim();
 
-    if (!normalizedSearch || isNip19SearchQuery(normalizedSearch) || !nostr) {
+    if (
+      !normalizedSearch ||
+      isNip19SearchQuery(normalizedSearch) ||
+      !nostr ||
+      typeof nostr.fetch !== "function"
+    ) {
       setNip50ProductEvents([]);
       setIsNip50SearchLoading(false);
       return;
@@ -411,6 +440,10 @@ const DisplayProducts = ({
                     productData={productData}
                     onProductClick={onProductClick}
                     href={getProductHref(productData)}
+                    reportSignal={getListingReportSignal(
+                      productData,
+                      reportSummaries
+                    )}
                   />
                 )
               )}

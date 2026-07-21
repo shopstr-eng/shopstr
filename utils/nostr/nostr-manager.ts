@@ -169,7 +169,10 @@ export class NostrManager {
     for (const relay of relays) {
       relay.activeSubs.push(sub);
     }
-    void this.keepAlive(relays);
+    // Fire-and-forget: subscribeMap() above already connects to each relay
+    // independently and in parallel, so reconnecting sleeping relays must not
+    // delay issuing REQs to healthy relays.
+    this.keepAlive(relays).catch(console.error);
     return sub;
   }
 
@@ -215,6 +218,8 @@ export class NostrManager {
 
         abortSignal.addEventListener("abort", () => {
           closeSubIfNeeded().catch(console.error);
+          // Return whatever healthy relays produced before the aggregate
+          // timeout instead of discarding partial marketplace data.
           resolveFetchedEvents();
         });
 
@@ -249,7 +254,9 @@ export class NostrManager {
     const relays = relayUrls
       ? this.relays.filter((r) => relayUrls.includes(r.url))
       : this.relays;
-    await this.keepAlive(relays);
+    // Fire-and-forget: pool.publish() connects to each relay independently
+    // with its own bounded connection timeout.
+    this.keepAlive(relays).catch(console.error);
     await Promise.allSettled(
       this.pool.publish(
         relays.map((r) => r.url),
@@ -272,23 +279,21 @@ export class NostrManager {
         DEFAULT_CONNECTION_TIMEOUT_MS,
     };
 
-    let relayPromise = this.pool.ensureRelay(relayUrl, relayParams);
-    relayPromise.catch(() => undefined);
-
-    const ensureRelaySafely = (): typeof relayPromise => {
-      relayPromise = this.pool.ensureRelay(relayUrl, relayParams);
+    const watchRelayPromise = (
+      relayPromise: ReturnType<SimplePool["ensureRelay"]>
+    ) => {
       relayPromise.catch(() => undefined);
       return relayPromise;
     };
+    watchRelayPromise(this.pool.ensureRelay(relayUrl, relayParams));
 
     const relay: NostrRelay = {
       url: relayUrl,
       connect: async () => {
-        await ensureRelaySafely();
+        await this.pool.ensureRelay(relayUrl, relayParams);
       },
       disconnect: async () => {
-        const relayHandle = await relayPromise.catch(() => null);
-        relayHandle?.close();
+        this.pool.close([relayUrl]);
       },
       activeSubs: [],
       sleeping: true,

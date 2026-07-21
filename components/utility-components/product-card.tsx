@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   Chip,
   Dropdown,
@@ -30,11 +30,17 @@ import {
   isSellerP2pkEscrowActive,
   isP2pkEscrowFeatureEnabled,
 } from "@/utils/cashu/p2pk-checkout";
+import {
+  EMPTY_REPORT_MODERATION_SIGNAL,
+  getReportModerationLabel,
+  ReportModerationSignal,
+} from "@/utils/nostr/report-moderation";
 
 export default function ProductCard({
   productData,
   onProductClick,
   href,
+  reportSignal = EMPTY_REPORT_MODERATION_SIGNAL,
 }: {
   productData: ProductData;
   onProductClick?: (
@@ -42,9 +48,16 @@ export default function ProductCard({
     e?: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>
   ) => void;
   href?: string | null;
+  reportSignal?: ReportModerationSignal;
 }) {
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
+  const [hasRevealedReportedContent, setHasRevealedReportedContent] =
+    useState(false);
+
+  useEffect(() => {
+    setHasRevealedReportedContent(false);
+  }, [reportSignal.level]);
 
   const router = useRouter();
   const { pubkey: userPubkey } = useContext(SignerContext);
@@ -183,6 +196,17 @@ export default function ProductCard({
   };
 
   const isCardInteractive = Boolean(href || onProductClick);
+  const shouldBlurReportedContent =
+    reportSignal.level === "reported_by_you" ||
+    reportSignal.level === "trusted_blur";
+  const isReportContentBlurred =
+    shouldBlurReportedContent && !hasRevealedReportedContent;
+  const reportLabel = getReportModerationLabel(reportSignal, "listing");
+  const reportDescription =
+    reportSignal.level === "reported_by_you"
+      ? "You flagged this listing."
+      : "Reported by trusted marketplace contacts.";
+  const revealReportedContent = () => setHasRevealedReportedContent(true);
 
   const handleNjumpClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -303,6 +327,22 @@ export default function ProductCard({
               </div>
             )}
 
+            {reportSignal.level !== "none" && (
+              <div className="mb-2 flex items-center gap-2">
+                <Chip
+                  color={
+                    reportSignal.level === "trusted_warning"
+                      ? "warning"
+                      : "danger"
+                  }
+                  size="sm"
+                  variant="flat"
+                >
+                  {reportLabel}
+                </Chip>
+              </div>
+            )}
+
             {/* Price */}
             <div className="mb-3">
               {!isZapsnag ? (
@@ -381,7 +421,26 @@ export default function ProductCard({
     <div
       className={`${cardHoverStyle} my-4 w-full rounded-2xl bg-white shadow-md transition-all duration-300 dark:bg-neutral-900`}
     >
-      <div className="w-full overflow-hidden rounded-2xl">{content}</div>
+      <div className="relative w-full overflow-hidden rounded-2xl">
+        <div
+          aria-hidden={isReportContentBlurred}
+          inert={isReportContentBlurred}
+          className={isReportContentBlurred ? "blur-sm" : ""}
+        >
+          {content}
+        </div>
+        {isReportContentBlurred && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/55 p-4 text-center text-white">
+            <div>
+              <p className="text-base font-semibold">{reportLabel}</p>
+              <p className="text-sm opacity-90">{reportDescription}</p>
+            </div>
+            <Button size="sm" variant="flat" onPress={revealReportedContent}>
+              Show listing
+            </Button>
+          </div>
+        )}
+      </div>
       <RawEventModal
         isOpen={showRawEventModal}
         onClose={() => setShowRawEventModal(false)}

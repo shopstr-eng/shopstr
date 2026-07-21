@@ -2,6 +2,7 @@ import CryptoJS from "crypto-js";
 import { verifyEvent } from "nostr-tools";
 import type { NextApiRequest } from "next";
 import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+import { getTagValue } from "@/utils/nostr/tag-utils";
 
 type NostrHttpAuthEvent = {
   id: string;
@@ -25,15 +26,16 @@ function toBase64(value: string): string {
     return Buffer.from(value, "utf-8").toString("base64");
   }
 
-  return btoa(value);
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
 }
 
 function fromBase64(value: string): string {
   return Buffer.from(value, "base64").toString("utf-8");
-}
-
-function getTagValue(tags: string[][], key: string): string | undefined {
-  return tags.find((tag) => tag[0] === key)?.[1];
 }
 
 function getRequestOrigin(req: NextApiRequest): string {

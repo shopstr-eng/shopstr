@@ -15,10 +15,7 @@ import {
 } from "crypto";
 import { NostrEvent } from "@/utils/types/types";
 import { cacheEvent } from "@/utils/db/db-service";
-import {
-  getDefaultRelays,
-  withBlastr,
-} from "@/utils/nostr/nostr-helper-functions";
+import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
 
 const ALGORITHM = "aes-256-gcm";
 

@@ -6,7 +6,7 @@ import {
   signAndPublishEvent,
 } from "@/utils/mcp/nostr-signing";
 import { ApiKeyRecord, getAgentSigner } from "@/utils/mcp/auth";
-import { EventTemplate } from "nostr-tools";
+import { EventTemplate, getEventHash } from "nostr-tools";
 import { cacheEvent, getDbPool } from "@/utils/db/db-service";
 import { v4 as uuidv4 } from "uuid";
 import dns from "dns";
@@ -23,6 +23,8 @@ import {
   buildSignedHttpRequestProofTemplate,
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
+import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
+import { createGiftWrapEvent } from "@/utils/nostr/gift-wrap";
 
 const resolveCname = promisify(dns.resolveCname);
 const resolve4 = promisify(dns.resolve4);
@@ -1393,18 +1395,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const {
-          generateSecretKey,
-          getPublicKey,
-          finalizeEvent,
-          getEventHash,
-          nip44,
-        } = await import("nostr-tools");
-
         const senderPubkey = signer.getPubKey();
-        const { getDefaultRelays, withBlastr } =
-          await import("@/utils/nostr/nostr-helper-functions");
-
         const defaultRelays = getDefaultRelays();
         const relayHint = defaultRelays[0] || "wss://relay.damus.io";
 
@@ -1444,86 +1435,18 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const innerEventId = getEventHash(innerEventForHash as any);
         const fullInnerEvent = { id: innerEventId, ...innerEvent };
 
-        const randomPrivKey = generateSecretKey();
-        const randomPubKey = getPublicKey(randomPrivKey);
+        const stringifiedInner = JSON.stringify(fullInnerEvent);
 
-        async function createGiftWrap(
-          targetPubkey: string,
-          sealPubkey: string,
-          useRandomKey: boolean
-        ) {
-          const stringifiedInner = JSON.stringify(fullInnerEvent);
-          let encryptedSealContent: string;
-
-          if (useRandomKey) {
-            const conversationKey = nip44.getConversationKey(
-              randomPrivKey,
-              targetPubkey
-            );
-            encryptedSealContent = nip44.encrypt(
-              stringifiedInner,
-              conversationKey
-            );
-          } else {
-            encryptedSealContent = signer!.encrypt(
-              targetPubkey,
-              stringifiedInner
-            );
-          }
-
-          const now = Math.floor(Date.now() / 1000);
-          const randomOffset = Math.floor(Math.random() * 172800);
-          const sealTimestamp = now - randomOffset;
-
-          const sealEvent = {
-            pubkey: sealPubkey,
-            created_at: sealTimestamp,
-            content: encryptedSealContent,
-            kind: 13,
-            tags: [] as string[][],
-          };
-
-          let signedSeal;
-          if (useRandomKey) {
-            signedSeal = finalizeEvent(sealEvent, randomPrivKey);
-          } else {
-            signedSeal = signer!.sign(sealEvent);
-          }
-
-          const wrapPrivKey = generateSecretKey();
-          const wrapPubKey = getPublicKey(wrapPrivKey);
-
-          const stringifiedSeal = JSON.stringify(signedSeal);
-          const wrapConversationKey = nip44.getConversationKey(
-            wrapPrivKey,
-            targetPubkey
-          );
-          const encryptedWrap = nip44.encrypt(
-            stringifiedSeal,
-            wrapConversationKey
-          );
-
-          const wrapTimestamp = now - Math.floor(Math.random() * 172800);
-          const giftWrapEvent = {
-            pubkey: wrapPubKey,
-            created_at: wrapTimestamp,
-            content: encryptedWrap,
-            kind: 1059,
-            tags: [["p", targetPubkey, relayHint]],
-          };
-
-          return finalizeEvent(giftWrapEvent, wrapPrivKey);
-        }
-
-        const recipientWrap = await createGiftWrap(
+        const recipientWrap = await createGiftWrapEvent(
+          stringifiedInner,
           params.recipientPubkey,
-          senderPubkey,
-          false
+          { signer, relayHint }
         );
-        const senderWrap = await createGiftWrap(
+
+        const senderWrap = await createGiftWrapEvent(
+          stringifiedInner,
           senderPubkey,
-          randomPubKey,
-          true
+          { relayHint }
         );
 
         const relayManager = new McpRelayManager(withBlastr(defaultRelays));
@@ -1602,12 +1525,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           (params.productTitle ? ` (${params.productTitle})` : "") +
           `\n\nNew Address: ${params.newAddress}`;
 
-        const { generateSecretKey, finalizeEvent, getEventHash, nip44 } =
-          await import("nostr-tools");
-
         const senderPubkey = signer.getPubKey();
-        const { getDefaultRelays, withBlastr } =
-          await import("@/utils/nostr/nostr-helper-functions");
         const defaultRelays = getDefaultRelays();
 
         const innerEvent = {
@@ -1627,55 +1545,10 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const innerEventId = getEventHash(innerEventForHash as any);
         const fullInnerEvent = { id: innerEventId, ...innerEvent };
 
-        const randomPrivKey = generateSecretKey();
-
-        async function createAddressChangeWrap(targetPubkey: string) {
-          const stringifiedInner = JSON.stringify(fullInnerEvent);
-          const conversationKey = nip44.getConversationKey(
-            randomPrivKey,
-            targetPubkey
-          );
-          const encryptedSealContent = nip44.encrypt(
-            stringifiedInner,
-            conversationKey
-          );
-
-          const now = Math.floor(Date.now() / 1000);
-          const randomOffset = Math.floor(Math.random() * 172800);
-          const sealTimestamp = now - randomOffset;
-
-          const sealEvent = {
-            created_at: sealTimestamp,
-            kind: 13,
-            tags: [],
-            content: encryptedSealContent,
-          };
-
-          const signedSeal = finalizeEvent(sealEvent, randomPrivKey);
-
-          const wrapPrivKey = generateSecretKey();
-          const wrapConversationKey = nip44.getConversationKey(
-            wrapPrivKey,
-            targetPubkey
-          );
-          const wrapContent = nip44.encrypt(
-            JSON.stringify(signedSeal),
-            wrapConversationKey
-          );
-
-          const wrapTimestamp = now - Math.floor(Math.random() * 172800);
-
-          const wrapEvent = {
-            created_at: wrapTimestamp,
-            kind: 1059,
-            tags: [["p", targetPubkey]],
-            content: wrapContent,
-          };
-
-          return finalizeEvent(wrapEvent, wrapPrivKey);
-        }
-
-        const sellerWrap = await createAddressChangeWrap(params.sellerPubkey);
+        const sellerWrap = await createGiftWrapEvent(
+          JSON.stringify(fullInnerEvent),
+          params.sellerPubkey
+        );
 
         const relayManager = new McpRelayManager(withBlastr(defaultRelays));
 
@@ -1757,11 +1630,6 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        const { generateSecretKey, finalizeEvent, getEventHash, nip44 } =
-          await import("nostr-tools");
-        const { getDefaultRelays, withBlastr } =
-          await import("@/utils/nostr/nostr-helper-functions");
-
         const senderPubkey = signer.getPubKey();
         const defaultRelays = getDefaultRelays();
         const relayHint: string =
@@ -1815,50 +1683,10 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const innerEventId = getEventHash(innerEventForHash as any);
         const fullInnerEvent = { id: innerEventId, ...innerEvent };
 
-        const randomPrivKey = generateSecretKey();
-
-        async function createWrap(targetPubkey: string) {
-          const stringifiedInner = JSON.stringify(fullInnerEvent);
-          const conversationKey = nip44.getConversationKey(
-            randomPrivKey,
-            targetPubkey
-          );
-          const encryptedContent = nip44.encrypt(
-            stringifiedInner,
-            conversationKey
-          );
-
-          const now = Math.floor(Date.now() / 1000);
-          const sealEvent = {
-            created_at: now - Math.floor(Math.random() * 172800),
-            kind: 13,
-            tags: [],
-            content: encryptedContent,
-          };
-          const signedSeal = finalizeEvent(sealEvent, randomPrivKey);
-
-          const wrapPrivKey = generateSecretKey();
-          const wrapConversationKey = nip44.getConversationKey(
-            wrapPrivKey,
-            targetPubkey
-          );
-          const wrapContent = nip44.encrypt(
-            JSON.stringify(signedSeal),
-            wrapConversationKey
-          );
-
-          return finalizeEvent(
-            {
-              created_at: now - Math.floor(Math.random() * 172800),
-              kind: 1059,
-              tags: [["p", targetPubkey]],
-              content: wrapContent,
-            },
-            wrapPrivKey
-          );
-        }
-
-        const buyerWrap = await createWrap(order.buyer_pubkey);
+        const buyerWrap = await createGiftWrapEvent(
+          JSON.stringify(fullInnerEvent),
+          order.buyer_pubkey
+        );
 
         const relayManager = new McpRelayManager(withBlastr(defaultRelays));
 
@@ -1989,11 +1817,6 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         if (params.buyerPubkey && params.message) {
           try {
-            const { generateSecretKey, finalizeEvent, getEventHash, nip44 } =
-              await import("nostr-tools");
-            const { getDefaultRelays, withBlastr } =
-              await import("@/utils/nostr/nostr-helper-functions");
-
             const senderPubkey = signer.getPubKey();
             const defaultRelays = getDefaultRelays();
             const relayHint: string =
@@ -2031,45 +1854,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             const innerEventId = getEventHash(innerEventForHash as any);
             const fullInnerEvent = { id: innerEventId, ...innerEvent };
 
-            const randomPrivKey = generateSecretKey();
-
-            const stringifiedInner = JSON.stringify(fullInnerEvent);
-            const conversationKey = nip44.getConversationKey(
-              randomPrivKey,
+            const wrapEvent = await createGiftWrapEvent(
+              JSON.stringify(fullInnerEvent),
               buyerPubkey
-            );
-            const encryptedContent = nip44.encrypt(
-              stringifiedInner,
-              conversationKey
-            );
-
-            const now = Math.floor(Date.now() / 1000);
-            const sealEvent = {
-              created_at: now - Math.floor(Math.random() * 172800),
-              kind: 13,
-              tags: [],
-              content: encryptedContent,
-            };
-            const signedSeal = finalizeEvent(sealEvent, randomPrivKey);
-
-            const wrapPrivKey = generateSecretKey();
-            const wrapConversationKey = nip44.getConversationKey(
-              wrapPrivKey,
-              buyerPubkey
-            );
-            const wrapContent = nip44.encrypt(
-              JSON.stringify(signedSeal),
-              wrapConversationKey
-            );
-
-            const wrapEvent = finalizeEvent(
-              {
-                created_at: now - Math.floor(Math.random() * 172800),
-                kind: 1059,
-                tags: [["p", buyerPubkey]],
-                content: wrapContent,
-              },
-              wrapPrivKey
             );
 
             const relayManager = new McpRelayManager(withBlastr(defaultRelays));
@@ -2729,9 +2516,6 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         });
         const encryptedContent = signer.encrypt(pubkey, proofData);
 
-        const { getDefaultRelays, withBlastr } =
-          await import("@/utils/nostr/nostr-helper-functions");
-
         const relays = withBlastr(getDefaultRelays());
         const tags: string[][] = [["mint", mintUrl]];
         for (const relay of relays) {
@@ -2789,9 +2573,6 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           pubkey,
           JSON.stringify(mintTags)
         );
-
-        const { getDefaultRelays, withBlastr } =
-          await import("@/utils/nostr/nostr-helper-functions");
 
         const relays = withBlastr(getDefaultRelays());
         const tags: string[][] = [["d", pubkey]];

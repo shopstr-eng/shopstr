@@ -120,6 +120,7 @@ describe("ProductCard", () => {
       expect(screen.getByTestId("image-carousel")).toBeInTheDocument();
       expect(screen.getByTestId("profile-dropdown")).toBeInTheDocument();
       expect(screen.getByText("Test Product")).toBeInTheDocument();
+      expect(screen.queryByText("Active")).not.toBeInTheDocument();
     });
 
     it("calls onProductClick when the card is clicked", () => {
@@ -226,6 +227,50 @@ describe("ProductCard", () => {
         <ProductCard productData={{ ...mockProductData, status: "sold" }} />
       );
       expect(screen.getByText("Sold")).toBeInTheDocument();
+    });
+
+    it("shows a trusted report warning without hiding the listing", () => {
+      renderWithContext(
+        <ProductCard
+          productData={mockProductData}
+          reportSignal={{
+            level: "trusted_warning",
+            reportCount: 1,
+            reportTypes: ["spam"],
+          }}
+        />
+      );
+
+      expect(screen.getByText("1 trusted listing report")).toBeInTheDocument();
+      expect(screen.queryByText("Show listing")).not.toBeInTheDocument();
+    });
+
+    it("blurs a listing with enough trusted reports until revealed", () => {
+      renderWithContext(
+        <ProductCard
+          productData={mockProductData}
+          href="/listing/test-slug"
+          reportSignal={{
+            level: "trusted_blur",
+            reportCount: 3,
+            reportTypes: ["illegal"],
+          }}
+        />
+      );
+
+      expect(
+        screen.getAllByText("3 trusted listing reports").length
+      ).toBeGreaterThan(0);
+      expect(
+        screen.getByText("Reported by trusted marketplace contacts.")
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText("Test Product").closest("[inert]")
+      ).not.toBeNull();
+
+      fireEvent.click(screen.getByText("Show listing"));
+      expect(screen.queryByText("Show listing")).not.toBeInTheDocument();
+      expect(screen.getByText("Test Product").closest("[inert]")).toBeNull();
     });
   });
 });
