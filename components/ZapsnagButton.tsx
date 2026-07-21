@@ -25,7 +25,53 @@ import {
 import { generateSecretKey, getPublicKey } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
-import { validateZapReceipt } from "@/utils/nostr/zap-validator";
+import {
+  validateZapReceipt,
+  validateSingleReceipt,
+} from "@/utils/nostr/zap-validator";
+import type { NostrManager } from "@/utils/nostr/nostr-manager";
+
+type SellerZapContext = {
+  lightningAddress: LightningAddress;
+  zapRecipientPubkey: string;
+};
+
+async function resolveSellerZapContext(
+  nostrManager: NostrManager,
+  sellerPubkey: string
+): Promise<SellerZapContext> {
+  const profileFilter = { kinds: [0], authors: [sellerPubkey] };
+  const events = await nostrManager.fetch([profileFilter]);
+  let lud16 = "";
+
+  if (events.length > 0) {
+    const kind0 = [...events].sort((a, b) => b.created_at - a.created_at)[0];
+    if (kind0) {
+      try {
+        const content = JSON.parse(kind0.content || "{}");
+        lud16 = content.lud16 || content.lnurl || "";
+      } catch (e) {
+        console.warn("Failed to parse seller profile", e);
+      }
+    }
+  }
+
+  if (!lud16) {
+    throw new Error("Seller has not set up a Lightning Address (LUD16).");
+  }
+
+  const lightningAddress = new LightningAddress(lud16);
+  await lightningAddress.fetch();
+
+  if (!lightningAddress.nostrPubkey) {
+    throw new Error("Seller Lightning Address does not support NIP-57 zaps.");
+  }
+
+  return {
+    lightningAddress,
+    zapRecipientPubkey: lightningAddress.nostrPubkey,
+  };
+}
 
 export default function ZapsnagButton({ product }: { product: ProductData }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -63,7 +109,10 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
 
   useEffect(() => {
     const checkInventory = async () => {
-      if (!nostrManager || !product.id) return;
+      if (!nostrManager || !product.id) {
+        setIsCheckingInventory(false);
+        return;
+      }
 
       if (!product.quantity || product.quantity <= 0) {
         setIsCheckingInventory(false);
@@ -71,9 +120,25 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       }
 
       try {
+        const { zapRecipientPubkey } = await resolveSellerZapContext(
+          nostrManager,
+          product.pubkey
+        );
         const filter = { kinds: [9735], "#e": [product.id] };
-        const zaps = await nostrManager.fetch([filter]);
-        setSoldCount(zaps.length);
+        const events = await nostrManager.fetch([filter]);
+        let count = 0;
+        for (const event of events) {
+          const result = validateSingleReceipt(event, {
+            productId: product.id,
+            expectedRecipientPubkey: zapRecipientPubkey,
+            expectedReceiptSignerPubkey: zapRecipientPubkey,
+            expectedAmountSats: product.price,
+            minTimestamp: 0,
+            skipFreshnessCheck: true,
+          });
+          if (result.valid) count++;
+        }
+        setSoldCount(count);
       } catch (e) {
         console.error("Failed to check inventory", e);
       } finally {
@@ -81,12 +146,24 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       }
     };
     checkInventory();
-  }, [nostrManager, product.id, product.quantity]);
+  }, [
+    nostrManager,
+    product.id,
+    product.price,
+    product.pubkey,
+    product.quantity,
+  ]);
 
   const handleBuy = async () => {
     let originalWebLN: any;
     if (!signer || !isLoggedIn || !userPubkey) {
       alert("Please sign in to purchase.");
+      return;
+    }
+
+    if (!nostrManager) {
+      alert("Connection error: unable to verify payment.");
+      setLoading(false);
       return;
     }
 
@@ -98,27 +175,8 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
     setLoading(true);
     setStatus("Finding seller address...");
     try {
-      const profileFilter = { kinds: [0], authors: [product.pubkey] };
-      const events = (await nostrManager?.fetch([profileFilter])) || [];
-      let lud16 = "";
-
-      if (events.length > 0) {
-        const kind0 = [...events].sort(
-          (a, b) => b.created_at - a.created_at
-        )[0];
-        if (kind0) {
-          try {
-            const content = JSON.parse(kind0.content || "{}");
-            lud16 = content.lud16 || content.lnurl || "";
-          } catch (e) {
-            console.warn("Failed to parse seller profile", e);
-          }
-        }
-      }
-
-      if (!lud16) {
-        throw new Error("Seller has not set up a Lightning Address (LUD16).");
-      }
+      const { lightningAddress: ln, zapRecipientPubkey } =
+        await resolveSellerZapContext(nostrManager, product.pubkey);
 
       originalWebLN = (window as any).webln;
       const { nwcString } = getLocalStorageData();
@@ -176,8 +234,6 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       await sendGiftWrappedMessageEvent(nostrManager!, finalEvent, signer);
 
       setStatus("Paying via Lightning...");
-      const ln = new LightningAddress(lud16);
-      await ln.fetch();
 
       const { relays: userRelays } = getLocalStorageData();
       const targetRelays =
@@ -202,13 +258,16 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
         );
 
         setStatus("Verifying receipt...");
-        const receiptFound = await validateZapReceipt(
-          nostrManager!,
-          product.id,
-          startTime
-        );
+        const receiptResult = await validateZapReceipt(nostrManager, {
+          productId: product.id,
+          expectedRecipientPubkey: zapRecipientPubkey,
+          expectedReceiptSignerPubkey: zapRecipientPubkey,
+          expectedAmountSats: product.price,
+          minTimestamp: startTime,
+          expectedPreimage: response.preimage,
+        });
 
-        if (receiptFound) {
+        if (receiptResult.valid) {
           alert(
             "Order Placed & Verified! Preimage: " +
               response.preimage.substring(0, 8) +
