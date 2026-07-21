@@ -8,14 +8,23 @@ const loadMintMock = jest.fn();
 const getSatoshiValueMock = jest.fn();
 var mockCashuMint: jest.Mock;
 
-jest.mock("@/utils/db/db-service", () => ({
-  fetchProductByDTagAndPubkey: (...args: unknown[]) =>
-    fetchProductByDTagAndPubkeyMock(...args),
-  fetchProductByIdFromDb: (...args: unknown[]) =>
-    fetchProductByIdFromDbMock(...args),
-  validateDiscountCode: (...args: unknown[]) =>
-    validateDiscountCodeMock(...args),
-}));
+jest.mock("@/utils/db/db-service", () => {
+  class DatabaseUnavailableError extends Error {
+    constructor(message = "Database unavailable") {
+      super(message);
+      this.name = "DatabaseUnavailableError";
+    }
+  }
+  return {
+    DatabaseUnavailableError,
+    fetchProductByDTagAndPubkey: (...args: unknown[]) =>
+      fetchProductByDTagAndPubkeyMock(...args),
+    fetchProductByIdFromDb: (...args: unknown[]) =>
+      fetchProductByIdFromDbMock(...args),
+    validateDiscountCode: (...args: unknown[]) =>
+      validateDiscountCodeMock(...args),
+  };
+});
 
 jest.mock("@getalby/lightning-tools", () => ({
   getSatoshiValue: (...args: unknown[]) => getSatoshiValueMock(...args),
@@ -23,6 +32,8 @@ jest.mock("@getalby/lightning-tools", () => ({
 
 jest.mock("@cashu/cashu-ts", () => {
   mockCashuMint = jest.fn().mockImplementation((url: string) => ({ url }));
+  class HttpResponseError extends Error {}
+  class RateLimitError extends Error {}
   return {
     Mint: mockCashuMint,
     Wallet: jest.fn().mockImplementation(() => ({
@@ -30,10 +41,13 @@ jest.mock("@cashu/cashu-ts", () => {
       createMintQuoteBolt11: (...args: unknown[]) =>
         createMintQuoteBolt11Mock(...args),
     })),
+    HttpResponseError,
+    RateLimitError,
   };
 });
 
 import handler from "@/pages/api/listing/mint-quote";
+import { DatabaseUnavailableError } from "@/utils/db/db-service";
 import { __resetRateLimitBuckets } from "@/utils/rate-limit";
 
 function createResponse() {
@@ -118,14 +132,18 @@ describe("/api/listing/mint-quote", () => {
     );
 
     expect(res.statusCode).toBe(200);
-    expect(fetchProductByIdFromDbMock).toHaveBeenCalledWith("product-1");
+    expect(fetchProductByIdFromDbMock).toHaveBeenCalledWith("product-1", {
+      rethrow: true,
+    });
     expect(fetchProductByDTagAndPubkeyMock).toHaveBeenCalledWith(
       "listing-d",
-      "seller-pubkey"
+      "seller-pubkey",
+      { rethrow: true }
     );
     expect(validateDiscountCodeMock).toHaveBeenCalledWith(
       "SAVE10",
-      "seller-pubkey"
+      "seller-pubkey",
+      { rethrow: true }
     );
     expect(createMintQuoteBolt11Mock).toHaveBeenCalledWith(100);
     expect(mockCashuMint).toHaveBeenCalledWith(
@@ -200,6 +218,84 @@ describe("/api/listing/mint-quote", () => {
       error: "Volume selection is required",
     });
     expect(createMintQuoteBolt11Mock).not.toHaveBeenCalled();
+  });
+
+  it("returns price without creating a quote in priceOnly mode", async () => {
+    const res = createResponse();
+
+    await handler(
+      createRequest({
+        productId: "product-1",
+        formType: "shipping",
+        priceOnly: true,
+      }),
+      res as unknown as NextApiResponse
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonBody).toMatchObject({
+      amount: 110,
+      mintUrl: "https://mint.minibits.cash/Bitcoin",
+    });
+    expect(loadMintMock).not.toHaveBeenCalled();
+    expect(createMintQuoteBolt11Mock).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when the listing does not exist", async () => {
+    fetchProductByIdFromDbMock.mockResolvedValue(null);
+    const res = createResponse();
+
+    await handler(
+      createRequest({ productId: "missing", formType: "shipping" }),
+      res as unknown as NextApiResponse
+    );
+
+    expect(res.statusCode).toBe(404);
+    expect(res.jsonBody).toMatchObject({ error: "Product not found" });
+  });
+
+  it("returns 503 when the database is unavailable instead of 404", async () => {
+    fetchProductByIdFromDbMock.mockRejectedValue(
+      new DatabaseUnavailableError()
+    );
+    const res = createResponse();
+
+    await handler(
+      createRequest({ productId: "product-1", formType: "shipping" }),
+      res as unknown as NextApiResponse
+    );
+
+    expect(res.statusCode).toBe(503);
+    expect(createMintQuoteBolt11Mock).not.toHaveBeenCalled();
+  });
+
+  it("returns 502 when the mint operation fails", async () => {
+    createMintQuoteBolt11Mock.mockRejectedValue(new Error("mint exploded"));
+    const res = createResponse();
+
+    await handler(
+      createRequest({ productId: "product-1", formType: "shipping" }),
+      res as unknown as NextApiResponse
+    );
+
+    expect(res.statusCode).toBe(502);
+    expect(JSON.stringify(res.jsonBody)).not.toContain("mint exploded");
+  });
+
+  it("returns a generic 500 without leaking internal error details", async () => {
+    fetchProductByIdFromDbMock.mockRejectedValue(
+      new Error("connection string postgres://secret")
+    );
+    const res = createResponse();
+
+    await handler(
+      createRequest({ productId: "product-1", formType: "shipping" }),
+      res as unknown as NextApiResponse
+    );
+
+    expect(res.statusCode).toBe(500);
+    expect(res.jsonBody).toEqual({ error: "Failed to create invoice" });
+    expect(JSON.stringify(res.jsonBody)).not.toContain("postgres://");
   });
 
   it("ignores buyer-supplied mint URLs and uses the trusted server mint", async () => {

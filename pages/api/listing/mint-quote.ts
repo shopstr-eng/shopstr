@@ -1,16 +1,19 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getSatoshiValue } from "@getalby/lightning-tools";
 import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
-import {
-  fetchProductByDTagAndPubkey,
-  fetchProductByIdFromDb,
-  validateDiscountCode,
-} from "@/utils/db/db-service";
-import { parseTags } from "@/utils/parsers/product-parser-functions";
+import { validateDiscountCode } from "@/utils/db/db-service";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
-import { computeListingPricing } from "@/utils/payments/listing-pricing";
+import {
+  computeListingPricing,
+  parseSelectedBulkOption,
+  PricingValidationError,
+} from "@/utils/payments/listing-pricing";
 import type { ListingOrderFormType } from "@/utils/payments/listing-pricing";
+import {
+  resolveLatestListing,
+  respondWithQuoteRouteError,
+} from "@/utils/payments/listing-resolution";
 import { applyRateLimit } from "@/utils/rate-limit";
 import { getTrustedMintUrl } from "@/utils/cashu/trusted-mints";
 
@@ -24,20 +27,8 @@ type MintQuoteRequest = {
   selectedWeight?: string;
   selectedBulkOption?: number | string;
   discountCode?: string;
+  priceOnly?: boolean;
 };
-
-function parseSelectedBulkOption(value: number | string | undefined) {
-  if (value === undefined || value === "" || value === 1 || value === "1") {
-    return undefined;
-  }
-
-  const parsed = typeof value === "number" ? value : Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    throw new Error("Invalid bulk tier");
-  }
-
-  return parsed;
-}
 
 async function convertListingTotalToSats(total: number, currency: string) {
   const normalizedCurrency = currency.toLowerCase();
@@ -50,7 +41,7 @@ async function convertListingTotalToSats(total: number, currency: string) {
     currency,
   });
 
-  return toCashuMintAmountSats(Math.round(sats));
+  return toCashuMintAmountSats(sats);
 }
 
 export default async function handler(
@@ -75,6 +66,7 @@ export default async function handler(
     selectedWeight,
     selectedBulkOption,
     discountCode,
+    priceOnly = false,
   } = req.body as MintQuoteRequest;
 
   if (!productId) {
@@ -82,39 +74,18 @@ export default async function handler(
   }
 
   try {
-    let productEvent = await fetchProductByIdFromDb(productId);
-
-    if (!productEvent) {
-      return res.status(404).json({ error: "Product not found" });
-    }
-
-    const requestedProduct = parseTags(productEvent);
-    if (!requestedProduct) {
-      return res.status(500).json({ error: "Failed to parse product data" });
-    }
-
-    if (requestedProduct.d) {
-      productEvent =
-        (await fetchProductByDTagAndPubkey(
-          requestedProduct.d,
-          requestedProduct.pubkey
-        )) ?? productEvent;
-    }
-
-    const product = parseTags(productEvent);
-    if (!product) {
-      return res.status(500).json({ error: "Failed to parse product data" });
-    }
+    const product = await resolveLatestListing(productId);
 
     let discountPercentage = 0;
     if (discountCode?.trim()) {
       const discountResult = await validateDiscountCode(
         discountCode,
-        product.pubkey
+        product.pubkey,
+        { rethrow: true }
       );
 
       if (!discountResult.valid || !discountResult.discount_percentage) {
-        return res.status(400).json({ error: "Invalid discount code" });
+        throw new PricingValidationError("Invalid discount code");
       }
 
       discountPercentage = discountResult.discount_percentage;
@@ -134,6 +105,14 @@ export default async function handler(
     );
     const mint = getTrustedMintUrl();
 
+    if (priceOnly) {
+      return res.status(200).json({
+        amount,
+        mintUrl: mint,
+        pricing,
+      });
+    }
+
     const wallet = new CashuWallet(new CashuMint(mint));
     await wallet.loadMint();
 
@@ -150,10 +129,6 @@ export default async function handler(
       pricing,
     });
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Failed to create listing invoice";
-    return res.status(400).json({ error: message });
+    return respondWithQuoteRouteError(res, error);
   }
 }

@@ -95,6 +95,11 @@ type ListingMintQuoteResponse = {
   pricing: ListingPricingResult;
 };
 
+type ListingPriceOnlyResponse = Omit<
+  ListingMintQuoteResponse,
+  "request" | "quote"
+>;
+
 export default function ProductInvoiceCard({
   productData,
   setIsBeingPaid,
@@ -700,6 +705,60 @@ export default function ProductInvoiceCard({
       return quote;
     };
 
+  /**
+   * Server-side repricing without creating a mint quote. Used by the Cashu
+   * path, which spends from the buyer's wallet directly and therefore needs
+   * the validated amount but no bolt11 invoice.
+   */
+  const requestListingPriceQuote =
+    async (): Promise<ListingPriceOnlyResponse> => {
+      const response = await fetch("/api/listing/mint-quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: productData.id,
+          formType,
+          selectedSize,
+          selectedVolume,
+          selectedWeight,
+          selectedBulkOption,
+          discountCode,
+          priceOnly: true,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          typeof payload.error === "string"
+            ? payload.error
+            : "Failed to verify the listing price"
+        );
+      }
+
+      const quote = payload as ListingPriceOnlyResponse;
+      validateQuoteMatchesSelectedListingOptions(quote);
+      return quote;
+    };
+
+  /**
+   * Guards automatic payment paths (NWC / Cashu) against paying more than
+   * the buyer was shown. Listings can be repriced between page load and
+   * checkout; a small tolerance — max(2 sats, 1%) — absorbs rounding and
+   * exchange-rate drift, anything above it aborts before funds move.
+   */
+  const assertServerAmountWithinTolerance = (
+    serverAmount: number,
+    displayedAmount: number
+  ) => {
+    const tolerance = Math.max(2, Math.ceil(displayedAmount * 0.01));
+    if (serverAmount - displayedAmount > tolerance) {
+      throw new Error(
+        `The verified price (${serverAmount} sats) is higher than the displayed price (${displayedAmount} sats). The listing may have been updated — please refresh and try again.`
+      );
+    }
+  };
+
   const updatePendingOrderAmount = (amount: number) => {
     if (pendingOrderRef.current) {
       pendingOrderRef.current.amount = String(amount);
@@ -717,7 +776,7 @@ export default function ProductInvoiceCard({
   };
 
   const validateQuoteMatchesSelectedListingOptions = (
-    quote: ListingMintQuoteResponse
+    quote: Pick<ListingMintQuoteResponse, "pricing">
   ) => {
     if (!quote.pricing) {
       throw new Error(
@@ -938,6 +997,10 @@ export default function ProductInvoiceCard({
         mintUrl,
       } = await createListingMintQuote();
       const serverInvoiceAmount = toCashuMintAmountSats(amount);
+      // NWC pays automatically without showing the buyer an invoice, so a
+      // silent server-side repricing above the displayed price must abort
+      // before the wallet is charged.
+      assertServerAmountWithinTolerance(serverInvoiceAmount, invoiceAmount);
       updatePendingOrderAmount(serverInvoiceAmount);
       const wallet = new CashuWallet(new CashuMint(mintUrl));
       await wallet.loadMint();
@@ -2051,6 +2114,14 @@ export default function ProductInvoiceCard({
         validatePaymentData(price);
       }
 
+      // Cashu spends from the buyer's wallet without a confirmation step, so
+      // reprice the listing server-side first and refuse to spend materially
+      // more than the buyer was shown.
+      const priceQuote = await requestListingPriceQuote();
+      const serverAmount = toCashuMintAmountSats(priceQuote.amount);
+      assertServerAmountWithinTolerance(serverAmount, price);
+      updatePendingOrderAmount(serverAmount);
+
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
       await wallet.loadMint();
@@ -2077,7 +2148,7 @@ export default function ProductInvoiceCard({
       const changeProofs = await sendTokens(
         wallet,
         filteredProofs,
-        price,
+        serverAmount,
         mints[0]!,
         data.shippingName ? data.shippingName : undefined,
         data.shippingAddress ? data.shippingAddress : undefined,
@@ -2102,7 +2173,11 @@ export default function ProductInvoiceCard({
       localStorage.setItem(
         "history",
         JSON.stringify([
-          { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
+          {
+            type: 5,
+            amount: serverAmount,
+            date: Math.floor(Date.now() / 1000),
+          },
           ...currentHistory,
         ])
       );
@@ -2112,7 +2187,7 @@ export default function ProductInvoiceCard({
         mints[0]!,
         changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
-        price.toString(),
+        serverAmount.toString(),
         deletedEventIds
       );
       setCashuPaymentSent(true);

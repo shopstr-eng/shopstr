@@ -100,6 +100,9 @@ import {
 import { Controller } from "react-hook-form";
 import {
   buildShippingAdjustedProductTotals,
+  cartHasMixedShippingWithPickup,
+  computeSellerFreeShippingStatus,
+  getCartShippingPredicate,
   ProductTotalsInSats,
   sumProductTotalsInSats,
 } from "@/utils/cart-totals";
@@ -284,55 +287,16 @@ export default function CartInvoiceCard({
   >(null);
   const [showOrderTypeSelection, setShowOrderTypeSelection] = useState(true);
 
-  const sellerFreeShippingStatus = useMemo(() => {
-    const statusMap: {
-      [pubkey: string]: {
-        qualifies: boolean;
-        threshold: number;
-        currency: string;
-        sellerSubtotal: number;
-        sellerName: string;
-      };
-    } = {};
-    const productsBySeller: { [pubkey: string]: ProductData[] } = {};
-    products.forEach((p) => {
-      if (!productsBySeller[p.pubkey]) productsBySeller[p.pubkey] = [];
-      productsBySeller[p.pubkey]!.push(p);
-    });
-
-    Object.entries(productsBySeller).forEach(([pubkey, sellerProducts]) => {
-      const profile = shopProfiles?.get(pubkey);
-      if (
-        !profile?.content?.freeShippingThreshold ||
-        profile.content.freeShippingThreshold <= 0
-      )
-        return;
-      let sellerSubtotal = 0;
-      sellerProducts.forEach((product) => {
-        const discount = appliedDiscounts[pubkey] || 0;
-        const basePrice =
-          product.bulkPrice !== undefined
-            ? product.bulkPrice
-            : product.volumePrice !== undefined
-              ? product.volumePrice
-              : product.weightPrice !== undefined
-                ? product.weightPrice
-                : product.price;
-        const qty = quantities[product.id] || 1;
-        const discountedPrice =
-          discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
-        sellerSubtotal += discountedPrice * qty;
-      });
-      statusMap[pubkey] = {
-        qualifies: sellerSubtotal >= profile.content.freeShippingThreshold,
-        threshold: profile.content.freeShippingThreshold,
-        currency: profile.content.freeShippingCurrency || "USD",
-        sellerSubtotal,
-        sellerName: profile.content.name || pubkey.substring(0, 8),
-      };
-    });
-    return statusMap;
-  }, [products, quantities, appliedDiscounts, shopProfiles]);
+  const sellerFreeShippingStatus = useMemo(
+    () =>
+      computeSellerFreeShippingStatus({
+        products,
+        quantities,
+        appliedDiscounts,
+        getShopProfileContent: (pubkey) => shopProfiles?.get(pubkey)?.content,
+      }),
+    [products, quantities, appliedDiscounts, shopProfiles]
+  );
 
   const getConsolidatedShippingForSeller = (
     sellerPubkey: string
@@ -494,9 +458,10 @@ export default function CartInvoiceCard({
     );
   }, [shippingTypes]);
 
-  const hasMixedShippingWithPickup = useMemo(() => {
-    return uniqueShippingTypes.length > 1 && hasShippingPickupProducts;
-  }, [uniqueShippingTypes, hasShippingPickupProducts]);
+  const hasMixedShippingWithPickup = useMemo(
+    () => cartHasMixedShippingWithPickup(shippingTypes),
+    [shippingTypes]
+  );
 
   const [requiredInfo, setRequiredInfo] = useState("");
   const defaultSavedAddress = useMemo(
@@ -914,6 +879,109 @@ export default function CartInvoiceCard({
     }
   };
 
+  type CartMintQuoteResponse = {
+    request?: string;
+    quote?: string;
+    amount: number;
+    mintUrl: string;
+    breakdown: { [productId: string]: number };
+    appliedDiscounts?: { [sellerPubkey: string]: number };
+  };
+
+  /**
+   * Requests server-validated cart pricing (and, unless priceOnly, a mint
+   * quote) from /api/cart/mint-quote. The server re-resolves each listing,
+   * reprices it, re-validates discount codes, and recomputes shipping — the
+   * client-displayed totals are never trusted for payment.
+   */
+  const requestCartQuote = async (
+    priceOnly: boolean
+  ): Promise<CartMintQuoteResponse> => {
+    const response = await fetch("/api/cart/mint-quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: products.map((product) => ({
+          productId: product.id,
+          quantity: quantities[product.id] || 1,
+          selectedSize: product.selectedSize || undefined,
+          selectedVolume: product.selectedVolume || undefined,
+          selectedWeight: product.selectedWeight || undefined,
+          selectedBulkOption: product.selectedBulkOption || undefined,
+        })),
+        formType,
+        shippingPickupPreference: shippingPickupPreference || undefined,
+        discountCodes:
+          discountCodes && Object.keys(discountCodes).length > 0
+            ? discountCodes
+            : undefined,
+        priceOnly,
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(
+        typeof payload.error === "string"
+          ? payload.error
+          : "Failed to verify your cart total. Please try again."
+      );
+    }
+
+    const cartQuote = payload as CartMintQuoteResponse;
+    if (
+      typeof cartQuote.amount !== "number" ||
+      !cartQuote.mintUrl ||
+      !cartQuote.breakdown
+    ) {
+      throw new Error(
+        "The server cart quote was incomplete. Please try again."
+      );
+    }
+    for (const product of products) {
+      const productTotal = cartQuote.breakdown[product.id];
+      if (typeof productTotal !== "number" || productTotal < 1) {
+        throw new Error("Failed to calculate cart totals for payment.");
+      }
+    }
+    if (
+      !priceOnly &&
+      (typeof cartQuote.request !== "string" ||
+        !cartQuote.request ||
+        typeof cartQuote.quote !== "string" ||
+        !cartQuote.quote)
+    ) {
+      throw new Error(
+        "The server did not return a payment invoice. Please try again."
+      );
+    }
+    return cartQuote;
+  };
+
+  /**
+   * Guards automatic payment paths (NWC / Cashu) against paying more than
+   * the buyer was shown. Listings can be repriced between page load and
+   * checkout; a small tolerance — max(2 sats, 1%) — absorbs rounding and
+   * exchange-rate drift, anything above it aborts before funds move.
+   */
+  const assertServerAmountWithinTolerance = (serverAmount: number) => {
+    const tolerance = Math.max(2, Math.ceil(totalCost * 0.01));
+    if (serverAmount - totalCost > tolerance) {
+      throw new Error(
+        `The verified cart total (${serverAmount} sats) is higher than the displayed total (${totalCost} sats). Prices may have changed — please review your cart and try again.`
+      );
+    }
+  };
+
+  const applyServerPricing = (cartQuote: CartMintQuoteResponse) => {
+    setCurrentProductTotalsInSats(cartQuote.breakdown);
+    setTotalCost(cartQuote.amount);
+    if (pendingOrderRef.current) {
+      pendingOrderRef.current.amount = String(cartQuote.amount);
+      pendingOrderRef.current.currency = "sats";
+    }
+  };
+
   const onFormSubmit = async (
     data: { [x: string]: string },
     paymentType?: "lightning" | "cashu" | "nwc"
@@ -1070,7 +1138,15 @@ export default function CartInvoiceCard({
 
     if (selectedOrderType === "shipping") {
       setFormType("shipping");
-      if (!(await applyCurrentProductTotals(() => true))) return;
+      if (
+        !(await applyCurrentProductTotals(
+          getCartShippingPredicate({
+            formType: "shipping",
+            hasMixedShippingWithPickup,
+          })
+        ))
+      )
+        return;
     } else if (selectedOrderType === "contact") {
       setFormType("contact");
       setIsFormValid(true);
@@ -1083,8 +1159,10 @@ export default function CartInvoiceCard({
       } else {
         if (
           !(await applyCurrentProductTotals(
-            (shippingType) =>
-              shippingType === "Added Cost" || shippingType === "Free"
+            getCartShippingPredicate({
+              formType: "combined",
+              hasMixedShippingWithPickup: false,
+            })
           ))
         ) {
           return;
@@ -1131,16 +1209,22 @@ export default function CartInvoiceCard({
       const invoiceAmount = toCashuMintAmountSats(convertedPrice);
       validatePaymentData(invoiceAmount, data);
 
-      const wallet = new CashuWallet(new CashuMint(mints[0]!));
+      const cartQuote = await requestCartQuote(false);
+      const serverAmount = toCashuMintAmountSats(cartQuote.amount);
+      // NWC pays automatically without showing the buyer an invoice, so a
+      // silent server-side repricing above the displayed total must abort
+      // before the wallet is charged.
+      assertServerAmountWithinTolerance(serverAmount);
+      applyServerPricing(cartQuote);
+
+      const pr = cartQuote.request!;
+      const hash = cartQuote.quote!;
+      const wallet = new CashuWallet(new CashuMint(cartQuote.mintUrl));
       await wallet.loadMint();
-      const { request: pr, quote: hash } = await withMintRetry(
-        () => wallet.createMintQuoteBolt11(invoiceAmount),
-        { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
-      );
       recordPendingMintQuote({
         quoteId: hash,
-        mintUrl: mints[0]!,
-        amount: invoiceAmount,
+        mintUrl: cartQuote.mintUrl,
+        amount: serverAmount,
         invoice: pr,
       });
       invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
@@ -1152,7 +1236,14 @@ export default function CartInvoiceCard({
       await nwc.enable();
 
       await nwc.sendPayment(pr);
-      await invoiceHasBeenPaid(wallet, invoiceAmount, hash, data);
+      await invoiceHasBeenPaid(
+        wallet,
+        serverAmount,
+        hash,
+        data,
+        cartQuote.breakdown,
+        cartQuote.mintUrl
+      );
     } catch (error: any) {
       handleNWCError(error);
     } finally {
@@ -1167,17 +1258,19 @@ export default function CartInvoiceCard({
       validatePaymentData(invoiceAmount, data);
 
       setShowInvoiceCard(true);
-      const wallet = new CashuWallet(new CashuMint(mints[0]!));
+      const cartQuote = await requestCartQuote(false);
+      const serverAmount = toCashuMintAmountSats(cartQuote.amount);
+      applyServerPricing(cartQuote);
+
+      const pr = cartQuote.request!;
+      const hash = cartQuote.quote!;
+      const wallet = new CashuWallet(new CashuMint(cartQuote.mintUrl));
       await wallet.loadMint();
 
-      const { request: pr, quote: hash } = await withMintRetry(
-        () => wallet.createMintQuoteBolt11(invoiceAmount),
-        { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
-      );
       recordPendingMintQuote({
         quoteId: hash,
-        mintUrl: mints[0]!,
-        amount: invoiceAmount,
+        mintUrl: cartQuote.mintUrl,
+        amount: serverAmount,
         invoice: pr,
       });
       invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
@@ -1211,7 +1304,14 @@ export default function CartInvoiceCard({
           console.error(e);
         }
       }
-      await invoiceHasBeenPaid(wallet, invoiceAmount, hash, data);
+      await invoiceHasBeenPaid(
+        wallet,
+        serverAmount,
+        hash,
+        data,
+        cartQuote.breakdown,
+        cartQuote.mintUrl
+      );
     } catch {
       if (setInvoiceGenerationFailed) {
         setInvoiceGenerationFailed(true);
@@ -1230,7 +1330,9 @@ export default function CartInvoiceCard({
     wallet: CashuWallet,
     convertedPrice: number,
     hash: string,
-    data: any
+    data: any,
+    serverBreakdown: { [productId: string]: number },
+    paymentMintUrl: string
   ) {
     let retryCount = 0;
     const maxRetries = 30; // Maximum 30 retries (about 1 minute)
@@ -1262,7 +1364,7 @@ export default function CartInvoiceCard({
           );
           recordPendingMintQuote({
             quoteId: hash,
-            mintUrl: mints[0]!,
+            mintUrl: paymentMintUrl,
             amount: convertedPrice,
             invoice: existing?.invoice ?? "",
             status: "paid_unclaimed",
@@ -1299,7 +1401,7 @@ export default function CartInvoiceCard({
                 await recoverProofsToBuyerWallet(
                   nostr,
                   signer,
-                  mints[0]!,
+                  paymentMintUrl,
                   proofs,
                   convertedPrice
                 );
@@ -1319,7 +1421,14 @@ export default function CartInvoiceCard({
               // wallet so they keep their sats and can retry.
               try {
                 await withDeadline(
-                  () => sendTokens(wallet, proofs, data),
+                  () =>
+                    sendTokens(
+                      wallet,
+                      proofs,
+                      data,
+                      serverBreakdown,
+                      paymentMintUrl
+                    ),
                   45000,
                   "seller payment hand-off"
                 );
@@ -1335,7 +1444,7 @@ export default function CartInvoiceCard({
                 await recoverProofsToBuyerWallet(
                   nostr!,
                   signer!,
-                  mints[0]!,
+                  paymentMintUrl,
                   proofs,
                   convertedPrice
                 );
@@ -1444,7 +1553,9 @@ export default function CartInvoiceCard({
   const sendTokens = async (
     wallet: CashuWallet,
     proofs: Proof[],
-    data: any
+    data: any,
+    productTotals: { [productId: string]: number },
+    paymentMintUrl: string
   ) => {
     let remainingProofs = proofs;
 
@@ -1465,7 +1576,7 @@ export default function CartInvoiceCard({
       const title = product.title;
       const pubkey = product.pubkey;
       const required = product.required;
-      const tokenAmount = currentProductTotalsInSats[product.id] || 0;
+      const tokenAmount = productTotals[product.id] || 0;
       if (tokenAmount < 1) {
         throw new Error("Failed to calculate cart totals for payment.");
       }
@@ -1479,7 +1590,7 @@ export default function CartInvoiceCard({
       const p2pkOutputConfig = await resolveP2pkCheckoutOutputConfig({
         sellerP2pk,
         amountSats: tokenAmount,
-        mintUrl: mints[0],
+        mintUrl: paymentMintUrl,
         buyerContent: buyerProfile?.content,
         buyerCashuPubkey: cashuPubkey,
       });
@@ -1588,7 +1699,7 @@ export default function CartInvoiceCard({
         const { keep, send } = swapOutcome;
         sellerProofs = send;
         sellerToken = getEncodedToken({
-          mint: mints[0]!,
+          mint: paymentMintUrl,
           proofs: send,
         });
         remainingProofs = keep;
@@ -1635,7 +1746,7 @@ export default function CartInvoiceCard({
         }
         const { keep, send } = swapOutcome;
         donationToken = getEncodedToken({
-          mint: mints[0]!,
+          mint: paymentMintUrl,
           proofs: send,
         });
         remainingProofs = keep;
@@ -1644,7 +1755,7 @@ export default function CartInvoiceCard({
       if (p2pkOutputConfig && sellerToken) {
         await persistBuyerP2pkEscrowRecord(nostr, signer, {
           orderId,
-          mint: mints[0]!,
+          mint: paymentMintUrl,
           token: sellerToken,
           amount: sellerAmount,
           sellerPubkey: p2pkOutputConfig.send.options.pubkey,
@@ -1797,7 +1908,7 @@ export default function CartInvoiceCard({
               await new Promise((resolve) => setTimeout(resolve, 500));
 
               const encodedChange = getEncodedToken({
-                mint: mints[0]!,
+                mint: paymentMintUrl,
                 proofs: changeProofs,
               });
               const changeMessage = "Overpaid fee change: " + encodedChange;
@@ -1833,7 +1944,7 @@ export default function CartInvoiceCard({
                 ? sumProofAmounts(unusedProofs)
                 : 0;
             const unusedToken = getEncodedToken({
-              mint: mints[0]!,
+              mint: paymentMintUrl,
               proofs: unusedProofs,
             });
             let productDetails = "";
@@ -2462,6 +2573,14 @@ export default function CartInvoiceCard({
 
       validatePaymentData(price, data);
 
+      // Cashu spends from the buyer's wallet without a confirmation step, so
+      // reprice the cart server-side first and refuse to spend materially
+      // more than the buyer was shown.
+      const cartQuote = await requestCartQuote(true);
+      const serverAmount = toCashuMintAmountSats(cartQuote.amount);
+      assertServerAmountWithinTolerance(serverAmount);
+      applyServerPricing(cartQuote);
+
       const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
       await wallet.loadMint();
@@ -2484,7 +2603,13 @@ export default function CartInvoiceCard({
             .map((event) => event.id),
         ]),
       ];
-      const changeProofs = await sendTokens(wallet, filteredProofs, data);
+      const changeProofs = await sendTokens(
+        wallet,
+        filteredProofs,
+        data,
+        cartQuote.breakdown,
+        mints[0]!
+      );
       const remainingProofs = (currentTokens as Proof[]).filter(
         (p: Proof) =>
           !mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
@@ -2499,7 +2624,11 @@ export default function CartInvoiceCard({
       localStorage.setItem(
         "history",
         JSON.stringify([
-          { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
+          {
+            type: 5,
+            amount: serverAmount,
+            date: Math.floor(Date.now() / 1000),
+          },
           ...currentHistory,
         ])
       );
@@ -2509,7 +2638,7 @@ export default function CartInvoiceCard({
         mints[0]!,
         changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
-        price.toString(),
+        serverAmount.toString(),
         deletedEventIds
       );
       localStorage.setItem("cart", JSON.stringify([]));
@@ -3426,10 +3555,11 @@ export default function CartInvoiceCard({
                     setShowFreePickupSelection(false);
                     if (
                       !(await applyCurrentProductTotals(
-                        (shippingType) =>
-                          shippingType === "Added Cost" ||
-                          shippingType === "Free" ||
-                          shippingType === "Free/Pickup"
+                        getCartShippingPredicate({
+                          formType: "combined",
+                          hasMixedShippingWithPickup: true,
+                          shippingPickupPreference: "shipping",
+                        })
                       ))
                     ) {
                       return;
@@ -3452,9 +3582,11 @@ export default function CartInvoiceCard({
                     setShowFreePickupSelection(false);
                     if (
                       !(await applyCurrentProductTotals(
-                        (shippingType) =>
-                          shippingType === "Added Cost" ||
-                          shippingType === "Free"
+                        getCartShippingPredicate({
+                          formType: "combined",
+                          hasMixedShippingWithPickup: true,
+                          shippingPickupPreference: "contact",
+                        })
                       ))
                     ) {
                       return;
