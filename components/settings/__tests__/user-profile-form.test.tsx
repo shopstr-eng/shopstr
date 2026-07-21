@@ -92,6 +92,7 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalUserProfileKey: (pubkey: string) => `shopstr:user-profile:${pubkey}`,
   parseLocalProfileFallback: (raw: string | null) =>
     raw ? { content: JSON.parse(raw), updatedAt: 0 } : null,
+  isProfileContentPopulated: jest.fn(() => true),
 }));
 const mockCreateNostrProfileEvent = createNostrProfileEvent as jest.Mock;
 
