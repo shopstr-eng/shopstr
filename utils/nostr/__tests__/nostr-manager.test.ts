@@ -10,6 +10,7 @@ const fakePoolInstance = {
   ),
   subscribeMap: jest.fn().mockReturnValue({ close: jest.fn() }),
   publish: jest.fn().mockReturnValue([Promise.resolve("ok")]),
+  close: jest.fn(),
 };
 const FakePool = jest.fn().mockImplementation(() => fakePoolInstance);
 
@@ -114,6 +115,30 @@ describe("NostrManager", () => {
       expect(mgr.relays.length).toBe(0);
       expect(sub.close).toHaveBeenCalled();
     });
+
+    it("passes a bounded default connectionTimeout to the pool", async () => {
+      const mgr = new NostrManager(["r1"]);
+      await mgr.relays[0].connect();
+      expect(fakePoolInstance.ensureRelay).toHaveBeenCalledWith("r1", {
+        connectionTimeout: 4000,
+      });
+    });
+
+    it("retries a failed connection instead of caching the rejection", async () => {
+      const mgr = new NostrManager(["r1"]);
+      fakePoolInstance.ensureRelay
+        .mockRejectedValueOnce(new Error("connection failed"))
+        .mockResolvedValueOnce({
+          connect: relayConnectMock,
+          close: relayCloseMock,
+        });
+
+      await expect(mgr.relays[0].connect()).rejects.toThrow(
+        "connection failed"
+      );
+      await expect(mgr.relays[0].connect()).resolves.toBeUndefined();
+      expect(fakePoolInstance.ensureRelay).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe("subscribe()", () => {
@@ -147,21 +172,12 @@ describe("NostrManager", () => {
       expect(mgr.relays[0].activeSubs).not.toContain(sub);
     });
 
-    it("awaits reconnect before subscribing on sleeping relays", async () => {
-      let resolveConnect!: () => void;
-      relayConnectMock.mockReturnValueOnce(
-        new Promise<void>((resolve) => {
-          resolveConnect = resolve;
-        })
+    it("subscribes immediately without waiting for slow relay connections", async () => {
+      fakePoolInstance.ensureRelay.mockReturnValueOnce(
+        new Promise(() => {}) // connection attempt that never settles
       );
 
-      const subscribePromise = mgr.subscribe([], {}, ["u1"]);
-      await Promise.resolve();
-
-      expect(fakePoolInstance.subscribeMap).not.toHaveBeenCalled();
-
-      resolveConnect();
-      await subscribePromise;
+      await mgr.subscribe([], {}, ["u1"]);
 
       expect(fakePoolInstance.subscribeMap).toHaveBeenCalledTimes(1);
     });
@@ -185,21 +201,12 @@ describe("NostrManager", () => {
       expect(fakePoolInstance.publish).toHaveBeenCalledWith(["p1"], evt);
     });
 
-    it("awaits reconnect before publishing on sleeping relays", async () => {
-      let resolveConnect!: () => void;
-      relayConnectMock.mockReturnValueOnce(
-        new Promise<void>((resolve) => {
-          resolveConnect = resolve;
-        })
+    it("publishes immediately without waiting for slow relay connections", async () => {
+      fakePoolInstance.ensureRelay.mockReturnValueOnce(
+        new Promise(() => {}) // connection attempt that never settles
       );
 
-      const publishPromise = mgr.publish(evt, ["p1"]);
-      await Promise.resolve();
-
-      expect(fakePoolInstance.publish).not.toHaveBeenCalled();
-
-      resolveConnect();
-      await publishPromise;
+      await expect(mgr.publish(evt, ["p1"])).resolves.toBeUndefined();
 
       expect(fakePoolInstance.publish).toHaveBeenCalledWith(["p1"], evt);
     });
@@ -258,6 +265,22 @@ describe("NostrManager", () => {
       params.oneose();
       await fetchPromise;
 
+      expect(subClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("resolves with partial events when the timeout aborts", async () => {
+      const subClose = jest.fn();
+      fakePoolInstance.subscribeMap.mockReturnValueOnce({ close: subClose });
+
+      const fetchPromise = mgr.fetch([{ kinds: [30402] }], {}, ["u1"], 1234);
+      await waitForSubscribeMap();
+
+      const params = fakePoolInstance.subscribeMap.mock.calls[0][1];
+      params.onevent({ id: "partial-1" });
+
+      latestAbortController!.abort();
+
+      await expect(fetchPromise).resolves.toEqual([{ id: "partial-1" }]);
       expect(subClose).toHaveBeenCalledTimes(1);
     });
   });
