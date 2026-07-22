@@ -140,9 +140,12 @@ const renderComponent = ({
           >
             <FollowsContext.Provider
               value={{
+                directFollowList: followList,
                 followList,
                 firstDegreeFollowsLength,
                 isLoading: isFollowsLoading,
+                addFollow: async () => ({ ok: false, reason: "unknown" }),
+                removeFollow: async () => ({ ok: false, reason: "unknown" }),
               }}
             >
               <MarketplacePage

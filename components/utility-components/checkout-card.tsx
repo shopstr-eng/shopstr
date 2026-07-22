@@ -637,7 +637,13 @@ export default function CheckoutCard({
                         dropDownKeys={
                           productData.pubkey === userPubkey
                             ? ["shop_profile"]
-                            : ["shop", "inquiry", "copy_npub", "report_profile"]
+                            : [
+                                "shop",
+                                "inquiry",
+                                "copy_npub",
+                                "report_profile",
+                                "follow",
+                              ]
                         }
                       />
                       {merchantQuality !== "" && (
@@ -980,6 +986,7 @@ export default function CheckoutCard({
                                         "inquiry",
                                         "copy_npub",
                                         "report_profile",
+                                        "follow",
                                       ]
                                 }
                               />

@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { ProfileWithDropdown } from "../profile-dropdown";
-import { ProfileMapContext } from "@/utils/context/context";
+import { FollowsContext, ProfileMapContext } from "@/utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
@@ -53,6 +53,8 @@ jest.mock("@heroui/react", () => {
       onOpen: mockOnOpen,
       onClose: jest.fn(),
     }),
+    addToast: jest.fn(),
+    Spinner: () => <span data-testid="spinner" />,
     Dropdown: ({
       children,
       isOpen,
@@ -128,6 +130,8 @@ jest.mock("@heroicons/react/24/outline", () => ({
   ClipboardIcon: () => <div data-testid="icon-clipboard" />,
   CheckIcon: () => <div data-testid="icon-check" />,
   ExclamationTriangleIcon: () => <div data-testid="icon-report" />,
+  UserMinusIcon: () => <div data-testid="icon-user-minus" />,
+  UserPlusIcon: () => <div data-testid="icon-user-plus" />,
   CheckCircleIcon: () => <div data-testid="icon-success" />,
 }));
 
@@ -140,9 +144,29 @@ Object.defineProperty(navigator, "clipboard", {
 
 const renderWithProviders = (
   ui: React.ReactElement,
-  options: { profileData?: Map<string, any>; isLoggedIn?: boolean } = {}
+  options: {
+    profileData?: Map<string, any>;
+    isLoggedIn?: boolean;
+    directFollowList?: string[];
+    addFollow?: jest.Mock;
+    removeFollow?: jest.Mock;
+  } = {}
 ) => {
-  const { profileData = new Map(), isLoggedIn = false } = options;
+  const {
+    profileData = new Map(),
+    isLoggedIn = false,
+    directFollowList = [],
+    addFollow = jest.fn().mockResolvedValue({
+      ok: true,
+      event: {},
+      alreadyApplied: false,
+    }),
+    removeFollow = jest.fn().mockResolvedValue({
+      ok: true,
+      event: {},
+      alreadyApplied: false,
+    }),
+  } = options;
   return render(
     <ProfileMapContext.Provider
       value={{
@@ -152,7 +176,18 @@ const renderWithProviders = (
       }}
     >
       <SignerContext.Provider value={{ isLoggedIn }}>
-        {ui}
+        <FollowsContext.Provider
+          value={{
+            directFollowList,
+            followList: directFollowList,
+            firstDegreeFollowsLength: directFollowList.length,
+            isLoading: false,
+            addFollow,
+            removeFollow,
+          }}
+        >
+          {ui}
+        </FollowsContext.Provider>
       </SignerContext.Provider>
     </ProfileMapContext.Provider>
   );
@@ -395,5 +430,54 @@ describe("ProfileWithDropdown", () => {
 
     expect(screen.getByText("Report Profile")).toBeInTheDocument();
     expect(screen.getByTestId("icon-report")).toBeInTheDocument();
+  });
+
+  it("shows a Following badge when the profile is directly followed", () => {
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["follow"]} />,
+      { directFollowList: [pubkey], isLoggedIn: true }
+    );
+
+    expect(screen.getByText("Following")).toBeInTheDocument();
+
+    openDropdownMenu();
+
+    expect(screen.getByText("Unfollow")).toBeInTheDocument();
+    expect(screen.getByTestId("icon-user-minus")).toBeInTheDocument();
+  });
+
+  it("opens sign-in instead of mutating follows when logged out", async () => {
+    const addFollow = jest.fn();
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["follow"]} />,
+      { addFollow, isLoggedIn: false }
+    );
+
+    openDropdownMenu();
+    fireEvent.click(screen.getByText("+ Follow"));
+
+    await waitFor(() => {
+      expect(mockOnOpen).toHaveBeenCalled();
+    });
+    expect(addFollow).not.toHaveBeenCalled();
+  });
+
+  it("calls addFollow from the follow menu item when logged in", async () => {
+    const addFollow = jest.fn().mockResolvedValue({
+      ok: true,
+      event: {},
+      alreadyApplied: false,
+    });
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["follow"]} />,
+      { addFollow, isLoggedIn: true }
+    );
+
+    openDropdownMenu();
+    fireEvent.click(screen.getByText("+ Follow"));
+
+    await waitFor(() => {
+      expect(addFollow).toHaveBeenCalledWith(pubkey);
+    });
   });
 });

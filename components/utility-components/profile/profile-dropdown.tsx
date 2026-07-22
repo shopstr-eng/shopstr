@@ -6,6 +6,7 @@ import {
   DropdownItemProps,
   DropdownMenu,
   DropdownTrigger,
+  Spinner,
   User,
   useDisclosure,
 } from "@heroui/react";
@@ -22,12 +23,15 @@ import {
   GlobeAltIcon,
   ExclamationTriangleIcon,
   UserIcon,
+  UserMinusIcon,
+  UserPlusIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../../sign-in/SignInModal";
 import useReportEventFlow from "../use-report-event-flow";
 import { ProfileData } from "@/utils/types/types";
+import { useFollowToggle } from "@/components/hooks/use-follow-toggle";
 
 type DropDownKeys =
   | "shop"
@@ -38,11 +42,12 @@ type DropDownKeys =
   | "settings"
   | "user_profile"
   | "logout"
-  | "copy_npub";
+  | "copy_npub"
+  | "follow";
 
 type DropdownActionItem = Omit<DropdownItemProps, "onClick"> & {
   label: string;
-  onClick?: () => void;
+  onClick?: () => void | Promise<void>;
 };
 
 const fetchedProfileContentCache = new Map<string, ProfileData["content"]>();
@@ -116,10 +121,26 @@ export const ProfileWithDropdown = ({
     onRequireLogin: onOpen,
   });
 
-  const handleDropdownAction = (action: () => void) => {
+  const closeDropdown = () => {
     setIsDropdownOpen(false);
-    action();
   };
+
+  const handleDropdownAction = (action: () => void | Promise<void>) => {
+    closeDropdown();
+    void action();
+  };
+
+  const {
+    isFollowing,
+    isLoading: isFollowLoading,
+    toggle: toggleFollow,
+  } = useFollowToggle(pubkey, {
+    onRequireSignIn: () => {
+      closeDropdown();
+      onOpen();
+    },
+    onSuccess: closeDropdown,
+  });
 
   useEffect(() => {
     let isCancelled = false;
@@ -181,6 +202,23 @@ export const ProfileWithDropdown = ({
   })();
   const pfp = profileContent?.picture || `https://robohash.org/${pubkey}`;
   const isNip05Verified = profile?.nip05Verified || false;
+  const showFollowingIndicator = dropDownKeys.includes("follow") && isFollowing;
+  const displayNameContent = showFollowingIndicator ? (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+        {displayName}
+      </span>
+      <span className="text-shopstr-purple dark:text-shopstr-yellow inline-flex shrink-0 items-center gap-1 text-[10px] font-medium">
+        <span
+          aria-hidden="true"
+          className="h-1.5 w-1.5 rounded-full bg-current"
+        />
+        Following
+      </span>
+    </span>
+  ) : (
+    displayName
+  );
 
   const DropDownItems: {
     [key in DropDownKeys]: DropdownActionItem;
@@ -322,6 +360,27 @@ export const ProfileWithDropdown = ({
       },
       label: isNPubCopied ? "Copied!" : "Copy npub",
     },
+    follow: {
+      key: "follow",
+      color: "default",
+      className: "text-light-text dark:text-dark-text",
+      startContent: isFollowLoading ? (
+        <Spinner size="sm" />
+      ) : isFollowing ? (
+        <UserMinusIcon className="h-5 w-5" />
+      ) : (
+        <UserPlusIcon className="h-5 w-5" />
+      ),
+      onPress: () => {
+        void toggleFollow();
+      },
+      label: isFollowLoading
+        ? "Please sign..."
+        : isFollowing
+          ? "Unfollow"
+          : "+ Follow",
+      isDisabled: isFollowLoading,
+    },
   };
 
   const handleReportDropdownAction = (item: DropdownActionItem) => {
@@ -363,12 +422,13 @@ export const ProfileWithDropdown = ({
                 } group-hover:underline group-hover:underline-offset-2`,
                 base: `${baseClassname}`,
               }}
-              name={displayName}
+              name={displayNameContent}
             />
           </DropdownTrigger>
           <DropdownMenu
             aria-label="User Actions"
             variant="flat"
+            closeOnSelect={false}
             items={dropDownKeys.map((key) => DropDownItems[key])}
           >
             {(item) => {
@@ -378,6 +438,7 @@ export const ProfileWithDropdown = ({
                   color={item.color}
                   className={item.className}
                   startContent={item.startContent}
+                  isDisabled={item.isDisabled}
                   onPress={
                     item.onClick
                       ? () => handleReportDropdownAction(item)

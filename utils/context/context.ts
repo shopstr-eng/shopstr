@@ -8,6 +8,7 @@ import {
   CommunityPost,
 } from "../types/types";
 import { Proof } from "@cashu/cashu-ts";
+import type { FollowMutationResult } from "@/utils/nostr/nostr-helper-functions";
 
 export interface ProfileContextInterface {
   profileData: Map<string, any>;
@@ -126,15 +127,21 @@ export const ChatsContext = createContext({
 } as ChatsContextInterface);
 
 export interface FollowsContextInterface {
+  directFollowList: string[];
   followList: string[];
   firstDegreeFollowsLength: number;
   isLoading: boolean;
+  addFollow: (pubkey: string) => Promise<FollowMutationResult>;
+  removeFollow: (pubkey: string) => Promise<FollowMutationResult>;
 }
 
 export const FollowsContext = createContext({
+  directFollowList: [],
   followList: [],
   firstDegreeFollowsLength: 0,
   isLoading: true,
+  addFollow: async (_pubkey: string) => ({ ok: false, reason: "unknown" }),
+  removeFollow: async (_pubkey: string) => ({ ok: false, reason: "unknown" }),
 } as FollowsContextInterface);
 
 export interface RelaysContextInterface {
