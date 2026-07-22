@@ -1,5 +1,6 @@
 import { NostrEvent } from "@/utils/types/types";
 import { ProductData } from "./product-parser-functions";
+import { normalizeProductImageUrl } from "@/utils/images";
 
 export const parseZapsnagNote = (event: NostrEvent): ProductData => {
   const content = event.content;
@@ -48,7 +49,7 @@ export const parseZapsnagNote = (event: NostrEvent): ProductData => {
     title: title,
     summary: content,
     publishedAt: String(event.created_at),
-    images: [image],
+    images: [normalizeProductImageUrl(image)],
     categories: ["zapsnag"],
     location: "Global",
     price: price,
