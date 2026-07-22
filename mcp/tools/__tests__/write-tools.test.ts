@@ -74,6 +74,18 @@ jest.mock("@/utils/cashu/melt-retry-service", () => ({
   safeMeltProofs: jest.fn(),
 }));
 
+// write-tools.ts does `const resolveCname = promisify(dns.resolveCname)` at
+// module load, so these must be Node-callback-style mocks
+// ((domain, callback) => ...), not promise-returning ones — promisify wraps
+// whatever it's given.
+const mockDnsResolveCname = jest.fn();
+const mockDnsResolve4 = jest.fn();
+
+jest.mock("dns", () => ({
+  resolveCname: (...args: unknown[]) => (mockDnsResolveCname as any)(...args),
+  resolve4: (...args: unknown[]) => (mockDnsResolve4 as any)(...args),
+}));
+
 type ToolResult = {
   content: Array<{ type: "text"; text: string }>;
   isError?: boolean;
@@ -2849,6 +2861,268 @@ describe("registerWriteTools — (Cashu payments)", () => {
 
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to send Cashu payment");
+    });
+  });
+});
+
+describe("registerWriteTools — (custom domain)", () => {
+  beforeEach(() => {
+    mockDnsResolveCname.mockImplementation((_domain: string, cb: any) =>
+      cb(new Error("NXDOMAIN"))
+    );
+    mockDnsResolve4.mockImplementation((_domain: string, cb: any) =>
+      cb(new Error("NXDOMAIN"))
+    );
+  });
+
+  describe.each(["manage_custom_domain"])("%s — shared guards", (toolName) => {
+    it("returns a permission error when apiKey.permissions is not full_access", async () => {
+      const callbacks = registerToolsForTest(readOnlyApiKey);
+      const tool = getTool(callbacks, toolName);
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toMatch(/Insufficient permissions/i);
+      expect(getAgentSigner).not.toHaveBeenCalled();
+    });
+
+    it("returns a no-signer error when getAgentSigner resolves null", async () => {
+      jest.mocked(getAgentSigner).mockResolvedValueOnce(null);
+      const callbacks = registerToolsForTest(fullAccessApiKey);
+      const tool = getTool(callbacks, toolName);
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toMatch(/No signing key configured/i);
+    });
+  });
+
+  describe("manage_custom_domain", () => {
+    function getCallback() {
+      return getTool(
+        registerToolsForTest(fullAccessApiKey),
+        "manage_custom_domain"
+      );
+    }
+
+    it("action='remove' deletes from custom_domains scoped to pubkey+domain, without any DNS lookup", async () => {
+      const pool = { query: jest.fn().mockResolvedValue({ rowCount: 1 }) };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "remove",
+        domain: "shop.example.com",
+      });
+
+      expect(pool.query).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "DELETE FROM custom_domains WHERE pubkey = $1 AND domain = $2"
+        ),
+        [TEST_PUBKEY, "shop.example.com"]
+      );
+      expect(mockDnsResolveCname).not.toHaveBeenCalled();
+      expect(mockDnsResolve4).not.toHaveBeenCalled();
+      expect(textPayload(result)).toMatchObject({
+        domain: "shop.example.com",
+        removed: true,
+      });
+    });
+
+    it.each(["milk.market", "edge.milk.market"])(
+      "treats a resolved CNAME of '%s' as a valid match and skips the A-record lookup",
+      async (cname) => {
+        mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
+          cb(null, [cname])
+        );
+        const tool = getCallback();
+
+        const result = await tool({
+          action: "verify",
+          domain: "shop.example.com",
+        });
+
+        const payload = textPayload(result);
+        expect(payload.cnameOk).toBe(true);
+        expect(payload.dnsOk).toBe(true);
+        expect(mockDnsResolve4).not.toHaveBeenCalled();
+      }
+    );
+
+    it("falls back to the A-record lookup when the CNAME lookup fails", async () => {
+      mockDnsResolve4.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["75.2.60.5"])
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "verify",
+        domain: "shop.example.com",
+      });
+
+      const payload = textPayload(result);
+      expect(payload.cnameOk).toBe(false);
+      expect(payload.aOk).toBe(true);
+      expect(payload.dnsOk).toBe(true);
+      expect(mockDnsResolve4).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back to the A-record lookup when the CNAME resolves but doesn't match milk.market", async () => {
+      mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["notmilkmarket.example.com"])
+      );
+      mockDnsResolve4.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["75.2.60.5"])
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "verify",
+        domain: "shop.example.com",
+      });
+
+      const payload = textPayload(result);
+      expect(payload.cnameOk).toBe(false);
+      expect(payload.aOk).toBe(true);
+      expect(mockDnsResolve4).toHaveBeenCalledTimes(1);
+    });
+
+    it("dnsOk is false and returns setup instructions when neither CNAME nor A record match", async () => {
+      mockDnsResolve4.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["1.2.3.4"])
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "verify",
+        domain: "shop.example.com",
+      });
+
+      const payload = textPayload(result);
+      expect(payload.dnsOk).toBe(false);
+      expect(payload.aOk).toBe(false);
+      expect(payload.instructions).toMatch(/Please add a CNAME record/);
+    });
+
+    it("action='verify' never writes to the database, regardless of DNS pass/fail", async () => {
+      const pool = { query: jest.fn() };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      const tool = getCallback();
+
+      await tool({ action: "verify", domain: "shop.example.com" });
+
+      expect(pool.query).not.toHaveBeenCalled();
+    });
+
+    it("action='register' rejects with 'DNS verification failed' when DNS does not point to milk.market, without querying the db", async () => {
+      const pool = { query: jest.fn() };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "register",
+        domain: "shop.example.com",
+        shopSlug: "fresh-farm",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("DNS verification failed");
+      expect(pool.query).not.toHaveBeenCalled();
+    });
+
+    it("action='register' rejects with 'Missing shopSlug' when shopSlug is omitted, even if DNS passed", async () => {
+      const pool = { query: jest.fn() };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["milk.market"])
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "register",
+        domain: "shop.example.com",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Missing shopSlug");
+      expect(pool.query).not.toHaveBeenCalled();
+    });
+
+    it("action='register' returns 'Domain already registered' when the upsert affects zero rows", async () => {
+      const pool = { query: jest.fn().mockResolvedValue({ rowCount: 0 }) };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["milk.market"])
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "register",
+        domain: "shop.example.com",
+        shopSlug: "fresh-farm",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Domain already registered");
+    });
+
+    it("action='register' upserts via ON CONFLICT and returns registered=true on success", async () => {
+      const pool = { query: jest.fn().mockResolvedValue({ rowCount: 1 }) };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["milk.market"])
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "register",
+        domain: "shop.example.com",
+        shopSlug: "fresh-farm",
+      });
+
+      expect(pool.query).toHaveBeenCalledWith(
+        expect.stringContaining("INSERT INTO custom_domains"),
+        [TEST_PUBKEY, "shop.example.com", "fresh-farm"]
+      );
+      expect(textPayload(result)).toMatchObject({
+        domain: "shop.example.com",
+        shopSlug: "fresh-farm",
+        registered: true,
+        dnsOk: true,
+      });
+    });
+
+    it("returns 'Invalid action' for an unrecognized action value (defensive fallback)", async () => {
+      mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["milk.market"])
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "bogus",
+        domain: "shop.example.com",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Invalid action");
+    });
+
+    it("returns errorResponse when the db query throws", async () => {
+      const pool = {
+        query: jest.fn().mockRejectedValue(new Error("db offline")),
+      };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "remove",
+        domain: "shop.example.com",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to manage custom domain");
     });
   });
 });
