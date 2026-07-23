@@ -35,28 +35,30 @@ export type NostrEvent = NToolEvent;
 export type NostrEventTemplate = NToolEvenTemplate;
 export type NostrManagerParams = {
   connectionTimeout?: number;
-  keepAliveTime: number;
-  gcInterval: number;
+  keepAliveTime?: number;
+  gcInterval?: number;
   readable?: boolean;
   writable?: boolean;
 };
 
 const DEFAULT_CONNECTION_TIMEOUT_MS = 4000;
+const DEFAULT_KEEP_ALIVE_MS = 1000 * 60 * 5;
+const DEFAULT_GC_INTERVAL_MS = 1000 * 60 * 5;
 
 export class NostrManager {
   private readonly pool: SimplePool;
-  private readonly params: NostrManagerParams;
+  private readonly params: Required<NostrManagerParams>;
   private readonly relays: Array<NostrRelay> = [];
-  private gcTimeout: any;
+  private gcTimeout?: ReturnType<typeof setTimeout>;
 
-  constructor(relays: Array<string> = [], params?: NostrManagerParams) {
+  constructor(relays: Array<string> = [], params: NostrManagerParams = {}) {
     const {
-      keepAliveTime = 1000 * 60 * 5,
-      gcInterval = 1000 * 60 * 5,
+      keepAliveTime = DEFAULT_KEEP_ALIVE_MS,
+      gcInterval = DEFAULT_GC_INTERVAL_MS,
       connectionTimeout = DEFAULT_CONNECTION_TIMEOUT_MS,
       readable = true,
       writable = true,
-    } = params || {};
+    } = params;
 
     this.pool = new SimplePool();
     this.params = {
@@ -141,18 +143,15 @@ export class NostrManager {
     }
     if (relayUrls) {
       for (const relayUrl of relayUrls) {
-        this.addRelay(relayUrl);
+        this.addRelay(relayUrl, {
+          connectionTimeout: this.params.connectionTimeout,
+        });
       }
     }
 
     const relays = relayUrls
       ? this.relays.filter((r) => relayUrls.includes(r.url))
       : this.relays;
-    // Fire-and-forget: subscribeMap() below already connects to each relay
-    // independently and in parallel (with its own bounded connection
-    // timeout), so awaiting keepAlive() here would only make every relay
-    // wait for the slowest/dead relay before any REQ goes out.
-    this.keepAlive(relays).catch(console.error);
     const requests = relays.flatMap((r) =>
       filters.map((f) => ({ url: r.url, filter: f }))
     );
@@ -170,6 +169,10 @@ export class NostrManager {
     for (const relay of relays) {
       relay.activeSubs.push(sub);
     }
+    // Fire-and-forget: subscribeMap() above already connects to each relay
+    // independently and in parallel, so reconnecting sleeping relays must not
+    // delay issuing REQs to healthy relays.
+    this.keepAlive(relays).catch(console.error);
     return sub;
   }
 
@@ -200,6 +203,13 @@ export class NostrManager {
         let didCloseSub = false;
         let didResolve = false;
 
+        const resolveFetchedEvents = () => {
+          if (!didResolve) {
+            didResolve = true;
+            resolve(fetchedEvents);
+          }
+        };
+
         const closeSubIfNeeded = async () => {
           if (!sub || didCloseSub) return;
           didCloseSub = true;
@@ -208,14 +218,9 @@ export class NostrManager {
 
         abortSignal.addEventListener("abort", () => {
           closeSubIfNeeded().catch(console.error);
-          // If the aggregate timeout fires, return whatever events were
-          // already collected from the relays that did respond instead of
-          // discarding them. The abort listener runs synchronously before
-          // the timeout's reject(), so resolving here wins.
-          if (!didResolve) {
-            didResolve = true;
-            resolve(fetchedEvents);
-          }
+          // Return whatever healthy relays produced before the aggregate
+          // timeout instead of discarding partial marketplace data.
+          resolveFetchedEvents();
         });
 
         params.onevent = (event: NostrEvent) => {
@@ -225,10 +230,7 @@ export class NostrManager {
 
         params.oneose = () => {
           closeSubIfNeeded().catch(console.error);
-          if (!didResolve) {
-            didResolve = true;
-            resolve(fetchedEvents);
-          }
+          resolveFetchedEvents();
           return onEose!();
         };
 
@@ -270,19 +272,25 @@ export class NostrManager {
     }
   ): void {
     if (this.relays.find((r) => r.url === relayUrl)) return;
-    const connectionTimeout =
-      params?.connectionTimeout ??
-      this.params.connectionTimeout ??
-      DEFAULT_CONNECTION_TIMEOUT_MS;
+    const relayParams = {
+      connectionTimeout:
+        params?.connectionTimeout ??
+        this.params.connectionTimeout ??
+        DEFAULT_CONNECTION_TIMEOUT_MS,
+    };
+
+    const watchRelayPromise = (
+      relayPromise: ReturnType<SimplePool["ensureRelay"]>
+    ) => {
+      relayPromise.catch(() => undefined);
+      return relayPromise;
+    };
+    watchRelayPromise(this.pool.ensureRelay(relayUrl, relayParams));
+
     const relay: NostrRelay = {
       url: relayUrl,
       connect: async () => {
-        // Ask the pool fresh on every call instead of caching the first
-        // ensureRelay() promise: a rejected promise stays rejected forever,
-        // which previously made a relay unrecoverable after one failed
-        // connection attempt. The pool/AbstractRelay already dedupes
-        // in-flight connection attempts internally.
-        await this.pool.ensureRelay(relayUrl, { connectionTimeout });
+        await this.pool.ensureRelay(relayUrl, relayParams);
       },
       disconnect: async () => {
         this.pool.close([relayUrl]);

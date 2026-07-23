@@ -2,7 +2,6 @@ import { SimplePool, verifyEvent } from "nostr-tools";
 import type { SubscribeManyParams, SubCloser } from "nostr-tools/abstract-pool";
 
 import type { Logger } from "./logger.js";
-import { TimeoutError } from "./timeout.js";
 import type { NostrEvent, NostrFilter } from "./types.js";
 
 export type NostrRelay = {
@@ -34,6 +33,7 @@ export type FetchOptions = {
 
 const DEFAULT_KEEP_ALIVE_MS = 5 * 60 * 1000;
 const DEFAULT_GC_INTERVAL_MS = 5 * 60 * 1000;
+const DEFAULT_CONNECTION_TIMEOUT_MS = 4_000;
 const DEFAULT_FETCH_TIMEOUT_MS = 60_000;
 
 export class NostrManager {
@@ -44,7 +44,7 @@ export class NostrManager {
       "keepAliveTime" | "gcInterval" | "readable" | "writable"
     >
   > & {
-    connectionTimeout?: number;
+    connectionTimeout: number;
     logger?: Pick<Logger, "warn">;
   };
   private readonly relays: NostrRelay[] = [];
@@ -57,9 +57,8 @@ export class NostrManager {
       gcInterval: params.gcInterval ?? DEFAULT_GC_INTERVAL_MS,
       readable: params.readable ?? true,
       writable: params.writable ?? false,
-      ...(params.connectionTimeout !== undefined && {
-        connectionTimeout: params.connectionTimeout,
-      }),
+      connectionTimeout:
+        params.connectionTimeout ?? DEFAULT_CONNECTION_TIMEOUT_MS,
       ...(params.logger !== undefined && {
         logger: params.logger,
       }),
@@ -202,9 +201,7 @@ export class NostrManager {
       };
 
       timeoutId = setTimeout(() => {
-        settle(() =>
-          reject(new TimeoutError("Relay fetch timed out", timeoutMs))
-        );
+        settle(() => resolve(fetchedEvents));
       }, timeoutMs);
 
       const originalOnevent = params.onevent;
@@ -259,11 +256,16 @@ export class NostrManager {
   ): void {
     if (this.relays.some((relay) => relay.url === relayUrl)) return;
 
-    let relayPromise = this.pool.ensureRelay(relayUrl, params);
+    const relayParams = {
+      connectionTimeout:
+        params.connectionTimeout ?? this.params.connectionTimeout,
+    };
+
+    let relayPromise = this.pool.ensureRelay(relayUrl, relayParams);
     relayPromise.catch(() => undefined);
 
     const ensureRelaySafely = (): typeof relayPromise => {
-      relayPromise = this.pool.ensureRelay(relayUrl, params);
+      relayPromise = this.pool.ensureRelay(relayUrl, relayParams);
       relayPromise.catch(() => undefined);
       return relayPromise;
     };
