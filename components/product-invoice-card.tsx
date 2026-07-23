@@ -1221,6 +1221,11 @@ export default function ProductInvoiceCard({
     let remainingProofs = proofs;
     let sellerToken;
     let donationToken;
+    const orderId = uuidv4();
+
+    if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
+      pendingOrderRef.current.orderId = orderId;
+    }
 
     const sellerProfile = profileContext.profileData.get(productData.pubkey);
     const buyerProfile = profileContext.profileData.get(userPubkey!);
@@ -1231,6 +1236,7 @@ export default function ProductInvoiceCard({
       mintUrl: mints[0],
       buyerContent: buyerProfile?.content,
       buyerCashuPubkey: cashuPubkey,
+      orderId,
     });
 
     const donationPercentage = sellerProfile?.content?.shopstr_donation ?? 2.1;
@@ -1283,12 +1289,6 @@ export default function ProductInvoiceCard({
         proofs: send,
       });
       remainingProofs = keep;
-    }
-
-    const orderId = uuidv4();
-
-    if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
-      pendingOrderRef.current.orderId = orderId;
     }
 
     if (p2pkOutputConfig && sellerToken) {

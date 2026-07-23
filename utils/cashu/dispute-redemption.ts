@@ -5,6 +5,7 @@ import {
   getTokenMetadata,
   signP2PKProof,
 } from "@cashu/cashu-ts";
+import { verifyEvent } from "nostr-tools";
 import { publishProofEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent, NostrManager } from "@/utils/nostr/nostr-manager";
 import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
@@ -48,6 +49,10 @@ export type EscrowPayload =
   | EscrowBuyerSigPayload
   | EscrowArbiterSigPayload
   | EscrowDisputePayload;
+
+type FindIncomingEscrowPayloadOptions = {
+  expectedSenderPubkeys?: string[];
+};
 
 // Decodes a Cashu token and signs each proof's P2PK secret with privkey,
 // producing exactly one signature per proof toward the 2-of-3 threshold.
@@ -184,7 +189,8 @@ export async function findIncomingEscrowPayload<T extends EscrowPayload>(
   signer: NostrSigner,
   userPubkey: string,
   orderId: string,
-  type: T["type"]
+  type: T["type"],
+  options: FindIncomingEscrowPayloadOptions = {}
 ): Promise<T | null> {
   const relayEvents = await nostr.fetch([
     { kinds: [1059], "#p": [userPubkey] },
@@ -192,13 +198,22 @@ export async function findIncomingEscrowPayload<T extends EscrowPayload>(
   const relayPayload = await findEscrowPayloadInEvents(
     relayEvents,
     signer,
+    userPubkey,
     orderId,
-    type
+    type,
+    options
   );
   if (relayPayload) return relayPayload;
 
   const cachedEvents = await fetchCachedGiftWrapEvents(userPubkey, signer);
-  return findEscrowPayloadInEvents(cachedEvents, signer, orderId, type);
+  return findEscrowPayloadInEvents(
+    cachedEvents,
+    signer,
+    userPubkey,
+    orderId,
+    type,
+    options
+  );
 }
 
 async function fetchCachedGiftWrapEvents(
@@ -235,18 +250,38 @@ async function fetchCachedGiftWrapEvents(
 async function findEscrowPayloadInEvents<T extends EscrowPayload>(
   events: NostrEvent[],
   signer: NostrSigner,
+  userPubkey: string,
   orderId: string,
-  type: T["type"]
+  type: T["type"],
+  options: FindIncomingEscrowPayloadOptions
 ): Promise<T | null> {
+  const expectedSenderPubkeys = new Set(
+    (options.expectedSenderPubkeys ?? []).filter(Boolean)
+  );
   const sortedEvents = [...events].sort(
     (a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)
   );
 
   for (const event of sortedEvents) {
     try {
+      if (event.kind !== 1059 || !verifyEvent(event as any)) continue;
+      if (!event.tags.some((tag) => tag[0] === "p" && tag[1] === userPubkey)) {
+        continue;
+      }
+
       const sealJson = await signer.decrypt(event.pubkey, event.content);
       const sealEvent = JSON.parse(sealJson);
       if (sealEvent.kind !== 13) continue;
+      if (!Array.isArray(sealEvent.tags) || sealEvent.tags.length !== 0) {
+        continue;
+      }
+      if (!verifyEvent(sealEvent)) continue;
+      if (
+        expectedSenderPubkeys.size > 0 &&
+        !expectedSenderPubkeys.has(sealEvent.pubkey)
+      ) {
+        continue;
+      }
 
       const rumorJson = await signer.decrypt(
         sealEvent.pubkey,

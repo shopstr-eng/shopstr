@@ -22,6 +22,7 @@ const P2PK_DISALLOWED_MINT_REASON =
   "This mint is not allowed for P2PK escrow checkout.";
 const P2PK_INPUT_FEE_REASON =
   "This mint charges input fees, so P2PK escrow checkout is blocked for now.";
+export const SHOPSTR_ORDER_P2PK_TAG = "shopstr_order";
 const P2PK_SINGLE_USE_TAGS = new Set([
   "sigflag",
   "pubkeys",
@@ -29,6 +30,7 @@ const P2PK_SINGLE_USE_TAGS = new Set([
   "locktime",
   "refund",
   "n_sigs_refund",
+  SHOPSTR_ORDER_P2PK_TAG,
 ]);
 
 export function normalizeCashuPubkey(pubkey?: string | null): string | null {
@@ -298,13 +300,15 @@ export function getBuyerReclaimKeys(
 export function buildP2pkSwapOptions(
   sellerP2pk: P2pkProfileSettings | undefined,
   buyerReclaimKeys: string[],
-  buyerCashuPubkey?: string
+  buyerCashuPubkey?: string,
+  orderId?: string
 ):
   | {
       pubkey: [string, string, string];
       requiredSignatures: number;
       locktime: number;
       refundKeys: string[];
+      additionalTags?: [string, ...string[]][];
     }
   | undefined {
   const sellerPubkey = normalizeCashuPubkey(sellerP2pk?.pubkey);
@@ -330,6 +334,7 @@ export function buildP2pkSwapOptions(
     requiredSignatures: 2,
     locktime: Math.floor(Date.now() / 1000) + locktimeOffsetSeconds,
     refundKeys: buyerReclaimKeys,
+    ...(orderId ? { additionalTags: [[SHOPSTR_ORDER_P2PK_TAG, orderId]] } : {}),
   };
 }
 
@@ -343,7 +348,8 @@ export function getPrimaryP2pkLockPubkey(
 export function buildP2pkOutputConfig(
   sellerP2pk: P2pkProfileSettings | undefined,
   buyerContent: ProfileData["content"] | undefined,
-  buyerCashuPubkey?: string
+  buyerCashuPubkey?: string,
+  orderId?: string
 ) {
   const reclaimKeys = getBuyerReclaimKeys(buyerContent, buyerCashuPubkey);
   if (!reclaimKeys) return undefined;
@@ -351,7 +357,8 @@ export function buildP2pkOutputConfig(
   const options = buildP2pkSwapOptions(
     sellerP2pk,
     reclaimKeys,
-    buyerCashuPubkey
+    buyerCashuPubkey,
+    orderId
   );
   if (!options) return undefined;
 
@@ -374,6 +381,26 @@ export function isSellerP2pkEscrowActive(
   );
 }
 
+function getShopstrOrderBinding(tags: P2PKTag[]): string | undefined | null {
+  const orderTags = tags.filter((tag) => tag[0] === SHOPSTR_ORDER_P2PK_TAG);
+  if (orderTags.length === 0) return undefined;
+  if (orderTags.length > 1) return null;
+
+  const tag = orderTags[0];
+  if (!tag) return null;
+  const orderId = tag?.[1];
+  if (
+    tag.length !== 2 ||
+    typeof orderId !== "string" ||
+    orderId.length === 0 ||
+    orderId.length > 128
+  ) {
+    return null;
+  }
+
+  return orderId;
+}
+
 // Single entry point for the buyer-side escrow checkout gate. Runs every
 // safety check in one place — feature flag + amount cap, mint NUT-10/NUT-11 +
 // input-fee support, and the buyer's reclaim identity — so a caller can never
@@ -386,6 +413,7 @@ export async function resolveP2pkCheckoutOutputConfig(params: {
   mintUrl: string | undefined;
   buyerContent: ProfileData["content"] | undefined;
   buyerCashuPubkey: string | undefined;
+  orderId?: string;
   fetchImpl?: typeof fetch;
 }): Promise<ReturnType<typeof buildP2pkOutputConfig>> {
   const {
@@ -394,6 +422,7 @@ export async function resolveP2pkCheckoutOutputConfig(params: {
     mintUrl,
     buyerContent,
     buyerCashuPubkey,
+    orderId,
     fetchImpl,
   } = params;
 
@@ -426,7 +455,8 @@ export async function resolveP2pkCheckoutOutputConfig(params: {
   const outputConfig = buildP2pkOutputConfig(
     sellerP2pk,
     buyerContent,
-    buyerCashuPubkey
+    buyerCashuPubkey,
+    orderId
   );
   if (!outputConfig) {
     throw new Error(
@@ -455,6 +485,9 @@ export function parseP2PK(proof: Proof): ParsedP2PK | null {
       if (seenTags.has(tag[0])) return null;
       seenTags.add(tag[0]);
     }
+
+    const shopstrOrderId = getShopstrOrderBinding(tags);
+    if (shopstrOrderId === null) return null;
 
     const locktime = getTagInt(proof.secret, "locktime") ?? 0;
 
@@ -506,6 +539,7 @@ export function parseP2PK(proof: Proof): ParsedP2PK | null {
       refundKeys,
       expired: locktime > 0 ? now >= locktime : false,
       rawTags: tags,
+      ...(shopstrOrderId ? { shopstrOrderId } : {}),
     };
   } catch {
     return null;
@@ -527,6 +561,7 @@ function p2pkConstraintFingerprint(p2pk: ParsedP2PK): string {
     nSigs: p2pk.nSigs,
     locktime: p2pk.locktime,
     refundKeys: p2pk.refundKeys.map(normalizeCashuPubkey).sort(),
+    shopstrOrderId: p2pk.shopstrOrderId,
   });
 }
 

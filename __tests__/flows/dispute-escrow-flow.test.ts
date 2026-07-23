@@ -15,6 +15,7 @@ jest.mock("@cashu/cashu-ts", () => {
       mint: "https://mint.example",
       unit: "sat",
     }),
+    getDecodedToken: (...args: unknown[]) => mockDecodeToken(...args),
     signP2PKProof: jest.fn((proof: Proof, privkey: string) => ({
       ...proof,
       witness: {
@@ -71,9 +72,10 @@ jest.mock("@/utils/nostr/server-dispute-records", () => ({
 
 jest.mock("@/utils/db/db-service", () => ({
   getOrderParticipants: jest.fn().mockResolvedValue({
-    buyerPubkey: null,
-    sellerPubkey: null,
+    buyerPubkey: "buyer-nostr-pubkey",
+    sellerPubkey: "seller-nostr-pubkey",
   }),
+  getOrderAmountSats: jest.fn().mockResolvedValue(21),
 }));
 
 jest.mock("@/utils/mcp/nostr-signing", () => ({
@@ -150,6 +152,7 @@ function buildLockedProof(outputConfig: any): Proof {
           ["refund", ...outputConfig.send.options.refundKeys],
           ["pubkeys", ...additionalPubkeys],
           ["n_sigs", String(outputConfig.send.options.requiredSignatures)],
+          ...(outputConfig.send.options.additionalTags ?? []),
         ],
       },
     ]),
@@ -199,7 +202,8 @@ describe("buyer/seller/arbiter dispute escrow flow", () => {
         refundDelayDays: 7,
       },
       undefined,
-      BUYER_CASHU_PUBKEY
+      BUYER_CASHU_PUBKEY,
+      "order-1"
     );
     expect(outputConfig).toEqual({
       send: {
@@ -228,6 +232,7 @@ describe("buyer/seller/arbiter dispute escrow flow", () => {
         pubkeys: [BUYER_CASHU_PUBKEY, NORMALIZED_ARBITER_CASHU_PUBKEY],
         nSigs: 2,
         refundKeys: [BUYER_CASHU_PUBKEY],
+        shopstrOrderId: "order-1",
       })
     );
 

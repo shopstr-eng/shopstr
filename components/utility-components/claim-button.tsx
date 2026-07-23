@@ -246,13 +246,16 @@ export default function ClaimButton({
     )
       return;
     let isActive = true;
+    const arbiterPubkey = process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY;
+    if (!arbiterPubkey) return;
 
     findIncomingEscrowPayload<EscrowArbiterSigPayload>(
       nostr,
       signer,
       userPubkey,
       orderId,
-      "escrow-arbiter-sig"
+      "escrow-arbiter-sig",
+      { expectedSenderPubkeys: [arbiterPubkey] }
     ).then((arbiterSigPayload) => {
       if (!isActive || !arbiterSigPayload) return;
       setDisputeStatus(isBuyerView ? "resolved:buyer" : "resolved:seller");
@@ -294,14 +297,20 @@ export default function ClaimButton({
     };
 
     const loadDisputeStatus = async () => {
+      const expectedDisputeSenders = [buyerPubkey, sellerPubkey].filter(
+        (pubkey): pubkey is string => Boolean(pubkey)
+      );
       const disputePayload =
-        await findIncomingEscrowPayload<EscrowDisputePayload>(
-          nostr,
-          signer,
-          userPubkey,
-          orderId,
-          "escrow-dispute"
-        );
+        expectedDisputeSenders.length > 0
+          ? await findIncomingEscrowPayload<EscrowDisputePayload>(
+              nostr,
+              signer,
+              userPubkey,
+              orderId,
+              "escrow-dispute",
+              { expectedSenderPubkeys: expectedDisputeSenders }
+            )
+          : null;
       if (!isActive) return;
       if (disputePayload) {
         markDisputeOpen();
@@ -331,6 +340,8 @@ export default function ClaimButton({
     nostr,
     signer,
     userPubkey,
+    buyerPubkey,
+    sellerPubkey,
     arbiterResolutionAvailable,
   ]);
 
@@ -703,21 +714,16 @@ export default function ClaimButton({
     await receive(false, true);
   };
 
-  // Shared DM helper for the dispute-escrow control-plane messages below.
-  // Reuses the exact ephemeral seal-and-wrap shape already used in
-  // redeem() (see the overpaid-fee-change notification above), just
-  // parameterized on an arbitrary recipient and a JSON payload instead of a
-  // plain-text message addressed to self.
+  // Shared DM helper for dispute-escrow control-plane messages. The seal is
+  // signed by the real sender so receivers can authenticate buyer/seller/
+  // arbiter payloads; only the outer gift-wrap key stays ephemeral.
   const sendEscrowDm = async (
     recipientPubkey: string,
     payload: EscrowPayload
   ) => {
-    const decodedRandomPubkeyForSender = nip19.decode(
-      randomNpubForSenderRef.current
-    );
-    const decodedRandomPrivkeyForSender = nip19.decode(
-      randomNsecForSenderRef.current
-    );
+    if (!userPubkey) {
+      throw new Error("Nostr identity is required to send escrow messages.");
+    }
     const decodedRandomPubkeyForReceiver = nip19.decode(
       randomNpubForReceiverRef.current
     );
@@ -725,7 +731,7 @@ export default function ClaimButton({
       randomNsecForReceiverRef.current
     );
     const giftWrappedMessageEvent = await constructGiftWrappedEvent(
-      decodedRandomPubkeyForSender.data as string,
+      userPubkey,
       recipientPubkey,
       JSON.stringify(payload),
       payload.type
@@ -733,9 +739,8 @@ export default function ClaimButton({
     const sealedEvent = await constructMessageSeal(
       signer!,
       giftWrappedMessageEvent,
-      decodedRandomPubkeyForSender.data as string,
-      recipientPubkey,
-      decodedRandomPrivkeyForSender.data as Uint8Array
+      userPubkey,
+      recipientPubkey
     );
     const giftWrappedEvent = await constructMessageGiftWrap(
       sealedEvent,
@@ -805,14 +810,16 @@ export default function ClaimButton({
     setEscrowActionError(null);
     setIsRedeeming(true);
     try {
-      const buyerSigPayload =
-        await findIncomingEscrowPayload<EscrowBuyerSigPayload>(
-          nostr,
-          signer,
-          userPubkey,
-          orderId,
-          "escrow-buyer-sig"
-        );
+      const buyerSigPayload = buyerPubkey
+        ? await findIncomingEscrowPayload<EscrowBuyerSigPayload>(
+            nostr,
+            signer,
+            userPubkey,
+            orderId,
+            "escrow-buyer-sig",
+            { expectedSenderPubkeys: [buyerPubkey] }
+          )
+        : null;
       if (!buyerSigPayload) {
         setEscrowActionError("No confirmation from buyer yet.");
         setIsRedeeming(false);
@@ -1005,14 +1012,20 @@ export default function ClaimButton({
       // Security rule 3: an EscrowArbiterSigPayload addressed to me is
       // itself the proof the arbiter resolved the dispute in my favor —
       // arbiter sigs are only ever sent to the winner.
-      const arbiterSigPayload =
-        await findIncomingEscrowPayload<EscrowArbiterSigPayload>(
-          nostr,
-          signer,
-          userPubkey,
-          orderId,
-          "escrow-arbiter-sig"
-        );
+      const arbiterSigPayload = process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY
+        ? await findIncomingEscrowPayload<EscrowArbiterSigPayload>(
+            nostr,
+            signer,
+            userPubkey,
+            orderId,
+            "escrow-arbiter-sig",
+            {
+              expectedSenderPubkeys: [
+                process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY,
+              ],
+            }
+          )
+        : null;
       if (!arbiterSigPayload) {
         setEscrowActionError("No arbiter resolution found yet.");
         setIsRedeeming(false);

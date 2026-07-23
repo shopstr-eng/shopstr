@@ -296,6 +296,7 @@ export interface ParsedP2PK {
   expired: boolean;
   rawTags: any[];
   proofCount?: number;
+  shopstrOrderId?: string;
 }
 
 export type WalletConfig = string[][];

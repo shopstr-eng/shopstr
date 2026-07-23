@@ -1469,6 +1469,12 @@ export default function CartInvoiceCard({
       }
       let sellerToken;
       let donationToken;
+      const orderId = uuidv4();
+
+      if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
+        pendingOrderRef.current.orderId = orderId;
+      }
+
       const sellerProfile = profileContext.profileData.get(pubkey);
       const buyerProfile = userPubkey
         ? profileContext.profileData.get(userPubkey)
@@ -1480,6 +1486,7 @@ export default function CartInvoiceCard({
         mintUrl: mints[0],
         buyerContent: buyerProfile?.content,
         buyerCashuPubkey: cashuPubkey,
+        orderId,
       });
       const donationPercentage =
         sellerProfile?.content?.shopstr_donation ?? 2.1;
@@ -1510,12 +1517,6 @@ export default function CartInvoiceCard({
           "Postal Code": data["Postal Code"],
           Country: data.Country,
         };
-      }
-
-      const orderId = uuidv4();
-
-      if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
-        pendingOrderRef.current.orderId = orderId;
       }
 
       // Generate keys once per order to ensure consistent sender pubkey

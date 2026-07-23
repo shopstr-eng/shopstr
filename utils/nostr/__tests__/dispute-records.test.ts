@@ -336,6 +336,16 @@ describe("selectAuthoritativeDisputeEvent", () => {
       ["p", "arbiter-pubkey", "", "arbiter"],
     ],
   });
+  const forgedWithRealParticipantTags = mkDisputeEvent({
+    pubkey: "attacker-pubkey",
+    created_at: 999,
+    tags: [
+      ["d", "order-1"],
+      ["p", "buyer-pubkey", "", "buyer"],
+      ["p", "seller-pubkey", "", "seller"],
+      ["p", "arbiter-pubkey", "", "arbiter"],
+    ],
+  });
 
   it("picks the candidate whose buyer/seller match the authoritative order record, ignoring a newer forged one", () => {
     const result = selectAuthoritativeDisputeEvent(
@@ -355,13 +365,22 @@ describe("selectAuthoritativeDisputeEvent", () => {
     expect(result).toBeNull();
   });
 
-  it("falls back to newest-overall when the order record has no known participants", () => {
+  it("rejects a forged candidate whose role tags name the real participants but whose author is unrelated", () => {
+    const result = selectAuthoritativeDisputeEvent(
+      [legitBuyerEvent, forgedWithRealParticipantTags],
+      { buyerPubkey: "buyer-pubkey", sellerPubkey: "seller-pubkey" }
+    );
+
+    expect(result).toBe(legitBuyerEvent);
+  });
+
+  it("returns null when the order record has no known participants", () => {
     const result = selectAuthoritativeDisputeEvent(
       [legitBuyerEvent, forgedByAttacker],
       { buyerPubkey: null, sellerPubkey: null }
     );
 
-    expect(result).toBe(forgedByAttacker);
+    expect(result).toBeNull();
   });
 });
 

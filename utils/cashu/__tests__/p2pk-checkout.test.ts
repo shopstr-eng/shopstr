@@ -40,6 +40,7 @@ const buildP2pkProof = ({
   refundKeys = [BUYER_CASHU_PUBKEY],
   pubkeys,
   nSigs,
+  shopstrOrderId,
   id = "proof-id",
 }: {
   pubkey?: string;
@@ -47,6 +48,7 @@ const buildP2pkProof = ({
   refundKeys?: string[];
   pubkeys?: string[];
   nSigs?: number;
+  shopstrOrderId?: string;
   id?: string;
 } = {}) =>
   ({
@@ -63,6 +65,7 @@ const buildP2pkProof = ({
           ["refund", ...refundKeys],
           ...(pubkeys ? [["pubkeys", ...pubkeys]] : []),
           ...(nSigs !== undefined ? [["n_sigs", nSigs.toString()]] : []),
+          ...(shopstrOrderId ? [["shopstr_order", shopstrOrderId]] : []),
         ],
       },
     ]),
@@ -158,6 +161,19 @@ describe("p2pk-checkout", () => {
         NORMALIZED_ARBITER_CASHU_PUBKEY,
       ]);
       expect(outputConfig?.send.options.requiredSignatures).toBe(2);
+    });
+
+    it("binds new escrow proofs to the checkout order id", () => {
+      const outputConfig = buildP2pkOutputConfig(
+        sellerP2pk,
+        undefined,
+        BUYER_CASHU_PUBKEY,
+        "order-1"
+      );
+
+      expect(outputConfig?.send.options.additionalTags).toEqual([
+        ["shopstr_order", "order-1"],
+      ]);
     });
 
     it("sets refundKeys from profile reclaim keys plus the buyer Cashu pubkey", () => {
@@ -577,6 +593,12 @@ describe("p2pk-checkout", () => {
       expect(parsed?.nSigs).toBe(2);
     });
 
+    it("parses the Shopstr order binding tag from P2PK proofs", () => {
+      const parsed = parseP2PK(buildP2pkProof({ shopstrOrderId: "order-1" }));
+
+      expect(parsed?.shopstrOrderId).toBe("order-1");
+    });
+
     it("compares x-only and compressed pubkeys consistently", () => {
       expect(
         pubkeysEqual(
@@ -613,6 +635,19 @@ describe("p2pk-checkout", () => {
       const result = parseP2PKProofSet([
         buildP2pkProof({ locktime: 100 }),
         buildP2pkProof({ locktime: 200, id: "second" }),
+      ]);
+
+      expect(result).toEqual({
+        p2pk: null,
+        invalidReason: "Token contains inconsistent P2PK proof locks.",
+      });
+    });
+
+    it("rejects proof sets that mix different Shopstr order bindings", () => {
+      const locktime = Math.floor(Date.now() / 1000) + 60;
+      const result = parseP2PKProofSet([
+        buildP2pkProof({ id: "one", locktime, shopstrOrderId: "order-1" }),
+        buildP2pkProof({ id: "two", locktime, shopstrOrderId: "order-2" }),
       ]);
 
       expect(result).toEqual({

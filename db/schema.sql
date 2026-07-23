@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS community_events (
 CREATE INDEX IF NOT EXISTS idx_community_events_pubkey ON community_events(pubkey);
 CREATE INDEX IF NOT EXISTS idx_community_events_kind ON community_events(kind);
 
--- Relay/config events (kind 10002 - relays, kind 10063 - blossom servers, kind 30009 - dispute records, kind 30405 - cart/saved, kind 30406 - buyer P2PK escrow records)
+-- Relay/config events (kind 10002 - relays, kind 10063 - blossom servers, kind 30407 - dispute records, kind 30405 - cart/saved, kind 30406 - buyer P2PK escrow records)
 CREATE TABLE IF NOT EXISTS config_events (
     id TEXT PRIMARY KEY,
     pubkey TEXT NOT NULL,
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS config_events (
     content TEXT NOT NULL,
     sig TEXT NOT NULL,
     cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT config_events_kind_check CHECK (kind IN (10002, 10063, 30009, 30405, 30406))
+    CONSTRAINT config_events_kind_check CHECK (kind IN (10002, 10063, 30407, 30405, 30406))
 );
 
 CREATE INDEX IF NOT EXISTS idx_config_events_pubkey ON config_events(pubkey);

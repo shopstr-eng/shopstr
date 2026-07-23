@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getTokenMetadata } from "@cashu/cashu-ts";
+import { getDecodedToken, getTokenMetadata, type Proof } from "@cashu/cashu-ts";
 import { applyRateLimit } from "@/utils/rate-limit";
 import { verifyNip98Request } from "@/utils/nostr/nip98-auth";
 import {
@@ -7,9 +7,13 @@ import {
   EscrowArbiterSigPayload,
 } from "@/utils/cashu/dispute-redemption";
 import {
+  getArbiterPubkey,
   isP2pkMintAllowed,
   isP2pkMintAllowlistConfigured,
+  parseP2PKProofSet,
+  pubkeysEqual,
 } from "@/utils/cashu/p2pk-checkout";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import { sendServerGiftWrappedDm } from "@/utils/nostr/server-gift-wrap";
 import {
   createDisputeEventTemplate,
@@ -18,7 +22,10 @@ import {
   selectAuthoritativeDisputeEvent,
 } from "@/utils/nostr/dispute-records";
 import { fetchCachedDisputeEvents } from "@/utils/nostr/server-dispute-records";
-import { getOrderParticipants } from "@/utils/db/db-service";
+import {
+  getOrderAmountSats,
+  getOrderParticipants,
+} from "@/utils/db/db-service";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
 import { McpNostrSigner, signAndPublishEvent } from "@/utils/mcp/nostr-signing";
@@ -67,6 +74,119 @@ function getTokenMint(token: string): string | null {
   } catch {
     return null;
   }
+}
+
+type DisputeTokenValidation =
+  { ok: true } | { ok: false; status: 400 | 403 | 500; error: string };
+
+function decodeTokenProofs(token: string): Proof[] | null {
+  try {
+    const decodedToken = getDecodedToken(token, []);
+    return Array.isArray(decodedToken?.proofs) ? decodedToken.proofs : null;
+  } catch {
+    return null;
+  }
+}
+
+function getProofAmountSats(proofs: Proof[]): number | null {
+  try {
+    const amount = sumProofAmounts(proofs);
+    if (!Number.isFinite(amount) || amount < 0) return null;
+    return amount;
+  } catch {
+    return null;
+  }
+}
+
+function validateDisputeToken(params: {
+  orderId: string;
+  token: string;
+  orderAmountSats: number | null;
+}): DisputeTokenValidation {
+  const { orderId, token, orderAmountSats } = params;
+
+  if (orderAmountSats === null) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Order amount is unavailable for dispute escrow",
+    };
+  }
+
+  const configuredArbiterCashuPubkey = getArbiterPubkey();
+  if (!configuredArbiterCashuPubkey) {
+    return {
+      ok: false,
+      status: 500,
+      error: "Arbiter Cashu pubkey is not configured",
+    };
+  }
+
+  const proofs = decodeTokenProofs(token);
+  if (!proofs || proofs.length === 0) {
+    return { ok: false, status: 400, error: "Invalid dispute token" };
+  }
+
+  const tokenAmountSats = getProofAmountSats(proofs);
+  if (tokenAmountSats === null) {
+    return { ok: false, status: 400, error: "Invalid dispute token amount" };
+  }
+
+  if (tokenAmountSats !== orderAmountSats) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Dispute token amount does not match the order amount",
+    };
+  }
+
+  const parsedProofSet = parseP2PKProofSet(proofs);
+  if (!parsedProofSet.p2pk) {
+    return {
+      ok: false,
+      status: 400,
+      error:
+        parsedProofSet.invalidReason ??
+        "Dispute token is not locked with P2PK escrow",
+    };
+  }
+
+  const escrowPubkeys = [
+    parsedProofSet.p2pk.pubkey,
+    ...(parsedProofSet.p2pk.pubkeys ?? []),
+  ];
+  const uniqueEscrowPubkeys = new Set(
+    escrowPubkeys.map((pubkey) => pubkey.toLowerCase())
+  );
+  if (parsedProofSet.p2pk.nSigs !== 2 || uniqueEscrowPubkeys.size !== 3) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Dispute token is not locked as 2-of-3 escrow",
+    };
+  }
+
+  if (parsedProofSet.p2pk.shopstrOrderId !== orderId) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Dispute token is not bound to the disputed order",
+    };
+  }
+
+  if (
+    !escrowPubkeys.some((pubkey) =>
+      pubkeysEqual(pubkey, configuredArbiterCashuPubkey)
+    )
+  ) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Dispute token is not locked to the configured arbiter",
+    };
+  }
+
+  return { ok: true };
 }
 
 export default async function handler(
@@ -166,6 +286,18 @@ export default async function handler(
     }
     if (dispute.status !== "open") {
       return res.status(409).json({ error: "Dispute is not open" });
+    }
+
+    const orderAmountSats = await getOrderAmountSats(orderId);
+    const tokenValidation = validateDisputeToken({
+      orderId,
+      token,
+      orderAmountSats,
+    });
+    if (!tokenValidation.ok) {
+      return res
+        .status(tokenValidation.status)
+        .json({ error: tokenValidation.error });
     }
 
     const winnerNostrPubkey =

@@ -1424,6 +1424,61 @@ export async function getOrderParticipants(orderId: string): Promise<{
   }
 }
 
+function parseOrderAmountSats(value: unknown): number | null {
+  const amount =
+    typeof value === "string" && value.trim()
+      ? Number(value)
+      : typeof value === "number"
+        ? value
+        : NaN;
+
+  if (!Number.isFinite(amount) || amount < 0) return null;
+
+  return Math.round(amount);
+}
+
+export async function getOrderAmountSats(
+  orderId: string
+): Promise<number | null> {
+  const dbPool = await getInitializedDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const messageResult = await client.query<{ tags: string[][] }>(
+      `SELECT tags
+       FROM message_events
+       WHERE order_id = $1
+       ORDER BY created_at DESC`,
+      [orderId] as any[]
+    );
+
+    for (const row of messageResult.rows) {
+      const tags = Array.isArray(row.tags) ? (row.tags as string[][]) : [];
+      const amountTag = tags.find((tag) => tag[0] === "amount");
+      const amount = parseOrderAmountSats(amountTag?.[1]);
+      if (amount !== null) return amount;
+    }
+
+    const mcpResult = await client.query<{ amount_total: string | number }>(
+      `SELECT amount_total
+       FROM mcp_orders
+       WHERE order_id = $1
+       LIMIT 1`,
+      [orderId] as any[]
+    );
+
+    return parseOrderAmountSats(mcpResult.rows[0]?.amount_total);
+  } catch (error) {
+    console.error("Failed to get order amount:", error);
+    throw error;
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
 // Update order status in database
 export async function updateOrderStatus(
   orderId: string,

@@ -91,7 +91,13 @@ function DisputesDashboard() {
             signer,
             userPubkey,
             dispute.orderId,
-            "escrow-dispute"
+            "escrow-dispute",
+            {
+              expectedSenderPubkeys: [
+                dispute.buyerPubkey,
+                dispute.sellerPubkey,
+              ],
+            }
           );
           return { ...dispute, token: dm?.token, amount: dm?.amount };
         })

@@ -4,6 +4,12 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   publishProofEvent: jest.fn().mockResolvedValue(undefined),
 }));
 
+const verifyEventMock = jest.fn().mockReturnValue(true);
+jest.mock("nostr-tools", () => ({
+  ...jest.requireActual("nostr-tools"),
+  verifyEvent: (...args: unknown[]) => verifyEventMock(...args),
+}));
+
 const mockDecodeToken = jest.fn();
 const mockLoadMint = jest.fn().mockResolvedValue(undefined);
 const mockReceive = jest.fn();
@@ -30,6 +36,7 @@ import { publishProofEvent } from "@/utils/nostr/nostr-helper-functions";
 import {
   createPartialRedemption,
   combineAndRedeem,
+  findIncomingEscrowPayload,
 } from "../dispute-redemption";
 
 const mkProof = (secret: string, amount = 10): Proof =>
@@ -160,5 +167,98 @@ describe("combineAndRedeem", () => {
     });
 
     expect(result).toEqual({ success: false, error: "threshold not met" });
+  });
+});
+
+describe("findIncomingEscrowPayload", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    verifyEventMock.mockReturnValue(true);
+  });
+
+  function buildWrappedEscrowPayload(senderPubkey: string) {
+    const payload = {
+      type: "escrow-dispute",
+      orderId: "order-1",
+      reason: "buyer opened dispute",
+      token: "cashuAtoken",
+      amount: 10,
+    };
+    const rumor = {
+      id: "rumor-id",
+      pubkey: senderPubkey,
+      created_at: 100,
+      kind: 14,
+      tags: [],
+      content: JSON.stringify(payload),
+      sig: "rumor-sig",
+    };
+    const seal = {
+      id: "seal-id",
+      pubkey: senderPubkey,
+      created_at: 99,
+      kind: 13,
+      tags: [],
+      content: "encrypted-rumor",
+      sig: "seal-sig",
+    };
+    const wrap = {
+      id: "wrap-id",
+      pubkey: "wrap-random-pubkey",
+      created_at: 101,
+      kind: 1059,
+      tags: [["p", "recipient-pubkey"]],
+      content: "encrypted-seal",
+      sig: "wrap-sig",
+    };
+
+    return { payload, rumor, seal, wrap };
+  }
+
+  it("returns an escrow payload when the seal author is an expected sender", async () => {
+    const { payload, rumor, seal, wrap } =
+      buildWrappedEscrowPayload("buyer-pubkey");
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrap]) };
+    const signer = {
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(seal))
+        .mockResolvedValueOnce(JSON.stringify(rumor)),
+    };
+
+    const result = await findIncomingEscrowPayload(
+      nostr as any,
+      signer as any,
+      "recipient-pubkey",
+      "order-1",
+      "escrow-dispute",
+      { expectedSenderPubkeys: ["buyer-pubkey"] }
+    );
+
+    expect(result).toEqual(payload);
+  });
+
+  it("rejects an escrow payload whose role data matches but whose seal author is not expected", async () => {
+    const { rumor, seal, wrap } = buildWrappedEscrowPayload("attacker-pubkey");
+    const nostr = { fetch: jest.fn().mockResolvedValue([wrap]) };
+    const signer = {
+      decrypt: jest
+        .fn()
+        .mockResolvedValueOnce(JSON.stringify(seal))
+        .mockResolvedValueOnce(JSON.stringify(rumor)),
+      sign: jest.fn(),
+    };
+    global.fetch = jest.fn().mockResolvedValue({ ok: false }) as jest.Mock;
+
+    const result = await findIncomingEscrowPayload(
+      nostr as any,
+      signer as any,
+      "recipient-pubkey",
+      "order-1",
+      "escrow-dispute",
+      { expectedSenderPubkeys: ["buyer-pubkey"] }
+    );
+
+    expect(result).toBeNull();
   });
 });

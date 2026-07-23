@@ -223,12 +223,10 @@ export async function fetchDisputeEventCandidates(params: {
 }
 
 // Picks the dispute event that should actually be acted on out of a set of
-// candidates for the same orderId, cross-checked against the authoritative
-// buyer/seller pubkeys recorded for the order (independent of anything in
-// the dispute event's own tags, which an attacker fully controls for events
-// they sign themselves). If the order record has no known buyer/seller
-// (e.g. it was never cached), falls back to newest-overall so legitimate
-// disputes for those orders aren't blocked.
+// candidates for the same orderId. The buyer/seller tags must match the
+// authoritative order record, and event.pubkey must be one of those same
+// participants; role tags alone are attacker-controlled and are not
+// authorship proof.
 export function selectAuthoritativeDisputeEvent(
   candidates: NostrEvent[],
   orderParticipants: { buyerPubkey: string | null; sellerPubkey: string | null }
@@ -238,17 +236,15 @@ export function selectAuthoritativeDisputeEvent(
   );
 
   const { buyerPubkey, sellerPubkey } = orderParticipants;
-  if (!buyerPubkey && !sellerPubkey) {
-    return sorted[0] ?? null;
-  }
+  if (!buyerPubkey || !sellerPubkey) return null;
 
   return (
     sorted.find((event) => {
       const parsed = parseDisputeEvent(event);
       if (!parsed) return false;
-      if (buyerPubkey && parsed.buyerPubkey !== buyerPubkey) return false;
-      if (sellerPubkey && parsed.sellerPubkey !== sellerPubkey) return false;
-      return true;
+      if (parsed.buyerPubkey !== buyerPubkey) return false;
+      if (parsed.sellerPubkey !== sellerPubkey) return false;
+      return event.pubkey === buyerPubkey || event.pubkey === sellerPubkey;
     }) ?? null
   );
 }
