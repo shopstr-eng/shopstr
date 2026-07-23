@@ -1,5 +1,6 @@
 jest.mock("@/utils/db/db-client", () => ({
   cacheEventToDatabase: jest.fn().mockResolvedValue(undefined),
+  cacheEventToDatabaseStrict: jest.fn().mockResolvedValue(undefined),
   deleteEventsFromDatabase: jest.fn().mockResolvedValue(undefined),
   trackFailedRelayPublish: jest.fn().mockResolvedValue(undefined),
 }));
@@ -100,6 +101,7 @@ import {
 } from "@/utils/types/types";
 import {
   cacheEventToDatabase,
+  cacheEventToDatabaseStrict,
   deleteEventsFromDatabase,
   trackFailedRelayPublish,
 } from "@/utils/db/db-client";
@@ -1614,6 +1616,24 @@ describe("sendGiftWrappedMessageEvent", () => {
     );
   });
 
+  it("does not publish a gift wrap when its required cache write fails", async () => {
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    (cacheEventToDatabaseStrict as jest.Mock).mockRejectedValueOnce(
+      new Error("database unavailable")
+    );
+
+    await expect(
+      sendGiftWrappedMessageEvent(
+        nostr as any,
+        giftWrappedEvent as any,
+        undefined,
+        { requireDurableCache: true }
+      )
+    ).rejects.toThrow("database unavailable");
+
+    expect(nostr.publish).not.toHaveBeenCalled();
+  });
+
   it("calls nostr.publish inside the timeout wrapper", async () => {
     const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
     (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
@@ -2456,6 +2476,23 @@ describe("finalizeAndSendNostrEvent", () => {
     expect(result).toEqual(signedEvent);
     expect(cacheEventToDatabase).toHaveBeenCalledWith(signedEvent);
     expect(newPromiseWithTimeout).toHaveBeenCalled();
+  });
+
+  it("requires a strict cache write before publishing when requested", async () => {
+    const signedEvent = makeSignedEvent();
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await finalizeAndSendNostrEvent(
+      signer as any,
+      nostr as any,
+      eventTemplate,
+      { requireDurableCache: true }
+    );
+
+    expect(cacheEventToDatabaseStrict).toHaveBeenCalledWith(signedEvent);
+    expect(cacheEventToDatabase).not.toHaveBeenCalled();
+    expect(nostr.publish).toHaveBeenCalled();
   });
 
   it("re-throws when signer.sign rejects", async () => {

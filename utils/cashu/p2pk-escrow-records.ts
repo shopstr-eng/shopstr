@@ -8,6 +8,8 @@ import {
 } from "@/utils/nostr/nostr-manager";
 import type { EventTemplate } from "nostr-tools";
 import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
+import { hashEscrowToken } from "@/utils/cashu/escrow-order-commitment";
 
 const LOCAL_STORAGE_KEY = "shopstr.p2pkEscrowRecords";
 const ENCRYPTED_STORAGE_KEY = "shopstr.p2pkEscrowRecords.encrypted";
@@ -38,6 +40,11 @@ export interface BuyerP2pkEscrowRecord {
   // Cashu pubkey of the arbiter (from NEXT_PUBLIC_ARBITER_PUBKEY at checkout
   // time). Absent on Phase 1 records that predate 2-of-3 dispute escrow.
   arbiterPubkey?: string;
+  // Phase 2 records retain the buyer's Cashu signer and seller's Nostr
+  // identity so checkout can register an authenticated, immutable order
+  // commitment without exposing the bearer token to the server.
+  buyerCashuPubkey?: string;
+  sellerNostrPubkey?: string;
   // Absent on Phase 1 records; normalized to "none" on read via
   // normalizeBuyerP2pkEscrowRecord.
   disputeStatus?: P2pkEscrowDisputeStatus;
@@ -47,6 +54,48 @@ export interface EncryptedBuyerP2pkEscrowRecord {
   orderId: string;
   createdAt: number;
   content: string;
+}
+
+export function createBuyerP2pkEscrowRecord(params: {
+  orderId: string;
+  mint: string;
+  token: string;
+  amount: number;
+  sellerNostrPubkey: string;
+  outputConfig: {
+    send: {
+      type: "p2pk";
+      options: {
+        pubkey: string | string[];
+        locktime: number;
+        refundKeys: string[];
+      };
+    };
+  };
+  createdAt: number;
+}): BuyerP2pkEscrowRecord {
+  const lockPubkeys = params.outputConfig.send.options.pubkey;
+  if (!Array.isArray(lockPubkeys) || lockPubkeys.length !== 3) {
+    throw new Error("Phase 2 escrow requires exactly three P2PK lock keys.");
+  }
+  const [sellerPubkey, buyerCashuPubkey, arbiterPubkey] = lockPubkeys;
+  if (!sellerPubkey || !buyerCashuPubkey || !arbiterPubkey) {
+    throw new Error("Phase 2 escrow lock keys are incomplete.");
+  }
+
+  return {
+    orderId: params.orderId,
+    mint: params.mint,
+    token: params.token,
+    amount: params.amount,
+    sellerPubkey,
+    buyerCashuPubkey,
+    arbiterPubkey,
+    sellerNostrPubkey: params.sellerNostrPubkey,
+    locktime: params.outputConfig.send.options.locktime,
+    refundKeys: params.outputConfig.send.options.refundKeys,
+    createdAt: params.createdAt,
+  };
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -81,9 +130,59 @@ export function isBuyerP2pkEscrowRecord(
     Number.isFinite(candidate.createdAt) &&
     (candidate.arbiterPubkey === undefined ||
       isNonEmptyString(candidate.arbiterPubkey)) &&
+    (candidate.buyerCashuPubkey === undefined ||
+      isNonEmptyString(candidate.buyerCashuPubkey)) &&
+    (candidate.sellerNostrPubkey === undefined ||
+      isNonEmptyString(candidate.sellerNostrPubkey)) &&
     (candidate.disputeStatus === undefined ||
       isDisputeStatus(candidate.disputeStatus))
   );
+}
+
+async function registerEscrowOrderCommitment(
+  signer: NostrSigner,
+  record: BuyerP2pkEscrowRecord
+): Promise<void> {
+  if (
+    !record.buyerCashuPubkey ||
+    !record.sellerNostrPubkey ||
+    !record.arbiterPubkey
+  ) {
+    return;
+  }
+
+  const body = JSON.stringify({
+    orderId: record.orderId,
+    sellerNostrPubkey: record.sellerNostrPubkey,
+    sellerCashuPubkey: record.sellerPubkey,
+    buyerCashuPubkey: record.buyerCashuPubkey,
+    arbiterCashuPubkey: record.arbiterPubkey,
+    amountSats: record.amount,
+    locktime: record.locktime,
+    tokenHash: hashEscrowToken(record.token),
+  });
+  const url = `${window.location.origin}/api/db/register-escrow-order`;
+  const authorization = await createNip98AuthorizationHeader(
+    signer,
+    url,
+    "POST",
+    body
+  );
+  const response = await fetch("/api/db/register-escrow-order", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: authorization,
+    },
+    body,
+  });
+
+  if (!response.ok) {
+    const responseBody = await response.json().catch(() => null);
+    throw new Error(
+      responseBody?.error ?? "Failed to register dispute escrow order"
+    );
+  }
 }
 
 // Phase 1 records predate arbiterPubkey/disputeStatus. This backfills the
@@ -246,7 +345,17 @@ export async function persistBuyerP2pkEscrowRecord(
   signer: NostrSigner | undefined,
   record: BuyerP2pkEscrowRecord
 ): Promise<void> {
-  if (!signer) return;
+  const isRegistrablePhase2Record = Boolean(
+    record.buyerCashuPubkey && record.sellerNostrPubkey && record.arbiterPubkey
+  );
+  if (!signer) {
+    if (isRegistrablePhase2Record) {
+      throw new Error(
+        "A Nostr identity is required to register dispute escrow securely."
+      );
+    }
+    return;
+  }
 
   const normalizedRecord = normalizeBuyerP2pkEscrowRecord(record);
 
@@ -260,6 +369,8 @@ export async function persistBuyerP2pkEscrowRecord(
     createdAt: normalizedRecord.createdAt,
     content,
   });
+
+  await registerEscrowOrderCommitment(signer, normalizedRecord);
 
   if (!nostr) return;
 

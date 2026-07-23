@@ -13,6 +13,7 @@ import {
   pubkeysEqual,
   resolveP2pkCheckoutOutputConfig,
 } from "../p2pk-checkout";
+import * as p2pkCheckout from "../p2pk-checkout";
 
 const BUYER_CASHU_PUBKEY = "a".repeat(64);
 const BUYER_EXTRA_RECLAIM_KEY = `03${"b".repeat(64)}`;
@@ -555,6 +556,44 @@ describe("p2pk-checkout", () => {
     });
   });
 
+  describe("resolveSellerCheckoutProfile", () => {
+    it("loads the seller profile at payment time when the in-memory profile map missed it", async () => {
+      const fetchedProfile = {
+        pubkey: BUYER_NOSTR_PUBKEY,
+        content: {
+          payment_preference: "ecash",
+          p2pk: sellerP2pk,
+        },
+        created_at: 123,
+      };
+      const fetchImpl = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ profile: fetchedProfile }),
+      });
+
+      const resolveSellerCheckoutProfile = (
+        p2pkCheckout as unknown as {
+          resolveSellerCheckoutProfile: (params: {
+            sellerPubkey: string;
+            cachedProfile?: unknown;
+            fetchImpl: typeof fetch;
+          }) => Promise<unknown>;
+        }
+      ).resolveSellerCheckoutProfile;
+
+      await expect(
+        resolveSellerCheckoutProfile({
+          sellerPubkey: BUYER_NOSTR_PUBKEY,
+          cachedProfile: undefined,
+          fetchImpl,
+        })
+      ).resolves.toEqual(fetchedProfile);
+      expect(fetchImpl).toHaveBeenCalledWith(
+        `/api/db/fetch-profile?pubkey=${BUYER_NOSTR_PUBKEY}`
+      );
+    });
+  });
+
   describe("P2PK parsing", () => {
     it("parses every refund value in a refund tag and normalizes keys", () => {
       const parsed = parseP2PK(
@@ -715,6 +754,33 @@ describe("p2pk-checkout", () => {
 
       expect(parseP2PK(proof)).toBeNull();
     });
+
+    it("rejects duplicate keys in either NUT-11 signature pathway", () => {
+      expect(
+        parseP2PK(
+          buildP2pkProof({
+            pubkeys: [SELLER_CASHU_PUBKEY, ARBITER_CASHU_PUBKEY],
+            nSigs: 2,
+          })
+        )
+      ).toBeNull();
+      expect(
+        parseP2PK(
+          buildP2pkProof({
+            refundKeys: [BUYER_CASHU_PUBKEY, `02${BUYER_CASHU_PUBKEY}`],
+          })
+        )
+      ).toBeNull();
+    });
+
+    it("rejects an unknown NUT-11 signature flag", () => {
+      const proof = buildP2pkProof();
+      const [, secret] = JSON.parse(proof.secret);
+      secret.tags.push(["sigflag", "SIG_UNKNOWN"]);
+      proof.secret = JSON.stringify(["P2PK", secret]);
+
+      expect(parseP2PK(proof)).toBeNull();
+    });
   });
 
   describe("getArbiterPubkey", () => {
@@ -726,6 +792,38 @@ describe("p2pk-checkout", () => {
       delete process.env.NEXT_PUBLIC_ARBITER_PUBKEY;
 
       expect(getArbiterPubkey()).toBeNull();
+    });
+  });
+
+  describe("seller escalation timing", () => {
+    const hour = 60 * 60 * 1000;
+    const requestSentAtMs = 1_000_000;
+
+    it("uses the normal 48 hour grace period when the refund locktime is far away", () => {
+      expect(
+        (p2pkCheckout as any).getSellerEscalationAtMs({
+          requestSentAtMs,
+          locktimeSeconds: Math.floor((requestSentAtMs + 7 * 24 * hour) / 1000),
+        })
+      ).toBe(requestSentAtMs + 48 * hour);
+    });
+
+    it("shortens the grace period to preserve a full day before refund unlock", () => {
+      expect(
+        (p2pkCheckout as any).getSellerEscalationAtMs({
+          requestSentAtMs,
+          locktimeSeconds: Math.floor((requestSentAtMs + 36 * hour) / 1000),
+        })
+      ).toBe(requestSentAtMs + 12 * hour);
+    });
+
+    it("allows immediate escalation when less than the safety window remains", () => {
+      expect(
+        (p2pkCheckout as any).getSellerEscalationAtMs({
+          requestSentAtMs,
+          locktimeSeconds: Math.floor((requestSentAtMs + 12 * hour) / 1000),
+        })
+      ).toBe(requestSentAtMs);
     });
   });
 });

@@ -14,7 +14,7 @@ import {
   createHash,
 } from "crypto";
 import { NostrEvent } from "@/utils/types/types";
-import { cacheEvent } from "@/utils/db/db-service";
+import { cacheEvent, cacheEventStrict } from "@/utils/db/db-service";
 import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
 
 const ALGORITHM = "aes-256-gcm";
@@ -154,19 +154,30 @@ export async function signAndPublishEvent(
   signer: McpNostrSigner,
   eventTemplate: EventTemplate,
   relayManager?: McpRelayManager,
-  options: { waitForRelayPublish?: boolean } = {}
+  options: {
+    waitForRelayPublish?: boolean;
+    requireDurableCache?: boolean;
+  } = {}
 ): Promise<NostrEvent> {
   const signedEvent = signer.sign(eventTemplate);
 
-  await cacheEvent(signedEvent);
+  if (options.requireDurableCache) {
+    await cacheEventStrict(signedEvent);
+  } else {
+    await cacheEvent(signedEvent);
+  }
 
   const manager = relayManager || new McpRelayManager();
   const publish = async () => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
       const publishPromise = manager.publish(signedEvent);
-      const timeoutPromise = new Promise<void>((_, reject) =>
-        setTimeout(() => reject(new Error("Relay publish timeout")), 21000)
-      );
+      const timeoutPromise = new Promise<void>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error("Relay publish timeout")),
+          21000
+        );
+      });
       await Promise.race([publishPromise, timeoutPromise]);
     } catch (error) {
       console.warn(
@@ -186,6 +197,7 @@ export async function signAndPublishEvent(
         console.error("Failed to track failed relay publish:", trackError);
       }
     } finally {
+      if (timeoutId) clearTimeout(timeoutId);
       if (!relayManager) {
         manager.close();
       }

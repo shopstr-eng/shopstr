@@ -23,6 +23,8 @@ const P2PK_DISALLOWED_MINT_REASON =
 const P2PK_INPUT_FEE_REASON =
   "This mint charges input fees, so P2PK escrow checkout is blocked for now.";
 export const SHOPSTR_ORDER_P2PK_TAG = "shopstr_order";
+export const SELLER_ESCALATION_GRACE_PERIOD_MS = 48 * 60 * 60 * 1000;
+export const SELLER_ESCALATION_REFUND_SAFETY_MS = 24 * 60 * 60 * 1000;
 const P2PK_SINGLE_USE_TAGS = new Set([
   "sigflag",
   "pubkeys",
@@ -79,6 +81,21 @@ export function getP2pkTestLocktimeSeconds(): number | undefined {
   }
 
   return Math.floor(configured);
+}
+
+export function getSellerEscalationAtMs(params: {
+  requestSentAtMs: number;
+  locktimeSeconds: number;
+}): number {
+  const normalEscalationAt =
+    params.requestSentAtMs + SELLER_ESCALATION_GRACE_PERIOD_MS;
+  const latestSafeEscalationAt =
+    params.locktimeSeconds * 1000 - SELLER_ESCALATION_REFUND_SAFETY_MS;
+
+  return Math.max(
+    params.requestSentAtMs,
+    Math.min(normalEscalationAt, latestSafeEscalationAt)
+  );
 }
 
 export function normalizeMintUrlForPolicy(mintUrl: string): string | null {
@@ -381,6 +398,61 @@ export function isSellerP2pkEscrowActive(
   );
 }
 
+export async function resolveSellerCheckoutProfile(params: {
+  sellerPubkey: string;
+  cachedProfile?: ProfileData;
+  fetchImpl?: typeof fetch;
+}): Promise<ProfileData> {
+  const { sellerPubkey, cachedProfile, fetchImpl = fetch } = params;
+  let fetchedProfile: ProfileData | undefined;
+
+  try {
+    const response = await fetchImpl(
+      `/api/db/fetch-profile?pubkey=${encodeURIComponent(sellerPubkey)}`
+    );
+    if (response.ok) {
+      const body = (await response.json()) as {
+        profile?: {
+          pubkey?: unknown;
+          content?: unknown;
+          created_at?: unknown;
+        } | null;
+      };
+      const profile = body.profile;
+      const createdAt = Number(profile?.created_at);
+      if (
+        profile?.pubkey === sellerPubkey &&
+        profile.content &&
+        typeof profile.content === "object" &&
+        !Array.isArray(profile.content) &&
+        Number.isFinite(createdAt)
+      ) {
+        fetchedProfile = {
+          pubkey: profile.pubkey,
+          content: profile.content as ProfileData["content"],
+          created_at: createdAt,
+        };
+      }
+    }
+  } catch {
+    // A verified in-memory profile remains usable when the cache endpoint is
+    // temporarily unavailable.
+  }
+
+  if (
+    fetchedProfile &&
+    (!cachedProfile ||
+      fetchedProfile.created_at >= Number(cachedProfile.created_at))
+  ) {
+    return fetchedProfile;
+  }
+  if (cachedProfile) return cachedProfile;
+
+  throw new Error(
+    "The seller payment profile could not be verified. Please wait for the listing to finish loading and try again."
+  );
+}
+
 function getShopstrOrderBinding(tags: P2PKTag[]): string | undefined | null {
   const orderTags = tags.filter((tag) => tag[0] === SHOPSTR_ORDER_P2PK_TAG);
   if (orderTags.length === 0) return undefined;
@@ -489,6 +561,15 @@ export function parseP2PK(proof: Proof): ParsedP2PK | null {
     const shopstrOrderId = getShopstrOrderBinding(tags);
     if (shopstrOrderId === null) return null;
 
+    const sigFlagTag = tags.find((tag) => tag[0] === "sigflag");
+    if (
+      sigFlagTag &&
+      (sigFlagTag.length !== 2 ||
+        (sigFlagTag[1] !== "SIG_INPUTS" && sigFlagTag[1] !== "SIG_ALL"))
+    ) {
+      return null;
+    }
+
     const locktime = getTagInt(proof.secret, "locktime") ?? 0;
 
     const refundKeys: string[] = [];
@@ -502,6 +583,7 @@ export function parseP2PK(proof: Proof): ParsedP2PK | null {
         refundKeys.push(refundKey);
       }
     }
+    if (new Set(refundKeys).size !== refundKeys.length) return null;
 
     const now = Math.floor(Date.now() / 1000);
     // parse additional pubkeys for multisig
@@ -515,6 +597,8 @@ export function parseP2PK(proof: Proof): ParsedP2PK | null {
         additionalPubkeys.push(additionalKey);
       }
     }
+    const mainPubkeys = [pubkey, ...additionalPubkeys];
+    if (new Set(mainPubkeys).size !== mainPubkeys.length) return null;
 
     // parse nSigs for multisig threshold
     const nSigs = getTagInt(proof.secret, "n_sigs") ?? undefined;

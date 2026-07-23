@@ -2,6 +2,7 @@ import { verifyEvent } from "nostr-tools";
 import { fetchCachedEvents } from "@/utils/db/db-service";
 import {
   DISPUTE_EVENT_KIND,
+  isDisputeTransitionAuthorAuthorized,
   parseDisputeEvent,
 } from "@/utils/nostr/dispute-records";
 import type { NostrEvent } from "@/utils/nostr/nostr-manager";
@@ -25,7 +26,8 @@ export async function fetchCachedDisputeEvents(
     (event) =>
       getDTag(event) === orderId &&
       verifyEvent(event) &&
-      parseDisputeEvent(event) !== null
+      parseDisputeEvent(event) !== null &&
+      isDisputeTransitionAuthorAuthorized(event)
   );
 
   const newestByAuthor = new Map<string, NostrEvent>();

@@ -10,8 +10,10 @@ const signAndPublishEventMock = jest.fn();
 const getTokenMetadataMock = jest.fn();
 const getDecodedTokenMock = jest.fn();
 const parseP2PKProofSetMock = jest.fn();
-const getOrderParticipantsMock = jest.fn();
-const getOrderAmountSatsMock = jest.fn();
+const getP2pkEscrowOrderMock = jest.fn();
+const recordP2pkEscrowRulingMock = jest.fn();
+const hashEscrowTokenMock = jest.fn();
+const deriveCashuPubkeyMock = jest.fn();
 
 jest.mock("@cashu/cashu-ts", () => ({
   getTokenMetadata: (...args: unknown[]) => getTokenMetadataMock(...args),
@@ -38,6 +40,14 @@ jest.mock("@/utils/cashu/p2pk-checkout", () => {
     parseP2PKProofSet: (...args: unknown[]) => parseP2PKProofSetMock(...args),
   };
 });
+
+jest.mock("@/utils/cashu/escrow-order-commitment", () => ({
+  hashEscrowToken: (...args: unknown[]) => hashEscrowTokenMock(...args),
+}));
+
+jest.mock("@/utils/cashu/wallet-config", () => ({
+  deriveCashuPubkey: (...args: unknown[]) => deriveCashuPubkeyMock(...args),
+}));
 
 jest.mock("@/utils/nostr/server-gift-wrap", () => ({
   sendServerGiftWrappedDm: (...args: unknown[]) =>
@@ -67,9 +77,9 @@ jest.mock("@/utils/nostr/server-dispute-records", () => ({
 }));
 
 jest.mock("@/utils/db/db-service", () => ({
-  getOrderParticipants: (...args: unknown[]) =>
-    getOrderParticipantsMock(...args),
-  getOrderAmountSats: (...args: unknown[]) => getOrderAmountSatsMock(...args),
+  getP2pkEscrowOrder: (...args: unknown[]) => getP2pkEscrowOrderMock(...args),
+  recordP2pkEscrowRuling: (...args: unknown[]) =>
+    recordP2pkEscrowRulingMock(...args),
 }));
 
 jest.mock("@/utils/mcp/nostr-signing", () => ({
@@ -146,11 +156,21 @@ describe("/api/arbiter/rule", () => {
     fetchDisputeEventCandidatesMock.mockResolvedValue([
       { id: "dispute-event" },
     ]);
-    getOrderParticipantsMock.mockResolvedValue({
-      buyerPubkey: "buyer-nostr-pubkey",
-      sellerPubkey: "seller-nostr-pubkey",
+    hashEscrowTokenMock.mockReturnValue("token-hash");
+    deriveCashuPubkeyMock.mockReturnValue("a".repeat(64));
+    getP2pkEscrowOrderMock.mockResolvedValue({
+      orderId: "order-1",
+      buyerNostrPubkey: "buyer-nostr-pubkey",
+      sellerNostrPubkey: "seller-nostr-pubkey",
+      sellerCashuPubkey: "b".repeat(64),
+      buyerCashuPubkey: "c".repeat(64),
+      arbiterCashuPubkey: "a".repeat(64),
+      amountSats: 10,
+      locktime: 9999999999,
+      tokenHash: "token-hash",
+      rulingFor: null,
     });
-    getOrderAmountSatsMock.mockResolvedValue(10);
+    recordP2pkEscrowRulingMock.mockResolvedValue("recorded");
     selectAuthoritativeDisputeEventMock.mockImplementation(
       (candidates: unknown[]) => candidates[0] ?? null
     );
@@ -217,16 +237,25 @@ describe("/api/arbiter/rule", () => {
 
     expect(verifyNip98RequestMock).toHaveBeenCalledWith(req, "POST");
     expect(fetchCachedDisputeEventsMock).toHaveBeenCalledWith("order-1");
-    expect(fetchDisputeEventCandidatesMock).not.toHaveBeenCalled();
-    expect(getOrderParticipantsMock).toHaveBeenCalledWith("order-1");
-    expect(getOrderAmountSatsMock).toHaveBeenCalledWith("order-1");
+    expect(fetchDisputeEventCandidatesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ orderId: "order-1", timeoutMs: 10_000 })
+    );
+    expect(getP2pkEscrowOrderMock).toHaveBeenCalledWith("order-1");
     expect(getDecodedTokenMock).toHaveBeenCalledWith("cashuAtoken", []);
     expect(parseP2PKProofSetMock).toHaveBeenCalledWith([
       { amount: 10, secret: "p2pk-secret", C: "proof-C" },
     ]);
     expect(selectAuthoritativeDisputeEventMock).toHaveBeenCalledWith(
-      [{ id: "cached-dispute" }],
-      { buyerPubkey: "buyer-nostr-pubkey", sellerPubkey: "seller-nostr-pubkey" }
+      [{ id: "cached-dispute" }, { id: "dispute-event" }],
+      {
+        buyerPubkey: "buyer-nostr-pubkey",
+        sellerPubkey: "seller-nostr-pubkey",
+      },
+      "arbiter-nostr-pubkey"
+    );
+    expect(recordP2pkEscrowRulingMock).toHaveBeenCalledWith(
+      "order-1",
+      "seller"
     );
     expect(createPartialRedemptionMock).toHaveBeenCalledWith(
       "cashuAtoken",
@@ -255,7 +284,7 @@ describe("/api/arbiter/rule", () => {
         tags: expect.arrayContaining([["status", "resolved:seller"]]),
       }),
       undefined,
-      { waitForRelayPublish: false }
+      { waitForRelayPublish: false, requireDurableCache: true }
     );
     expect(res.statusCode).toBe(200);
     expect(res.jsonBody).toEqual({ success: true });
@@ -292,12 +321,12 @@ describe("/api/arbiter/rule", () => {
     expect(createPartialRedemptionMock).not.toHaveBeenCalled();
   });
 
-  it("rejects rulings when the order amount is unavailable", async () => {
+  it("rejects rulings when the immutable escrow order record is unavailable", async () => {
     verifyNip98RequestMock.mockResolvedValue({
       ok: true,
       pubkey: "arbiter-nostr-pubkey",
     });
-    getOrderAmountSatsMock.mockResolvedValue(null);
+    getP2pkEscrowOrderMock.mockResolvedValue(null);
 
     const req = {
       method: "POST",
@@ -314,7 +343,7 @@ describe("/api/arbiter/rule", () => {
 
     expect(res.statusCode).toBe(403);
     expect(res.jsonBody).toEqual({
-      error: "Order amount is unavailable for dispute escrow",
+      error: "Escrow order record is unavailable",
     });
     expect(createPartialRedemptionMock).not.toHaveBeenCalled();
   });
@@ -459,7 +488,7 @@ describe("/api/arbiter/rule", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.jsonBody).toEqual({
-      error: "Dispute token is not locked to the configured arbiter",
+      error: "Dispute token lock keys do not match the registered order",
     });
     expect(createPartialRedemptionMock).not.toHaveBeenCalled();
   });
@@ -568,7 +597,7 @@ describe("/api/arbiter/rule", () => {
     await handler(req, res as any);
 
     expect(res.statusCode).toBe(404);
-    expect(getOrderParticipantsMock).not.toHaveBeenCalled();
+    expect(getP2pkEscrowOrderMock).toHaveBeenCalledWith("order-1");
     expect(createPartialRedemptionMock).not.toHaveBeenCalled();
   });
 
@@ -577,9 +606,17 @@ describe("/api/arbiter/rule", () => {
       ok: true,
       pubkey: "arbiter-nostr-pubkey",
     });
-    getOrderParticipantsMock.mockResolvedValue({
-      buyerPubkey: "real-buyer-pubkey",
-      sellerPubkey: "seller-nostr-pubkey",
+    getP2pkEscrowOrderMock.mockResolvedValue({
+      orderId: "order-1",
+      buyerNostrPubkey: "real-buyer-pubkey",
+      sellerNostrPubkey: "seller-nostr-pubkey",
+      sellerCashuPubkey: "b".repeat(64),
+      buyerCashuPubkey: "c".repeat(64),
+      arbiterCashuPubkey: "a".repeat(64),
+      amountSats: 10,
+      locktime: 9999999999,
+      tokenHash: "token-hash",
+      rulingFor: null,
     });
     selectAuthoritativeDisputeEventMock.mockReturnValue(null);
 
@@ -599,6 +636,129 @@ describe("/api/arbiter/rule", () => {
     expect(res.statusCode).toBe(403);
     expect(res.jsonBody).toEqual({
       error: "Dispute event does not match order records",
+    });
+    expect(createPartialRedemptionMock).not.toHaveBeenCalled();
+    expect(sendServerGiftWrappedDmMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a different bearer token even when its amount and order tag match", async () => {
+    verifyNip98RequestMock.mockResolvedValue({
+      ok: true,
+      pubkey: "arbiter-nostr-pubkey",
+    });
+    hashEscrowTokenMock.mockReturnValue("different-token-hash");
+
+    const req = {
+      method: "POST",
+      headers: { authorization: "Nostr signed-event" },
+      body: {
+        orderId: "order-1",
+        token: "cashuAotherToken",
+        rulingFor: "buyer",
+      },
+    } as any;
+    const res = createResponse();
+
+    await handler(req, res as any);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonBody).toEqual({
+      error: "Dispute token does not match the registered order token",
+    });
+    expect(recordP2pkEscrowRulingMock).not.toHaveBeenCalled();
+    expect(createPartialRedemptionMock).not.toHaveBeenCalled();
+  });
+
+  it("requires the token lock to contain the exact registered seller, buyer, and arbiter keys", async () => {
+    verifyNip98RequestMock.mockResolvedValue({
+      ok: true,
+      pubkey: "arbiter-nostr-pubkey",
+    });
+    parseP2PKProofSetMock.mockReturnValue({
+      p2pk: {
+        pubkey: "d".repeat(64),
+        pubkeys: ["c".repeat(64), "a".repeat(64)],
+        nSigs: 2,
+        locktime: 9999999999,
+        refundKeys: ["c".repeat(64)],
+        expired: false,
+        rawTags: [],
+        proofCount: 1,
+        shopstrOrderId: "order-1",
+      },
+    });
+
+    const req = {
+      method: "POST",
+      headers: { authorization: "Nostr signed-event" },
+      body: {
+        orderId: "order-1",
+        token: "cashuAtoken",
+        rulingFor: "buyer",
+      },
+    } as any;
+    const res = createResponse();
+
+    await handler(req, res as any);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonBody).toEqual({
+      error: "Dispute token lock keys do not match the registered order",
+    });
+    expect(createPartialRedemptionMock).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the Cashu arbiter private key does not match the configured public key", async () => {
+    verifyNip98RequestMock.mockResolvedValue({
+      ok: true,
+      pubkey: "arbiter-nostr-pubkey",
+    });
+    deriveCashuPubkeyMock.mockReturnValue("f".repeat(64));
+
+    const req = {
+      method: "POST",
+      headers: { authorization: "Nostr signed-event" },
+      body: {
+        orderId: "order-1",
+        token: "cashuAtoken",
+        rulingFor: "buyer",
+      },
+    } as any;
+    const res = createResponse();
+
+    await handler(req, res as any);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.jsonBody).toEqual({
+      error: "Arbiter Cashu private key does not match configured pubkey",
+    });
+    expect(recordP2pkEscrowRulingMock).not.toHaveBeenCalled();
+    expect(createPartialRedemptionMock).not.toHaveBeenCalled();
+  });
+
+  it("does not issue a signature share after an opposite ruling is durably recorded", async () => {
+    verifyNip98RequestMock.mockResolvedValue({
+      ok: true,
+      pubkey: "arbiter-nostr-pubkey",
+    });
+    recordP2pkEscrowRulingMock.mockResolvedValue("conflict");
+
+    const req = {
+      method: "POST",
+      headers: { authorization: "Nostr signed-event" },
+      body: {
+        orderId: "order-1",
+        token: "cashuAtoken",
+        rulingFor: "seller",
+      },
+    } as any;
+    const res = createResponse();
+
+    await handler(req, res as any);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.jsonBody).toEqual({
+      error: "Dispute already has a final ruling",
     });
     expect(createPartialRedemptionMock).not.toHaveBeenCalled();
     expect(sendServerGiftWrappedDmMock).not.toHaveBeenCalled();

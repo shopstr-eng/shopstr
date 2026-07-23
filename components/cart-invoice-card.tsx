@@ -43,9 +43,9 @@ import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import {
-  getPrimaryP2pkLockPubkey,
   isSellerP2pkEscrowActive,
   resolveP2pkCheckoutOutputConfig,
+  resolveSellerCheckoutProfile,
 } from "@/utils/cashu/p2pk-checkout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import {
@@ -60,7 +60,10 @@ import {
   withDeadline,
   isTimeoutError,
 } from "@/utils/cashu/wallet-recovery";
-import { persistBuyerP2pkEscrowRecord } from "@/utils/cashu/p2pk-escrow-records";
+import {
+  createBuyerP2pkEscrowRecord,
+  persistBuyerP2pkEscrowRecord,
+} from "@/utils/cashu/p2pk-escrow-records";
 import {
   getSavedAddresses,
   generateKeys,
@@ -1475,7 +1478,10 @@ export default function CartInvoiceCard({
         pendingOrderRef.current.orderId = orderId;
       }
 
-      const sellerProfile = profileContext.profileData.get(pubkey);
+      const sellerProfile = await resolveSellerCheckoutProfile({
+        sellerPubkey: pubkey,
+        cachedProfile: profileContext.profileData.get(pubkey),
+      });
       const buyerProfile = userPubkey
         ? profileContext.profileData.get(userPubkey)
         : undefined;
@@ -1488,6 +1494,11 @@ export default function CartInvoiceCard({
         buyerCashuPubkey: cashuPubkey,
         orderId,
       });
+      if (p2pkOutputConfig && !signer) {
+        throw new Error(
+          "A Nostr identity is required to register dispute escrow securely."
+        );
+      }
       const donationPercentage =
         sellerProfile?.content?.shopstr_donation ?? 2.1;
       const donationAmount = Math.ceil(
@@ -1641,16 +1652,19 @@ export default function CartInvoiceCard({
       }
 
       if (p2pkOutputConfig && sellerToken) {
-        await persistBuyerP2pkEscrowRecord(nostr, signer, {
-          orderId,
-          mint: mints[0]!,
-          token: sellerToken,
-          amount: sellerAmount,
-          sellerPubkey: getPrimaryP2pkLockPubkey(p2pkOutputConfig)!,
-          locktime: p2pkOutputConfig.send.options.locktime,
-          refundKeys: p2pkOutputConfig.send.options.refundKeys,
-          createdAt: Math.floor(Date.now() / 1000),
-        });
+        await persistBuyerP2pkEscrowRecord(
+          nostr,
+          signer,
+          createBuyerP2pkEscrowRecord({
+            orderId,
+            mint: mints[0]!,
+            token: sellerToken,
+            amount: sellerAmount,
+            sellerNostrPubkey: pubkey,
+            outputConfig: p2pkOutputConfig,
+            createdAt: Math.floor(Date.now() / 1000),
+          })
+        );
       }
 
       // Step 1: Send payment message (if applicable)

@@ -6,6 +6,8 @@ const mockVerifyNip98Request = jest.fn();
 const mockRelayDisputeEvents: any[] = [];
 const mockDmInbox: any[] = [];
 const mockPublishedProofEvents: any[] = [];
+const mockGetP2pkEscrowOrder = jest.fn();
+const mockRecordP2pkEscrowRuling = jest.fn();
 
 jest.mock("@cashu/cashu-ts", () => {
   const actual = jest.requireActual("@cashu/cashu-ts");
@@ -71,11 +73,17 @@ jest.mock("@/utils/nostr/server-dispute-records", () => ({
 }));
 
 jest.mock("@/utils/db/db-service", () => ({
-  getOrderParticipants: jest.fn().mockResolvedValue({
-    buyerPubkey: "buyer-nostr-pubkey",
-    sellerPubkey: "seller-nostr-pubkey",
-  }),
-  getOrderAmountSats: jest.fn().mockResolvedValue(21),
+  getP2pkEscrowOrder: (...args: unknown[]) => mockGetP2pkEscrowOrder(...args),
+  recordP2pkEscrowRuling: (...args: unknown[]) =>
+    mockRecordP2pkEscrowRuling(...args),
+}));
+
+jest.mock("@/utils/cashu/escrow-order-commitment", () => ({
+  hashEscrowToken: jest.fn(() => "registered-token-hash"),
+}));
+
+jest.mock("@/utils/cashu/wallet-config", () => ({
+  deriveCashuPubkey: jest.fn(() => "c".repeat(64)),
 }));
 
 jest.mock("@/utils/mcp/nostr-signing", () => ({
@@ -188,6 +196,7 @@ describe("buyer/seller/arbiter dispute escrow flow", () => {
         secret: "fresh-secret",
       },
     ]);
+    mockRecordP2pkEscrowRuling.mockResolvedValue("recorded");
   });
 
   afterEach(() => {
@@ -205,6 +214,9 @@ describe("buyer/seller/arbiter dispute escrow flow", () => {
       BUYER_CASHU_PUBKEY,
       "order-1"
     );
+    if (!outputConfig) {
+      throw new Error("Expected a Phase 2 escrow output configuration");
+    }
     expect(outputConfig).toEqual({
       send: {
         type: "p2pk",
@@ -218,6 +230,20 @@ describe("buyer/seller/arbiter dispute escrow flow", () => {
           refundKeys: [BUYER_CASHU_PUBKEY],
         }),
       },
+    });
+    mockGetP2pkEscrowOrder.mockResolvedValue({
+      orderId: "order-1",
+      buyerNostrPubkey: BUYER_NOSTR_PUBKEY,
+      sellerNostrPubkey: SELLER_NOSTR_PUBKEY,
+      sellerCashuPubkey: NORMALIZED_SELLER_CASHU_PUBKEY,
+      buyerCashuPubkey: BUYER_CASHU_PUBKEY,
+      arbiterCashuPubkey: NORMALIZED_ARBITER_CASHU_PUBKEY,
+      amountSats: 21,
+      locktime: outputConfig.send.options.locktime,
+      tokenHash: "registered-token-hash",
+      rulingFor: null,
+      resolvedAt: null,
+      createdAt: new Date(),
     });
 
     const lockedProof = buildLockedProof(outputConfig);

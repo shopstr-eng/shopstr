@@ -13,6 +13,8 @@ import {
   parseP2PKProofSet,
   pubkeysEqual,
 } from "@/utils/cashu/p2pk-checkout";
+import { hashEscrowToken } from "@/utils/cashu/escrow-order-commitment";
+import { deriveCashuPubkey } from "@/utils/cashu/wallet-config";
 import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import { sendServerGiftWrappedDm } from "@/utils/nostr/server-gift-wrap";
 import {
@@ -23,8 +25,9 @@ import {
 } from "@/utils/nostr/dispute-records";
 import { fetchCachedDisputeEvents } from "@/utils/nostr/server-dispute-records";
 import {
-  getOrderAmountSats,
-  getOrderParticipants,
+  getP2pkEscrowOrder,
+  recordP2pkEscrowRuling,
+  type P2pkEscrowOrderRecord,
 } from "@/utils/db/db-service";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
@@ -101,17 +104,9 @@ function getProofAmountSats(proofs: Proof[]): number | null {
 function validateDisputeToken(params: {
   orderId: string;
   token: string;
-  orderAmountSats: number | null;
+  orderRecord: P2pkEscrowOrderRecord;
 }): DisputeTokenValidation {
-  const { orderId, token, orderAmountSats } = params;
-
-  if (orderAmountSats === null) {
-    return {
-      ok: false,
-      status: 403,
-      error: "Order amount is unavailable for dispute escrow",
-    };
-  }
+  const { orderId, token, orderRecord } = params;
 
   const configuredArbiterCashuPubkey = getArbiterPubkey();
   if (!configuredArbiterCashuPubkey) {
@@ -119,6 +114,22 @@ function validateDisputeToken(params: {
       ok: false,
       status: 500,
       error: "Arbiter Cashu pubkey is not configured",
+    };
+  }
+  if (
+    !pubkeysEqual(configuredArbiterCashuPubkey, orderRecord.arbiterCashuPubkey)
+  ) {
+    return {
+      ok: false,
+      status: 403,
+      error: "Escrow order is assigned to a different Cashu arbiter",
+    };
+  }
+  if (hashEscrowToken(token) !== orderRecord.tokenHash) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Dispute token does not match the registered order token",
     };
   }
 
@@ -132,7 +143,7 @@ function validateDisputeToken(params: {
     return { ok: false, status: 400, error: "Invalid dispute token amount" };
   }
 
-  if (tokenAmountSats !== orderAmountSats) {
+  if (tokenAmountSats !== orderRecord.amountSats) {
     return {
       ok: false,
       status: 400,
@@ -156,7 +167,13 @@ function validateDisputeToken(params: {
     ...(parsedProofSet.p2pk.pubkeys ?? []),
   ];
   const uniqueEscrowPubkeys = new Set(
-    escrowPubkeys.map((pubkey) => pubkey.toLowerCase())
+    escrowPubkeys
+      .map((pubkey) => {
+        const normalized =
+          pubkey.length === 66 ? pubkey.slice(2).toLowerCase() : pubkey;
+        return normalized.toLowerCase();
+      })
+      .filter(Boolean)
   );
   if (parsedProofSet.p2pk.nSigs !== 2 || uniqueEscrowPubkeys.size !== 3) {
     return {
@@ -174,15 +191,28 @@ function validateDisputeToken(params: {
     };
   }
 
+  const expectedEscrowPubkeys = [
+    orderRecord.sellerCashuPubkey,
+    orderRecord.buyerCashuPubkey,
+    orderRecord.arbiterCashuPubkey,
+  ];
   if (
-    !escrowPubkeys.some((pubkey) =>
-      pubkeysEqual(pubkey, configuredArbiterCashuPubkey)
+    expectedEscrowPubkeys.some(
+      (expected) =>
+        !escrowPubkeys.some((actual) => pubkeysEqual(actual, expected))
     )
   ) {
     return {
       ok: false,
       status: 400,
-      error: "Dispute token is not locked to the configured arbiter",
+      error: "Dispute token lock keys do not match the registered order",
+    };
+  }
+  if (parsedProofSet.p2pk.locktime !== orderRecord.locktime) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Dispute token locktime does not match the registered order",
     };
   }
 
@@ -233,6 +263,17 @@ export default async function handler(
   if (!arbiterCashuPrivkey || !arbiterNostrPrivkey) {
     return res.status(500).json({ error: "Arbiter is not configured" });
   }
+  const configuredArbiterCashuPubkey = getArbiterPubkey();
+  const derivedArbiterCashuPubkey = deriveCashuPubkey(arbiterCashuPrivkey);
+  if (
+    !configuredArbiterCashuPubkey ||
+    !derivedArbiterCashuPubkey ||
+    !pubkeysEqual(derivedArbiterCashuPubkey, configuredArbiterCashuPubkey)
+  ) {
+    return res.status(500).json({
+      error: "Arbiter Cashu private key does not match configured pubkey",
+    });
+  }
 
   try {
     const arbiterSigner = new McpNostrSigner(arbiterNostrPrivkey);
@@ -242,19 +283,38 @@ export default async function handler(
       });
     }
 
-    let candidates = await fetchCachedDisputeEvents(orderId);
-    if (candidates.length === 0) {
-      const nostr = createServerNostrManager();
-      try {
-        candidates = await fetchDisputeEventCandidates({
-          nostr,
-          orderId,
-          timeoutMs: 10_000,
-        });
-      } finally {
-        nostr.close();
-      }
+    const orderRecord = await getP2pkEscrowOrder(orderId);
+    if (!orderRecord) {
+      return res
+        .status(403)
+        .json({ error: "Escrow order record is unavailable" });
     }
+    if (orderRecord.rulingFor && orderRecord.rulingFor !== rulingFor) {
+      return res
+        .status(409)
+        .json({ error: "Dispute already has a final ruling" });
+    }
+
+    const cachedCandidates = await fetchCachedDisputeEvents(orderId);
+    const nostr = createServerNostrManager();
+    let relayCandidates;
+    try {
+      relayCandidates = await fetchDisputeEventCandidates({
+        nostr,
+        orderId,
+        timeoutMs: 10_000,
+      });
+    } finally {
+      nostr.close();
+    }
+    const candidates = Array.from(
+      new Map(
+        [...cachedCandidates, ...relayCandidates].map((event) => [
+          event.id,
+          event,
+        ])
+      ).values()
+    );
 
     if (candidates.length === 0) {
       return res.status(404).json({ error: "Dispute not found" });
@@ -264,10 +324,13 @@ export default async function handler(
     // pubkeys (independent of anything in the dispute events' own tags,
     // which an attacker fully controls for events they sign themselves)
     // before trusting any of them for payout.
-    const orderParticipants = await getOrderParticipants(orderId);
     const disputeEvent = selectAuthoritativeDisputeEvent(
       candidates,
-      orderParticipants
+      {
+        buyerPubkey: orderRecord.buyerNostrPubkey,
+        sellerPubkey: orderRecord.sellerNostrPubkey,
+      },
+      expectedArbiterPubkey
     );
     if (!disputeEvent) {
       return res
@@ -284,15 +347,21 @@ export default async function handler(
         .status(403)
         .json({ error: "Dispute is assigned to a different arbiter" });
     }
-    if (dispute.status !== "open") {
+    const expectedResolvedStatus = `resolved:${rulingFor}`;
+    if (
+      dispute.status !== "open" &&
+      !(
+        orderRecord.rulingFor === rulingFor &&
+        dispute.status === expectedResolvedStatus
+      )
+    ) {
       return res.status(409).json({ error: "Dispute is not open" });
     }
 
-    const orderAmountSats = await getOrderAmountSats(orderId);
     const tokenValidation = validateDisputeToken({
       orderId,
       token,
-      orderAmountSats,
+      orderRecord,
     });
     if (!tokenValidation.ok) {
       return res
@@ -301,7 +370,21 @@ export default async function handler(
     }
 
     const winnerNostrPubkey =
-      rulingFor === "buyer" ? dispute.buyerPubkey : dispute.sellerPubkey;
+      rulingFor === "buyer"
+        ? orderRecord.buyerNostrPubkey
+        : orderRecord.sellerNostrPubkey;
+
+    const rulingResult = await recordP2pkEscrowRuling(orderId, rulingFor);
+    if (rulingResult === "not-found") {
+      return res
+        .status(403)
+        .json({ error: "Escrow order record is unavailable" });
+    }
+    if (rulingResult === "conflict") {
+      return res
+        .status(409)
+        .json({ error: "Dispute already has a final ruling" });
+    }
 
     const { proofs, partialSigs: arbiterSigs } = await createPartialRedemption(
       token,
@@ -333,7 +416,7 @@ export default async function handler(
         status: `resolved:${rulingFor}`,
       }),
       undefined,
-      { waitForRelayPublish: false }
+      { waitForRelayPublish: false, requireDurableCache: true }
     );
 
     return res.status(200).json({ success: true });

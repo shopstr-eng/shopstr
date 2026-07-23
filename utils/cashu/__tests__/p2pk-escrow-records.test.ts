@@ -8,12 +8,20 @@ import {
   restoreEscrowRecordLocally,
   updateDisputeStatus,
 } from "../p2pk-escrow-records";
+import * as escrowRecords from "../p2pk-escrow-records";
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   finalizeAndSendNostrEvent: jest.fn().mockResolvedValue({ id: "event-id" }),
 }));
 
+jest.mock("@/utils/nostr/nip98-auth", () => ({
+  createNip98AuthorizationHeader: jest
+    .fn()
+    .mockResolvedValue("Nostr signed-registration"),
+}));
+
 import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions";
+import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 import { getPublicKey, nip44 } from "nostr-tools";
 
 // Phase 1 fixture: no arbiterPubkey/disputeStatus, matching records
@@ -46,9 +54,19 @@ function decryptSelfContent(content: string): unknown {
 }
 
 describe("p2pk-escrow-records", () => {
+  const originalFetch = global.fetch;
+
   beforeEach(() => {
     localStorage.clear();
     jest.clearAllMocks();
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ success: true }),
+    }) as jest.Mock;
+  });
+
+  afterAll(() => {
+    global.fetch = originalFetch;
   });
 
   it("persists a local buyer escrow mirror", async () => {
@@ -167,6 +185,103 @@ describe("p2pk-escrow-records", () => {
       }),
       { waitForRelayPublish: false }
     );
+  });
+
+  it("registers an immutable authenticated token commitment without sending the bearer token", async () => {
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue("1".repeat(64)),
+      encrypt: jest.fn().mockResolvedValue("encrypted-record"),
+    } as any;
+    const phase2Record = {
+      ...record,
+      sellerPubkey: "2".repeat(64),
+      buyerCashuPubkey: "3".repeat(64),
+      arbiterPubkey: "4".repeat(64),
+      sellerNostrPubkey: "5".repeat(64),
+    };
+
+    await persistBuyerP2pkEscrowRecord(undefined, signer, phase2Record);
+
+    expect(createNip98AuthorizationHeader).toHaveBeenCalledTimes(1);
+    const [, url, method, body] = (createNip98AuthorizationHeader as jest.Mock)
+      .mock.calls[0]!;
+    expect(url).toBe(`${window.location.origin}/api/db/register-escrow-order`);
+    expect(method).toBe("POST");
+
+    const parsedBody = JSON.parse(body);
+    expect(parsedBody).toEqual(
+      expect.objectContaining({
+        orderId: "order-1",
+        sellerNostrPubkey: "5".repeat(64),
+        sellerCashuPubkey: "2".repeat(64),
+        buyerCashuPubkey: "3".repeat(64),
+        arbiterCashuPubkey: "4".repeat(64),
+        amountSats: 42,
+        locktime: 123456,
+        tokenHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+      })
+    );
+    expect(body).not.toContain("cashuAtoken");
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/db/register-escrow-order",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Nostr signed-registration",
+        }),
+        body,
+      })
+    );
+  });
+
+  it("refuses to persist a Phase 2 escrow without a Nostr signer", async () => {
+    const phase2Record = {
+      ...record,
+      sellerPubkey: "2".repeat(64),
+      buyerCashuPubkey: "3".repeat(64),
+      arbiterPubkey: "4".repeat(64),
+      sellerNostrPubkey: "5".repeat(64),
+    };
+
+    await expect(
+      persistBuyerP2pkEscrowRecord(undefined, undefined, phase2Record)
+    ).rejects.toThrow("Nostr identity is required");
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("builds a complete Phase 2 record from the checkout output keys", () => {
+    const result = (escrowRecords as any).createBuyerP2pkEscrowRecord({
+      orderId: "order-2",
+      mint: "https://mint.example",
+      token: "cashuBtoken",
+      amount: 21,
+      sellerNostrPubkey: "5".repeat(64),
+      outputConfig: {
+        send: {
+          type: "p2pk",
+          options: {
+            pubkey: ["2".repeat(64), "3".repeat(64), "4".repeat(64)],
+            locktime: 999,
+            refundKeys: ["3".repeat(64)],
+          },
+        },
+      },
+      createdAt: 222,
+    });
+
+    expect(result).toEqual({
+      orderId: "order-2",
+      mint: "https://mint.example",
+      token: "cashuBtoken",
+      amount: 21,
+      sellerPubkey: "2".repeat(64),
+      buyerCashuPubkey: "3".repeat(64),
+      arbiterPubkey: "4".repeat(64),
+      sellerNostrPubkey: "5".repeat(64),
+      locktime: 999,
+      refundKeys: ["3".repeat(64)],
+      createdAt: 222,
+    });
   });
 
   describe("Phase 2 dispute fields", () => {

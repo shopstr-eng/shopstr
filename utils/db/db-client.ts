@@ -44,6 +44,19 @@ export async function cacheEventToDatabase(event: NostrEvent): Promise<void> {
   }
 }
 
+export async function cacheEventToDatabaseStrict(
+  event: NostrEvent
+): Promise<void> {
+  const response = await fetch("/api/db/cache-event", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(event),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to cache event to database");
+  }
+}
+
 const CACHE_EVENTS_CHUNK_SIZE = 50;
 const CACHE_EVENTS_MAX_CONCURRENT_REQUESTS = 4;
 

@@ -177,3 +177,23 @@ CREATE INDEX IF NOT EXISTS idx_mcp_orders_order_id ON mcp_orders(order_id);
 CREATE INDEX IF NOT EXISTS idx_mcp_orders_buyer_pubkey ON mcp_orders(buyer_pubkey);
 CREATE INDEX IF NOT EXISTS idx_mcp_orders_seller_pubkey ON mcp_orders(seller_pubkey);
 CREATE INDEX IF NOT EXISTS idx_mcp_orders_api_key_id ON mcp_orders(api_key_id);
+
+-- Browser P2PK escrow order commitments. The buyer authenticates the
+-- immutable commitment with NIP-98; only final-ruling fields may change.
+CREATE TABLE IF NOT EXISTS p2pk_escrow_orders (
+    order_id TEXT PRIMARY KEY,
+    buyer_nostr_pubkey TEXT NOT NULL,
+    seller_nostr_pubkey TEXT NOT NULL,
+    seller_cashu_pubkey TEXT NOT NULL,
+    buyer_cashu_pubkey TEXT NOT NULL,
+    arbiter_cashu_pubkey TEXT NOT NULL,
+    amount_sats BIGINT NOT NULL CHECK (amount_sats > 0),
+    locktime BIGINT NOT NULL CHECK (locktime > 0),
+    token_hash TEXT NOT NULL,
+    ruling_for TEXT CHECK (ruling_for IN ('buyer', 'seller')),
+    resolved_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_p2pk_escrow_orders_buyer ON p2pk_escrow_orders(buyer_nostr_pubkey);
+CREATE INDEX IF NOT EXISTS idx_p2pk_escrow_orders_seller ON p2pk_escrow_orders(seller_nostr_pubkey);

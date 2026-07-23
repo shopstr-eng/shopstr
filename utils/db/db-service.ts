@@ -442,6 +442,26 @@ async function initializeTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_seller_pubkey ON mcp_orders(seller_pubkey);
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_api_key_id ON mcp_orders(api_key_id);
 
+      -- Browser P2PK escrow order commitments. The buyer authenticates the
+      -- initial immutable record with NIP-98; only the ruling columns mutate.
+      CREATE TABLE IF NOT EXISTS p2pk_escrow_orders (
+          order_id TEXT PRIMARY KEY,
+          buyer_nostr_pubkey TEXT NOT NULL,
+          seller_nostr_pubkey TEXT NOT NULL,
+          seller_cashu_pubkey TEXT NOT NULL,
+          buyer_cashu_pubkey TEXT NOT NULL,
+          arbiter_cashu_pubkey TEXT NOT NULL,
+          amount_sats BIGINT NOT NULL CHECK (amount_sats > 0),
+          locktime BIGINT NOT NULL CHECK (locktime > 0),
+          token_hash TEXT NOT NULL,
+          ruling_for TEXT CHECK (ruling_for IN ('buyer', 'seller')),
+          resolved_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_p2pk_escrow_orders_buyer ON p2pk_escrow_orders(buyer_nostr_pubkey);
+      CREATE INDEX IF NOT EXISTS idx_p2pk_escrow_orders_seller ON p2pk_escrow_orders(seller_nostr_pubkey);
+
       -- Shop slugs table (storefront URL slugs)
       CREATE TABLE IF NOT EXISTS shop_slugs (
           pubkey TEXT PRIMARY KEY,
@@ -562,8 +582,10 @@ export function buildReviewDTagFilter(dTag: string): string {
   return JSON.stringify([["d", dTag]]);
 }
 
-// Cache a single event to the database
-export async function cacheEvent(event: NostrEvent): Promise<void> {
+async function cacheEventInternal(
+  event: NostrEvent,
+  throwOnError: boolean
+): Promise<void> {
   const table = getTableForKind(event.kind);
   if (!table) {
     console.warn(`No table mapping for event kind ${event.kind}`);
@@ -673,11 +695,22 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
       }
     }
     console.error("Failed to cache event %s:", event.id, error);
+    if (throwOnError) throw error;
   } finally {
     if (client) {
       client.release();
     }
   }
+}
+
+// Best-effort cache used by ordinary relay ingestion paths.
+export async function cacheEvent(event: NostrEvent): Promise<void> {
+  await cacheEventInternal(event, false);
+}
+
+// Fail-closed cache used before security-sensitive delivery side effects.
+export async function cacheEventStrict(event: NostrEvent): Promise<void> {
+  await cacheEventInternal(event, true);
 }
 
 // Cache multiple events in a batch with retry logic for deadlocks
@@ -1365,6 +1398,208 @@ export async function getUnreadMessageCount(pubkey: string): Promise<number> {
     if (client) {
       client.release();
     }
+  }
+}
+
+export type P2pkEscrowOrderRecord = {
+  orderId: string;
+  buyerNostrPubkey: string;
+  sellerNostrPubkey: string;
+  sellerCashuPubkey: string;
+  buyerCashuPubkey: string;
+  arbiterCashuPubkey: string;
+  amountSats: number;
+  locktime: number;
+  tokenHash: string;
+  rulingFor: "buyer" | "seller" | null;
+};
+
+type P2pkEscrowOrderRegistration = Omit<P2pkEscrowOrderRecord, "rulingFor">;
+
+type P2pkEscrowOrderRow = {
+  order_id: string;
+  buyer_nostr_pubkey: string;
+  seller_nostr_pubkey: string;
+  seller_cashu_pubkey: string;
+  buyer_cashu_pubkey: string;
+  arbiter_cashu_pubkey: string;
+  amount_sats: string | number;
+  locktime: string | number;
+  token_hash: string;
+  ruling_for: "buyer" | "seller" | null;
+};
+
+function mapP2pkEscrowOrderRow(row: P2pkEscrowOrderRow): P2pkEscrowOrderRecord {
+  return {
+    orderId: row.order_id,
+    buyerNostrPubkey: row.buyer_nostr_pubkey,
+    sellerNostrPubkey: row.seller_nostr_pubkey,
+    sellerCashuPubkey: row.seller_cashu_pubkey,
+    buyerCashuPubkey: row.buyer_cashu_pubkey,
+    arbiterCashuPubkey: row.arbiter_cashu_pubkey,
+    amountSats: Number(row.amount_sats),
+    locktime: Number(row.locktime),
+    tokenHash: row.token_hash,
+    rulingFor: row.ruling_for,
+  };
+}
+
+function registrationsEqual(
+  left: P2pkEscrowOrderRecord,
+  right: P2pkEscrowOrderRegistration
+): boolean {
+  return (
+    left.orderId === right.orderId &&
+    left.buyerNostrPubkey === right.buyerNostrPubkey &&
+    left.sellerNostrPubkey === right.sellerNostrPubkey &&
+    left.sellerCashuPubkey === right.sellerCashuPubkey &&
+    left.buyerCashuPubkey === right.buyerCashuPubkey &&
+    left.arbiterCashuPubkey === right.arbiterCashuPubkey &&
+    left.amountSats === right.amountSats &&
+    left.locktime === right.locktime &&
+    left.tokenHash === right.tokenHash
+  );
+}
+
+export async function registerP2pkEscrowOrder(
+  registration: P2pkEscrowOrderRegistration
+): Promise<"created" | "existing" | "conflict"> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    const inserted = await client.query(
+      `INSERT INTO p2pk_escrow_orders (
+         order_id,
+         buyer_nostr_pubkey,
+         seller_nostr_pubkey,
+         seller_cashu_pubkey,
+         buyer_cashu_pubkey,
+         arbiter_cashu_pubkey,
+         amount_sats,
+         locktime,
+         token_hash
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (order_id) DO NOTHING
+       RETURNING order_id`,
+      [
+        registration.orderId,
+        registration.buyerNostrPubkey,
+        registration.sellerNostrPubkey,
+        registration.sellerCashuPubkey,
+        registration.buyerCashuPubkey,
+        registration.arbiterCashuPubkey,
+        registration.amountSats,
+        registration.locktime,
+        registration.tokenHash,
+      ]
+    );
+    if ((inserted.rowCount ?? 0) > 0) return "created";
+
+    const existing = await client.query<P2pkEscrowOrderRow>(
+      `SELECT order_id,
+              buyer_nostr_pubkey,
+              seller_nostr_pubkey,
+              seller_cashu_pubkey,
+              buyer_cashu_pubkey,
+              arbiter_cashu_pubkey,
+              amount_sats,
+              locktime,
+              token_hash,
+              ruling_for
+       FROM p2pk_escrow_orders
+       WHERE order_id = $1`,
+      [registration.orderId]
+    );
+    const row = existing.rows[0];
+    if (!row) return "conflict";
+    return registrationsEqual(mapP2pkEscrowOrderRow(row), registration)
+      ? "existing"
+      : "conflict";
+  } finally {
+    client.release();
+  }
+}
+
+export async function getP2pkEscrowOrder(
+  orderId: string
+): Promise<P2pkEscrowOrderRecord | null> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    const result = await client.query<P2pkEscrowOrderRow>(
+      `SELECT order_id,
+              buyer_nostr_pubkey,
+              seller_nostr_pubkey,
+              seller_cashu_pubkey,
+              buyer_cashu_pubkey,
+              arbiter_cashu_pubkey,
+              amount_sats,
+              locktime,
+              token_hash,
+              ruling_for
+       FROM p2pk_escrow_orders
+       WHERE order_id = $1
+       LIMIT 1`,
+      [orderId]
+    );
+    return result.rows[0] ? mapP2pkEscrowOrderRow(result.rows[0]) : null;
+  } finally {
+    client.release();
+  }
+}
+
+export async function recordP2pkEscrowRuling(
+  orderId: string,
+  rulingFor: "buyer" | "seller"
+): Promise<"recorded" | "already-recorded" | "conflict" | "not-found"> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    await client.query("BEGIN");
+    const result = await client.query<{
+      ruling_for: "buyer" | "seller" | null;
+    }>(
+      `SELECT ruling_for
+       FROM p2pk_escrow_orders
+       WHERE order_id = $1
+       FOR UPDATE`,
+      [orderId]
+    );
+    const existingRuling = result.rows[0]?.ruling_for;
+    if (result.rows.length === 0) {
+      await client.query("COMMIT");
+      return "not-found";
+    }
+    if (existingRuling === rulingFor) {
+      await client.query("COMMIT");
+      return "already-recorded";
+    }
+    if (existingRuling) {
+      await client.query("COMMIT");
+      return "conflict";
+    }
+
+    await client.query(
+      `UPDATE p2pk_escrow_orders
+       SET ruling_for = $2, resolved_at = CURRENT_TIMESTAMP
+       WHERE order_id = $1`,
+      [orderId, rulingFor]
+    );
+    await client.query("COMMIT");
+    return "recorded";
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // Preserve the original database error.
+    }
+    throw error;
+  } finally {
+    client.release();
   }
 }
 

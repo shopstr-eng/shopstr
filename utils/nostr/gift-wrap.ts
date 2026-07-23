@@ -10,7 +10,10 @@ import type { NostrEvent } from "@/utils/types/types";
 import type { ProductData } from "@/utils/parsers/product-parser-functions";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import type { NostrManager } from "@/utils/nostr/nostr-manager";
-import { cacheEventToDatabase } from "@/utils/db/db-client";
+import {
+  cacheEventToDatabase,
+  cacheEventToDatabaseStrict,
+} from "@/utils/db/db-client";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageData } from "./nostr-helper-functions";
 import { withBlastr } from "./relay-config";
@@ -340,6 +343,7 @@ export async function constructMessageGiftWrap(
 
 type SendGiftWrappedMessageOptions = {
   waitForRelayPublish?: boolean;
+  requireDurableCache?: boolean;
 };
 
 export async function sendGiftWrappedMessageEvent(
@@ -351,7 +355,11 @@ export async function sendGiftWrappedMessageEvent(
   const { relays, writeRelays } = getLocalStorageData();
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
 
-  await cacheEventToDatabase(giftWrappedMessageEvent);
+  if (options.requireDurableCache) {
+    await cacheEventToDatabaseStrict(giftWrappedMessageEvent);
+  } else {
+    await cacheEventToDatabase(giftWrappedMessageEvent);
+  }
 
   const publishWithRetryTracking = async () => {
     try {

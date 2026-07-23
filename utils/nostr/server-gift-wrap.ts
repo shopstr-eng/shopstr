@@ -9,7 +9,7 @@ import {
 } from "nostr-tools";
 import { hexToBytes } from "@noble/hashes/utils.js";
 import { NostrEvent } from "@/utils/types/types";
-import { cacheEvent } from "@/utils/db/db-service";
+import { cacheEventStrict } from "@/utils/db/db-service";
 import { McpRelayManager } from "@/utils/mcp/nostr-signing";
 
 function toPrivkeyBytes(nsecOrHex: string): Uint8Array {
@@ -64,7 +64,6 @@ export async function sendServerGiftWrappedDm(params: {
   const rumor = {
     ...rumorBare,
     id: getEventHash(rumorBare as UnsignedEvent),
-    sig: "",
   };
 
   // kind-13 seal, signed with the sender's real Nostr identity key so the
@@ -101,16 +100,20 @@ export async function sendServerGiftWrappedDm(params: {
     wrapPrivkeyBytes
   ) as unknown as NostrEvent;
 
-  await cacheEvent(giftWrap);
+  await cacheEventStrict(giftWrap);
 
   const manager = relayManager || new McpRelayManager();
   const publish = async () => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
       await Promise.race([
         manager.publish(giftWrap),
-        new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error("Relay publish timeout")), 21000)
-        ),
+        new Promise<void>((_, reject) => {
+          timeoutId = setTimeout(
+            () => reject(new Error("Relay publish timeout")),
+            21000
+          );
+        }),
       ]);
     } catch (error) {
       // The event is already durably cached via cacheEvent above; a relay
@@ -124,6 +127,7 @@ export async function sendServerGiftWrappedDm(params: {
         error
       );
     } finally {
+      if (timeoutId) clearTimeout(timeoutId);
       if (!relayManager) {
         manager.close();
       }

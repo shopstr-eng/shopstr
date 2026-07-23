@@ -18,29 +18,6 @@ import {
 import { formatWithCommas } from "@/components/utility-components/display-monetary-info";
 import ArbiterControls from "@/components/dispute/arbiter-controls";
 
-const RESOLVED_LOCALLY_KEY = "shopstr.disputes.resolvedLocally";
-
-function getResolvedLocally(): Set<string> {
-  if (typeof window === "undefined") return new Set();
-  try {
-    const raw = window.localStorage.getItem(RESOLVED_LOCALLY_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return new Set(Array.isArray(parsed) ? parsed : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function addResolvedLocally(orderId: string): void {
-  if (typeof window === "undefined") return;
-  const resolved = getResolvedLocally();
-  resolved.add(orderId);
-  window.localStorage.setItem(
-    RESOLVED_LOCALLY_KEY,
-    JSON.stringify(Array.from(resolved))
-  );
-}
-
 interface DisputeRow extends ParsedDisputeEvent {
   token?: string;
   amount?: number;
@@ -78,11 +55,9 @@ function DisputesDashboard() {
     const load = async () => {
       setIsLoading(true);
       const events = await fetchDisputeEvents({ nostr, arbiterPubkey });
-      const resolvedLocally = getResolvedLocally();
       const parsed = events
         .map(parseDisputeEvent)
-        .filter((d): d is ParsedDisputeEvent => d !== null)
-        .filter((d) => !resolvedLocally.has(d.orderId));
+        .filter((d): d is ParsedDisputeEvent => d !== null);
 
       const enriched = await Promise.all(
         parsed.map(async (dispute) => {
@@ -116,7 +91,6 @@ function DisputesDashboard() {
   }, [isArbiter, nostr, signer, arbiterPubkey, userPubkey]);
 
   const handleRuled = (orderId: string) => {
-    addResolvedLocally(orderId);
     setDisputes((prev) => prev.filter((d) => d.orderId !== orderId));
   };
 

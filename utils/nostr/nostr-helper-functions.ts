@@ -17,6 +17,7 @@ import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import {
   cacheEventToDatabase,
+  cacheEventToDatabaseStrict,
   deleteEventsFromDatabase,
 } from "@/utils/db/db-client";
 import {
@@ -611,6 +612,7 @@ export async function publishSpendingHistoryEvent(
 
 type FinalizeAndSendOptions = {
   waitForRelayPublish?: boolean;
+  requireDurableCache?: boolean;
 };
 
 async function publishEventWithRetryTracking(
@@ -661,7 +663,11 @@ export async function finalizeAndSendNostrEvent(
     const signedEvent = await signer.sign(eventTemplate);
 
     // Cache to database first and wait for confirmation
-    await cacheEventToDatabase(signedEvent);
+    if (options.requireDurableCache) {
+      await cacheEventToDatabaseStrict(signedEvent);
+    } else {
+      await cacheEventToDatabase(signedEvent);
+    }
 
     const allWriteRelays = withBlastr([...writeRelays, ...relays]);
 

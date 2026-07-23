@@ -20,6 +20,16 @@ export interface ParsedDisputeEvent {
 }
 
 export type DisputeEventStatus = "open" | "resolved:buyer" | "resolved:seller";
+const DISPUTE_EVENT_STATUSES = new Set<DisputeEventStatus>([
+  "open",
+  "resolved:buyer",
+  "resolved:seller",
+]);
+
+type OrderParticipants = {
+  buyerPubkey: string | null;
+  sellerPubkey: string | null;
+};
 
 export function createDisputeEventTemplate(params: {
   orderId: string;
@@ -91,6 +101,7 @@ export async function publishDisputeEvent(params: {
 
   await finalizeAndSendNostrEvent(signer, nostr, event, {
     waitForRelayPublish: false,
+    requireDurableCache: true,
   });
 }
 
@@ -131,6 +142,26 @@ function getDTag(event: NostrEvent): string | undefined {
   return event.tags.find((tag) => tag[0] === "d")?.[1];
 }
 
+export function isDisputeTransitionAuthorAuthorized(
+  event: NostrEvent,
+  expectedArbiterPubkey?: string
+): boolean {
+  const parsed = parseDisputeEvent(event);
+  if (!parsed) return false;
+  if (expectedArbiterPubkey && parsed.arbiterPubkey !== expectedArbiterPubkey) {
+    return false;
+  }
+
+  if (parsed.status === "open") {
+    return (
+      event.pubkey === parsed.buyerPubkey ||
+      event.pubkey === parsed.sellerPubkey
+    );
+  }
+
+  return event.pubkey === parsed.arbiterPubkey;
+}
+
 // Fetches all open kind 30407 dispute events tagging arbiterPubkey,
 // deduplicated by (orderId, author) keeping the newest per author, sorted
 // newest first. Deduplication is scoped per-author (not globally per
@@ -152,29 +183,58 @@ export async function fetchDisputeEvents(params: {
     fetchCachedDisputeEvents(arbiterPubkey),
   ]);
 
-  const newestByOrderIdAndAuthor = new Map<string, NostrEvent>();
+  const eventsByOrderId = new Map<string, NostrEvent[]>();
   for (const event of [...relayEvents, ...cachedEvents]) {
     const orderId = getDTag(event);
-    if (!orderId) continue;
-    const key = `${orderId}::${event.pubkey}`;
-    const existing = newestByOrderIdAndAuthor.get(key);
-    if (!existing || (event.created_at ?? 0) > (existing.created_at ?? 0)) {
-      newestByOrderIdAndAuthor.set(key, event);
+    const parsed = parseDisputeEvent(event);
+    if (
+      !verifyEvent(event) ||
+      !orderId ||
+      !parsed ||
+      !isDisputeTransitionAuthorAuthorized(event, arbiterPubkey)
+    ) {
+      continue;
     }
+    const existing = eventsByOrderId.get(orderId) ?? [];
+    existing.push(event);
+    eventsByOrderId.set(orderId, existing);
   }
 
-  return Array.from(newestByOrderIdAndAuthor.values())
-    .filter((event) => parseDisputeEvent(event)?.status === "open")
-    .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
+  const openEvents: NostrEvent[] = [];
+  for (const orderEvents of eventsByOrderId.values()) {
+    const authorizedResolutions = orderEvents.filter(
+      (event) => parseDisputeEvent(event)?.status !== "open"
+    );
+    if (authorizedResolutions.length > 0) continue;
+
+    const newestOpenByAuthor = new Map<string, NostrEvent>();
+    for (const event of orderEvents) {
+      const parsed = parseDisputeEvent(event);
+      if (parsed?.status !== "open") {
+        continue;
+      }
+      const existing = newestOpenByAuthor.get(event.pubkey);
+      if (!existing || event.created_at > existing.created_at) {
+        newestOpenByAuthor.set(event.pubkey, event);
+      }
+    }
+    openEvents.push(...newestOpenByAuthor.values());
+  }
+
+  return openEvents.sort((a, b) => b.created_at - a.created_at);
 }
 
-// Fetches the single newest kind 30407 dispute event for a given orderId.
+// Fetches the role-authorized state for an order. A resolution signed by the
+// configured arbiter is final regardless of later participant timestamps.
 export async function fetchDisputeEvent(params: {
   nostr: NostrManager;
   orderId: string;
   timeoutMs?: number;
+  orderParticipants?: OrderParticipants;
+  arbiterPubkey?: string;
 }): Promise<NostrEvent | null> {
-  const { nostr, orderId, timeoutMs } = params;
+  const { nostr, orderId, timeoutMs, orderParticipants, arbiterPubkey } =
+    params;
 
   const events = await nostr.fetch(
     [{ kinds: [DISPUTE_EVENT_KIND], "#d": [orderId] }],
@@ -184,9 +244,24 @@ export async function fetchDisputeEvent(params: {
   );
   if (events.length === 0) return null;
 
-  return events.reduce((newest, event) =>
-    (event.created_at ?? 0) > (newest.created_at ?? 0) ? event : newest
+  if (orderParticipants) {
+    return selectAuthoritativeDisputeEvent(
+      events.filter(verifyEvent),
+      orderParticipants,
+      arbiterPubkey
+    );
+  }
+
+  const authorized = events
+    .filter(verifyEvent)
+    .filter((event) =>
+      isDisputeTransitionAuthorAuthorized(event, arbiterPubkey)
+    );
+  const resolutions = authorized.filter(
+    (event) => parseDisputeEvent(event)?.status !== "open"
   );
+  const candidates = resolutions.length > 0 ? resolutions : authorized;
+  return candidates.sort((a, b) => b.created_at - a.created_at)[0] ?? null;
 }
 
 // Fetches every kind 30407 dispute-event candidate for a given orderId from
@@ -212,7 +287,7 @@ export async function fetchDisputeEventCandidates(params: {
   );
 
   const newestByAuthor = new Map<string, NostrEvent>();
-  for (const event of events) {
+  for (const event of events.filter(verifyEvent)) {
     const existing = newestByAuthor.get(event.pubkey);
     if (!existing || (event.created_at ?? 0) > (existing.created_at ?? 0)) {
       newestByAuthor.set(event.pubkey, event);
@@ -229,24 +304,39 @@ export async function fetchDisputeEventCandidates(params: {
 // authorship proof.
 export function selectAuthoritativeDisputeEvent(
   candidates: NostrEvent[],
-  orderParticipants: { buyerPubkey: string | null; sellerPubkey: string | null }
+  orderParticipants: OrderParticipants,
+  expectedArbiterPubkey?: string
 ): NostrEvent | null {
-  const sorted = [...candidates].sort(
-    (a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)
-  );
-
   const { buyerPubkey, sellerPubkey } = orderParticipants;
   if (!buyerPubkey || !sellerPubkey) return null;
 
-  return (
-    sorted.find((event) => {
-      const parsed = parseDisputeEvent(event);
-      if (!parsed) return false;
-      if (parsed.buyerPubkey !== buyerPubkey) return false;
-      if (parsed.sellerPubkey !== sellerPubkey) return false;
+  const authorized = candidates.filter((event) => {
+    const parsed = parseDisputeEvent(event);
+    if (!parsed) return false;
+    if (parsed.buyerPubkey !== buyerPubkey) return false;
+    if (parsed.sellerPubkey !== sellerPubkey) return false;
+    if (
+      expectedArbiterPubkey &&
+      parsed.arbiterPubkey !== expectedArbiterPubkey
+    ) {
+      return false;
+    }
+
+    if (parsed.status === "open") {
       return event.pubkey === buyerPubkey || event.pubkey === sellerPubkey;
-    }) ?? null
+    }
+
+    return event.pubkey === parsed.arbiterPubkey;
+  });
+
+  // A participant cannot reopen a dispute after the arbiter has ruled, even
+  // by publishing an event with an artificially far-future created_at.
+  const resolutions = authorized.filter(
+    (event) => parseDisputeEvent(event)?.status !== "open"
   );
+  const currentState = resolutions.length > 0 ? resolutions : authorized;
+
+  return currentState.sort((a, b) => b.created_at - a.created_at)[0] ?? null;
 }
 
 export function parseDisputeEvent(
@@ -268,6 +358,9 @@ export function parseDisputeEvent(
   }
 
   const status = event.tags.find((tag) => tag[0] === "status")?.[1] ?? "open";
+  if (!DISPUTE_EVENT_STATUSES.has(status as DisputeEventStatus)) {
+    return null;
+  }
 
   return {
     orderId,
@@ -275,7 +368,7 @@ export function parseDisputeEvent(
     buyerPubkey,
     sellerPubkey,
     arbiterPubkey,
-    status,
+    status: status as DisputeEventStatus,
     createdAt: event.created_at,
   };
 }

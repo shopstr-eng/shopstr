@@ -4,7 +4,7 @@ import { fetchCachedEvents } from "@/utils/db/db-service";
 import { applyRateLimit } from "@/utils/rate-limit";
 import {
   DISPUTE_EVENT_KIND,
-  parseDisputeEvent,
+  isDisputeTransitionAuthorAuthorized,
 } from "@/utils/nostr/dispute-records";
 
 const RATE_LIMIT = { limit: 600, windowMs: 60 * 1000 };
@@ -35,7 +35,7 @@ export default async function handler(
     const disputes = events.filter(
       (event) =>
         verifyEvent(event) &&
-        parseDisputeEvent(event)?.arbiterPubkey === normalizedArbiterPubkey
+        isDisputeTransitionAuthorAuthorized(event, normalizedArbiterPubkey)
     );
     res.status(200).json(disputes);
   } catch (error) {

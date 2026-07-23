@@ -3528,6 +3528,53 @@ describe("db-service helpers", () => {
 
   describe("db-service with Testcontainers (discounts, stats, cached events)", () => {
     maybeItTc(
+      "persists immutable P2PK escrow commitments and one final ruling",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["p2pk_escrow_orders"]);
+
+          const registration = {
+            orderId: "order-integration-1",
+            buyerNostrPubkey: "1".repeat(64),
+            sellerNostrPubkey: "2".repeat(64),
+            sellerCashuPubkey: "3".repeat(64),
+            buyerCashuPubkey: "4".repeat(64),
+            arbiterCashuPubkey: "5".repeat(64),
+            amountSats: 42,
+            locktime: 2_000_000_000,
+            tokenHash: "6".repeat(64),
+          };
+
+          await expect(db.registerP2pkEscrowOrder(registration)).resolves.toBe(
+            "created"
+          );
+          await expect(db.registerP2pkEscrowOrder(registration)).resolves.toBe(
+            "existing"
+          );
+          await expect(
+            db.registerP2pkEscrowOrder({
+              ...registration,
+              tokenHash: "7".repeat(64),
+            })
+          ).resolves.toBe("conflict");
+          await expect(
+            db.getP2pkEscrowOrder(registration.orderId)
+          ).resolves.toEqual({ ...registration, rulingFor: null });
+
+          await expect(
+            db.recordP2pkEscrowRuling(registration.orderId, "buyer")
+          ).resolves.toBe("recorded");
+          await expect(
+            db.recordP2pkEscrowRuling(registration.orderId, "buyer")
+          ).resolves.toBe("already-recorded");
+          await expect(
+            db.recordP2pkEscrowRuling(registration.orderId, "seller")
+          ).resolves.toBe("conflict");
+        });
+      }
+    );
+
+    maybeItTc(
       "read helpers fetch reviews/messages/profiles/wallet/communities/relay/blossom",
       async () => {
         await withPostgresDbService(async (db) => {

@@ -15,6 +15,7 @@ import {
   DISPUTE_EVENT_KIND,
   publishDisputeEvent,
   fetchDisputeEvents,
+  fetchDisputeEvent,
   fetchDisputeEventCandidates,
   selectAuthoritativeDisputeEvent,
   parseDisputeEvent,
@@ -59,7 +60,10 @@ describe("publishDisputeEvent", () => {
 
     expect(calledSigner).toBe(signer);
     expect(calledNostr).toBe(nostr);
-    expect(options).toEqual({ waitForRelayPublish: false });
+    expect(options).toEqual({
+      waitForRelayPublish: false,
+      requireDurableCache: true,
+    });
     expect(eventTemplate.kind).toBe(DISPUTE_EVENT_KIND);
     expect(eventTemplate.content).toBe("item not received");
     expect(eventTemplate.tags).toEqual(
@@ -262,6 +266,83 @@ describe("fetchDisputeEvents", () => {
     expect(result).toContain(forged);
     expect(result).toHaveLength(2);
   });
+
+  it("keeps an arbiter resolution final even when a participant publishes a newer open event", async () => {
+    const resolution = mkDisputeEvent({
+      pubkey: "arbiter-pubkey",
+      created_at: 200,
+      tags: [
+        ["d", "order-1"],
+        ["p", "buyer-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+        ["status", "resolved:buyer"],
+      ],
+    });
+    const futureOpen = mkDisputeEvent({
+      pubkey: "seller-pubkey",
+      created_at: 999,
+      tags: [
+        ["d", "order-1"],
+        ["p", "buyer-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+        ["status", "open"],
+      ],
+    });
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([resolution, futureOpen]),
+    } as any;
+
+    const result = await fetchDisputeEvents({
+      nostr,
+      arbiterPubkey: "arbiter-pubkey",
+    });
+
+    expect(result).toEqual([]);
+  });
+});
+
+describe("fetchDisputeEvent", () => {
+  it("ignores unrelated authors and returns the role-authorized order state", async () => {
+    const legitimateOpen = mkDisputeEvent({
+      pubkey: "buyer-pubkey",
+      created_at: 100,
+      tags: [
+        ["d", "order-1"],
+        ["p", "buyer-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+        ["status", "open"],
+      ],
+    });
+    const forged = mkDisputeEvent({
+      pubkey: "attacker-pubkey",
+      created_at: 999,
+      tags: [
+        ["d", "order-1"],
+        ["p", "buyer-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+        ["status", "open"],
+      ],
+    });
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([legitimateOpen, forged]),
+    } as any;
+
+    const result = await (fetchDisputeEvent as any)({
+      nostr,
+      orderId: "order-1",
+      orderParticipants: {
+        buyerPubkey: "buyer-pubkey",
+        sellerPubkey: "seller-pubkey",
+      },
+      arbiterPubkey: "arbiter-pubkey",
+    });
+
+    expect(result).toBe(legitimateOpen);
+  });
 });
 
 describe("fetchDisputeEventCandidates", () => {
@@ -381,6 +462,61 @@ describe("selectAuthoritativeDisputeEvent", () => {
     );
 
     expect(result).toBeNull();
+  });
+
+  it("does not let a participant forge a resolved transition", () => {
+    const forgedResolution = mkDisputeEvent({
+      pubkey: "seller-pubkey",
+      created_at: 999,
+      tags: [
+        ["d", "order-1"],
+        ["p", "buyer-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+        ["status", "resolved:seller"],
+      ],
+    });
+
+    const result = selectAuthoritativeDisputeEvent(
+      [legitBuyerEvent, forgedResolution],
+      { buyerPubkey: "buyer-pubkey", sellerPubkey: "seller-pubkey" },
+      "arbiter-pubkey"
+    );
+
+    expect(result).toBe(legitBuyerEvent);
+  });
+
+  it("treats an arbiter-authored resolution as final even when a participant publishes a newer open event", () => {
+    const resolution = mkDisputeEvent({
+      pubkey: "arbiter-pubkey",
+      created_at: 200,
+      tags: [
+        ["d", "order-1"],
+        ["p", "buyer-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+        ["status", "resolved:buyer"],
+      ],
+    });
+    const futureOpen = mkDisputeEvent({
+      pubkey: "seller-pubkey",
+      created_at: 999,
+      tags: [
+        ["d", "order-1"],
+        ["p", "buyer-pubkey", "", "buyer"],
+        ["p", "seller-pubkey", "", "seller"],
+        ["p", "arbiter-pubkey", "", "arbiter"],
+        ["status", "open"],
+      ],
+    });
+
+    const result = selectAuthoritativeDisputeEvent(
+      [legitBuyerEvent, resolution, futureOpen],
+      { buyerPubkey: "buyer-pubkey", sellerPubkey: "seller-pubkey" },
+      "arbiter-pubkey"
+    );
+
+    expect(result).toBe(resolution);
   });
 });
 

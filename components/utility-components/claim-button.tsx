@@ -50,6 +50,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import {
   checkMintP2pkSupport,
+  getSellerEscalationAtMs,
   parseP2PKProofSet,
   pubkeysEqual,
 } from "@/utils/cashu/p2pk-checkout";
@@ -126,11 +127,6 @@ export default function ClaimButton({
     null
   );
 
-  // Grace period a buyer gets to respond to a seller's payment request
-  // before the seller may escalate to the arbiter. Kept generous so
-  // escalation can't be used to rush a buyer who just hasn't checked in yet.
-  const SELLER_ESCALATION_GRACE_PERIOD_MS = 48 * 60 * 60 * 1000;
-
   const paymentRequestSentAtKey = (id: string) =>
     `shopstr.escrow.paymentRequestSentAt.${id}`;
 
@@ -148,9 +144,17 @@ export default function ClaimButton({
   }, [orderId]);
 
   const canEscalate = useMemo(() => {
-    if (!isAwaitingBuyerConfirm || requestSentAt === null) return false;
-    return Date.now() - requestSentAt >= SELLER_ESCALATION_GRACE_PERIOD_MS;
-  }, [isAwaitingBuyerConfirm, requestSentAt]);
+    if (!isAwaitingBuyerConfirm || requestSentAt === null || !p2pk?.locktime) {
+      return false;
+    }
+    return (
+      Date.now() >=
+      getSellerEscalationAtMs({
+        requestSentAtMs: requestSentAt,
+        locktimeSeconds: p2pk.locktime,
+      })
+    );
+  }, [isAwaitingBuyerConfirm, requestSentAt, p2pk?.locktime]);
 
   // True when locktime has expired and the current wallet key is an
   // authorized refund signer. refundKeys are stored as "02"+x-only (66 chars)
@@ -317,7 +321,17 @@ export default function ClaimButton({
         return;
       }
 
-      const disputeEvent = await fetchDisputeEvent({ nostr, orderId });
+      const arbiterPubkey =
+        process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY ?? undefined;
+      const disputeEvent = await fetchDisputeEvent({
+        nostr,
+        orderId,
+        orderParticipants: {
+          buyerPubkey: buyerPubkey ?? null,
+          sellerPubkey: sellerPubkey ?? null,
+        },
+        arbiterPubkey,
+      });
       if (!isActive || !disputeEvent) return;
       const parsedDispute = parseDisputeEvent(disputeEvent);
       const isParticipant =
@@ -750,6 +764,7 @@ export default function ClaimButton({
     );
     await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer, {
       waitForRelayPublish: false,
+      requireDurableCache: true,
     });
   };
 
@@ -860,49 +875,47 @@ export default function ClaimButton({
       return;
     setEscrowActionError(null);
     try {
-      // Persists via the real app signer, not cashuPrivkey — the escrow
-      // record is self-encrypted to the buyer's real Nostr identity, which
-      // cashuPrivkey (a wallet-only key) has no relationship to.
-      await updateDisputeStatusWithSigner(orderId, "open", signer, nostr);
-      setDisputeStatus("open");
-      setIsDisputeInProgress(true);
-
+      const arbiterPubkey = process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY;
+      if (!arbiterPubkey) {
+        throw new Error("The dispute arbiter is not configured.");
+      }
       const sellerPayload: EscrowDisputePayload = {
         type: "escrow-dispute",
         orderId,
         reason,
       };
-
-      const arbiterPubkey = process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY;
-      const publishTasks: Promise<unknown>[] = [
-        sendEscrowDm(sellerPubkey, sellerPayload),
-      ];
-      if (arbiterPubkey) {
-        // The arbiter has no way to decrypt either party's self-encrypted
-        // kind 30406 escrow record, so its copy of the DM also carries the
-        // Cashu token/amount it needs to rule on the dispute.
-        const arbiterPayload: EscrowDisputePayload = {
-          type: "escrow-dispute",
+      // The arbiter cannot decrypt either party's self-encrypted kind 30406
+      // record. Do not mark the dispute open until both its token DM and the
+      // public discovery event have been durably cached.
+      const arbiterPayload: EscrowDisputePayload = {
+        type: "escrow-dispute",
+        orderId,
+        reason,
+        token,
+        amount: tokenAmount,
+      };
+      await Promise.all([
+        sendEscrowDm(arbiterPubkey, arbiterPayload),
+        publishDisputeEvent({
           orderId,
           reason,
-          token,
-          amount: tokenAmount,
-        };
-        publishTasks.push(
-          sendEscrowDm(arbiterPubkey, arbiterPayload),
-          publishDisputeEvent({
-            orderId,
-            reason,
-            nostr: nostr!,
-            signer,
-            buyerPubkey: userPubkey,
-            sellerPubkey,
-            arbiterPubkey,
-          })
-        );
-      }
+          nostr: nostr!,
+          signer,
+          buyerPubkey: userPubkey,
+          sellerPubkey,
+          arbiterPubkey,
+        }),
+      ]);
+      setDisputeStatus("open");
+      setIsDisputeInProgress(true);
 
-      const results = await Promise.allSettled(publishTasks);
+      // These mirrors/notifications are recoverable from the authoritative
+      // public event and arbiter DM, so their failure must not erase a
+      // dispute that is already durably open.
+      const results = await Promise.allSettled([
+        updateDisputeStatusWithSigner(orderId, "open", signer, nostr),
+        sendEscrowDm(sellerPubkey, sellerPayload),
+      ]);
       const firstFailure = results.find(
         (result): result is PromiseRejectedResult =>
           result.status === "rejected"
@@ -941,9 +954,10 @@ export default function ClaimButton({
       return;
     setEscrowActionError(null);
     try {
-      setDisputeStatus("open");
-      setIsDisputeInProgress(true);
-
+      const arbiterPubkey = process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY;
+      if (!arbiterPubkey) {
+        throw new Error("The dispute arbiter is not configured.");
+      }
       const reason =
         "Seller escalation: buyer unresponsive after payment request.";
       const buyerPayload: EscrowDisputePayload = {
@@ -951,34 +965,31 @@ export default function ClaimButton({
         orderId,
         reason,
       };
-
-      const arbiterPubkey = process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY;
-      const publishTasks: Promise<unknown>[] = [
-        sendEscrowDm(buyerPubkey, buyerPayload),
-      ];
-      if (arbiterPubkey) {
-        const arbiterPayload: EscrowDisputePayload = {
-          type: "escrow-dispute",
+      const arbiterPayload: EscrowDisputePayload = {
+        type: "escrow-dispute",
+        orderId,
+        reason,
+        token,
+        amount: tokenAmount,
+      };
+      await Promise.all([
+        sendEscrowDm(arbiterPubkey, arbiterPayload),
+        publishDisputeEvent({
           orderId,
           reason,
-          token,
-          amount: tokenAmount,
-        };
-        publishTasks.push(
-          sendEscrowDm(arbiterPubkey, arbiterPayload),
-          publishDisputeEvent({
-            orderId,
-            reason,
-            nostr: nostr!,
-            signer,
-            buyerPubkey,
-            sellerPubkey: userPubkey,
-            arbiterPubkey,
-          })
-        );
-      }
+          nostr: nostr!,
+          signer,
+          buyerPubkey,
+          sellerPubkey: userPubkey,
+          arbiterPubkey,
+        }),
+      ]);
+      setDisputeStatus("open");
+      setIsDisputeInProgress(true);
 
-      const results = await Promise.allSettled(publishTasks);
+      const results = await Promise.allSettled([
+        sendEscrowDm(buyerPubkey, buyerPayload),
+      ]);
       const firstFailure = results.find(
         (result): result is PromiseRejectedResult =>
           result.status === "rejected"
