@@ -22,6 +22,18 @@ const P2PK_DISALLOWED_MINT_REASON =
   "This mint is not allowed for P2PK escrow checkout.";
 const P2PK_INPUT_FEE_REASON =
   "This mint charges input fees, so P2PK escrow checkout is blocked for now.";
+export const SHOPSTR_ORDER_P2PK_TAG = "shopstr_order";
+export const SELLER_ESCALATION_GRACE_PERIOD_MS = 48 * 60 * 60 * 1000;
+export const SELLER_ESCALATION_REFUND_SAFETY_MS = 24 * 60 * 60 * 1000;
+const P2PK_SINGLE_USE_TAGS = new Set([
+  "sigflag",
+  "pubkeys",
+  "n_sigs",
+  "locktime",
+  "refund",
+  "n_sigs_refund",
+  SHOPSTR_ORDER_P2PK_TAG,
+]);
 
 export function normalizeCashuPubkey(pubkey?: string | null): string | null {
   if (!pubkey) return null;
@@ -71,6 +83,21 @@ export function getP2pkTestLocktimeSeconds(): number | undefined {
   return Math.floor(configured);
 }
 
+export function getSellerEscalationAtMs(params: {
+  requestSentAtMs: number;
+  locktimeSeconds: number;
+}): number {
+  const normalEscalationAt =
+    params.requestSentAtMs + SELLER_ESCALATION_GRACE_PERIOD_MS;
+  const latestSafeEscalationAt =
+    params.locktimeSeconds * 1000 - SELLER_ESCALATION_REFUND_SAFETY_MS;
+
+  return Math.max(
+    params.requestSentAtMs,
+    Math.min(normalEscalationAt, latestSafeEscalationAt)
+  );
+}
+
 export function normalizeMintUrlForPolicy(mintUrl: string): string | null {
   try {
     const parsed = new URL(mintUrl.trim());
@@ -99,6 +126,10 @@ function getP2pkMintAllowlist(): Set<string> | null {
     .filter((entry): entry is string => Boolean(entry));
 
   return new Set(allowedMints);
+}
+
+export function isP2pkMintAllowlistConfigured(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_P2PK_ESCROW_ALLOWED_MINTS?.trim());
 }
 
 export function isP2pkMintAllowed(mintUrl: string): boolean {
@@ -285,33 +316,60 @@ export function getBuyerReclaimKeys(
 
 export function buildP2pkSwapOptions(
   sellerP2pk: P2pkProfileSettings | undefined,
-  buyerReclaimKeys: string[]
-): { pubkey: string; locktime: number; refundKeys: string[] } | undefined {
+  buyerReclaimKeys: string[],
+  buyerCashuPubkey?: string,
+  orderId?: string
+):
+  | {
+      pubkey: [string, string, string];
+      requiredSignatures: number;
+      locktime: number;
+      refundKeys: string[];
+      additionalTags?: [string, ...string[]][];
+    }
+  | undefined {
   const sellerPubkey = normalizeCashuPubkey(sellerP2pk?.pubkey);
   if (!sellerP2pk?.enabled || !sellerPubkey) return undefined;
 
   const days = sellerP2pk.refundDelayDays;
   if (!days || days <= 0) return undefined;
 
+  // resolveP2pkCheckoutOutputConfig throws an explicit "arbiter not
+  // configured" error before reaching this function; this branch only
+  // guards direct callers that skip that gate.
+  const arbiterPubkey = getArbiterPubkey();
+  if (!arbiterPubkey) return undefined;
+
+  const normalizedBuyerPubkey = normalizeCashuPubkey(buyerCashuPubkey);
+  if (!normalizedBuyerPubkey) return undefined;
+
   const testLocktimeSeconds = getP2pkTestLocktimeSeconds();
   const locktimeOffsetSeconds = testLocktimeSeconds ?? days * 24 * 60 * 60;
 
   return {
-    pubkey: sellerPubkey,
+    pubkey: [sellerPubkey, normalizedBuyerPubkey, arbiterPubkey],
+    requiredSignatures: 2,
     locktime: Math.floor(Date.now() / 1000) + locktimeOffsetSeconds,
-    refundKeys: buyerReclaimKeys, // cashu-ts / NUT-11 reclaim path
+    refundKeys: buyerReclaimKeys,
+    ...(orderId ? { additionalTags: [[SHOPSTR_ORDER_P2PK_TAG, orderId]] } : {}),
   };
 }
 
 export function buildP2pkOutputConfig(
   sellerP2pk: P2pkProfileSettings | undefined,
   buyerContent: ProfileData["content"] | undefined,
-  buyerCashuPubkey?: string
+  buyerCashuPubkey?: string,
+  orderId?: string
 ) {
   const reclaimKeys = getBuyerReclaimKeys(buyerContent, buyerCashuPubkey);
   if (!reclaimKeys) return undefined;
 
-  const options = buildP2pkSwapOptions(sellerP2pk, reclaimKeys);
+  const options = buildP2pkSwapOptions(
+    sellerP2pk,
+    reclaimKeys,
+    buyerCashuPubkey,
+    orderId
+  );
   if (!options) return undefined;
 
   return {
@@ -333,6 +391,81 @@ export function isSellerP2pkEscrowActive(
   );
 }
 
+export async function resolveSellerCheckoutProfile(params: {
+  sellerPubkey: string;
+  cachedProfile?: ProfileData;
+  fetchImpl?: typeof fetch;
+}): Promise<ProfileData> {
+  const { sellerPubkey, cachedProfile, fetchImpl = fetch } = params;
+  let fetchedProfile: ProfileData | undefined;
+
+  try {
+    const response = await fetchImpl(
+      `/api/db/fetch-profile?pubkey=${encodeURIComponent(sellerPubkey)}`
+    );
+    if (response.ok) {
+      const body = (await response.json()) as {
+        profile?: {
+          pubkey?: unknown;
+          content?: unknown;
+          created_at?: unknown;
+        } | null;
+      };
+      const profile = body.profile;
+      const createdAt = Number(profile?.created_at);
+      if (
+        profile?.pubkey === sellerPubkey &&
+        profile.content &&
+        typeof profile.content === "object" &&
+        !Array.isArray(profile.content) &&
+        Number.isFinite(createdAt)
+      ) {
+        fetchedProfile = {
+          pubkey: profile.pubkey,
+          content: profile.content as ProfileData["content"],
+          created_at: createdAt,
+        };
+      }
+    }
+  } catch {
+    // A verified in-memory profile remains usable when the cache endpoint is
+    // temporarily unavailable.
+  }
+
+  if (
+    fetchedProfile &&
+    (!cachedProfile ||
+      fetchedProfile.created_at >= Number(cachedProfile.created_at))
+  ) {
+    return fetchedProfile;
+  }
+  if (cachedProfile) return cachedProfile;
+
+  throw new Error(
+    "The seller payment profile could not be verified. Please wait for the listing to finish loading and try again."
+  );
+}
+
+function getShopstrOrderBinding(tags: P2PKTag[]): string | undefined | null {
+  const orderTags = tags.filter((tag) => tag[0] === SHOPSTR_ORDER_P2PK_TAG);
+  if (orderTags.length === 0) return undefined;
+  if (orderTags.length > 1) return null;
+
+  const tag = orderTags[0];
+  if (!tag) return null;
+  const orderId = tag?.[1];
+  if (
+    tag.length !== 2 ||
+    typeof orderId !== "string" ||
+    orderId.length === 0 ||
+    orderId.length > 128
+  ) {
+    return null;
+  }
+
+  return orderId;
+}
+
 // Single entry point for the buyer-side escrow checkout gate. Runs every
 // safety check in one place — feature flag + amount cap, mint NUT-10/NUT-11 +
 // input-fee support, and the buyer's reclaim identity — so a caller can never
@@ -345,6 +478,7 @@ export async function resolveP2pkCheckoutOutputConfig(params: {
   mintUrl: string | undefined;
   buyerContent: ProfileData["content"] | undefined;
   buyerCashuPubkey: string | undefined;
+  orderId?: string;
   fetchImpl?: typeof fetch;
 }): Promise<ReturnType<typeof buildP2pkOutputConfig>> {
   const {
@@ -353,6 +487,7 @@ export async function resolveP2pkCheckoutOutputConfig(params: {
     mintUrl,
     buyerContent,
     buyerCashuPubkey,
+    orderId,
     fetchImpl,
   } = params;
 
@@ -363,6 +498,12 @@ export async function resolveP2pkCheckoutOutputConfig(params: {
 
   if (!isSellerP2pkEscrowActive(sellerP2pk)) {
     return undefined;
+  }
+
+  if (!getArbiterPubkey()) {
+    throw new Error(
+      "Escrow checkout is unavailable: the dispute arbiter is not configured on this server. Please contact the marketplace operator."
+    );
   }
 
   if (!mintUrl) {
@@ -379,7 +520,8 @@ export async function resolveP2pkCheckoutOutputConfig(params: {
   const outputConfig = buildP2pkOutputConfig(
     sellerP2pk,
     buyerContent,
-    buyerCashuPubkey
+    buyerCashuPubkey,
+    orderId
   );
   if (!outputConfig) {
     throw new Error(
@@ -402,6 +544,24 @@ export function parseP2PK(proof: Proof): ParsedP2PK | null {
     if (!pubkey) return null;
 
     const tags = getTags(proof.secret) as P2PKTag[];
+    const seenTags = new Set<string>();
+    for (const tag of tags) {
+      if (!P2PK_SINGLE_USE_TAGS.has(tag[0])) continue;
+      if (seenTags.has(tag[0])) return null;
+      seenTags.add(tag[0]);
+    }
+
+    const shopstrOrderId = getShopstrOrderBinding(tags);
+    if (shopstrOrderId === null) return null;
+
+    const sigFlagTag = tags.find((tag) => tag[0] === "sigflag");
+    if (
+      sigFlagTag &&
+      (sigFlagTag.length !== 2 ||
+        (sigFlagTag[1] !== "SIG_INPUTS" && sigFlagTag[1] !== "SIG_ALL"))
+    ) {
+      return null;
+    }
 
     const locktime = getTagInt(proof.secret, "locktime") ?? 0;
 
@@ -416,15 +576,47 @@ export function parseP2PK(proof: Proof): ParsedP2PK | null {
         refundKeys.push(refundKey);
       }
     }
+    if (new Set(refundKeys).size !== refundKeys.length) return null;
 
     const now = Math.floor(Date.now() / 1000);
+    // parse additional pubkeys for multisig
+    const additionalPubkeys: string[] = [];
+    for (const tag of tags) {
+      if (tag[0] !== "pubkeys") continue;
+      for (const value of tag.slice(1)) {
+        if (typeof value !== "string") return null;
+        const additionalKey = normalizeCashuPubkey(value);
+        if (!additionalKey) return null;
+        additionalPubkeys.push(additionalKey);
+      }
+    }
+    const mainPubkeys = [pubkey, ...additionalPubkeys];
+    if (new Set(mainPubkeys).size !== mainPubkeys.length) return null;
+
+    // parse nSigs for multisig threshold
+    const nSigs = getTagInt(proof.secret, "n_sigs") ?? undefined;
+    if (seenTags.has("n_sigs")) {
+      if (nSigs === undefined || !Number.isInteger(nSigs)) return null;
+      if (nSigs <= 0 || nSigs > additionalPubkeys.length + 1) return null;
+    }
+
+    const nSigsRefund = getTagInt(proof.secret, "n_sigs_refund");
+    if (seenTags.has("n_sigs_refund")) {
+      if (nSigsRefund === undefined || !Number.isInteger(nSigsRefund)) {
+        return null;
+      }
+      if (nSigsRefund <= 0 || nSigsRefund > refundKeys.length) return null;
+    }
 
     return {
       pubkey,
+      pubkeys: additionalPubkeys.length > 0 ? additionalPubkeys : undefined,
+      nSigs,
       locktime,
       refundKeys,
       expired: locktime > 0 ? now >= locktime : false,
       rawTags: tags,
+      ...(shopstrOrderId ? { shopstrOrderId } : {}),
     };
   } catch {
     return null;
@@ -442,8 +634,11 @@ function hasP2pkKind(proof: Proof): boolean {
 function p2pkConstraintFingerprint(p2pk: ParsedP2PK): string {
   return JSON.stringify({
     pubkey: normalizeCashuPubkey(p2pk.pubkey),
+    pubkeys: p2pk.pubkeys?.map(normalizeCashuPubkey).sort(),
+    nSigs: p2pk.nSigs,
     locktime: p2pk.locktime,
     refundKeys: p2pk.refundKeys.map(normalizeCashuPubkey).sort(),
+    shopstrOrderId: p2pk.shopstrOrderId,
   });
 }
 
@@ -496,4 +691,8 @@ export function parseP2PKProofSet(proofs: Proof[]): P2pkProofSetParseResult {
   return {
     p2pk: parsedP2pk ? { ...parsedP2pk, proofCount: proofs.length } : null,
   };
+}
+
+export function getArbiterPubkey(): string | null {
+  return normalizeCashuPubkey(process.env.NEXT_PUBLIC_ARBITER_PUBKEY);
 }

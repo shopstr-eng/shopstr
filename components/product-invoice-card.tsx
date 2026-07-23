@@ -34,6 +34,7 @@ import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import {
   isSellerP2pkEscrowActive,
   resolveP2pkCheckoutOutputConfig,
+  resolveSellerCheckoutProfile,
 } from "@/utils/cashu/p2pk-checkout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
@@ -49,7 +50,10 @@ import {
   withDeadline,
   isTimeoutError,
 } from "@/utils/cashu/wallet-recovery";
-import { persistBuyerP2pkEscrowRecord } from "@/utils/cashu/p2pk-escrow-records";
+import {
+  createBuyerP2pkEscrowRecord,
+  persistBuyerP2pkEscrowRecord,
+} from "@/utils/cashu/p2pk-escrow-records";
 import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
   getLocalStorageData,
@@ -1386,8 +1390,16 @@ export default function ProductInvoiceCard({
     let remainingProofs = proofs;
     let sellerToken;
     let donationToken;
+    const orderId = uuidv4();
 
-    const sellerProfile = profileContext.profileData.get(productData.pubkey);
+    if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
+      pendingOrderRef.current.orderId = orderId;
+    }
+
+    const sellerProfile = await resolveSellerCheckoutProfile({
+      sellerPubkey: productData.pubkey,
+      cachedProfile: profileContext.profileData.get(productData.pubkey),
+    });
     const buyerProfile = profileContext.profileData.get(userPubkey!);
     const sellerP2pk = sellerProfile?.content?.p2pk;
     const p2pkOutputConfig = await resolveP2pkCheckoutOutputConfig({
@@ -1396,7 +1408,13 @@ export default function ProductInvoiceCard({
       mintUrl: mints[0],
       buyerContent: buyerProfile?.content,
       buyerCashuPubkey: cashuPubkey,
+      orderId,
     });
+    if (p2pkOutputConfig && !signer) {
+      throw new Error(
+        "A Nostr identity is required to register dispute escrow securely."
+      );
+    }
 
     const donationPercentage = sellerProfile?.content?.shopstr_donation ?? 2.1;
     const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
@@ -1450,23 +1468,20 @@ export default function ProductInvoiceCard({
       remainingProofs = keep;
     }
 
-    const orderId = uuidv4();
-
-    if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
-      pendingOrderRef.current.orderId = orderId;
-    }
-
     if (p2pkOutputConfig && sellerToken) {
-      await persistBuyerP2pkEscrowRecord(nostr, signer, {
-        orderId,
-        mint: mints[0]!,
-        token: sellerToken,
-        amount: sellerAmount,
-        sellerPubkey: p2pkOutputConfig.send.options.pubkey,
-        locktime: p2pkOutputConfig.send.options.locktime,
-        refundKeys: p2pkOutputConfig.send.options.refundKeys,
-        createdAt: Math.floor(Date.now() / 1000),
-      });
+      await persistBuyerP2pkEscrowRecord(
+        nostr,
+        signer,
+        createBuyerP2pkEscrowRecord({
+          orderId,
+          mint: tokenMintUrl,
+          token: sellerToken,
+          amount: sellerAmount,
+          sellerNostrPubkey: productData.pubkey,
+          outputConfig: p2pkOutputConfig,
+          createdAt: Math.floor(Date.now() / 1000),
+        })
+      );
     }
 
     const paymentPreference =

@@ -62,6 +62,7 @@ const ChatMessage = ({
 }) => {
   const router = useRouter();
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
+  const [localOrderId, setLocalOrderId] = useState("");
   const { pubkey: userPubkey } = useContext(SignerContext);
 
   useEffect(() => {
@@ -97,6 +98,7 @@ const ChatMessage = ({
     );
     setProductAddress?.(productAddress as string);
     setOrderId?.(orderId as string);
+    setLocalOrderId(orderId as string);
   }, [messageEvent]);
 
   const cashuMatch = messageEvent.content.match(/cashu[A-Za-z]/);
@@ -188,7 +190,16 @@ const ChatMessage = ({
             <>
               {renderMessageContent(contentBeforeCashu!)}
               <div className="flex items-center">
-                <ClaimButton token={cashuPrefix + tokenAfterCashuVersion} />
+                <ClaimButton
+                  token={cashuPrefix + tokenAfterCashuVersion}
+                  orderId={localOrderId || undefined}
+                  buyerPubkey={messageEvent.pubkey}
+                  sellerPubkey={
+                    messageEvent.pubkey === userPubkey
+                      ? currentChatPubkey
+                      : userPubkey
+                  }
+                />
                 {copiedToClipboard ? (
                   <CheckIcon className="ml-2 h-5 w-5 text-green-400" />
                 ) : (
