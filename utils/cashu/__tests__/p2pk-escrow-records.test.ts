@@ -6,7 +6,6 @@ import {
   persistBuyerP2pkEscrowRecord,
   restoreEncryptedEscrowRecordLocally,
   restoreEscrowRecordLocally,
-  updateDisputeStatus,
 } from "../p2pk-escrow-records";
 import * as escrowRecords from "../p2pk-escrow-records";
 
@@ -22,7 +21,6 @@ jest.mock("@/utils/nostr/nip98-auth", () => ({
 
 import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
-import { getPublicKey, nip44 } from "nostr-tools";
 
 // Phase 1 fixture: no arbiterPubkey/disputeStatus, matching records
 // persisted before Phase 2 shipped.
@@ -40,18 +38,6 @@ const legacyRecord = {
 const record = legacyRecord;
 // What legacyRecord normalizes to once it round-trips through this module.
 const normalizedRecord = { ...legacyRecord, disputeStatus: "none" };
-
-const USER_PRIVKEY = "1".repeat(64);
-const USER_PRIVKEY_BYTES = Uint8Array.from(Buffer.from(USER_PRIVKEY, "hex"));
-const USER_PUBKEY = getPublicKey(USER_PRIVKEY_BYTES);
-
-function decryptSelfContent(content: string): unknown {
-  const conversationKey = nip44.getConversationKey(
-    USER_PRIVKEY_BYTES,
-    USER_PUBKEY
-  );
-  return JSON.parse(nip44.decrypt(content, conversationKey));
-}
 
 describe("p2pk-escrow-records", () => {
   const originalFetch = global.fetch;
@@ -310,33 +296,6 @@ describe("p2pk-escrow-records", () => {
       const [stored] = getLocalBuyerP2pkEscrowRecords();
       expect(stored?.disputeStatus).toBe("none");
       expect(stored?.arbiterPubkey).toBeUndefined();
-    });
-
-    it("updateDisputeStatus throws when no record exists for the order", async () => {
-      await expect(
-        updateDisputeStatus("no-such-order", "open", USER_PRIVKEY)
-      ).rejects.toThrow("No escrow record found for order no-such-order.");
-    });
-
-    it("updateDisputeStatus republishes the record with the new status, preserving other fields", async () => {
-      restoreEscrowRecordLocally({ ...record, orderId: "order-2" });
-
-      await updateDisputeStatus("order-2", "open", USER_PRIVKEY);
-
-      expect(finalizeAndSendNostrEvent).toHaveBeenCalledTimes(1);
-      const [, , eventTemplate] = (finalizeAndSendNostrEvent as jest.Mock).mock
-        .calls[0];
-      expect(eventTemplate.kind).toBe(BUYER_P2PK_ESCROW_EVENT_KIND);
-      expect(eventTemplate.tags).toEqual(
-        expect.arrayContaining([["d", "shopstr:p2pk-escrow:order-2"]])
-      );
-
-      const decryptedRecord = decryptSelfContent(eventTemplate.content) as any;
-      expect(decryptedRecord).toEqual({
-        ...record,
-        orderId: "order-2",
-        disputeStatus: "open",
-      });
     });
   });
 });

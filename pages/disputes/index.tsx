@@ -135,8 +135,6 @@ function DisputesDashboard() {
                   <ArbiterControls
                     orderId={dispute.orderId}
                     token={dispute.token}
-                    buyerNostrPubkey={dispute.buyerPubkey}
-                    sellerNostrPubkey={dispute.sellerPubkey}
                     reason={dispute.reason}
                     onRuled={() => handleRuled(dispute.orderId)}
                   />

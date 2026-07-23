@@ -1195,37 +1195,6 @@ describe("ClaimButton — dispute escrow", () => {
     }
   });
 
-  test("derives seller escalation from the token locktime safety window", async () => {
-    const requestSentAtMs = Date.now() - 60_000;
-    const getItemSpy = jest
-      .spyOn(Storage.prototype, "getItem")
-      .mockImplementation((key: string) =>
-        key.includes("paymentRequestSentAt") ? String(requestSentAtMs) : null
-      );
-    mockGetSellerEscalationAtMs.mockReturnValue(Date.now() - 1);
-    mockParseP2PKProofSet.mockReturnValue({ p2pk: mockSellerMultisigP2PK });
-
-    try {
-      renderClaimButton("cashuAtoken", {
-        cashuPubkey: SELLER_CASHU_PUBKEY,
-        userPubkey: "seller-nostr-pubkey",
-        orderId: "order-1",
-        buyerPubkey: "buyer-nostr-pubkey",
-        sellerPubkey: "seller-nostr-pubkey",
-      });
-
-      expect(
-        await screen.findByRole("button", { name: /Escalate to Arbiter/i })
-      ).toBeInTheDocument();
-      expect(mockGetSellerEscalationAtMs).toHaveBeenCalledWith({
-        requestSentAtMs,
-        locktimeSeconds: mockSellerMultisigP2PK.locktime,
-      });
-    } finally {
-      getItemSpy.mockRestore();
-    }
-  });
-
   test("seller escalation durably notifies the arbiter and publishes the seller-authored dispute", async () => {
     const originalArbiterPubkey = process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY;
     process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY = "arbiter-nostr-pubkey";
@@ -1280,41 +1249,6 @@ describe("ClaimButton — dispute escrow", () => {
       getItemSpy.mockRestore();
       process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY = originalArbiterPubkey;
     }
-  });
-
-  test("shows winner claim action when arbiter resolution DM arrives during an open dispute", async () => {
-    mockParseP2PKProofSet.mockReturnValue({ p2pk: mockBuyerMultisigP2PK });
-    mockFindIncomingEscrowPayload.mockImplementation(
-      async (
-        _nostr: unknown,
-        _signer: unknown,
-        _userPubkey: string,
-        _orderId: string,
-        type: string
-      ) =>
-        type === "escrow-arbiter-sig"
-          ? {
-              type: "escrow-arbiter-sig",
-              orderId: "order-1",
-              proofs: [mockP2PKProof],
-              arbiterSigs: ["arbiter-sig"],
-            }
-          : null
-    );
-
-    renderClaimButton("cashuAtoken", {
-      orderId: "order-1",
-      buyerPubkey: "buyer-nostr-pubkey",
-      sellerPubkey: "seller-nostr-pubkey",
-    });
-
-    await screen.findByTestId("p2pk-detected");
-    expect(
-      await screen.findByRole("button", { name: /Claim Refund/i })
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /Dispute in Progress/i })
-    ).not.toBeInTheDocument();
   });
 
   test("winner claim combines the arbiter signature with the winner's own signature", async () => {

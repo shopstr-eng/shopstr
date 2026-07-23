@@ -1,11 +1,5 @@
-import { finalizeEvent, getPublicKey, nip19, nip44 } from "nostr-tools";
-import { hexToBytes } from "@noble/hashes/utils.js";
 import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
-import {
-  NostrManager,
-  type NostrEvent,
-  type NostrEventTemplate,
-} from "@/utils/nostr/nostr-manager";
+import { NostrManager } from "@/utils/nostr/nostr-manager";
 import type { EventTemplate } from "nostr-tools";
 import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
@@ -389,83 +383,8 @@ export async function persistBuyerP2pkEscrowRecord(
   });
 }
 
-// Wraps a raw Nostr private key (hex or nsec) as a NostrSigner so
-// updateDisputeStatus can run outside the browser-extension/NIP-46 signer
-// flows the rest of this file assumes (e.g. an arbiter's own key).
-class PrivkeyNostrSigner implements NostrSigner {
-  private readonly privKeyBytes: Uint8Array;
-  private readonly pubkey: string;
-
-  constructor(privkey: string) {
-    this.privKeyBytes = privkey.startsWith("nsec")
-      ? (nip19.decode(privkey).data as Uint8Array)
-      : hexToBytes(privkey);
-    this.pubkey = getPublicKey(this.privKeyBytes);
-  }
-
-  async connect(): Promise<string> {
-    return this.pubkey;
-  }
-
-  async getPubKey(): Promise<string> {
-    return this.pubkey;
-  }
-
-  async sign(event: NostrEventTemplate): Promise<NostrEvent> {
-    return finalizeEvent(event, this.privKeyBytes) as unknown as NostrEvent;
-  }
-
-  async encrypt(pubkey: string, plainText: string): Promise<string> {
-    const conversationKey = nip44.getConversationKey(this.privKeyBytes, pubkey);
-    return nip44.encrypt(plainText, conversationKey);
-  }
-
-  async decrypt(pubkey: string, cipherText: string): Promise<string> {
-    const conversationKey = nip44.getConversationKey(this.privKeyBytes, pubkey);
-    return nip44.decrypt(cipherText, conversationKey);
-  }
-
-  async close(): Promise<void> {}
-
-  toJSON(): { [key: string]: any } {
-    return { type: "privkey", pubkey: this.pubkey };
-  }
-}
-
-// Publishes an updated kind 30406 record with a new disputeStatus, signed
-// by userPrivkey (buyer, seller, or arbiter — whoever calls this only ever
-// updates their own self-encrypted copy of the record for orderId).
-export async function updateDisputeStatus(
-  orderId: string,
-  status: P2pkEscrowDisputeStatus,
-  userPrivkey: string
-): Promise<void> {
-  const signer = new PrivkeyNostrSigner(userPrivkey);
-
-  const existingRecords = await getStoredBuyerP2pkEscrowRecords(signer);
-  const existingRecord = existingRecords.find(
-    (candidate) => candidate.orderId === orderId
-  );
-
-  if (!existingRecord) {
-    throw new Error(`No escrow record found for order ${orderId}.`);
-  }
-
-  const updatedRecord: BuyerP2pkEscrowRecord = {
-    ...existingRecord,
-    disputeStatus: status,
-  };
-
-  const nostr = new NostrManager();
-  await persistBuyerP2pkEscrowRecord(nostr, signer, updatedRecord);
-}
-
-// Same as updateDisputeStatus, but for callers that already have the app's
-// real NostrSigner (e.g. the buyer's SignerContext.signer in-session) rather
-// than a raw privkey. This matters because the escrow record is
-// self-encrypted to whoever originally persisted it (the buyer's real Nostr
-// identity at checkout) — a Cashu-only key like cashuPrivkey has no
-// relationship to that identity and can never decrypt/update the record.
+// Update with the app's active Nostr signer because the record is encrypted
+// to the buyer's Nostr identity, not to a Cashu key.
 export async function updateDisputeStatusWithSigner(
   orderId: string,
   status: P2pkEscrowDisputeStatus,

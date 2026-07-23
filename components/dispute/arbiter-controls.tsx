@@ -8,8 +8,6 @@ import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 interface ArbiterControlsProps {
   orderId: string;
   token: string;
-  buyerNostrPubkey: string;
-  sellerNostrPubkey: string;
   reason: string;
   onRuled: (ruling: "buyer" | "seller") => void;
 }

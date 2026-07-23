@@ -99,8 +99,6 @@ describe("ArbiterControls", () => {
         <ArbiterControls
           orderId="order-1"
           token="cashuAtoken"
-          buyerNostrPubkey="buyer-pubkey"
-          sellerNostrPubkey="seller-pubkey"
           reason="item not received"
           onRuled={onRuled}
         />

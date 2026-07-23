@@ -10,10 +10,6 @@ let initializeTablesPromise: Promise<void> | null = null;
 // Queue for serializing cache operations
 let cacheQueue: Promise<void> = Promise.resolve();
 
-function shouldAwaitTableInitialization(): boolean {
-  return shouldAutoInitializeTables();
-}
-
 function shouldAutoInitializeTables(): boolean {
   return (
     process.env.NODE_ENV !== "test" ||
@@ -65,7 +61,7 @@ export async function trackFailedRelayPublishRecord({
   event: NostrEvent;
   relays: string[];
 }): Promise<boolean> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -105,7 +101,7 @@ export async function trackFailedRelayPublishRecord({
 }
 
 export async function getFailedRelayPublishesForOwner(ownerPubkey: string) {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -148,7 +144,7 @@ export async function clearFailedRelayPublishForOwner(
   eventId: string,
   ownerPubkey: string
 ): Promise<void> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -168,7 +164,7 @@ export async function incrementFailedRelayPublishRetryForOwner(
   eventId: string,
   ownerPubkey: string
 ): Promise<void> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -239,7 +235,7 @@ async function ensureTablesInitialized(): Promise<void> {
 }
 
 async function getInitializedDbPool(): Promise<Pool> {
-  if (shouldAwaitTableInitialization()) {
+  if (shouldAutoInitializeTables()) {
     await ensureTablesInitialized();
   }
   return getDbPool();
@@ -592,7 +588,10 @@ async function cacheEventInternal(
     return;
   }
 
-  const dbPool = await getInitializedDbPool();
+  const dbPool =
+    event.kind === 30407 || throwOnError
+      ? await getInitializedDbPool()
+      : getDbPool();
   let client;
 
   try {
@@ -765,7 +764,9 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
     }
   }
 
-  const dbPool = await getInitializedDbPool();
+  const dbPool = events.some((event) => event.kind === 30407)
+    ? await getInitializedDbPool()
+    : getDbPool();
   let client;
 
   try {
@@ -938,7 +939,7 @@ export async function fetchCachedEvents(
   const table = getTableForKind(kind);
   if (!table) return [];
 
-  const dbPool = await getInitializedDbPool();
+  const dbPool = kind === 30407 ? await getInitializedDbPool() : getDbPool();
   let client;
 
   try {
@@ -1003,7 +1004,7 @@ export async function deleteCachedEvent(
   const table = getTableForKind(kind);
   if (!table) return;
 
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -1024,7 +1025,7 @@ export async function deleteCachedEventsByIds(
 ): Promise<void> {
   if (eventIds.length === 0) return;
 
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   // All tables that can store events
@@ -1110,7 +1111,7 @@ export async function cachedEventsBelongToPubkey(
 
   const uniqueEventIds = Array.from(new Set(eventIds));
 
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   const eventTables = [
@@ -1164,7 +1165,7 @@ export async function fetchAllProductsFromDb(
   limit = 500,
   offset = 0
 ): Promise<NostrEvent[]> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -1231,7 +1232,7 @@ export async function fetchRelevantReportsFromDb(
     return [];
   }
 
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -1295,7 +1296,7 @@ export async function fetchRelevantReportsFromDb(
 export async function fetchAllMessagesFromDb(
   pubkey?: string
 ): Promise<(NostrEvent & { is_read: boolean })[]> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -1341,7 +1342,7 @@ export async function markMessagesAsRead(
 ): Promise<void> {
   if (messageIds.length === 0) return;
 
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -1371,7 +1372,7 @@ export async function markMessagesAsRead(
 
 // Get unread message count for a user
 export async function getUnreadMessageCount(pubkey: string): Promise<number> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -1607,7 +1608,7 @@ export async function getOrderParticipants(orderId: string): Promise<{
   buyerPubkey: string | null;
   sellerPubkey: string | null;
 }> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -1659,61 +1660,6 @@ export async function getOrderParticipants(orderId: string): Promise<{
   }
 }
 
-function parseOrderAmountSats(value: unknown): number | null {
-  const amount =
-    typeof value === "string" && value.trim()
-      ? Number(value)
-      : typeof value === "number"
-        ? value
-        : NaN;
-
-  if (!Number.isFinite(amount) || amount < 0) return null;
-
-  return Math.round(amount);
-}
-
-export async function getOrderAmountSats(
-  orderId: string
-): Promise<number | null> {
-  const dbPool = await getInitializedDbPool();
-  let client;
-
-  try {
-    client = await dbPool.connect();
-    const messageResult = await client.query<{ tags: string[][] }>(
-      `SELECT tags
-       FROM message_events
-       WHERE order_id = $1
-       ORDER BY created_at DESC`,
-      [orderId] as any[]
-    );
-
-    for (const row of messageResult.rows) {
-      const tags = Array.isArray(row.tags) ? (row.tags as string[][]) : [];
-      const amountTag = tags.find((tag) => tag[0] === "amount");
-      const amount = parseOrderAmountSats(amountTag?.[1]);
-      if (amount !== null) return amount;
-    }
-
-    const mcpResult = await client.query<{ amount_total: string | number }>(
-      `SELECT amount_total
-       FROM mcp_orders
-       WHERE order_id = $1
-       LIMIT 1`,
-      [orderId] as any[]
-    );
-
-    return parseOrderAmountSats(mcpResult.rows[0]?.amount_total);
-  } catch (error) {
-    console.error("Failed to get order amount:", error);
-    throw error;
-  } finally {
-    if (client) {
-      client.release();
-    }
-  }
-}
-
 // Update order status in database
 export async function updateOrderStatus(
   orderId: string,
@@ -1721,7 +1667,7 @@ export async function updateOrderStatus(
   pubkey: string,
   messageId?: string
 ): Promise<void> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -1774,7 +1720,7 @@ export async function getOrderStatuses(
 ): Promise<Record<string, string>> {
   if (orderIds.length === 0) return {};
 
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -1808,7 +1754,7 @@ export async function getOrderStatuses(
 
 // Fetch all profiles from database (both user and shop profiles)
 export async function fetchAllProfilesFromDb(): Promise<NostrEvent[]> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -1842,7 +1788,7 @@ export async function fetchAllProfilesFromDb(): Promise<NostrEvent[]> {
 export async function fetchAllWalletEventsFromDb(
   pubkey: string
 ): Promise<NostrEvent[]> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -1906,7 +1852,7 @@ export async function addDiscountCode(
   discountPercentage: number,
   expiration?: number
 ): Promise<void> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -1938,7 +1884,7 @@ export async function getDiscountCodesByPubkey(pubkey: string): Promise<
     expiration: number | null;
   }>
 > {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -1968,7 +1914,7 @@ export async function validateDiscountCode(
   pubkey: string,
   opts?: DbFetchOptions
 ): Promise<{ valid: boolean; discount_percentage?: number }> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -2008,7 +1954,7 @@ export async function deleteDiscountCode(
   code: string,
   pubkey: string
 ): Promise<void> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
 
   try {
@@ -2032,7 +1978,7 @@ export async function fetchMarketplaceStats(): Promise<{
   listingCount: number;
   sellerCount: number;
 }> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
   try {
     client = await dbPool.connect();
@@ -2095,7 +2041,7 @@ export async function fetchProductByIdFromDb(
   id: string,
   opts?: DbFetchOptions
 ): Promise<NostrEvent | null> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
   try {
     client = await dbPool.connect();
@@ -2131,7 +2077,7 @@ export async function fetchProductByDTagAndPubkey(
   pubkey: string,
   opts?: DbFetchOptions
 ): Promise<NostrEvent | null> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
   try {
     client = await dbPool.connect();
@@ -2173,7 +2119,7 @@ export async function fetchProductByDTagAndPubkey(
 export async function fetchProductByListingSlug(
   slug: string
 ): Promise<NostrEvent | null> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
   try {
     client = await dbPool.connect();
@@ -2240,7 +2186,7 @@ export async function fetchShopProfileByPubkeyFromDb(
   pubkey: string,
   opts?: DbFetchOptions
 ): Promise<NostrEvent | null> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
   try {
     client = await dbPool.connect();
@@ -2278,7 +2224,7 @@ export async function fetchShopProfileByPubkeyFromDb(
 export async function fetchProfilePubkeyByNameSlug(
   nameSlug: string
 ): Promise<string | null> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
   try {
     client = await dbPool.connect();
@@ -2341,7 +2287,7 @@ export async function fetchProfilePubkeyByNameSlug(
 export async function fetchShopPubkeyBySlug(
   slug: string
 ): Promise<string | null> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
   try {
     client = await dbPool.connect();
@@ -2363,7 +2309,7 @@ export async function fetchCommunityByPubkeyAndIdentifier(
   pubkey: string,
   identifier: string
 ): Promise<NostrEvent | null> {
-  const dbPool = await getInitializedDbPool();
+  const dbPool = getDbPool();
   let client;
   try {
     client = await dbPool.connect();

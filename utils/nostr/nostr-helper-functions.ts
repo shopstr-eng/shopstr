@@ -49,9 +49,7 @@ export async function deleteEvent(
     deletedKind
   );
 
-  await finalizeAndSendNostrEvent(signer, nostr, deletionEvent, {
-    waitForRelayPublish: false,
-  });
+  await finalizeAndSendNostrEvent(signer, nostr, deletionEvent);
 
   // Delete from database via API
   const pubkey = await signer.getPubKey();
@@ -492,8 +490,7 @@ export async function publishProofEvent(
       signedEvent = await finalizeAndSendNostrEvent(
         signer!,
         nostr,
-        cashuProofEvent,
-        { waitForRelayPublish: false }
+        cashuProofEvent
       );
     }
     if (deletedEventsArray && deletedEventsArray.length > 0) {
@@ -547,14 +544,7 @@ export async function publishSpendingHistoryEvent(
       content: await signer!.encrypt(userPubkey, JSON.stringify(eventContent)),
       created_at: Math.floor(Date.now() / 1000),
     };
-    await finalizeAndSendNostrEvent(
-      signer!,
-      nostr!,
-      cashuSpendingHistoryEvent,
-      {
-        waitForRelayPublish: false,
-      }
-    );
+    await finalizeAndSendNostrEvent(signer!, nostr!, cashuSpendingHistoryEvent);
   } catch {
     return;
   }

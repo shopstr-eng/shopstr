@@ -355,13 +355,6 @@ export function buildP2pkSwapOptions(
   };
 }
 
-export function getPrimaryP2pkLockPubkey(
-  outputConfig: ReturnType<typeof buildP2pkOutputConfig>
-): string | undefined {
-  const pubkey = outputConfig?.send.options.pubkey;
-  return Array.isArray(pubkey) ? pubkey[0] : pubkey;
-}
-
 export function buildP2pkOutputConfig(
   sellerP2pk: P2pkProfileSettings | undefined,
   buyerContent: ProfileData["content"] | undefined,
