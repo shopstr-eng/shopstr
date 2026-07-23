@@ -1965,7 +1965,8 @@ export async function getDiscountCodesByPubkey(pubkey: string): Promise<
 // Validate and get discount code
 export async function validateDiscountCode(
   code: string,
-  pubkey: string
+  pubkey: string,
+  opts?: DbFetchOptions
 ): Promise<{ valid: boolean; discount_percentage?: number }> {
   const dbPool = await getInitializedDbPool();
   let client;
@@ -1991,6 +1992,9 @@ export async function validateDiscountCode(
     return { valid: true, discount_percentage: Number(discount_percentage) };
   } catch (error) {
     console.error("Failed to validate discount code:", error);
+    if (opts?.rethrow) {
+      throw new DatabaseUnavailableError("Failed to validate discount code");
+    }
     return { valid: false };
   } finally {
     if (client) {
@@ -2069,8 +2073,27 @@ export function profileNameToSlug(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
+/**
+ * Raised (only when callers opt in via `{ rethrow: true }`) when a DB read
+ * fails for infrastructure reasons. Lets payment-critical API routes return
+ * 503 instead of misreporting a transient outage as a 404 "not found".
+ * Default behavior (swallow + return null) is preserved for SSR/OG callers
+ * that intentionally degrade to "no data".
+ */
+export class DatabaseUnavailableError extends Error {
+  constructor(message = "Database unavailable") {
+    super(message);
+    this.name = "DatabaseUnavailableError";
+  }
+}
+
+export type DbFetchOptions = {
+  rethrow?: boolean;
+};
+
 export async function fetchProductByIdFromDb(
-  id: string
+  id: string,
+  opts?: DbFetchOptions
 ): Promise<NostrEvent | null> {
   const dbPool = await getInitializedDbPool();
   let client;
@@ -2094,6 +2117,9 @@ export async function fetchProductByIdFromDb(
     };
   } catch (error) {
     console.error("Failed to fetch product by id:", error);
+    if (opts?.rethrow) {
+      throw new DatabaseUnavailableError("Failed to fetch product by id");
+    }
     return null;
   } finally {
     if (client) client.release();
@@ -2102,7 +2128,8 @@ export async function fetchProductByIdFromDb(
 
 export async function fetchProductByDTagAndPubkey(
   dTag: string,
-  pubkey: string
+  pubkey: string,
+  opts?: DbFetchOptions
 ): Promise<NostrEvent | null> {
   const dbPool = await getInitializedDbPool();
   let client;
@@ -2132,6 +2159,11 @@ export async function fetchProductByDTagAndPubkey(
     };
   } catch (error) {
     console.error("Failed to fetch product by d-tag and pubkey:", error);
+    if (opts?.rethrow) {
+      throw new DatabaseUnavailableError(
+        "Failed to fetch product by d-tag and pubkey"
+      );
+    }
     return null;
   } finally {
     if (client) client.release();
@@ -2205,7 +2237,8 @@ export async function fetchProductByListingSlug(
 }
 
 export async function fetchShopProfileByPubkeyFromDb(
-  pubkey: string
+  pubkey: string,
+  opts?: DbFetchOptions
 ): Promise<NostrEvent | null> {
   const dbPool = await getInitializedDbPool();
   let client;
@@ -2231,6 +2264,11 @@ export async function fetchShopProfileByPubkeyFromDb(
     };
   } catch (error) {
     console.error("Failed to fetch shop profile by pubkey:", error);
+    if (opts?.rethrow) {
+      throw new DatabaseUnavailableError(
+        "Failed to fetch shop profile by pubkey"
+      );
+    }
     return null;
   } finally {
     if (client) client.release();

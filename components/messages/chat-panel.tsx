@@ -28,10 +28,8 @@ import {
 import { ChatObject, NostrMessageEvent } from "../../utils/types/types";
 import ChatMessage from "./chat-message";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
-import {
-  publishReviewEvent,
-  generateKeys,
-} from "@/utils/nostr/nostr-helper-functions";
+import { generateKeys } from "@/utils/nostr/key-utilities";
+import { publishReviewEvent } from "@/utils/nostr/nostr-helper-functions";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,

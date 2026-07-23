@@ -15,11 +15,11 @@ import {
   getTokenMetadata,
   Wallet as CashuWallet,
 } from "@cashu/cashu-ts";
+import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
   getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
-  generateKeys,
 } from "@/utils/nostr/nostr-helper-functions";
 import * as giftWrapHelpers from "@/utils/nostr/gift-wrap";
 import {
@@ -45,11 +45,13 @@ jest.setTimeout(15000);
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
+jest.mock("@/utils/nostr/key-utilities", () => ({
+  generateKeys: jest.fn(),
+}));
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalStorageData: jest.fn(),
   publishProofEvent: jest.fn(),
   publishWalletEvent: jest.fn(),
-  generateKeys: jest.fn(),
 }));
 
 jest.mock("@/utils/nostr/gift-wrap", () => ({

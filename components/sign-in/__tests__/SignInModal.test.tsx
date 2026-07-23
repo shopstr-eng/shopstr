@@ -4,13 +4,16 @@ import SignInModal from "../SignInModal";
 import { useRouter } from "next/router";
 import { RelaysContext } from "../../../utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import * as nostrHelpers from "@/utils/nostr/nostr-helper-functions";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
+import { validateNSecKey, parseBunkerToken } from "@/utils/nostr/key-utilities";
+import { setLocalStorageDataOnSignIn } from "@/utils/nostr/nostr-helper-functions";
 
 jest.mock("next/router", () => ({ useRouter: jest.fn() }));
-jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+jest.mock("@/utils/nostr/key-utilities", () => ({
   validateNSecKey: jest.fn(),
   parseBunkerToken: jest.fn(),
+}));
+jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   setLocalStorageDataOnSignIn: jest.fn(),
 }));
 jest.spyOn(NostrNSecSigner, "getEncryptedNSEC").mockReturnValue({
@@ -19,7 +22,11 @@ jest.spyOn(NostrNSecSigner, "getEncryptedNSEC").mockReturnValue({
   pubkey: "test-pubkey",
 });
 
-const helpers = nostrHelpers as jest.Mocked<typeof nostrHelpers>;
+const helpers = {
+  validateNSecKey: validateNSecKey as jest.Mock,
+  parseBunkerToken: parseBunkerToken as jest.Mock,
+  setLocalStorageDataOnSignIn: setLocalStorageDataOnSignIn as jest.Mock,
+};
 
 const mockRelays = {
   isLoading: false,
