@@ -523,3 +523,76 @@ describe("search_products", () => {
     });
   });
 });
+
+describe("get_product_details", () => {
+  function getCallback() {
+    return getTool(registerToolsForTest(), "get_product_details");
+  }
+
+  it("returns the parsed product spread at the top level with _meta.resultCount=1 when the id matches", async () => {
+    mockDbPool(() => ({
+      rows: [
+        makeProductRow({ id: "product-1", tags: [["title", "Raw Milk"]] }),
+        makeProductRow({ id: "product-2", tags: [["title", "Honey"]] }),
+      ],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({ productId: "product-1" });
+
+    const payload = textPayload(result);
+    expect(payload.id).toBe("product-1");
+    expect(payload.title).toBe("Raw Milk");
+    expect(payload._meta.resultCount).toBe(1);
+  });
+
+  it("returns 'Product not found' (isError) when no event matches productId", async () => {
+    mockDbPool(() => ({ rows: [makeProductRow({ id: "product-1" })] }));
+    const tool = getCallback();
+
+    const result = await tool({ productId: "unknown-id" });
+
+    expect(result.isError).toBe(true);
+    expect(textPayload(result).error).toBe("Product not found");
+  });
+
+  it("returns dataFreshness derived from the single product's own createdAt", async () => {
+    mockDbPool(() => ({
+      rows: [makeProductRow({ id: "product-1", created_at: 1_700_000_000 })],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({ productId: "product-1" });
+
+    expect(textPayload(result)._meta.dataFreshness).toBe(
+      new Date(1_700_000_000 * 1000).toISOString()
+    );
+  });
+
+  it("returns dataFreshness=null when createdAt is falsy (e.g. 0)", async () => {
+    mockDbPool(() => ({
+      rows: [makeProductRow({ id: "product-1", created_at: 0 })],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({ productId: "product-1" });
+
+    expect(textPayload(result)._meta.dataFreshness).toBeNull();
+  });
+
+  it("returns DB_ERROR and releases the client when the query rejects", async () => {
+    const { release } = mockDbPool(() => {
+      throw new Error("database offline");
+    });
+    const tool = getCallback();
+
+    const result = await tool({ productId: "product-1" });
+
+    expect(result.isError).toBe(true);
+    expect(textPayload(result)).toMatchObject({
+      error: "DB fetch failed",
+      code: "DB_ERROR",
+    });
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+});
