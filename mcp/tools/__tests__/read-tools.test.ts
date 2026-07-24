@@ -77,6 +77,24 @@ function makeProductRow(overrides: Partial<DbEventRow> = {}): DbEventRow {
   };
 }
 
+function makeProfileRow(
+  overrides: Partial<Omit<DbEventRow, "content">> & {
+    content?: Record<string, unknown>;
+  } = {}
+): DbEventRow {
+  const { content, ...rest } = overrides;
+  return {
+    id: "profile-1",
+    pubkey: TEST_PUBKEY,
+    created_at: 1_700_000_000,
+    kind: 30019,
+    tags: [],
+    content: JSON.stringify(content ?? { name: "Fresh Farm" }),
+    sig: "sig",
+    ...rest,
+  };
+}
+
 let auditLogSpy: jest.SpyInstance;
 
 beforeAll(() => {
@@ -587,6 +605,148 @@ describe("get_product_details", () => {
     const tool = getCallback();
 
     const result = await tool({ productId: "product-1" });
+
+    expect(result.isError).toBe(true);
+    expect(textPayload(result)).toMatchObject({
+      error: "DB fetch failed",
+      code: "DB_ERROR",
+    });
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("list_companies", () => {
+  function getCallback() {
+    return getTool(registerToolsForTest(), "list_companies");
+  }
+
+  it("includes only kind:30019 shop profiles, excluding kind:0 user-only profiles", async () => {
+    mockDbPool(() => ({
+      rows: [
+        makeProfileRow({ id: "shop-1", kind: 30019 }),
+        makeProfileRow({ id: "user-1", kind: 0 }),
+      ],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({});
+
+    const payload = textPayload(result);
+    expect(payload.count).toBe(1);
+    expect(payload.companies).toHaveLength(1);
+    expect(payload.companies[0].pubkey).toBe(TEST_PUBKEY);
+  });
+
+  it("parses shop-specific fields via parseProfileEvent, including a derived storefrontUrl", async () => {
+    mockDbPool(() => ({
+      rows: [
+        makeProfileRow({
+          kind: 30019,
+          content: {
+            name: "Fresh Farm",
+            paymentMethodDiscounts: { bitcoin: 5 },
+            freeShippingThreshold: 50,
+            freeShippingCurrency: "USD",
+            storefront: { shopSlug: "fresh-farm" },
+          },
+        }),
+      ],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({});
+
+    expect(textPayload(result).companies[0]).toMatchObject({
+      name: "Fresh Farm",
+      paymentMethodDiscounts: { bitcoin: 5 },
+      freeShippingThreshold: 50,
+      freeShippingCurrency: "USD",
+      storefront: { shopSlug: "fresh-farm" },
+      storefrontUrl: "/shop/fresh-farm",
+    });
+  });
+
+  it("falls back to an empty profile object when content is malformed JSON, rather than throwing", async () => {
+    // makeProfileRow always JSON.stringifies its content, so build this row
+    // by hand to get genuinely malformed JSON in the content column.
+    mockDbPool(() => ({
+      rows: [
+        {
+          id: "profile-1",
+          pubkey: TEST_PUBKEY,
+          created_at: 1_700_000_000,
+          kind: 30019,
+          tags: [],
+          content: "{not valid json",
+          sig: "sig",
+        },
+      ],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({});
+
+    expect(textPayload(result).companies[0]).toMatchObject({ name: "" });
+  });
+
+  it("applies limit after filtering to shop profiles", async () => {
+    mockDbPool(() => ({
+      rows: [
+        makeProfileRow({ id: "shop-1", kind: 30019 }),
+        makeProfileRow({ id: "shop-2", kind: 30019 }),
+        makeProfileRow({ id: "user-1", kind: 0 }),
+      ],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({ limit: 1 });
+
+    expect(textPayload(result).companies).toHaveLength(1);
+  });
+
+  it("computes dataFreshness from the returned (post-limit) set", async () => {
+    mockDbPool(() => ({
+      rows: [
+        makeProfileRow({
+          id: "shop-1",
+          kind: 30019,
+          created_at: 1_700_000_100,
+        }),
+        makeProfileRow({
+          id: "shop-2",
+          kind: 30019,
+          created_at: 1_700_000_200,
+        }),
+      ],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({});
+
+    expect(textPayload(result)._meta.dataFreshness).toBe(
+      new Date(1_700_000_200 * 1000).toISOString()
+    );
+  });
+
+  it("returns an empty companies array and dataFreshness=null (not an error) when no shop profiles exist", async () => {
+    mockDbPool(() => ({ rows: [makeProfileRow({ kind: 0 })] }));
+    const tool = getCallback();
+
+    const result = await tool({});
+
+    const payload = textPayload(result);
+    expect(result.isError).toBeUndefined();
+    expect(payload).toMatchObject({ count: 0, companies: [] });
+    expect(payload._meta.dataFreshness).toBeNull();
+  });
+
+  it("returns DB_ERROR and releases the client when the query rejects", async () => {
+    const { release } = mockDbPool(() => {
+      throw new Error("database offline");
+    });
+    const tool = getCallback();
+
+    const result = await tool({});
 
     expect(result.isError).toBe(true);
     expect(textPayload(result)).toMatchObject({
