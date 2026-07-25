@@ -95,6 +95,31 @@ function makeProfileRow(
   };
 }
 
+function makeReviewRow(overrides: Partial<DbEventRow> = {}): DbEventRow {
+  return {
+    id: "review-1",
+    pubkey: "reviewer-pubkey",
+    created_at: 1_700_000_000,
+    kind: 31555,
+    tags: [["d", `${TEST_PUBKEY}:some-target`]],
+    content: "Great product!",
+    sig: "sig",
+    ...overrides,
+  };
+}
+
+// get_company_details and get_storefront each fan out to multiple tables
+// via a single shared mocked client.query — branch on the SQL text to
+// return the right rows per table.
+function mockMultiTableDbPool(rowsBySqlFragment: Record<string, unknown[]>) {
+  return mockDbPool((sql: string) => {
+    for (const [fragment, rows] of Object.entries(rowsBySqlFragment)) {
+      if (sql.includes(fragment)) return { rows };
+    }
+    return { rows: [] };
+  });
+}
+
 let auditLogSpy: jest.SpyInstance;
 
 beforeAll(() => {
@@ -754,5 +779,263 @@ describe("list_companies", () => {
       code: "DB_ERROR",
     });
     expect(release).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("get_company_details", () => {
+  function getCallback() {
+    return getTool(registerToolsForTest(), "get_company_details");
+  }
+
+  it("combines shopProfile (kind 30019) and userProfile (kind 0) for the same pubkey", async () => {
+    mockMultiTableDbPool({
+      profile_events: [
+        makeProfileRow({ kind: 30019, content: { name: "Fresh Farm Shop" } }),
+        makeProfileRow({ kind: 0, content: { name: "Alice" } }),
+      ],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    const payload = textPayload(result);
+    expect(payload.shopProfile).toMatchObject({ name: "Fresh Farm Shop" });
+    expect(payload.userProfile).toMatchObject({ name: "Alice" });
+  });
+
+  it("parses kind:0-only fields (website, fiat_options, payment_preference) onto the userProfile", async () => {
+    mockMultiTableDbPool({
+      profile_events: [
+        makeProfileRow({
+          kind: 0,
+          content: {
+            name: "Alice",
+            website: "https://example.com",
+            fiat_options: { venmo: "alice-v" },
+            payment_preference: "lightning",
+          },
+        }),
+      ],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(textPayload(result).userProfile).toMatchObject({
+      website: "https://example.com",
+      fiat_options: { venmo: "alice-v" },
+      payment_preference: "lightning",
+    });
+  });
+
+  it("returns 'Company not found' when neither profile kind exists for this pubkey, even if products/reviews do", async () => {
+    mockMultiTableDbPool({
+      profile_events: [makeProfileRow({ pubkey: "someone-else", kind: 30019 })],
+      product_events: [makeProductRow({ pubkey: TEST_PUBKEY })],
+      review_events: [makeReviewRow({ tags: [["d", `${TEST_PUBKEY}:x`]] })],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(result.isError).toBe(true);
+    expect(textPayload(result).error).toBe("Company not found");
+  });
+
+  it("scopes products and reviews to the requested pubkey", async () => {
+    mockMultiTableDbPool({
+      profile_events: [makeProfileRow({ kind: 30019 })],
+      product_events: [
+        makeProductRow({ id: "mine", pubkey: TEST_PUBKEY }),
+        makeProductRow({ id: "theirs", pubkey: "someone-else" }),
+      ],
+      review_events: [
+        makeReviewRow({ id: "review-mine", tags: [["d", `${TEST_PUBKEY}:x`]] }),
+        makeReviewRow({ id: "review-theirs", tags: [["d", "someone-else:x"]] }),
+      ],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    const payload = textPayload(result);
+    expect(payload.products.items.map((p: any) => p.id)).toEqual(["mine"]);
+    expect(payload.reviews.items.map((r: any) => r.id)).toEqual([
+      "review-mine",
+    ]);
+  });
+
+  it("matches reviews whose d tag contains the pubkey, not just an exact match", async () => {
+    mockMultiTableDbPool({
+      profile_events: [makeProfileRow({ kind: 30019 })],
+      review_events: [
+        makeReviewRow({
+          id: "product-review",
+          tags: [["d", `${TEST_PUBKEY}:product-abc`]],
+        }),
+      ],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(textPayload(result).reviews.items[0].id).toBe("product-review");
+  });
+
+  it("parses rating tags into the review's ratings map, keyed by category", async () => {
+    mockMultiTableDbPool({
+      profile_events: [makeProfileRow({ kind: 30019 })],
+      review_events: [
+        makeReviewRow({
+          tags: [
+            ["d", `${TEST_PUBKEY}:x`],
+            ["rating", "5", "quality"],
+            ["rating", "4", "shipping"],
+          ],
+        }),
+      ],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(textPayload(result).reviews.items[0].ratings).toEqual({
+      quality: 5,
+      shipping: 4,
+    });
+  });
+
+  it("attaches pricing with acceptedPaymentMethods=[lightning, cashu] to every product", async () => {
+    mockMultiTableDbPool({
+      profile_events: [makeProfileRow({ kind: 30019 })],
+      product_events: [
+        makeProductRow({ pubkey: TEST_PUBKEY, tags: [["price", "10", "USD"]] }),
+      ],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    const payload = textPayload(result);
+    expect(payload.paymentInfo.acceptedPaymentMethods).toEqual([
+      "lightning",
+      "cashu",
+    ]);
+    expect(payload.products.items[0].pricing.paymentMethods).toEqual([
+      "lightning",
+      "cashu",
+    ]);
+  });
+
+  it("computes priceRange as null when no products have price > 0", async () => {
+    mockMultiTableDbPool({
+      profile_events: [makeProfileRow({ kind: 30019 })],
+      product_events: [makeProductRow({ pubkey: TEST_PUBKEY, tags: [] })],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(textPayload(result).paymentInfo.priceRange).toBeNull();
+  });
+
+  it("computes priceRange min/max/currency from priced products", async () => {
+    mockMultiTableDbPool({
+      profile_events: [makeProfileRow({ kind: 30019 })],
+      product_events: [
+        makeProductRow({
+          id: "cheap",
+          pubkey: TEST_PUBKEY,
+          tags: [["price", "5", "USD"]],
+        }),
+        makeProductRow({
+          id: "pricey",
+          pubkey: TEST_PUBKEY,
+          tags: [["price", "50", "USD"]],
+        }),
+      ],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(textPayload(result).paymentInfo.priceRange).toEqual({
+      min: 5,
+      max: 50,
+      currency: "USD",
+    });
+  });
+
+  it("counts freeShippingProducts only for shippingType 'Free' or 'Free/Pickup'", async () => {
+    mockMultiTableDbPool({
+      profile_events: [makeProfileRow({ kind: 30019 })],
+      product_events: [
+        makeProductRow({
+          id: "free",
+          pubkey: TEST_PUBKEY,
+          tags: [["shipping", "Free", "0", "USD"]],
+        }),
+        makeProductRow({
+          id: "free-pickup",
+          pubkey: TEST_PUBKEY,
+          tags: [["shipping", "Free/Pickup", "0", "USD"]],
+        }),
+        makeProductRow({
+          id: "paid",
+          pubkey: TEST_PUBKEY,
+          tags: [["shipping", "Added Cost", "5", "USD"]],
+        }),
+      ],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    const payload = textPayload(result);
+    expect(payload.paymentInfo.freeShippingAvailable).toBe(true);
+    expect(payload.paymentInfo.freeShippingProductCount).toBe(2);
+  });
+
+  it("computes dataFreshness as the max createdAt across products AND reviews", async () => {
+    mockMultiTableDbPool({
+      profile_events: [makeProfileRow({ kind: 30019 })],
+      product_events: [
+        makeProductRow({ pubkey: TEST_PUBKEY, created_at: 1_700_000_100 }),
+      ],
+      review_events: [
+        makeReviewRow({
+          tags: [["d", `${TEST_PUBKEY}:x`]],
+          created_at: 1_700_000_300,
+        }),
+      ],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(textPayload(result)._meta.dataFreshness).toBe(
+      new Date(1_700_000_300 * 1000).toISOString()
+    );
+  });
+
+  it("returns DB_ERROR when the combined Promise.all rejects (e.g. one of the three queries fails)", async () => {
+    const query = jest.fn().mockImplementation((sql: string) => {
+      if (sql.includes("review_events")) {
+        throw new Error("reviews table offline");
+      }
+      return { rows: [] };
+    });
+    const release = jest.fn();
+    const connect = jest.fn().mockResolvedValue({ query, release });
+    jest.mocked(getDbPool).mockReturnValue({ connect } as any);
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(result.isError).toBe(true);
+    expect(textPayload(result)).toMatchObject({
+      error: "DB fetch failed",
+      code: "DB_ERROR",
+    });
   });
 });
