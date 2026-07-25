@@ -1168,3 +1168,90 @@ describe("get_reviews", () => {
     expect(release).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("check_discount_code", () => {
+  function getCallback() {
+    return getTool(registerToolsForTest(), "check_discount_code");
+  }
+
+  const FAR_FUTURE = Math.floor(Date.now() / 1000) + 1_000_000;
+  const FAR_PAST = Math.floor(Date.now() / 1000) - 1_000_000;
+
+  it("returns {valid:true, discount_percentage} for a code within its expiration", async () => {
+    mockDbPool(() => ({
+      rows: [{ discount_percentage: 20, expiration: FAR_FUTURE }],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({ code: "SUMMER20", sellerPubkey: TEST_PUBKEY });
+
+    const payload = textPayload(result);
+    expect(payload.valid).toBe(true);
+    expect(payload.discount_percentage).toBe(20);
+    expect(payload._meta.resultCount).toBe(1);
+  });
+
+  it("returns {valid:true, discount_percentage} for a code with no expiration (permanent)", async () => {
+    mockDbPool(() => ({
+      rows: [{ discount_percentage: 10, expiration: null }],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({ code: "FOREVER", sellerPubkey: TEST_PUBKEY });
+
+    expect(textPayload(result)).toMatchObject({
+      valid: true,
+      discount_percentage: 10,
+    });
+  });
+
+  it("returns {valid:false} (no discount_percentage) for an unknown code", async () => {
+    mockDbPool(() => ({ rows: [] }));
+    const tool = getCallback();
+
+    const result = await tool({ code: "UNKNOWN", sellerPubkey: TEST_PUBKEY });
+
+    const payload = textPayload(result);
+    expect(payload.valid).toBe(false);
+    expect(payload.discount_percentage).toBeUndefined();
+  });
+
+  it("returns {valid:false} for a code that has expired, even though the row still exists", async () => {
+    mockDbPool(() => ({
+      rows: [{ discount_percentage: 20, expiration: FAR_PAST }],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({ code: "EXPIRED10", sellerPubkey: TEST_PUBKEY });
+
+    expect(textPayload(result).valid).toBe(false);
+  });
+
+  it("scopes the lookup to code AND pubkey via query params", async () => {
+    const { query } = mockDbPool(() => ({ rows: [] }));
+    const tool = getCallback();
+
+    await tool({ code: "SUMMER20", sellerPubkey: TEST_PUBKEY });
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("SELECT discount_percentage, expiration"),
+      ["SUMMER20", TEST_PUBKEY]
+    );
+  });
+
+  it("returns DB_ERROR and releases the client when the query rejects", async () => {
+    const { release } = mockDbPool(() => {
+      throw new Error("database offline");
+    });
+    const tool = getCallback();
+
+    const result = await tool({ code: "SUMMER20", sellerPubkey: TEST_PUBKEY });
+
+    expect(result.isError).toBe(true);
+    expect(textPayload(result)).toMatchObject({
+      error: "DB fetch failed",
+      code: "DB_ERROR",
+    });
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+});
