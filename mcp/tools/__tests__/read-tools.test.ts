@@ -1039,3 +1039,132 @@ describe("get_company_details", () => {
     });
   });
 });
+
+describe("get_reviews", () => {
+  function getCallback() {
+    return getTool(registerToolsForTest(), "get_reviews");
+  }
+
+  it("returns a validation error when neither productId nor sellerPubkey is provided, without querying the db", async () => {
+    const { query } = mockDbPool(() => ({ rows: [] }));
+    const tool = getCallback();
+
+    const result = await tool({});
+
+    expect(result.isError).toBe(true);
+    expect(textPayload(result).error).toBe(
+      "Either productId or sellerPubkey is required"
+    );
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("filters to reviews whose d tag contains productId when only productId is given", async () => {
+    mockDbPool(() => ({
+      rows: [
+        makeReviewRow({
+          id: "for-product",
+          tags: [["d", `seller-a:product-123`]],
+        }),
+        makeReviewRow({
+          id: "for-other-product",
+          tags: [["d", `seller-a:product-999`]],
+        }),
+      ],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({ productId: "product-123" });
+
+    expect(textPayload(result).reviews.map((r: any) => r.id)).toEqual([
+      "for-product",
+    ]);
+  });
+
+  it("filters to reviews whose d tag contains sellerPubkey when only sellerPubkey is given", async () => {
+    mockDbPool(() => ({
+      rows: [
+        makeReviewRow({ id: "for-seller", tags: [["d", `${TEST_PUBKEY}:x`]] }),
+        makeReviewRow({
+          id: "for-other-seller",
+          tags: [["d", "someone-else:x"]],
+        }),
+      ],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({ sellerPubkey: TEST_PUBKEY });
+
+    expect(textPayload(result).reviews.map((r: any) => r.id)).toEqual([
+      "for-seller",
+    ]);
+  });
+
+  it("applies both filters (AND) when both productId and sellerPubkey are given", async () => {
+    mockDbPool(() => ({
+      rows: [
+        makeReviewRow({
+          id: "matches-both",
+          tags: [["d", `${TEST_PUBKEY}:product-123`]],
+        }),
+        makeReviewRow({
+          id: "wrong-product",
+          tags: [["d", `${TEST_PUBKEY}:product-999`]],
+        }),
+        makeReviewRow({
+          id: "wrong-seller",
+          tags: [["d", `someone-else:product-123`]],
+        }),
+      ],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({
+      productId: "product-123",
+      sellerPubkey: TEST_PUBKEY,
+    });
+
+    expect(textPayload(result).reviews.map((r: any) => r.id)).toEqual([
+      "matches-both",
+    ]);
+  });
+
+  it("computes dataFreshness from the filtered result set", async () => {
+    mockDbPool(() => ({
+      rows: [
+        makeReviewRow({
+          tags: [["d", `${TEST_PUBKEY}:x`]],
+          created_at: 1_700_000_100,
+        }),
+        makeReviewRow({
+          tags: [["d", "someone-else:x"]],
+          created_at: 1_700_000_900,
+        }),
+      ],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({ sellerPubkey: TEST_PUBKEY });
+
+    // The someone-else review is filtered out, so freshness should reflect
+    // only the surviving TEST_PUBKEY review, not the later unfiltered one.
+    expect(textPayload(result)._meta.dataFreshness).toBe(
+      new Date(1_700_000_100 * 1000).toISOString()
+    );
+  });
+
+  it("returns DB_ERROR and releases the client when the query rejects", async () => {
+    const { release } = mockDbPool(() => {
+      throw new Error("database offline");
+    });
+    const tool = getCallback();
+
+    const result = await tool({ sellerPubkey: TEST_PUBKEY });
+
+    expect(result.isError).toBe(true);
+    expect(textPayload(result)).toMatchObject({
+      error: "DB fetch failed",
+      code: "DB_ERROR",
+    });
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+});
