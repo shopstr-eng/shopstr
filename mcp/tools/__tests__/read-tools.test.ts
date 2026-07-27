@@ -120,6 +120,45 @@ function mockMultiTableDbPool(rowsBySqlFragment: Record<string, unknown[]>) {
   });
 }
 
+function mockStorefrontDbPool({
+  profiles = [] as unknown[],
+  products = [] as unknown[],
+  slugRows = [] as unknown[],
+  domainRows = [] as unknown[],
+  slugQueryImpl,
+  domainQueryImpl,
+}: {
+  profiles?: unknown[];
+  products?: unknown[];
+  slugRows?: unknown[];
+  domainRows?: unknown[];
+  slugQueryImpl?: (sql: string, params?: unknown[]) => unknown;
+  domainQueryImpl?: (sql: string, params?: unknown[]) => unknown;
+} = {}) {
+  const connectQuery = jest.fn().mockImplementation((sql: string) => {
+    if (sql.includes("profile_events")) return { rows: profiles };
+    if (sql.includes("product_events")) return { rows: products };
+    return { rows: [] };
+  });
+  const release = jest.fn();
+  const connect = jest.fn().mockResolvedValue({ query: connectQuery, release });
+  const poolQuery = jest
+    .fn()
+    .mockImplementation((sql: string, params?: unknown[]) => {
+      if (sql.includes("shop_slugs")) {
+        return slugQueryImpl ? slugQueryImpl(sql, params) : { rows: slugRows };
+      }
+      if (sql.includes("custom_domains")) {
+        return domainQueryImpl
+          ? domainQueryImpl(sql, params)
+          : { rows: domainRows };
+      }
+      return { rows: [] };
+    });
+  jest.mocked(getDbPool).mockReturnValue({ connect, query: poolQuery } as any);
+  return { connectQuery, release, connect, poolQuery };
+}
+
 let auditLogSpy: jest.SpyInstance;
 
 beforeAll(() => {
@@ -239,6 +278,17 @@ describe("registerReadTools — harness sanity", () => {
 
     expect(textPayload(result).products[0].title).toBe("");
   });
+
+  it("normalizeTags falls back to an empty tags array when the JSON parses to a non-array (e.g. an object)", async () => {
+    mockDbPool(() => ({
+      rows: [makeProductRow({ tags: JSON.stringify({ not: "an array" }) })],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({});
+
+    expect(textPayload(result).products[0].title).toBe("");
+  });
 });
 
 describe("search_products", () => {
@@ -263,6 +313,42 @@ describe("search_products", () => {
       const unpriced = payload.products.find((p: any) => p.id === "unpriced");
       expect(priced).toMatchObject({ price: 10, currency: "USD" });
       expect(unpriced).toMatchObject({ price: 0, currency: "" });
+    });
+
+    it("defaults currency to '' when the price tag has no third (currency) element", async () => {
+      mockDbPool(() => ({
+        rows: [makeProductRow({ tags: [["price", "10"]] })],
+      }));
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(textPayload(result).products[0]).toMatchObject({
+        price: 10,
+        currency: "",
+      });
+    });
+
+    it("leaves quantity/price undefined for size/volume/weight tags missing their second element", async () => {
+      mockDbPool(() => ({
+        rows: [
+          makeProductRow({
+            tags: [
+              ["size", "S"],
+              ["volume", "1L"],
+              ["weight", "1lb"],
+            ],
+          }),
+        ],
+      }));
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      const product = textPayload(result).products[0];
+      expect(product.sizes).toEqual([{ size: "S", quantity: undefined }]);
+      expect(product.volumes).toEqual([{ volume: "1L", price: undefined }]);
+      expect(product.weights).toEqual([{ weight: "1lb", price: undefined }]);
     });
 
     it("parses shipping via parseShippingFromTags + getEffectiveShippingCost", async () => {
@@ -541,6 +627,22 @@ describe("search_products", () => {
         new Date(1_700_000_200 * 1000).toISOString()
       );
     });
+
+    it("ignores a product with createdAt=0 when computing dataFreshness, rather than treating it as the max", async () => {
+      mockDbPool(() => ({
+        rows: [
+          makeProductRow({ id: "zero", created_at: 0 }),
+          makeProductRow({ id: "real", created_at: 1_700_000_100 }),
+        ],
+      }));
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(textPayload(result)._meta.dataFreshness).toBe(
+        new Date(1_700_000_100 * 1000).toISOString()
+      );
+    });
   });
 
   describe("DB errors", () => {
@@ -563,6 +665,35 @@ describe("search_products", () => {
       } finally {
         jest.useRealTimers();
       }
+    });
+
+    it("dbError falls back to 'DB fetch failed' when a non-Error value is thrown (shared across all tools)", async () => {
+      mockDbPool(() => {
+        throw "raw failure";
+      });
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      const payload = textPayload(result);
+      expect(result.isError).toBe(true);
+      expect(payload).toMatchObject({
+        error: "DB fetch failed",
+        code: "DB_ERROR",
+      });
+    });
+
+    it("does not attempt to release a client when pool.connect itself rejects", async () => {
+      const release = jest.fn();
+      const connect = jest.fn().mockRejectedValue(new Error("pool exhausted"));
+      jest.mocked(getDbPool).mockReturnValue({ connect } as any);
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(release).not.toHaveBeenCalled();
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).code).toBe("DB_ERROR");
     });
   });
 });
@@ -691,6 +822,19 @@ describe("list_companies", () => {
     });
   });
 
+  it("omits storefrontUrl when storefront is present but has no shopSlug", async () => {
+    mockDbPool(() => ({
+      rows: [makeProfileRow({ kind: 30019, content: { storefront: {} } })],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({});
+
+    const company = textPayload(result).companies[0];
+    expect(company.storefront).toEqual({});
+    expect(company.storefrontUrl).toBeUndefined();
+  });
+
   it("falls back to an empty profile object when content is malformed JSON, rather than throwing", async () => {
     // makeProfileRow always JSON.stringifies its content, so build this row
     // by hand to get genuinely malformed JSON in the content column.
@@ -753,6 +897,22 @@ describe("list_companies", () => {
     );
   });
 
+  it("ignores a company with createdAt=0 when computing dataFreshness, rather than treating it as the max", async () => {
+    mockDbPool(() => ({
+      rows: [
+        makeProfileRow({ id: "zero", kind: 30019, created_at: 0 }),
+        makeProfileRow({ id: "real", kind: 30019, created_at: 1_700_000_100 }),
+      ],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({});
+
+    expect(textPayload(result)._meta.dataFreshness).toBe(
+      new Date(1_700_000_100 * 1000).toISOString()
+    );
+  });
+
   it("returns an empty companies array and dataFreshness=null (not an error) when no shop profiles exist", async () => {
     mockDbPool(() => ({ rows: [makeProfileRow({ kind: 0 })] }));
     const tool = getCallback();
@@ -779,6 +939,19 @@ describe("list_companies", () => {
       code: "DB_ERROR",
     });
     expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not attempt to release a client when pool.connect itself rejects", async () => {
+    const release = jest.fn();
+    const connect = jest.fn().mockRejectedValue(new Error("pool exhausted"));
+    jest.mocked(getDbPool).mockReturnValue({ connect } as any);
+    const tool = getCallback();
+
+    const result = await tool({});
+
+    expect(release).not.toHaveBeenCalled();
+    expect(result.isError).toBe(true);
+    expect(textPayload(result).code).toBe("DB_ERROR");
   });
 });
 
@@ -905,6 +1078,28 @@ describe("get_company_details", () => {
     });
   });
 
+  it("skips a rating tag that is missing its category (third) element", async () => {
+    mockMultiTableDbPool({
+      profile_events: [makeProfileRow({ kind: 30019 })],
+      review_events: [
+        makeReviewRow({
+          tags: [
+            ["d", `${TEST_PUBKEY}:x`],
+            ["rating", "5"],
+            ["rating", "4", "shipping"],
+          ],
+        }),
+      ],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(textPayload(result).reviews.items[0].ratings).toEqual({
+      shipping: 4,
+    });
+  });
+
   it("attaches pricing with acceptedPaymentMethods=[lightning, cashu] to every product", async () => {
     mockMultiTableDbPool({
       profile_events: [makeProfileRow({ kind: 30019 })],
@@ -966,6 +1161,20 @@ describe("get_company_details", () => {
     });
   });
 
+  it("falls back to 'sats' for priceRange.currency when the first product has no currency", async () => {
+    mockMultiTableDbPool({
+      profile_events: [makeProfileRow({ kind: 30019 })],
+      product_events: [
+        makeProductRow({ pubkey: TEST_PUBKEY, tags: [["price", "5"]] }),
+      ],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(textPayload(result).paymentInfo.priceRange.currency).toBe("sats");
+  });
+
   it("counts freeShippingProducts only for shippingType 'Free' or 'Free/Pickup'", async () => {
     mockMultiTableDbPool({
       profile_events: [makeProfileRow({ kind: 30019 })],
@@ -1016,6 +1225,24 @@ describe("get_company_details", () => {
     expect(textPayload(result)._meta.dataFreshness).toBe(
       new Date(1_700_000_300 * 1000).toISOString()
     );
+  });
+
+  it("treats a product or review with createdAt=0 as contributing 0 (not NaN) to dataFreshness", async () => {
+    mockMultiTableDbPool({
+      profile_events: [makeProfileRow({ kind: 30019 })],
+      product_events: [makeProductRow({ pubkey: TEST_PUBKEY, created_at: 0 })],
+      review_events: [
+        makeReviewRow({
+          tags: [["d", `${TEST_PUBKEY}:x`]],
+          created_at: 0,
+        }),
+      ],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(textPayload(result)._meta.dataFreshness).toBeNull();
   });
 
   it("returns DB_ERROR when the combined Promise.all rejects (e.g. one of the three queries fails)", async () => {
@@ -1152,6 +1379,43 @@ describe("get_reviews", () => {
     );
   });
 
+  it("ignores a review with createdAt=0 when computing dataFreshness, rather than treating it as the max", async () => {
+    mockDbPool(() => ({
+      rows: [
+        makeReviewRow({
+          id: "zero",
+          tags: [["d", `${TEST_PUBKEY}:x`]],
+          created_at: 0,
+        }),
+        makeReviewRow({
+          id: "real",
+          tags: [["d", `${TEST_PUBKEY}:y`]],
+          created_at: 1_700_000_100,
+        }),
+      ],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({ sellerPubkey: TEST_PUBKEY });
+
+    expect(textPayload(result)._meta.dataFreshness).toBe(
+      new Date(1_700_000_100 * 1000).toISOString()
+    );
+  });
+
+  it("returns dataFreshness=null when the filtered result set is empty", async () => {
+    mockDbPool(() => ({
+      rows: [makeReviewRow({ tags: [["d", "someone-else:x"]] })],
+    }));
+    const tool = getCallback();
+
+    const result = await tool({ sellerPubkey: TEST_PUBKEY });
+
+    const payload = textPayload(result);
+    expect(payload.reviews).toEqual([]);
+    expect(payload._meta.dataFreshness).toBeNull();
+  });
+
   it("returns DB_ERROR and releases the client when the query rejects", async () => {
     const { release } = mockDbPool(() => {
       throw new Error("database offline");
@@ -1166,6 +1430,19 @@ describe("get_reviews", () => {
       code: "DB_ERROR",
     });
     expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not attempt to release a client when pool.connect itself rejects", async () => {
+    const release = jest.fn();
+    const connect = jest.fn().mockRejectedValue(new Error("pool exhausted"));
+    jest.mocked(getDbPool).mockReturnValue({ connect } as any);
+    const tool = getCallback();
+
+    const result = await tool({ sellerPubkey: TEST_PUBKEY });
+
+    expect(release).not.toHaveBeenCalled();
+    expect(result.isError).toBe(true);
+    expect(textPayload(result).code).toBe("DB_ERROR");
   });
 });
 
@@ -1253,5 +1530,233 @@ describe("check_discount_code", () => {
       code: "DB_ERROR",
     });
     expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not attempt to release a client when pool.connect itself rejects", async () => {
+    const release = jest.fn();
+    const connect = jest.fn().mockRejectedValue(new Error("pool exhausted"));
+    jest.mocked(getDbPool).mockReturnValue({ connect } as any);
+    const tool = getCallback();
+
+    const result = await tool({ code: "SUMMER20", sellerPubkey: TEST_PUBKEY });
+
+    expect(release).not.toHaveBeenCalled();
+    expect(result.isError).toBe(true);
+    expect(textPayload(result).code).toBe("DB_ERROR");
+  });
+});
+
+describe("get_storefront", () => {
+  function getCallback() {
+    return getTool(registerToolsForTest(), "get_storefront");
+  }
+
+  it("returns a validation error when neither slug nor pubkey is provided, without querying the db", async () => {
+    const { poolQuery, connect } = mockStorefrontDbPool();
+    const tool = getCallback();
+
+    const result = await tool({});
+
+    expect(result.isError).toBe(true);
+    expect(textPayload(result).error).toBe("Either slug or pubkey is required");
+    expect(poolQuery).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it("resolves slug to pubkey via shop_slugs, lowercased", async () => {
+    const { poolQuery } = mockStorefrontDbPool({
+      slugRows: [{ pubkey: TEST_PUBKEY }],
+      profiles: [makeProfileRow({ kind: 30019 })],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ slug: "Fresh-Farm" });
+
+    expect(poolQuery).toHaveBeenCalledWith(
+      expect.stringContaining("SELECT pubkey FROM shop_slugs"),
+      ["fresh-farm"]
+    );
+    expect(textPayload(result).pubkey).toBe(TEST_PUBKEY);
+  });
+
+  it("skips the shop_slugs lookup entirely when pubkey is provided directly", async () => {
+    const { poolQuery } = mockStorefrontDbPool({
+      profiles: [makeProfileRow({ kind: 30019 })],
+    });
+    const tool = getCallback();
+
+    await tool({ pubkey: TEST_PUBKEY });
+
+    expect(poolQuery).not.toHaveBeenCalledWith(
+      expect.stringContaining("shop_slugs"),
+      expect.anything()
+    );
+  });
+
+  it("returns \"Shop with slug '...' not found\" when the slug has no match", async () => {
+    mockStorefrontDbPool({ slugRows: [] });
+    const tool = getCallback();
+
+    const result = await tool({ slug: "no-such-shop" });
+
+    expect(result.isError).toBe(true);
+    expect(textPayload(result).error).toBe(
+      "Shop with slug 'no-such-shop' not found"
+    );
+  });
+
+  it("returns 'Seller not found' when the resolved pubkey has neither shop nor user profile", async () => {
+    mockStorefrontDbPool({
+      profiles: [makeProfileRow({ pubkey: "someone-else", kind: 30019 })],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(result.isError).toBe(true);
+    expect(textPayload(result).error).toBe("Seller not found");
+  });
+
+  it("resolves successfully from a kind:0 user profile alone, with shopProfile null", async () => {
+    mockStorefrontDbPool({
+      profiles: [
+        makeProfileRow({ kind: 0, content: { name: "Alice the Farmer" } }),
+      ],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    const payload = textPayload(result);
+    expect(result.isError).toBeUndefined();
+    expect(payload.shopProfile).toBeNull();
+    expect(payload.userProfile).toMatchObject({ name: "Alice the Farmer" });
+  });
+
+  it("computes storefrontUrl from storefront.shopSlug when present, else null", async () => {
+    mockStorefrontDbPool({
+      profiles: [
+        makeProfileRow({
+          kind: 30019,
+          content: { storefront: { shopSlug: "fresh-farm" } },
+        }),
+      ],
+    });
+    const tool = getCallback();
+
+    const withSlug = await tool({ pubkey: TEST_PUBKEY });
+    expect(textPayload(withSlug).storefront.storefrontUrl).toBe(
+      "/shop/fresh-farm"
+    );
+
+    mockStorefrontDbPool({
+      profiles: [makeProfileRow({ kind: 30019, content: {} })],
+    });
+    const withoutSlug = await getCallback()({ pubkey: TEST_PUBKEY });
+    expect(textPayload(withoutSlug).storefront.storefrontUrl).toBeNull();
+  });
+
+  it("populates customDomain from custom_domains when a row exists, else null", async () => {
+    mockStorefrontDbPool({
+      profiles: [makeProfileRow({ kind: 30019 })],
+      domainRows: [{ domain: "shop.example.com", verified: true }],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(textPayload(result).storefront.customDomain).toEqual({
+      domain: "shop.example.com",
+      verified: true,
+    });
+  });
+
+  it("customDomain is null when no custom_domains row exists", async () => {
+    mockStorefrontDbPool({
+      profiles: [makeProfileRow({ kind: 30019 })],
+      domainRows: [],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(textPayload(result).storefront.customDomain).toBeNull();
+  });
+
+  it("attaches pricing (lightning+cashu always) to every returned product", async () => {
+    mockStorefrontDbPool({
+      profiles: [makeProfileRow({ kind: 30019 })],
+      products: [
+        makeProductRow({ pubkey: TEST_PUBKEY, tags: [["price", "10", "USD"]] }),
+      ],
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    const payload = textPayload(result);
+    expect(payload.products.count).toBe(1);
+    expect(payload.products.items[0].pricing.paymentMethods).toEqual([
+      "lightning",
+      "cashu",
+    ]);
+    expect(payload.paymentInfo.acceptedPaymentMethods).toEqual([
+      "lightning",
+      "cashu",
+    ]);
+  });
+
+  it("returns DB_ERROR when the shop_slugs lookup fails", async () => {
+    mockStorefrontDbPool({
+      slugQueryImpl: () => {
+        throw new Error("slug table offline");
+      },
+    });
+    const tool = getCallback();
+
+    const result = await tool({ slug: "fresh-farm" });
+
+    expect(result.isError).toBe(true);
+    expect(textPayload(result)).toMatchObject({
+      error: "DB fetch failed",
+      code: "DB_ERROR",
+    });
+  });
+
+  it("returns DB_ERROR when the profiles+products Promise.all fails", async () => {
+    const { connectQuery } = mockStorefrontDbPool();
+    connectQuery.mockImplementation((sql: string) => {
+      if (sql.includes("product_events")) {
+        throw new Error("products table offline");
+      }
+      return { rows: [] };
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(result.isError).toBe(true);
+    expect(textPayload(result)).toMatchObject({
+      error: "DB fetch failed",
+      code: "DB_ERROR",
+    });
+  });
+
+  it("returns DB_ERROR when the custom_domains lookup fails", async () => {
+    mockStorefrontDbPool({
+      profiles: [makeProfileRow({ kind: 30019 })],
+      domainQueryImpl: () => {
+        throw new Error("domains table offline");
+      },
+    });
+    const tool = getCallback();
+
+    const result = await tool({ pubkey: TEST_PUBKEY });
+
+    expect(result.isError).toBe(true);
+    expect(textPayload(result)).toMatchObject({
+      error: "DB fetch failed",
+      code: "DB_ERROR",
+    });
   });
 });
