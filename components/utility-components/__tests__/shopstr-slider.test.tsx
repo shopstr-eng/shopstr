@@ -1,7 +1,10 @@
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import ShopstrSlider from "../shopstr-slider";
-import { FollowsContext } from "@/utils/context/context";
+import {
+  FollowsContext,
+  type FollowsContextInterface,
+} from "@/utils/context/context";
 import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 
 const mockUseTheme = { theme: "light" };
@@ -51,10 +54,13 @@ const renderWithContext = (contextValue: any) => {
 };
 
 describe("ShopstrSlider", () => {
-  const defaultFollowsContext = {
+  const defaultFollowsContext: FollowsContextInterface = {
+    directFollowList: [],
     followList: [],
     firstDegreeFollowsLength: 0,
     isLoading: false,
+    addFollow: async () => ({ ok: false, reason: "unknown" }),
+    removeFollow: async () => ({ ok: false, reason: "unknown" }),
   };
 
   beforeEach(() => {
@@ -92,6 +98,7 @@ describe("ShopstrSlider", () => {
 
   it("uses firstDegreeFollowsLength for maxValue when available", () => {
     const contextValue = {
+      ...defaultFollowsContext,
       followList: [],
       isLoading: false,
       firstDegreeFollowsLength: 150,
@@ -105,6 +112,7 @@ describe("ShopstrSlider", () => {
 
   it("uses the wot value for maxValue when context data is not available", () => {
     const contextValue = {
+      ...defaultFollowsContext,
       followList: [],
       firstDegreeFollowsLength: 0,
       isLoading: true,

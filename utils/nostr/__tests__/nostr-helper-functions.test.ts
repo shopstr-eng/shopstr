@@ -50,9 +50,11 @@ import {
   createNostrShopEvent,
   deleteEvent,
   finalizeAndSendNostrEvent,
+  followUser,
   getDefaultBlossomServer,
   getDefaultMint,
   getDefaultRelays,
+  getLatestLocalContactListEvent,
   getLocalStorageData,
   getLocalUserProfileKey,
   isProfileContentPopulated,
@@ -3875,5 +3877,72 @@ describe("blossomUploadImages", () => {
     expect(cacheEventToDatabase).toHaveBeenCalledWith(
       expect.objectContaining({ id: "signed-upload-event" })
     );
+  });
+});
+
+describe("followUser", () => {
+  const userPubkey =
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+  const targetPubkey =
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem(
+      "relays",
+      JSON.stringify(["wss://alive.example", "wss://dead.example"])
+    );
+    localStorage.setItem("readRelays", JSON.stringify([]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ contactList: null }),
+    }) as typeof global.fetch;
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("creates a first contact list when at least one source confirms it is empty", async () => {
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue(userPubkey),
+      sign: jest.fn().mockImplementation(async (template: any) => ({
+        ...template,
+        id: "signed-contact-list",
+        pubkey: userPubkey,
+        sig: "sig",
+      })),
+    };
+    const nostr = {
+      fetch: jest.fn((_filters: unknown, _opts: unknown, relays: string[]) =>
+        relays[0] === "wss://dead.example"
+          ? Promise.reject(new Error("relay down"))
+          : Promise.resolve([])
+      ),
+      publish: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const result = await followUser(nostr as any, signer as any, targetPubkey);
+
+    expect(result).toMatchObject({
+      ok: true,
+      event: {
+        id: "signed-contact-list",
+        kind: 3,
+        tags: [["p", targetPubkey]],
+      },
+      alreadyApplied: false,
+    });
+    expect(getLatestLocalContactListEvent(userPubkey)).toMatchObject({
+      id: "signed-contact-list",
+      tags: [["p", targetPubkey]],
+    });
   });
 });

@@ -57,8 +57,8 @@ import {
   isNpub,
 } from "@/utils/url-slugs";
 import { useDebounce } from "@/utils/hooks/useDebounce";
+import { useFollowToggle } from "@/components/hooks/use-follow-toggle";
 import {
-  getDirectFollowPubkeys,
   getProfileReportSignal,
   getReportModerationLabel,
   summarizeReportEvents,
@@ -136,13 +136,14 @@ function MarketplacePage({
 
   const { pubkey: userPubkey, isLoggedIn: loggedIn } =
     useContext(SignerContext);
+  const {
+    isFollowing: isFollowingFocusedPubkey,
+    isLoading: isFollowActionLoading,
+    toggle: handleFollowToggle,
+  } = useFollowToggle(focusedPubkey, { onRequireSignIn: onOpen });
   const directFollowPubkeys = useMemo(
-    () =>
-      getDirectFollowPubkeys(
-        followsContext.followList,
-        followsContext.firstDegreeFollowsLength
-      ),
-    [followsContext.followList, followsContext.firstDegreeFollowsLength]
+    () => followsContext.directFollowList,
+    [followsContext.directFollowList]
   );
   const reportSummaries = useMemo(
     () =>
@@ -383,6 +384,7 @@ function MarketplacePage({
                                   "inquiry",
                                   "copy_npub",
                                   "report_profile",
+                                  "follow",
                                 ]
                           }
                         />
@@ -510,6 +512,20 @@ function MarketplacePage({
               >
                 Message
               </Button>
+              {focusedPubkey !== userPubkey && (
+                <Button
+                  className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text bg-transparent text-lg hover:text-purple-700 sm:text-xl"
+                  onClick={handleFollowToggle}
+                  isLoading={isFollowActionLoading}
+                  isDisabled={isFollowActionLoading}
+                >
+                  {isFollowActionLoading
+                    ? "Please sign..."
+                    : isFollowingFocusedPubkey
+                      ? "Following"
+                      : "+ Follow"}
+                </Button>
+              )}
               {rawEvent && (
                 <Dropdown>
                   <DropdownTrigger>
