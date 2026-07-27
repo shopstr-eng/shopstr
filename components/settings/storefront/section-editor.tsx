@@ -267,7 +267,9 @@ export default function SectionEditor({
                     onChange={(e) =>
                       update({
                         productLayout: e.target.value as
-                          "grid" | "list" | "featured",
+                          | "grid"
+                          | "list"
+                          | "featured",
                       })
                     }
                   >

@@ -3910,22 +3910,20 @@ describe("followUser", () => {
     jest.clearAllMocks();
   });
 
-  it("creates a first contact list when at least one source confirms it is empty", async () => {
-    const signer = {
-      getPubKey: jest.fn().mockResolvedValue(userPubkey),
-      sign: jest.fn().mockImplementation(async (template: any) => ({
-        ...template,
-        id: "signed-contact-list",
-        pubkey: userPubkey,
-        sig: "sig",
-      })),
-    };
+  const createSigner = (pubkey = userPubkey) => ({
+    getPubKey: jest.fn().mockResolvedValue(pubkey),
+    sign: jest.fn().mockImplementation(async (template: any) => ({
+      ...template,
+      id: "signed-contact-list",
+      pubkey: userPubkey,
+      sig: "sig",
+    })),
+  });
+
+  it("creates a first contact list when every relay and the DB confirm it is empty", async () => {
+    const signer = createSigner();
     const nostr = {
-      fetch: jest.fn((_filters: unknown, _opts: unknown, relays: string[]) =>
-        relays[0] === "wss://dead.example"
-          ? Promise.reject(new Error("relay down"))
-          : Promise.resolve([])
-      ),
+      fetch: jest.fn().mockResolvedValue([]),
       publish: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -3944,5 +3942,28 @@ describe("followUser", () => {
       id: "signed-contact-list",
       tags: [["p", targetPubkey]],
     });
+  });
+
+  it("refuses to create a first contact list while any relay is unreachable", async () => {
+    // Separate user so the module-level local contact list cache from the
+    // previous test cannot satisfy the lookup.
+    const signer = createSigner("d".repeat(64));
+    const nostr = {
+      fetch: jest.fn((_filters: unknown, _opts: unknown, relays: string[]) =>
+        relays[0] === "wss://dead.example"
+          ? Promise.reject(new Error("relay down"))
+          : Promise.resolve([])
+      ),
+      publish: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const result = await followUser(nostr as any, signer as any, targetPubkey);
+
+    expect(result).toEqual({
+      ok: false,
+      reason: "unverified-contact-list",
+    });
+    expect(signer.sign).not.toHaveBeenCalled();
+    expect(nostr.publish).not.toHaveBeenCalled();
   });
 });

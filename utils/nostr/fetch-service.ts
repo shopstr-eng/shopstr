@@ -1373,8 +1373,14 @@ export const fetchAllFollows = async (
   }
 
   try {
+    // Bound the DB cache lookup so a hung API route can't stall the whole
+    // follows pipeline before the relay fetch even starts.
     const response = await fetch(
-      `/api/db/fetch-contacts?pubkey=${encodeURIComponent(userPubkey)}`
+      `/api/db/fetch-contacts?pubkey=${encodeURIComponent(userPubkey)}`,
+      typeof AbortSignal !== "undefined" &&
+        typeof AbortSignal.timeout === "function"
+        ? { signal: AbortSignal.timeout(2500) }
+        : undefined
     );
     if (response.ok) {
       const data = await response.json();

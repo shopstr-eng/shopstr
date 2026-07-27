@@ -428,6 +428,9 @@ export const ProfileWithDropdown = ({
           <DropdownMenu
             aria-label="User Actions"
             variant="flat"
+            // closeOnSelect is disabled so the follow item can stay open and
+            // show its spinner while signing; every OTHER item must close the
+            // menu itself (handleDropdownAction / handleReportDropdownAction).
             closeOnSelect={false}
             items={dropDownKeys.map((key) => DropDownItems[key])}
           >

@@ -1359,7 +1359,11 @@ const latestLocalContactListEvents = new Map<string, NostrEvent>();
 const contactListMutationQueues = new Map<string, Promise<void>>();
 
 export type FollowMutationFailureReason =
-  "invalid-pubkey" | "self-follow" | "unverified-contact-list" | "unknown";
+  | "invalid-pubkey"
+  | "self-follow"
+  | "unverified-contact-list"
+  | "no-contact-list"
+  | "unknown";
 
 export type FollowMutationResult =
   | {
@@ -1445,8 +1449,12 @@ async function fetchLatestContactListEvent(
   ]);
 
   const relayEvents = relayResults.flatMap((result) => result.value);
+  // Creating a brand-new contact list overwrites the user's follow list
+  // network-wide (kind 3 is replaceable), so "empty" is only trusted when
+  // EVERY relay responded — a single timed-out relay may be the one holding
+  // the real list.
   const relayConfirmedEmpty =
-    relays.length === 0 || relayResults.some((result) => result.didRespond);
+    relays.length === 0 || relayResults.every((result) => result.didRespond);
   const dbEvent = dbFetch.value;
   const allExternalEvents = dbEvent?.id
     ? [...relayEvents, dbEvent]
@@ -1571,7 +1579,7 @@ async function mutateContactList(
     if (action === "unfollow" && !isFollowing) {
       return latestEvent
         ? { ok: true, event: latestEvent, alreadyApplied: true }
-        : { ok: false, reason: "unknown" };
+        : { ok: false, reason: "no-contact-list" };
     }
 
     const nextTags =

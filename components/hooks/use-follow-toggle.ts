@@ -15,8 +15,10 @@ function showFollowFailureToast(result: FollowMutationResult) {
   addToast({
     title:
       result.reason === "unverified-contact-list"
-        ? "Could not verify your follow list — please try again."
-        : "Follow action failed. Please try again.",
+        ? "Could not verify your follow list — some of your relays are unreachable. Retry, or remove dead relays in settings."
+        : result.reason === "no-contact-list"
+          ? "You don't have a follow list yet, so there's nothing to unfollow."
+          : "Follow action failed. Please try again.",
     color: "danger",
   });
 }

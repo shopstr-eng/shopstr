@@ -141,7 +141,7 @@ const SideShopNav = ({
             </Button>
             {focusedPubkey !== userPubkey && (
               <Button
-                onClick={handleFollowToggle}
+                onPress={handleFollowToggle}
                 isLoading={isFollowActionLoading}
                 isDisabled={isFollowActionLoading}
                 className={`${SHOPSTRBUTTONCLASSNAMES} flex flex-row items-center py-7`}

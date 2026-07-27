@@ -515,14 +515,14 @@ function MarketplacePage({
               {focusedPubkey !== userPubkey && (
                 <Button
                   className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text bg-transparent text-lg hover:text-purple-700 sm:text-xl"
-                  onClick={handleFollowToggle}
+                  onPress={handleFollowToggle}
                   isLoading={isFollowActionLoading}
                   isDisabled={isFollowActionLoading}
                 >
                   {isFollowActionLoading
                     ? "Please sign..."
                     : isFollowingFocusedPubkey
-                      ? "Following"
+                      ? "Unfollow"
                       : "+ Follow"}
                 </Button>
               )}
