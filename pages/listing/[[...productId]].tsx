@@ -43,6 +43,7 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 import SignInModal from "@/components/sign-in/SignInModal";
 import useReportEventFlow from "@/components/utility-components/use-report-event-flow";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import { useFollowToggle } from "@/components/hooks/use-follow-toggle";
 
 type ListingPageProps = {
   ogMeta: OgMetaProps;
@@ -250,6 +251,11 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
     if (!sellerPubkey) return undefined;
     return profileMap.get(sellerPubkey)?.content.p2pk;
   }, [profileMap, sellerPubkey]);
+  const {
+    isFollowing: isFollowingSeller,
+    isLoading: isFollowActionLoading,
+    toggle: handleFollowToggle,
+  } = useFollowToggle(sellerPubkey, { onRequireSignIn: onOpen });
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -456,6 +462,22 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
                   <p className="mb-6 whitespace-pre-wrap text-gray-600 dark:text-gray-300">
                     {productData.summary}
                   </p>
+                  {sellerPubkey && sellerPubkey !== userPubkey && (
+                    <Button
+                      color="secondary"
+                      variant="flat"
+                      className="mb-4"
+                      onPress={handleFollowToggle}
+                      isLoading={isFollowActionLoading}
+                      isDisabled={isFollowActionLoading}
+                    >
+                      {isFollowActionLoading
+                        ? "Please sign..."
+                        : isFollowingSeller
+                          ? "Unfollow"
+                          : "+ Follow"}
+                    </Button>
+                  )}
                   <ZapsnagButton product={productData} />
                 </div>
               </div>

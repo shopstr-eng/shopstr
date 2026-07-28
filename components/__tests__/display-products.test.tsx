@@ -129,9 +129,12 @@ const renderDisplayProducts = ({
           >
             <FollowsContext.Provider
               value={{
+                directFollowList: followList,
                 followList,
                 firstDegreeFollowsLength,
                 isLoading: false,
+                addFollow: async () => ({ ok: false, reason: "unknown" }),
+                removeFollow: async () => ({ ok: false, reason: "unknown" }),
               }}
             >
               <ReportsContext.Provider
@@ -197,9 +200,12 @@ describe("DisplayProducts search filtering", () => {
           >
             <FollowsContext.Provider
               value={{
+                directFollowList: [],
                 followList: [],
                 firstDegreeFollowsLength: 0,
                 isLoading: false,
+                addFollow: async () => ({ ok: false, reason: "unknown" }),
+                removeFollow: async () => ({ ok: false, reason: "unknown" }),
               }}
             >
               <ProductContext.Provider
@@ -287,9 +293,12 @@ describe("DisplayProducts search filtering", () => {
             >
               <FollowsContext.Provider
                 value={{
+                  directFollowList: [],
                   followList: [],
                   firstDegreeFollowsLength: 0,
                   isLoading: false,
+                  addFollow: async () => ({ ok: false, reason: "unknown" }),
+                  removeFollow: async () => ({ ok: false, reason: "unknown" }),
                 }}
               >
                 <ProductContext.Provider
@@ -445,9 +454,15 @@ describe("DisplayProducts search filtering", () => {
               >
                 <FollowsContext.Provider
                   value={{
+                    directFollowList: [],
                     followList: [],
                     firstDegreeFollowsLength: 0,
                     isLoading: false,
+                    addFollow: async () => ({ ok: false, reason: "unknown" }),
+                    removeFollow: async () => ({
+                      ok: false,
+                      reason: "unknown",
+                    }),
                   }}
                 >
                   <ProductContext.Provider
@@ -635,7 +650,8 @@ describe("DisplayProducts search filtering", () => {
       fetch: jest.fn().mockResolvedValue([relayProduct]),
     };
     let setContextProductEvents:
-      Dispatch<SetStateAction<NostrEvent[]>> | undefined;
+      | Dispatch<SetStateAction<NostrEvent[]>>
+      | undefined;
 
     function StatefulDisplayProducts() {
       const [contextProductEvents, setProductEvents] = useState<NostrEvent[]>(
@@ -667,9 +683,15 @@ describe("DisplayProducts search filtering", () => {
               >
                 <FollowsContext.Provider
                   value={{
+                    directFollowList: [],
                     followList: [],
                     firstDegreeFollowsLength: 0,
                     isLoading: false,
+                    addFollow: async () => ({ ok: false, reason: "unknown" }),
+                    removeFollow: async () => ({
+                      ok: false,
+                      reason: "unknown",
+                    }),
                   }}
                 >
                   <ProductContext.Provider

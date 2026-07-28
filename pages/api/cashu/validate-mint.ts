@@ -169,7 +169,8 @@ function hasBrowserCors(response: Response, requestOrigin: string): boolean {
 }
 
 type MintFetchResult =
-  { ok: true; json: unknown } | { ok: false; reason: "cors" | "request" };
+  | { ok: true; json: unknown }
+  | { ok: false; reason: "cors" | "request" };
 
 async function fetchJson(
   endpoint: string,
