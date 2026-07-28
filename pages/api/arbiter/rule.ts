@@ -83,8 +83,7 @@ function getTokenMint(token: string): string | null {
 }
 
 type DisputeTokenValidation =
-  | { ok: true }
-  | { ok: false; status: 400 | 403 | 500; error: string };
+  { ok: true } | { ok: false; status: 400 | 403 | 500; error: string };
 
 function decodeTokenProofs(token: string): Proof[] | null {
   try {
