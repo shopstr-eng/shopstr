@@ -22,6 +22,7 @@ import * as dbService from "../db-service";
 
 const registration = {
   orderId: "order-1",
+  invoiceOrderId: "invoice-order-1",
   buyerNostrPubkey: "1".repeat(64),
   sellerNostrPubkey: "2".repeat(64),
   sellerCashuPubkey: "3".repeat(64),
@@ -34,6 +35,7 @@ const registration = {
 
 const storedRow = {
   order_id: registration.orderId,
+  invoice_order_id: registration.invoiceOrderId,
   buyer_nostr_pubkey: registration.buyerNostrPubkey,
   seller_nostr_pubkey: registration.sellerNostrPubkey,
   seller_cashu_pubkey: registration.sellerCashuPubkey,

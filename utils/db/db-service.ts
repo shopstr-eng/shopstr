@@ -462,6 +462,7 @@ async function initializeTables(): Promise<void> {
       -- initial immutable record with NIP-98; only the ruling columns mutate.
       CREATE TABLE IF NOT EXISTS p2pk_escrow_orders (
           order_id TEXT PRIMARY KEY,
+          invoice_order_id TEXT,
           buyer_nostr_pubkey TEXT NOT NULL,
           seller_nostr_pubkey TEXT NOT NULL,
           seller_cashu_pubkey TEXT NOT NULL,
@@ -477,6 +478,9 @@ async function initializeTables(): Promise<void> {
 
       CREATE INDEX IF NOT EXISTS idx_p2pk_escrow_orders_buyer ON p2pk_escrow_orders(buyer_nostr_pubkey);
       CREATE INDEX IF NOT EXISTS idx_p2pk_escrow_orders_seller ON p2pk_escrow_orders(seller_nostr_pubkey);
+
+      -- Migration for tables created before invoice_order_id existed.
+      ALTER TABLE p2pk_escrow_orders ADD COLUMN IF NOT EXISTS invoice_order_id TEXT;
 
       -- Shop slugs table (storefront URL slugs)
       CREATE TABLE IF NOT EXISTS shop_slugs (
@@ -1521,7 +1525,12 @@ export async function getUnreadMessageCount(pubkey: string): Promise<number> {
 }
 
 export type P2pkEscrowOrderRecord = {
+  // H(escrow token). Keyed by the token rather than the invoice order id so
+  // registrations cannot be squatted by someone who merely saw the order id.
   orderId: string;
+  // The order id from the invoice, bound inside the P2PK secret. Null only
+  // for rows registered before this column existed.
+  invoiceOrderId: string | null;
   buyerNostrPubkey: string;
   sellerNostrPubkey: string;
   sellerCashuPubkey: string;
@@ -1533,10 +1542,14 @@ export type P2pkEscrowOrderRecord = {
   rulingFor: "buyer" | "seller" | null;
 };
 
-type P2pkEscrowOrderRegistration = Omit<P2pkEscrowOrderRecord, "rulingFor">;
+type P2pkEscrowOrderRegistration = Omit<
+  P2pkEscrowOrderRecord,
+  "rulingFor" | "invoiceOrderId"
+> & { invoiceOrderId: string };
 
 type P2pkEscrowOrderRow = {
   order_id: string;
+  invoice_order_id: string | null;
   buyer_nostr_pubkey: string;
   seller_nostr_pubkey: string;
   seller_cashu_pubkey: string;
@@ -1551,6 +1564,7 @@ type P2pkEscrowOrderRow = {
 function mapP2pkEscrowOrderRow(row: P2pkEscrowOrderRow): P2pkEscrowOrderRecord {
   return {
     orderId: row.order_id,
+    invoiceOrderId: row.invoice_order_id ?? null,
     buyerNostrPubkey: row.buyer_nostr_pubkey,
     sellerNostrPubkey: row.seller_nostr_pubkey,
     sellerCashuPubkey: row.seller_cashu_pubkey,
@@ -1569,6 +1583,7 @@ function registrationsEqual(
 ): boolean {
   return (
     left.orderId === right.orderId &&
+    left.invoiceOrderId === right.invoiceOrderId &&
     left.buyerNostrPubkey === right.buyerNostrPubkey &&
     left.sellerNostrPubkey === right.sellerNostrPubkey &&
     left.sellerCashuPubkey === right.sellerCashuPubkey &&
@@ -1590,6 +1605,7 @@ export async function registerP2pkEscrowOrder(
     const inserted = await client.query(
       `INSERT INTO p2pk_escrow_orders (
          order_id,
+         invoice_order_id,
          buyer_nostr_pubkey,
          seller_nostr_pubkey,
          seller_cashu_pubkey,
@@ -1599,11 +1615,12 @@ export async function registerP2pkEscrowOrder(
          locktime,
          token_hash
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (order_id) DO NOTHING
        RETURNING order_id`,
       [
         registration.orderId,
+        registration.invoiceOrderId,
         registration.buyerNostrPubkey,
         registration.sellerNostrPubkey,
         registration.sellerCashuPubkey,
@@ -1618,6 +1635,7 @@ export async function registerP2pkEscrowOrder(
 
     const existing = await client.query<P2pkEscrowOrderRow>(
       `SELECT order_id,
+              invoice_order_id,
               buyer_nostr_pubkey,
               seller_nostr_pubkey,
               seller_cashu_pubkey,
@@ -1650,6 +1668,7 @@ export async function getP2pkEscrowOrder(
   try {
     const result = await client.query<P2pkEscrowOrderRow>(
       `SELECT order_id,
+              invoice_order_id,
               buyer_nostr_pubkey,
               seller_nostr_pubkey,
               seller_cashu_pubkey,

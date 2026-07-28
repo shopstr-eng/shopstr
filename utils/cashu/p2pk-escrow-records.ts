@@ -3,7 +3,6 @@ import { NostrManager } from "@/utils/nostr/nostr-manager";
 import type { EventTemplate } from "nostr-tools";
 import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
-import { hashEscrowToken } from "@/utils/cashu/escrow-order-commitment";
 
 const LOCAL_STORAGE_KEY = "shopstr.p2pkEscrowRecords";
 const ENCRYPTED_STORAGE_KEY = "shopstr.p2pkEscrowRecords.encrypted";
@@ -11,7 +10,10 @@ export const BUYER_P2PK_ESCROW_EVENT_KIND = 30406;
 const BUYER_P2PK_ESCROW_D_PREFIX = "shopstr:p2pk-escrow";
 
 export type P2pkEscrowDisputeStatus =
-  "none" | "open" | "resolved:buyer" | "resolved:seller";
+  | "none"
+  | "open"
+  | "resolved:buyer"
+  | "resolved:seller";
 
 const DISPUTE_STATUSES: readonly P2pkEscrowDisputeStatus[] = [
   "none",
@@ -145,15 +147,15 @@ async function registerEscrowOrderCommitment(
     return;
   }
 
+  // Only the token and the two non-derivable pubkeys are sent. The server
+  // derives orderId, lock keys, amount, locktime, and the token hash from the
+  // token itself so registrations cannot be squatted or forged. Sending the
+  // token is safe: the proofs are locked 2-of-3, so the server cannot spend
+  // them without the buyer's or seller's signature.
   const body = JSON.stringify({
-    orderId: record.orderId,
+    token: record.token,
     sellerNostrPubkey: record.sellerNostrPubkey,
-    sellerCashuPubkey: record.sellerPubkey,
     buyerCashuPubkey: record.buyerCashuPubkey,
-    arbiterCashuPubkey: record.arbiterPubkey,
-    amountSats: record.amount,
-    locktime: record.locktime,
-    tokenHash: hashEscrowToken(record.token),
   });
   const url = `${window.location.origin}/api/db/register-escrow-order`;
   const authorization = await createNip98AuthorizationHeader(

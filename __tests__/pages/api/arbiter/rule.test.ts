@@ -160,6 +160,7 @@ describe("/api/arbiter/rule", () => {
     deriveCashuPubkeyMock.mockReturnValue("a".repeat(64));
     getP2pkEscrowOrderMock.mockResolvedValue({
       orderId: "order-1",
+      invoiceOrderId: "order-1",
       buyerNostrPubkey: "buyer-nostr-pubkey",
       sellerNostrPubkey: "seller-nostr-pubkey",
       sellerCashuPubkey: "b".repeat(64),

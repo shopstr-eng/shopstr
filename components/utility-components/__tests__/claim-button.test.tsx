@@ -40,6 +40,7 @@ import {
   parseDisputeEvent,
 } from "@/utils/nostr/dispute-records";
 import { updateDisputeStatusWithSigner } from "@/utils/cashu/p2pk-escrow-records";
+import { hashEscrowToken } from "@/utils/cashu/escrow-order-commitment";
 
 jest.setTimeout(15000);
 
@@ -1152,7 +1153,7 @@ describe("ClaimButton — dispute escrow", () => {
       await waitFor(() =>
         expect(mockPublishDisputeEvent).toHaveBeenCalledWith(
           expect.objectContaining({
-            orderId: "order-1",
+            orderId: hashEscrowToken("cashuAtoken"),
             buyerPubkey: "user-pubkey",
             sellerPubkey: "seller-nostr-pubkey",
             arbiterPubkey: "arbiter-nostr-pubkey",
@@ -1224,7 +1225,7 @@ describe("ClaimButton — dispute escrow", () => {
         await screen.findByRole("button", { name: /Dispute in Progress/i })
       ).toBeDisabled();
       expect(mockPublishDisputeEvent).toHaveBeenCalledWith({
-        orderId: "order-1",
+        orderId: hashEscrowToken("cashuAtoken"),
         reason: "Seller escalation: buyer unresponsive after payment request.",
         nostr: mockNostr,
         signer: mockSigner,
@@ -1237,7 +1238,7 @@ describe("ClaimButton — dispute escrow", () => {
         "arbiter-nostr-pubkey",
         JSON.stringify({
           type: "escrow-dispute",
-          orderId: "order-1",
+          orderId: hashEscrowToken("cashuAtoken"),
           reason:
             "Seller escalation: buyer unresponsive after payment request.",
           token: "cashuAtoken",
@@ -1341,7 +1342,7 @@ describe("ClaimButton — dispute escrow", () => {
       expect(screen.queryByText(/Request Payment/i)).not.toBeInTheDocument();
       expect(mockFetchDisputeEvent).toHaveBeenCalledWith({
         nostr: mockNostr,
-        orderId: "order-1",
+        orderId: hashEscrowToken("cashuAtoken"),
         orderParticipants: {
           buyerPubkey: "buyer-nostr-pubkey",
           sellerPubkey: "seller-nostr-pubkey",

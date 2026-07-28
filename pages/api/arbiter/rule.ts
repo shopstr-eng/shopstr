@@ -10,6 +10,7 @@ import {
   getArbiterPubkey,
   isP2pkMintAllowed,
   isP2pkMintAllowlistConfigured,
+  normalizeCashuPubkey,
   parseP2PKProofSet,
   pubkeysEqual,
 } from "@/utils/cashu/p2pk-checkout";
@@ -57,10 +58,12 @@ function isRuleBody(body: unknown): body is RuleBody {
 }
 
 function getConfiguredArbiterPubkey(): string | undefined {
+  // Lowercase so the NIP-98 auth comparison is case-insensitive regardless of
+  // how the operator cased the env var (verifyNip98Request normalizes too).
   return (
     process.env.ARBITER_NOSTR_PUBKEY ||
     process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY
-  );
+  )?.toLowerCase();
 }
 
 function createServerNostrManager(): NostrManager {
@@ -80,7 +83,8 @@ function getTokenMint(token: string): string | null {
 }
 
 type DisputeTokenValidation =
-  { ok: true } | { ok: false; status: 400 | 403 | 500; error: string };
+  | { ok: true }
+  | { ok: false; status: 400 | 403 | 500; error: string };
 
 function decodeTokenProofs(token: string): Proof[] | null {
   try {
@@ -102,11 +106,10 @@ function getProofAmountSats(proofs: Proof[]): number | null {
 }
 
 function validateDisputeToken(params: {
-  orderId: string;
   token: string;
   orderRecord: P2pkEscrowOrderRecord;
 }): DisputeTokenValidation {
-  const { orderId, token, orderRecord } = params;
+  const { token, orderRecord } = params;
 
   const configuredArbiterCashuPubkey = getArbiterPubkey();
   if (!configuredArbiterCashuPubkey) {
@@ -168,12 +171,8 @@ function validateDisputeToken(params: {
   ];
   const uniqueEscrowPubkeys = new Set(
     escrowPubkeys
-      .map((pubkey) => {
-        const normalized =
-          pubkey.length === 66 ? pubkey.slice(2).toLowerCase() : pubkey;
-        return normalized.toLowerCase();
-      })
-      .filter(Boolean)
+      .map((pubkey) => normalizeCashuPubkey(pubkey))
+      .filter((pubkey): pubkey is string => Boolean(pubkey))
   );
   if (parsedProofSet.p2pk.nSigs !== 2 || uniqueEscrowPubkeys.size !== 3) {
     return {
@@ -183,7 +182,13 @@ function validateDisputeToken(params: {
     };
   }
 
-  if (parsedProofSet.p2pk.shopstrOrderId !== orderId) {
+  // The record is keyed by H(token) (the tokenHash check above covers that
+  // binding); the P2PK secret's order tag is checked against the stored
+  // invoice order id.
+  if (
+    !orderRecord.invoiceOrderId ||
+    parsedProofSet.p2pk.shopstrOrderId !== orderRecord.invoiceOrderId
+  ) {
     return {
       ok: false,
       status: 400,
@@ -359,7 +364,6 @@ export default async function handler(
     }
 
     const tokenValidation = validateDisputeToken({
-      orderId,
       token,
       orderRecord,
     });

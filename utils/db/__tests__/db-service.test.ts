@@ -3546,6 +3546,7 @@ describe("db-service helpers", () => {
 
           const registration = {
             orderId: "order-integration-1",
+            invoiceOrderId: "invoice-order-integration-1",
             buyerNostrPubkey: "1".repeat(64),
             sellerNostrPubkey: "2".repeat(64),
             sellerCashuPubkey: "3".repeat(64),

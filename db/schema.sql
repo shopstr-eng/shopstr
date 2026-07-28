@@ -181,7 +181,12 @@ CREATE INDEX IF NOT EXISTS idx_mcp_orders_api_key_id ON mcp_orders(api_key_id);
 -- Browser P2PK escrow order commitments. The buyer authenticates the
 -- immutable commitment with NIP-98; only final-ruling fields may change.
 CREATE TABLE IF NOT EXISTS p2pk_escrow_orders (
+    -- H(escrow token), not the invoice order id: keyed by something only the
+    -- token holder can know, so an order id visible on an invoice cannot be
+    -- squatted with a counterfeit token. The invoice order id is kept in
+    -- invoice_order_id for the P2PK secret binding check and display.
     order_id TEXT PRIMARY KEY,
+    invoice_order_id TEXT,
     buyer_nostr_pubkey TEXT NOT NULL,
     seller_nostr_pubkey TEXT NOT NULL,
     seller_cashu_pubkey TEXT NOT NULL,

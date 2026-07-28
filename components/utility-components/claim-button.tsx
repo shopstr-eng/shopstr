@@ -55,6 +55,7 @@ import {
   pubkeysEqual,
 } from "@/utils/cashu/p2pk-checkout";
 import { sumProofAmounts } from "@/utils/cashu/proof-amount";
+import { hashEscrowToken } from "@/utils/cashu/escrow-order-commitment";
 import { ParsedP2PK } from "@/utils/types/types";
 import {
   createPartialRedemption,
@@ -183,6 +184,15 @@ export default function ClaimButton({
     [p2pk, cashuPubkey]
   );
 
+  // The dispute flow (dispute events, escrow-dispute and arbiter-sig DMs) is
+  // keyed by H(token), not the invoice order id, so a seller who saw the
+  // invoice order id cannot squat or forge the escrow record that gates
+  // arbiter dispute resolution.
+  const escrowId = useMemo(
+    () => (token ? hashEscrowToken(token) : null),
+    [token]
+  );
+
   const assertP2pkMintSupported = async () => {
     if (!p2pk) return;
 
@@ -241,7 +251,7 @@ export default function ClaimButton({
   // reach handleArbiterRedeem.
   useEffect(() => {
     if (
-      !orderId ||
+      !escrowId ||
       !isMultisigEscrow ||
       (!isBuyerView && !isSellerView) ||
       !nostr ||
@@ -257,7 +267,7 @@ export default function ClaimButton({
       nostr,
       signer,
       userPubkey,
-      orderId,
+      escrowId,
       "escrow-arbiter-sig",
       { expectedSenderPubkeys: [arbiterPubkey] }
     ).then((arbiterSigPayload) => {
@@ -271,7 +281,7 @@ export default function ClaimButton({
       isActive = false;
     };
   }, [
-    orderId,
+    escrowId,
     isMultisigEscrow,
     isBuyerView,
     isSellerView,
@@ -285,7 +295,7 @@ export default function ClaimButton({
   // public kind 30407 fallback so a missed DM cannot leave stale claim UI.
   useEffect(() => {
     if (
-      !orderId ||
+      !escrowId ||
       !isMultisigEscrow ||
       !nostr ||
       !signer ||
@@ -310,7 +320,7 @@ export default function ClaimButton({
               nostr,
               signer,
               userPubkey,
-              orderId,
+              escrowId,
               "escrow-dispute",
               { expectedSenderPubkeys: expectedDisputeSenders }
             )
@@ -325,7 +335,7 @@ export default function ClaimButton({
         process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY ?? undefined;
       const disputeEvent = await fetchDisputeEvent({
         nostr,
-        orderId,
+        orderId: escrowId,
         orderParticipants: {
           buyerPubkey: buyerPubkey ?? null,
           sellerPubkey: sellerPubkey ?? null,
@@ -349,7 +359,7 @@ export default function ClaimButton({
       isActive = false;
     };
   }, [
-    orderId,
+    escrowId,
     isMultisigEscrow,
     nostr,
     signer,
@@ -871,7 +881,14 @@ export default function ClaimButton({
   };
 
   const handleOpenDispute = async (reason: string) => {
-    if (!isBuyerView || !orderId || !sellerPubkey || !signer || !userPubkey)
+    if (
+      !isBuyerView ||
+      !orderId ||
+      !escrowId ||
+      !sellerPubkey ||
+      !signer ||
+      !userPubkey
+    )
       return;
     setEscrowActionError(null);
     try {
@@ -881,7 +898,7 @@ export default function ClaimButton({
       }
       const sellerPayload: EscrowDisputePayload = {
         type: "escrow-dispute",
-        orderId,
+        orderId: escrowId,
         reason,
       };
       // The arbiter cannot decrypt either party's self-encrypted kind 30406
@@ -889,7 +906,7 @@ export default function ClaimButton({
       // public discovery event have been durably cached.
       const arbiterPayload: EscrowDisputePayload = {
         type: "escrow-dispute",
-        orderId,
+        orderId: escrowId,
         reason,
         token,
         amount: tokenAmount,
@@ -897,7 +914,7 @@ export default function ClaimButton({
       await Promise.all([
         sendEscrowDm(arbiterPubkey, arbiterPayload),
         publishDisputeEvent({
-          orderId,
+          orderId: escrowId,
           reason,
           nostr: nostr!,
           signer,
@@ -947,6 +964,7 @@ export default function ClaimButton({
       !isSellerView ||
       !canEscalate ||
       !orderId ||
+      !escrowId ||
       !buyerPubkey ||
       !signer ||
       !userPubkey
@@ -962,12 +980,12 @@ export default function ClaimButton({
         "Seller escalation: buyer unresponsive after payment request.";
       const buyerPayload: EscrowDisputePayload = {
         type: "escrow-dispute",
-        orderId,
+        orderId: escrowId,
         reason,
       };
       const arbiterPayload: EscrowDisputePayload = {
         type: "escrow-dispute",
-        orderId,
+        orderId: escrowId,
         reason,
         token,
         amount: tokenAmount,
@@ -975,7 +993,7 @@ export default function ClaimButton({
       await Promise.all([
         sendEscrowDm(arbiterPubkey, arbiterPayload),
         publishDisputeEvent({
-          orderId,
+          orderId: escrowId,
           reason,
           nostr: nostr!,
           signer,
@@ -1012,7 +1030,7 @@ export default function ClaimButton({
   };
 
   const handleArbiterRedeem = async () => {
-    if (!orderId || !nostr || !signer || !userPubkey) return;
+    if (!escrowId || !nostr || !signer || !userPubkey) return;
     if (!cashuPrivkey) {
       setIsP2pkKeyMissing(true);
       return;
@@ -1028,7 +1046,7 @@ export default function ClaimButton({
             nostr,
             signer,
             userPubkey,
-            orderId,
+            escrowId,
             "escrow-arbiter-sig",
             {
               expectedSenderPubkeys: [

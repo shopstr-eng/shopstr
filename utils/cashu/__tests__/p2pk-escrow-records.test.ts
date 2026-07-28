@@ -195,19 +195,15 @@ describe("p2pk-escrow-records", () => {
     expect(method).toBe("POST");
 
     const parsedBody = JSON.parse(body);
-    expect(parsedBody).toEqual(
-      expect.objectContaining({
-        orderId: "order-1",
-        sellerNostrPubkey: "5".repeat(64),
-        sellerCashuPubkey: "2".repeat(64),
-        buyerCashuPubkey: "3".repeat(64),
-        arbiterCashuPubkey: "4".repeat(64),
-        amountSats: 42,
-        locktime: 123456,
-        tokenHash: expect.stringMatching(/^[0-9a-f]{64}$/),
-      })
-    );
-    expect(body).not.toContain("cashuAtoken");
+    // The client sends the token plus the two pubkeys that cannot be derived
+    // from it; the server derives orderId, lock keys, amount, locktime, and
+    // the token hash itself. Sending the token is safe because the proofs are
+    // locked 2-of-3 and the server cannot spend them alone.
+    expect(parsedBody).toEqual({
+      token: record.token,
+      sellerNostrPubkey: "5".repeat(64),
+      buyerCashuPubkey: "3".repeat(64),
+    });
     expect(global.fetch).toHaveBeenCalledWith(
       "/api/db/register-escrow-order",
       expect.objectContaining({

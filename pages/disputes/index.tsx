@@ -110,7 +110,11 @@ function DisputesDashboard() {
           {disputes.map((dispute) => (
             <Card key={dispute.orderId}>
               <CardHeader className="flex flex-col items-start gap-1">
-                <div className="font-semibold">Order: {dispute.orderId}</div>
+                {/* Disputes are keyed by H(escrow token), not the invoice
+                    order id, so this identifier is intentionally a hash. */}
+                <div className="font-semibold">
+                  Escrow ID: {dispute.orderId}
+                </div>
                 {dispute.amount !== undefined ? (
                   <div className="text-sm">
                     Amount: {formatWithCommas(dispute.amount, "sats")}

@@ -110,7 +110,7 @@ describe("disputes dashboard", () => {
 
     renderPage();
 
-    expect(await screen.findByText("Order: order-1")).toBeInTheDocument();
+    expect(await screen.findByText("Escrow ID: order-1")).toBeInTheDocument();
   });
 
   it("removes a successfully ruled row from the current view", async () => {
@@ -118,7 +118,7 @@ describe("disputes dashboard", () => {
     fireEvent.click(await screen.findByText("Complete ruling"));
 
     await waitFor(() =>
-      expect(screen.queryByText("Order: order-1")).not.toBeInTheDocument()
+      expect(screen.queryByText("Escrow ID: order-1")).not.toBeInTheDocument()
     );
     expect(localStorage.getItem("shopstr.disputes.resolvedLocally")).toBeNull();
   });
