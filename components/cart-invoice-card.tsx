@@ -45,6 +45,7 @@ import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import {
   isSellerP2pkEscrowActive,
   resolveP2pkCheckoutOutputConfig,
+  resolveSellerCheckoutProfile,
 } from "@/utils/cashu/p2pk-checkout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
@@ -60,7 +61,10 @@ import {
   withDeadline,
   isTimeoutError,
 } from "@/utils/cashu/wallet-recovery";
-import { persistBuyerP2pkEscrowRecord } from "@/utils/cashu/p2pk-escrow-records";
+import {
+  createBuyerP2pkEscrowRecord,
+  persistBuyerP2pkEscrowRecord,
+} from "@/utils/cashu/p2pk-escrow-records";
 import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
   getSavedAddresses,
@@ -1582,7 +1586,16 @@ export default function CartInvoiceCard({
       }
       let sellerToken;
       let donationToken;
-      const sellerProfile = profileContext.profileData.get(pubkey);
+      const orderId = uuidv4();
+
+      if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
+        pendingOrderRef.current.orderId = orderId;
+      }
+
+      const sellerProfile = await resolveSellerCheckoutProfile({
+        sellerPubkey: pubkey,
+        cachedProfile: profileContext.profileData.get(pubkey),
+      });
       const buyerProfile = userPubkey
         ? profileContext.profileData.get(userPubkey)
         : undefined;
@@ -1593,7 +1606,13 @@ export default function CartInvoiceCard({
         mintUrl: paymentMintUrl,
         buyerContent: buyerProfile?.content,
         buyerCashuPubkey: cashuPubkey,
+        orderId,
       });
+      if (p2pkOutputConfig && !signer) {
+        throw new Error(
+          "A Nostr identity is required to register dispute escrow securely."
+        );
+      }
       const donationPercentage =
         sellerProfile?.content?.shopstr_donation ?? 2.1;
       const donationAmount = Math.ceil(
@@ -1623,12 +1642,6 @@ export default function CartInvoiceCard({
           "Postal Code": data["Postal Code"],
           Country: data.Country,
         };
-      }
-
-      const orderId = uuidv4();
-
-      if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
-        pendingOrderRef.current.orderId = orderId;
       }
 
       // Generate keys once per order to ensure consistent sender pubkey
@@ -1753,16 +1766,19 @@ export default function CartInvoiceCard({
       }
 
       if (p2pkOutputConfig && sellerToken) {
-        await persistBuyerP2pkEscrowRecord(nostr, signer, {
-          orderId,
-          mint: paymentMintUrl,
-          token: sellerToken,
-          amount: sellerAmount,
-          sellerPubkey: p2pkOutputConfig.send.options.pubkey,
-          locktime: p2pkOutputConfig.send.options.locktime,
-          refundKeys: p2pkOutputConfig.send.options.refundKeys,
-          createdAt: Math.floor(Date.now() / 1000),
-        });
+        await persistBuyerP2pkEscrowRecord(
+          nostr,
+          signer,
+          createBuyerP2pkEscrowRecord({
+            orderId,
+            mint: paymentMintUrl,
+            token: sellerToken,
+            amount: sellerAmount,
+            sellerNostrPubkey: pubkey,
+            outputConfig: p2pkOutputConfig,
+            createdAt: Math.floor(Date.now() / 1000),
+          })
+        );
       }
 
       // Step 1: Send payment message (if applicable)

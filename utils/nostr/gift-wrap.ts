@@ -10,7 +10,10 @@ import type { NostrEvent } from "@/utils/types/types";
 import type { ProductData } from "@/utils/parsers/product-parser-functions";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import type { NostrManager } from "@/utils/nostr/nostr-manager";
-import { cacheEventToDatabase } from "@/utils/db/db-client";
+import {
+  cacheEventToDatabase,
+  cacheEventToDatabaseStrict,
+} from "@/utils/db/db-client";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageData } from "./nostr-helper-functions";
 import { withBlastr } from "./relay-config";
@@ -338,39 +341,58 @@ export async function constructMessageGiftWrap(
   return signedEvent;
 }
 
+type SendGiftWrappedMessageOptions = {
+  waitForRelayPublish?: boolean;
+  requireDurableCache?: boolean;
+};
+
 export async function sendGiftWrappedMessageEvent(
   nostr: NostrManager,
   giftWrappedMessageEvent: NostrEvent,
-  signer?: NostrSigner
+  signer?: NostrSigner,
+  options: SendGiftWrappedMessageOptions = {}
 ) {
   const { relays, writeRelays } = getLocalStorageData();
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
 
-  await cacheEventToDatabase(giftWrappedMessageEvent);
-
-  try {
-    await newPromiseWithTimeout(
-      async (resolve, reject) => {
-        try {
-          await nostr.publish(giftWrappedMessageEvent, allWriteRelays);
-          resolve(undefined);
-        } catch (err) {
-          reject(err as Error);
-        }
-      },
-      { timeout: 21000 }
-    );
-  } catch (error) {
-    console.warn(
-      "Relay publish timed out or failed for gift-wrapped message, but event is saved to database:",
-      error
-    );
-    const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
-    await trackFailedRelayPublish(
-      giftWrappedMessageEvent.id,
-      giftWrappedMessageEvent,
-      allWriteRelays,
-      signer
-    ).catch(console.error);
+  if (options.requireDurableCache) {
+    await cacheEventToDatabaseStrict(giftWrappedMessageEvent);
+  } else {
+    await cacheEventToDatabase(giftWrappedMessageEvent);
   }
+
+  const publishWithRetryTracking = async () => {
+    try {
+      await newPromiseWithTimeout(
+        async (resolve, reject) => {
+          try {
+            await nostr.publish(giftWrappedMessageEvent, allWriteRelays);
+            resolve(undefined);
+          } catch (err) {
+            reject(err as Error);
+          }
+        },
+        { timeout: 21000 }
+      );
+    } catch (error) {
+      console.warn(
+        "Relay publish timed out or failed for gift-wrapped message, but event is saved to database:",
+        error
+      );
+      const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
+      await trackFailedRelayPublish(
+        giftWrappedMessageEvent.id,
+        giftWrappedMessageEvent,
+        allWriteRelays,
+        signer
+      ).catch(console.error);
+    }
+  };
+
+  if (options.waitForRelayPublish === false) {
+    void publishWithRetryTracking();
+    return;
+  }
+
+  await publishWithRetryTracking();
 }
