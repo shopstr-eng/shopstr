@@ -135,18 +135,14 @@ function sanitizeFooter(
 ): StorefrontFooter {
   return {
     ...footer,
-    socialLinks: footer.socialLinks?.map(
-      (link): StorefrontSocialLink => ({
-        ...link,
-        url: sanitizeStorefrontSocialLink(link.url),
-      })
-    ),
-    navLinks: footer.navLinks?.map(
-      (link): StorefrontNavLink => ({
-        ...link,
-        href: sanitizeStorefrontNavHref(link, shopSlug),
-      })
-    ),
+    socialLinks: footer.socialLinks?.map((link): StorefrontSocialLink => ({
+      ...link,
+      url: sanitizeStorefrontSocialLink(link.url),
+    })),
+    navLinks: footer.navLinks?.map((link): StorefrontNavLink => ({
+      ...link,
+      href: sanitizeStorefrontNavHref(link, shopSlug),
+    })),
   };
 }
 
@@ -159,12 +155,10 @@ export function sanitizeStorefrontConfigLinks(
     ...storefront,
     sections: storefront.sections?.map(sanitizeSection),
     pages: storefront.pages?.map(sanitizePage),
-    navLinks: storefront.navLinks?.map(
-      (link): StorefrontNavLink => ({
-        ...link,
-        href: sanitizeStorefrontNavHref(link, shopSlug),
-      })
-    ),
+    navLinks: storefront.navLinks?.map((link): StorefrontNavLink => ({
+      ...link,
+      href: sanitizeStorefrontNavHref(link, shopSlug),
+    })),
     footer: storefront.footer
       ? sanitizeFooter(storefront.footer, shopSlug)
       : storefront.footer,
