@@ -22,6 +22,16 @@ type ValidateMintError = {
   error: string;
 };
 
+// Local/private mints (e.g. a fake mint for E2E tests) are only accepted
+// outside production and only when explicitly enabled. In production the flag
+// is ignored and the SSRF controls below always apply.
+function isLocalMintValidationAllowed(): boolean {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env.CASHU_MINT_VALIDATION_ALLOW_LOCAL === "true"
+  );
+}
+
 function isPrivateIPv4(ip: string): boolean {
   const parts = ip.split(".").map(Number);
   if (
@@ -100,7 +110,13 @@ function normalizeMintUrl(rawMintUrl: unknown): string | null {
   if (!["https:", "http:"].includes(parsed.protocol)) return null;
   if (parsed.username || parsed.password) return null;
   if (parsed.search || parsed.hash) return null;
-  if (parsed.port && !["80", "443"].includes(parsed.port)) return null;
+  if (
+    parsed.port &&
+    !["80", "443"].includes(parsed.port) &&
+    !isLocalMintValidationAllowed()
+  ) {
+    return null;
+  }
 
   const normalizedPath = parsed.pathname.replace(/\/+$/, "");
   return normalizedPath && normalizedPath !== "/"
@@ -288,7 +304,10 @@ export default async function handler(
     return res.status(400).json({ error: "Invalid mint URL" });
   }
 
-  if (!(await isSafePublicHostname(hostname))) {
+  if (
+    !isLocalMintValidationAllowed() &&
+    !(await isSafePublicHostname(hostname))
+  ) {
     return res.status(400).json({ error: "Mint host is not allowed" });
   }
 

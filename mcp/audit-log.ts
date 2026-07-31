@@ -17,7 +17,6 @@ export interface AuditEntry {
 
 type MaybePromise<T> = T | Promise<T>;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ToolCb = (
   args: any,
   extra: any

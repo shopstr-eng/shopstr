@@ -8,10 +8,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { Card, CardBody, Button, Input, Image, Tooltip } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import {
-  generateKeys,
-  setLocalStorageDataOnSignIn,
-} from "@/utils/nostr/nostr-helper-functions";
+import { generateKeys } from "@/utils/nostr/key-utilities";
+import { setLocalStorageDataOnSignIn } from "@/utils/nostr/nostr-helper-functions";
 import { RelaysContext } from "../../utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";

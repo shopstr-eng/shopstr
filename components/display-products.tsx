@@ -229,7 +229,14 @@ const DisplayProducts = ({
       setProductEvents([]);
       setIsProductLoading(false);
     }
-  }, [productEventContext, wotFilter, nip50ProductEvents, selectedSearch]);
+  }, [
+    productEventContext,
+    wotFilter,
+    nip50ProductEvents,
+    selectedSearch,
+    followsContext.followList,
+    followsContext.isLoading,
+  ]);
 
   useEffect(() => {
     if (focusedPubkey && setCategories) {

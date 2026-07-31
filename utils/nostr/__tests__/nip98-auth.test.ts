@@ -464,4 +464,54 @@ describe("verifyNip98Request", () => {
       pubkey: "f".repeat(64),
     });
   });
+
+  it("normalizes uppercase signer pubkeys to lowercase", async () => {
+    const req = {
+      headers: {
+        host: "localhost:3000",
+        authorization: buildAuthHeader({
+          pubkey: "ABCDEF".repeat(10) + "ABCD",
+          kind: 27235,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            ["u", "http://localhost:3000/api/db/update-order-status"],
+            ["method", "GET"],
+          ],
+          content: "",
+          sig: "valid",
+        }),
+      },
+      url: "/api/db/update-order-status",
+    } as any;
+
+    await expect(verifyNip98Request(req, "GET")).resolves.toEqual({
+      ok: true,
+      pubkey: "abcdef".repeat(10) + "abcd",
+    });
+  });
+
+  it("rejects malformed signer pubkeys", async () => {
+    const req = {
+      headers: {
+        host: "localhost:3000",
+        authorization: buildAuthHeader({
+          pubkey: "not-a-pubkey",
+          kind: 27235,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            ["u", "http://localhost:3000/api/db/update-order-status"],
+            ["method", "GET"],
+          ],
+          content: "",
+          sig: "valid",
+        }),
+      },
+      url: "/api/db/update-order-status",
+    } as any;
+
+    await expect(verifyNip98Request(req, "GET")).resolves.toEqual({
+      ok: false,
+      error: "Malformed NIP-98 authorization",
+    });
+  });
 });

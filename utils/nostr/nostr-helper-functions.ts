@@ -1,9 +1,4 @@
-import {
-  EventTemplate,
-  generateSecretKey,
-  getPublicKey,
-  nip19,
-} from "nostr-tools";
+import { EventTemplate } from "nostr-tools";
 import { v4 as uuidv4 } from "uuid";
 import CryptoJS from "crypto-js";
 import {
@@ -17,6 +12,7 @@ import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import {
   cacheEventToDatabase,
+  cacheEventToDatabaseStrict,
   deleteEventsFromDatabase,
 } from "@/utils/db/db-client";
 import {
@@ -26,6 +22,8 @@ import {
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { getLocalStorageJson } from "@/utils/safe-json";
 import { buildWalletConfigV1 } from "@/utils/cashu/wallet-config";
+import { isHexPubkey } from "@/utils/nostr/pubkey";
+import { pickPreferredReplaceableEvent } from "@/utils/nostr/replaceable-events";
 import { getDefaultRelays, withBlastr } from "./relay-config";
 export { getDefaultRelays, withBlastr };
 
@@ -40,16 +38,6 @@ export const REPORT_TYPES = [
 ] as const;
 
 export type ReportType = (typeof REPORT_TYPES)[number];
-
-export async function generateKeys(): Promise<{ nsec: string; npub: string }> {
-  const sk = generateSecretKey();
-  const nsec = nip19.nsecEncode(sk);
-
-  const pk = getPublicKey(sk);
-  const npub = nip19.npubEncode(pk);
-
-  return { nsec, npub };
-}
 
 export async function deleteEvent(
   nostr: NostrManager,
@@ -97,41 +85,6 @@ export function createNostrDeleteEvent(
   };
 
   return msg;
-}
-
-interface BunkerTokenParams {
-  remotePubkey: string;
-  relays: string[];
-  secret?: string;
-}
-
-export function parseBunkerToken(token: string): BunkerTokenParams | null {
-  try {
-    if (!token.startsWith("bunker://")) {
-      return null;
-    }
-
-    // Extract the basic parts using URL
-    const url = new URL(token.replace("bunker://", "https://"));
-
-    // Get pubkey (hostname in URL)
-    const remotePubkey = url.hostname;
-
-    // Get relays from query params (can have multiple relay params)
-    const relays = url.searchParams.getAll("relay");
-
-    // Get optional secret
-    const secret = url.searchParams.get("secret") || undefined;
-
-    return {
-      remotePubkey,
-      relays,
-      secret,
-    };
-  } catch (error) {
-    console.error("Failed to parse bunker token:", error);
-    return null;
-  }
 }
 
 export async function createNostrProfileEvent(
@@ -620,6 +573,7 @@ export async function publishSpendingHistoryEvent(
 
 type FinalizeAndSendOptions = {
   waitForRelayPublish?: boolean;
+  requireDurableCache?: boolean;
 };
 
 async function publishEventWithRetryTracking(
@@ -670,7 +624,11 @@ export async function finalizeAndSendNostrEvent(
     const signedEvent = await signer.sign(eventTemplate);
 
     // Cache to database first and wait for confirmation
-    await cacheEventToDatabase(signedEvent);
+    if (options.requireDurableCache) {
+      await cacheEventToDatabaseStrict(signedEvent);
+    } else {
+      await cacheEventToDatabase(signedEvent);
+    }
 
     const allWriteRelays = withBlastr([...writeRelays, ...relays]);
 
@@ -874,15 +832,6 @@ export async function blossomUploadImages(
 /***** HELPER FUNCTIONS *****/
 
 // function to validate public and private keys
-export function validateNPubKey(publicKey: string) {
-  const validPubKey = /^npub[a-zA-Z0-9]{59}$/;
-  return publicKey.match(validPubKey) !== null;
-}
-export function validateNSecKey(privateKey: string) {
-  const validPrivKey = /^nsec[a-zA-Z0-9]{59}$/;
-  return privateKey.match(validPrivKey) !== null;
-}
-
 const LOCALSTORAGECONSTANTS = {
   signInMethod: "signInMethod",
   userNPub: "userNPub",
@@ -1611,24 +1560,6 @@ export const LogOut = () => {
   window.dispatchEvent(new Event("storage"));
 };
 
-export const decryptNpub = (npub: string): string | null => {
-  try {
-    const decoded = nip19.decode(npub);
-    return decoded.type === "npub" && typeof decoded.data === "string"
-      ? decoded.data
-      : null;
-  } catch {
-    return null;
-  }
-};
-
-export function nostrExtensionLoaded() {
-  if (!window.nostr) {
-    return false;
-  }
-  return true;
-}
-
 export function getDefaultMint(): string {
   return "https://mint.minibits.cash/Bitcoin";
 }
@@ -1743,3 +1674,278 @@ export {
   deleteAddress,
   setDefaultAddress,
 } from "@/utils/nostr/saved-address-helpers";
+
+const CONTACT_LIST_FETCH_TIMEOUT_MS = 2500;
+const latestLocalContactListEvents = new Map<string, NostrEvent>();
+const contactListMutationQueues = new Map<string, Promise<void>>();
+
+export type FollowMutationFailureReason =
+  | "invalid-pubkey"
+  | "self-follow"
+  | "unverified-contact-list"
+  | "no-contact-list"
+  | "unknown";
+
+export type FollowMutationResult =
+  | {
+      ok: true;
+      event: NostrEvent;
+      alreadyApplied: boolean;
+    }
+  | {
+      ok: false;
+      reason: FollowMutationFailureReason;
+    };
+
+export function getLatestLocalContactListEvent(
+  userPubkey: string
+): NostrEvent | null {
+  return latestLocalContactListEvents.get(userPubkey) ?? null;
+}
+
+function getContactListRelays(): string[] {
+  const { readRelays, writeRelays, relays } = getLocalStorageData();
+  return [...new Set([...readRelays, ...writeRelays, ...relays])];
+}
+
+async function withContactListFetchTimeout<T>(
+  task: () => Promise<T>,
+  fallback: T
+): Promise<{ value: T; didRespond: boolean }> {
+  try {
+    const value = await newPromiseWithTimeout<T>(
+      (resolve, reject) => {
+        void task().then(resolve).catch(reject);
+      },
+      { timeout: CONTACT_LIST_FETCH_TIMEOUT_MS }
+    );
+    return { value, didRespond: true };
+  } catch {
+    return { value: fallback, didRespond: false };
+  }
+}
+
+async function fetchLatestContactListEvent(
+  nostr: NostrManager,
+  userPubkey: string
+): Promise<{ event: NostrEvent | null; confirmedEmpty: boolean }> {
+  const localEvent = latestLocalContactListEvents.get(userPubkey) ?? null;
+  const relays = getContactListRelays();
+
+  const relayFetchPromise = Promise.all(
+    relays.map((relay) =>
+      withContactListFetchTimeout(
+        () =>
+          nostr.fetch(
+            [{ kinds: [3], authors: [userPubkey] }],
+            {},
+            [relay],
+            CONTACT_LIST_FETCH_TIMEOUT_MS
+          ),
+        [] as NostrEvent[]
+      )
+    )
+  );
+
+  const dbFetchPromise = withContactListFetchTimeout(
+    async () => {
+      if (typeof fetch !== "function") return null;
+
+      const response = await fetch(
+        `/api/db/fetch-contacts?pubkey=${encodeURIComponent(userPubkey)}`
+      );
+      if (!response.ok) {
+        throw new Error(`DB fetch failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      return (data?.contactList as NostrEvent) ?? null;
+    },
+    null as NostrEvent | null
+  );
+
+  const [relayResults, dbFetch] = await Promise.all([
+    relayFetchPromise,
+    dbFetchPromise,
+  ]);
+
+  const relayEvents = relayResults.flatMap((result) => result.value);
+  // Creating a brand-new contact list overwrites the user's follow list
+  // network-wide (kind 3 is replaceable), so "empty" is only trusted when
+  // EVERY relay responded — a single timed-out relay may be the one holding
+  // the real list.
+  const relayConfirmedEmpty =
+    relays.length === 0 || relayResults.every((result) => result.didRespond);
+  const dbEvent = dbFetch.value;
+  const allExternalEvents = dbEvent?.id
+    ? [...relayEvents, dbEvent]
+    : relayEvents;
+  const externalEvent = pickPreferredReplaceableEvent(allExternalEvents);
+
+  const confirmedEmpty =
+    !externalEvent &&
+    !localEvent &&
+    relayConfirmedEmpty &&
+    dbFetch.didRespond &&
+    !dbEvent &&
+    relayEvents.length === 0;
+
+  return {
+    event: pickPreferredReplaceableEvent(
+      [localEvent, externalEvent].filter(Boolean) as NostrEvent[]
+    ),
+    confirmedEmpty,
+  };
+}
+
+function getNextContactListCreatedAt(latestEvent: NostrEvent | null): number {
+  const now = Math.floor(Date.now() / 1000);
+  return latestEvent ? Math.max(now, Number(latestEvent.created_at) + 1) : now;
+}
+
+function enqueueContactListMutation(
+  userPubkey: string,
+  mutation: () => Promise<FollowMutationResult>
+): Promise<FollowMutationResult> {
+  const previous =
+    contactListMutationQueues.get(userPubkey) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(mutation);
+  contactListMutationQueues.set(
+    userPubkey,
+    next.then(
+      () => undefined,
+      () => undefined
+    )
+  );
+  return next;
+}
+
+export async function signNostrEvent(
+  signer: NostrSigner,
+  eventTemplate: EventTemplate
+): Promise<NostrEvent> {
+  return (await signer.sign(eventTemplate)) as NostrEvent;
+}
+
+async function persistContactListEvent(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  signedEvent: NostrEvent
+) {
+  const { writeRelays, relays } = getLocalStorageData();
+  const allWriteRelays = withBlastr([...writeRelays, ...relays]);
+
+  try {
+    await cacheEventToDatabase(signedEvent);
+  } catch (error) {
+    console.error(
+      "Failed to cache contact list event before relay publish:",
+      error
+    );
+  }
+
+  await publishEventWithRetryTracking(
+    nostr,
+    signer,
+    signedEvent,
+    allWriteRelays
+  );
+}
+
+export function cacheAndPublishSignedEventInBackground(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  signedEvent: NostrEvent
+) {
+  void persistContactListEvent(nostr, signer, signedEvent).catch((error) => {
+    console.error(
+      "Unexpected error while persisting contact list event:",
+      error
+    );
+  });
+}
+
+async function mutateContactList(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  targetPubkey: string,
+  action: "follow" | "unfollow"
+): Promise<FollowMutationResult> {
+  if (!isHexPubkey(targetPubkey)) {
+    return { ok: false, reason: "invalid-pubkey" };
+  }
+
+  const userPubkey = await signer.getPubKey();
+  if (action === "follow" && userPubkey === targetPubkey) {
+    return { ok: false, reason: "self-follow" };
+  }
+
+  return enqueueContactListMutation(userPubkey, async () => {
+    const { event: latestEvent, confirmedEmpty } =
+      await fetchLatestContactListEvent(nostr, userPubkey);
+
+    if (!latestEvent && !confirmedEmpty) {
+      return { ok: false, reason: "unverified-contact-list" };
+    }
+
+    const existingTags = latestEvent?.tags ?? [];
+    const existingContent = latestEvent?.content ?? "";
+    const isFollowing = existingTags.some(
+      (tag) => tag[0] === "p" && tag[1] === targetPubkey
+    );
+
+    if (action === "follow" && isFollowing && latestEvent) {
+      return { ok: true, event: latestEvent, alreadyApplied: true };
+    }
+    if (action === "unfollow" && !isFollowing) {
+      return latestEvent
+        ? { ok: true, event: latestEvent, alreadyApplied: true }
+        : { ok: false, reason: "no-contact-list" };
+    }
+
+    const nextTags =
+      action === "follow"
+        ? [...existingTags, ["p", targetPubkey]]
+        : existingTags.filter(
+            (tag) => !(tag[0] === "p" && tag[1] === targetPubkey)
+          );
+
+    const eventTemplate: EventTemplate = {
+      kind: 3,
+      created_at: getNextContactListCreatedAt(latestEvent),
+      tags: nextTags,
+      content: existingContent,
+    };
+
+    const signedEvent = await signNostrEvent(signer, eventTemplate);
+    latestLocalContactListEvents.set(userPubkey, signedEvent);
+    cacheAndPublishSignedEventInBackground(nostr, signer, signedEvent);
+    return { ok: true, event: signedEvent, alreadyApplied: false };
+  });
+}
+
+export async function followUser(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  targetPubkey: string
+): Promise<FollowMutationResult> {
+  try {
+    return await mutateContactList(nostr, signer, targetPubkey, "follow");
+  } catch (error) {
+    console.error("followUser failed:", error);
+    return { ok: false, reason: "unknown" };
+  }
+}
+
+export async function unfollowUser(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  targetPubkey: string
+): Promise<FollowMutationResult> {
+  try {
+    return await mutateContactList(nostr, signer, targetPubkey, "unfollow");
+  } catch (error) {
+    console.error("unfollowUser failed:", error);
+    return { ok: false, reason: "unknown" };
+  }
+}
