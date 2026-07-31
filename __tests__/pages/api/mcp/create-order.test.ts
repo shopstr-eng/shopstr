@@ -646,7 +646,7 @@ describe("handleCreateOrder validation & pricing", () => {
       });
     });
 
-    it("overrides unitPrice with weightPrices when a valid selectedWeight is given (weight wins if both volume and weight given, since it's parsed last)", async () => {
+    it("uses volume pricing when both volume and weight are selected, matching shared pricing precedence", async () => {
       fetchAllProductsFromDbMock.mockResolvedValue([
         makeProductEvent([
           ["price", "1000", "sats"],
@@ -663,8 +663,14 @@ describe("handleCreateOrder validation & pricing", () => {
 
       expect(res.statusCode).toBe(402);
       expect(pricingOf(res)).toMatchObject({
-        unitPrice: 800,
-        total: 800,
+        unitPrice: 1500,
+        total: 1500,
+        selectedSpecs: {
+          volume: "250ml",
+          volumePrice: 1500,
+          weight: "100g",
+          weightPrice: 800,
+        },
       });
     });
   });
@@ -830,36 +836,50 @@ describe("handleCreateOrder validation & pricing", () => {
       ]);
     }
 
-    it("applies sellerProfile.paymentMethodDiscounts.bitcoin on top of any discount code, without surfacing it as discountPercentage/discountedSubtotal", async () => {
+    it("applies the seller bitcoin discount after a valid code discount", async () => {
       fetchAllProductsFromDbMock.mockResolvedValue([
         makeProductEvent([["price", "1000", "sats"]]),
       ]);
+      validateDiscountCodeMock.mockResolvedValue({
+        valid: true,
+        discount_percentage: 10,
+      });
       withSellerProfile(
         JSON.stringify({ paymentMethodDiscounts: { bitcoin: 5 } })
       );
 
-      const res = await createOrder({ productId: "product-1" });
+      const res = await createOrder({
+        productId: "product-1",
+        discountCode: "SAVE10",
+      });
 
       expect(res.statusCode).toBe(402);
-      const pricing = pricingOf(res);
-      expect(pricing.total).toBe(950);
-      expect(pricing.discountPercentage).toBeUndefined();
-      expect(pricing.discountedSubtotal).toBeUndefined();
+      expect(pricingOf(res)).toMatchObject({
+        subtotal: 1000,
+        discountPercentage: 10,
+        discountedSubtotal: 855,
+        total: 855,
+      });
     });
 
-    it("ignores a non-numeric or non-positive bitcoin discount value", async () => {
-      fetchAllProductsFromDbMock.mockResolvedValue([
-        makeProductEvent([["price", "1000", "sats"]]),
-      ]);
-      withSellerProfile(
-        JSON.stringify({ paymentMethodDiscounts: { bitcoin: 0 } })
-      );
+    it.each([0, -5, "5"])(
+      "ignores bitcoin discount value %p when it is not a positive number",
+      async (methodDiscount) => {
+        fetchAllProductsFromDbMock.mockResolvedValue([
+          makeProductEvent([["price", "1000", "sats"]]),
+        ]);
+        withSellerProfile(
+          JSON.stringify({
+            paymentMethodDiscounts: { bitcoin: methodDiscount },
+          })
+        );
 
-      const res = await createOrder({ productId: "product-1" });
+        const res = await createOrder({ productId: "product-1" });
 
-      expect(res.statusCode).toBe(402);
-      expect(pricingOf(res).total).toBe(1000);
-    });
+        expect(res.statusCode).toBe(402);
+        expect(pricingOf(res).total).toBe(1000);
+      }
+    );
 
     it("ignores a seller profile whose content isn't valid JSON (getSellerProfile catches and returns null)", async () => {
       fetchAllProductsFromDbMock.mockResolvedValue([
@@ -930,7 +950,7 @@ describe("handleCreateOrder validation & pricing", () => {
       expect(res.jsonBody).toMatchObject({ paymentMethod: "lightning" });
     });
 
-    it("returns 500 with the caught error's message when fetchAllProductsFromDb rejects", async () => {
+    it("returns a generic 500 response when fetchAllProductsFromDb rejects", async () => {
       fetchAllProductsFromDbMock.mockRejectedValueOnce(
         new Error("db unavailable")
       );
@@ -938,9 +958,8 @@ describe("handleCreateOrder validation & pricing", () => {
       const res = await createOrder({ productId: "product-1" });
 
       expect(res.statusCode).toBe(500);
-      expect(res.jsonBody).toMatchObject({
+      expect(res.jsonBody).toEqual({
         error: "Failed to create order",
-        details: "db unavailable",
       });
     });
   });

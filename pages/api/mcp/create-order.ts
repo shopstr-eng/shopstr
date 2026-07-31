@@ -227,11 +227,13 @@ async function handleCreateOrder(
         });
       }
       const weightPrice = product.weightPrices?.get(selectedWeight);
-      if (weightPrice !== undefined) {
+      // Match shared listing pricing: volume takes precedence when both
+      // dimensions are selected, while retaining the weight selection.
+      if (!selectedVolume && weightPrice !== undefined) {
         unitPrice = weightPrice;
       }
       selectedSpecs.weight = selectedWeight;
-      selectedSpecs.weightPrice = unitPrice;
+      selectedSpecs.weightPrice = weightPrice ?? unitPrice;
     }
 
     let effectiveQuantity = quantity;
@@ -352,7 +354,6 @@ async function handleCreateOrder(
     console.error("Failed to create MCP order:", error);
     return res.status(500).json({
       error: "Failed to create order",
-      details: error instanceof Error ? error.message : "Unknown error",
     });
   }
 }
