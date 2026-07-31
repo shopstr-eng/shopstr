@@ -127,6 +127,10 @@ const getVolatileCashuCacheHelpers = ():
     ? (cashuHelpers as VolatileCashuCacheHelpers)
     : undefined;
 
+beforeEach(() => {
+  cashuHelpers.setCachedCashuProofs?.([]);
+});
+
 describe("constructGiftWrappedEvent", () => {
   const senderPubkey =
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -1152,9 +1156,9 @@ describe("getLocalStorageData", () => {
     expect(data.blossomServers).toEqual([getDefaultBlossomServer()]);
   });
 
-  it("initialises tokens to [] in localStorage when the key is absent", () => {
+  it("does not initialise persistent Cashu tokens when the key is absent", () => {
     getLocalStorageData();
-    expect(localStorage.getItem("tokens")).toBe("[]");
+    expect(localStorage.getItem("tokens")).toBeNull();
   });
 
   it("initialises history to [] in localStorage when the key is absent", () => {

@@ -28,6 +28,7 @@ const getVolatileCashuCacheHelpers = ():
 describe("getLocalStorageData", () => {
   beforeEach(() => {
     localStorage.clear();
+    cashuHelpers.setCachedCashuProofs?.([]);
     jest.restoreAllMocks();
   });
 
@@ -118,7 +119,7 @@ describe("getLocalStorageData", () => {
     expect(volatileCashuHelpers.getCachedCashuProofs()).toEqual([firstProof]);
 
     const returnedProofs = volatileCashuHelpers.getCachedCashuProofs();
-    returnedProofs.push(secondProof);
+    returnedProofs.push(secondProof as never);
 
     expect(volatileCashuHelpers.getCachedCashuProofs()).toEqual([firstProof]);
     expect(getLocalStorageData().tokens).toEqual([firstProof]);

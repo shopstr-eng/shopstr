@@ -208,8 +208,7 @@ const MintButton = () => {
         );
         if (proofs && proofs.length > 0) {
           creditProofsToLocalWallet(proofs, invoiceAmount, 3);
-          markMintQuoteClaimed(hash);
-          publishProofEventBestEffort(
+          const proofEventPublished = await publishProofEventBestEffort(
             nostr!,
             signer!,
             mints[0]!,
@@ -217,6 +216,24 @@ const MintButton = () => {
             "in",
             invoiceAmount.toString()
           );
+
+          if (!proofEventPublished) {
+            updatePendingMintQuote(hash, {
+              status: "paid_unclaimed",
+              lastErrorMessage:
+                "Failed to publish wallet proof event after mint",
+            });
+            setShowInvoiceCard(false);
+            setInvoice("");
+            setQrCodeUrl(null);
+            setFailureText(
+              "Payment received, but wallet backup failed. We'll automatically retry the claim the next time you open the app."
+            );
+            setShowFailureModal(true);
+            return;
+          }
+
+          markMintQuoteClaimed(hash);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {

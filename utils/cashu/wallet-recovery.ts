@@ -8,13 +8,15 @@ type Signer = Parameters<typeof publishProofEvent>[1];
 /**
  * Persist freshly-minted proofs into the buyer's local wallet when the
  * downstream seller-DM hand-off fails. Mirrors the wallet-top-up bookkeeping
- * done by the mint-button claim path: localStorage `tokens`, history entry,
+ * done by the mint-button claim path: volatile proof cache, history entry,
  * and a kind-7375 wallet event so other devices can sync.
  *
  * Idempotency: callers must only invoke this once per failed claim. The
  * pending-mint-store should be transitioned to `claimed` immediately after
- * a successful call so boot recovery does not re-attempt the (already issued)
- * mint quote.
+ * a successful call so boot recovery does not re-attempt the already-issued
+ * mint quote. If the wallet event cannot be signed/cached, this throws so the
+ * pending quote stays available for recovery diagnostics instead of being
+ * silently dropped.
  */
 export async function recoverProofsToBuyerWallet(
   nostr: Nostr,
@@ -28,25 +30,27 @@ export async function recoverProofsToBuyerWallet(
 
   creditProofsToLocalWallet(proofs, amount, 3);
 
-  // Best-effort wallet event publish; localStorage is the source of truth and
-  // sendGiftWrappedMessageEvent / publishProofEvent already cache to DB first
-  // so durability does not depend on relay reachability here.
-  void publishProofEvent(
-    nostr,
-    signer,
-    mintUrl,
-    proofs,
-    "in",
-    amount.toString()
-  ).catch((err) => {
+  try {
+    await publishProofEvent(
+      nostr,
+      signer,
+      mintUrl,
+      proofs,
+      "in",
+      amount.toString(),
+      undefined,
+      { throwOnFailure: true }
+    );
+  } catch (err) {
     console.warn(
-      "[wallet-recovery] proof event publish failed; tokens are safe in localStorage:",
+      "[wallet-recovery] proof event publish failed after local cache update:",
       err
     );
-  });
+    throw err;
+  }
 }
 
-export function publishProofEventBestEffort(
+export async function publishProofEventBestEffort(
   nostr: Nostr,
   signer: Signer,
   mintUrl: string,
@@ -54,18 +58,23 @@ export function publishProofEventBestEffort(
   direction: "in" | "out",
   amount: string,
   deletedEventsArray?: string[]
-): void {
-  void publishProofEvent(
-    nostr,
-    signer,
-    mintUrl,
-    proofs,
-    direction,
-    amount,
-    deletedEventsArray
-  ).catch((err) => {
+): Promise<boolean> {
+  try {
+    await publishProofEvent(
+      nostr,
+      signer,
+      mintUrl,
+      proofs,
+      direction,
+      amount,
+      deletedEventsArray,
+      { throwOnFailure: true }
+    );
+    return true;
+  } catch (err) {
     console.warn("[wallet-recovery] proof event publish failed:", err);
-  });
+    return false;
+  }
 }
 
 /**

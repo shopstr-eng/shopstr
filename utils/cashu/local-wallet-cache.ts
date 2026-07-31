@@ -1,5 +1,9 @@
 import { Proof } from "@cashu/cashu-ts";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
+import {
+  getCachedCashuProofs,
+  getLocalStorageData,
+  setCachedCashuProofs,
+} from "@/utils/nostr/nostr-helper-functions";
 
 export function getUniqueProofsBySecret(proofs: Proof[]): Proof[] {
   const seenSecrets = new Set<string>();
@@ -18,18 +22,26 @@ export function creditProofsToLocalWallet(
   if (typeof window === "undefined") return;
   if (!proofs || proofs.length === 0) return;
 
-  const { tokens, history } = getLocalStorageData();
-  const proofArray = getUniqueProofsBySecret([...tokens, ...proofs]);
-  window.localStorage.setItem("tokens", JSON.stringify(proofArray));
-  window.localStorage.setItem(
-    "history",
-    JSON.stringify([
-      {
-        type: historyType,
-        amount,
-        date: Math.floor(Date.now() / 1000),
-      },
-      ...history,
-    ])
-  );
+  const { history } = getLocalStorageData();
+  const proofArray = getUniqueProofsBySecret([
+    ...getCachedCashuProofs(),
+    ...proofs,
+  ]);
+  setCachedCashuProofs(proofArray);
+
+  try {
+    window.localStorage.setItem(
+      "history",
+      JSON.stringify([
+        {
+          type: historyType,
+          amount,
+          date: Math.floor(Date.now() / 1000),
+        },
+        ...history,
+      ])
+    );
+  } catch (error) {
+    console.warn("Failed to write Cashu wallet history entry:", error);
+  }
 }

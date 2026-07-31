@@ -1,18 +1,23 @@
 import { Proof } from "@cashu/cashu-ts";
 import {
+  publishProofEventBestEffort,
   recoverProofsToBuyerWallet,
   withDeadline,
   isTimeoutError,
 } from "../wallet-recovery";
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+  getCachedCashuProofs: jest.fn(),
   getLocalStorageData: jest.fn(() => ({ tokens: [], history: [] })),
   publishProofEvent: jest.fn(),
+  setCachedCashuProofs: jest.fn(),
 }));
 
 const helpers = jest.requireMock("@/utils/nostr/nostr-helper-functions") as {
+  getCachedCashuProofs: jest.Mock;
   getLocalStorageData: jest.Mock;
   publishProofEvent: jest.Mock;
+  setCachedCashuProofs: jest.Mock;
 };
 
 const mkProof = (secret: string, amount = 10): Proof =>
@@ -26,13 +31,16 @@ const mkProof = (secret: string, amount = 10): Proof =>
 describe("recoverProofsToBuyerWallet", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    helpers.getCachedCashuProofs.mockReset();
     helpers.getLocalStorageData.mockReset();
     helpers.publishProofEvent.mockReset();
+    helpers.setCachedCashuProofs.mockReset();
+    helpers.getCachedCashuProofs.mockReturnValue([]);
     helpers.getLocalStorageData.mockReturnValue({ tokens: [], history: [] });
     helpers.publishProofEvent.mockResolvedValue(undefined);
   });
 
-  it("appends proofs to localStorage tokens and writes a history entry", async () => {
+  it("appends proofs to the volatile cache and writes a history entry", async () => {
     const proofs = [mkProof("s1", 4), mkProof("s2", 6)];
     await recoverProofsToBuyerWallet(
       {} as never,
@@ -42,17 +50,17 @@ describe("recoverProofsToBuyerWallet", () => {
       10
     );
 
-    const tokens = JSON.parse(window.localStorage.getItem("tokens") ?? "[]");
-    expect(tokens).toHaveLength(2);
-    expect(tokens.map((p: Proof) => p.secret)).toEqual(["s1", "s2"]);
+    expect(helpers.setCachedCashuProofs).toHaveBeenCalledWith(proofs);
+    expect(window.localStorage.getItem("tokens")).toBeNull();
 
     const history = JSON.parse(window.localStorage.getItem("history") ?? "[]");
     expect(history[0]).toMatchObject({ type: 3, amount: 10 });
   });
 
   it("preserves existing wallet contents", async () => {
+    helpers.getCachedCashuProofs.mockReturnValue([mkProof("existing", 1)]);
     helpers.getLocalStorageData.mockReturnValue({
-      tokens: [mkProof("existing", 1)],
+      tokens: [],
       history: [{ type: 3, amount: 1, date: 1 }],
     });
     await recoverProofsToBuyerWallet(
@@ -62,13 +70,16 @@ describe("recoverProofsToBuyerWallet", () => {
       [mkProof("new", 2)],
       2
     );
-    const tokens = JSON.parse(window.localStorage.getItem("tokens") ?? "[]");
-    expect(tokens.map((p: Proof) => p.secret)).toEqual(["existing", "new"]);
+    expect(helpers.setCachedCashuProofs).toHaveBeenCalledWith([
+      mkProof("existing", 1),
+      mkProof("new", 2),
+    ]);
   });
 
   it("deduplicates recovered proofs by secret", async () => {
+    helpers.getCachedCashuProofs.mockReturnValue([mkProof("existing", 1)]);
     helpers.getLocalStorageData.mockReturnValue({
-      tokens: [mkProof("existing", 1)],
+      tokens: [],
       history: [],
     });
     await recoverProofsToBuyerWallet(
@@ -78,11 +89,13 @@ describe("recoverProofsToBuyerWallet", () => {
       [mkProof("existing", 1), mkProof("new", 2)],
       3
     );
-    const tokens = JSON.parse(window.localStorage.getItem("tokens") ?? "[]");
-    expect(tokens.map((p: Proof) => p.secret)).toEqual(["existing", "new"]);
+    expect(helpers.setCachedCashuProofs).toHaveBeenCalledWith([
+      mkProof("existing", 1),
+      mkProof("new", 2),
+    ]);
   });
 
-  it("does not throw when proof event publish fails", async () => {
+  it("preserves the local cache update but rejects when proof event publish fails", async () => {
     helpers.publishProofEvent.mockRejectedValueOnce(new Error("relay down"));
     await expect(
       recoverProofsToBuyerWallet(
@@ -92,9 +105,26 @@ describe("recoverProofsToBuyerWallet", () => {
         [mkProof("s1", 5)],
         5
       )
-    ).resolves.toBeUndefined();
-    const tokens = JSON.parse(window.localStorage.getItem("tokens") ?? "[]");
-    expect(tokens).toHaveLength(1);
+    ).rejects.toThrow("relay down");
+    expect(helpers.setCachedCashuProofs).toHaveBeenCalledWith([
+      mkProof("s1", 5),
+    ]);
+    expect(window.localStorage.getItem("tokens")).toBeNull();
+  });
+
+  it("reports best-effort proof event publish failures", async () => {
+    helpers.publishProofEvent.mockRejectedValueOnce(new Error("db down"));
+
+    await expect(
+      publishProofEventBestEffort(
+        {} as never,
+        {} as never,
+        "https://mint.example",
+        [mkProof("s1", 5)],
+        "in",
+        "5"
+      )
+    ).resolves.toBe(false);
   });
 
   it("no-ops on empty proof array", async () => {
@@ -107,6 +137,7 @@ describe("recoverProofsToBuyerWallet", () => {
     );
     expect(window.localStorage.getItem("tokens")).toBeNull();
     expect(helpers.publishProofEvent).not.toHaveBeenCalled();
+    expect(helpers.setCachedCashuProofs).not.toHaveBeenCalled();
   });
 });
 
