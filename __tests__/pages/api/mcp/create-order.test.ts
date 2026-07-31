@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import type { ApiKeyRecord } from "@/utils/mcp/auth";
+import type { NostrEvent } from "@/utils/types/types";
 
 const authenticateRequestMock = jest.fn();
 const initializeApiKeysTableMock = jest.fn();
@@ -79,6 +80,23 @@ jest.mock("@/utils/cashu/trusted-mints", () => ({
 // --- Fixtures ---------------------------------------------------------------
 
 const BUYER_PUBKEY = "b".repeat(64);
+const SELLER_PUBKEY = "c".repeat(64);
+
+function makeProductEvent(
+  tags: string[][],
+  overrides: Partial<NostrEvent> = {}
+): NostrEvent {
+  return {
+    id: "product-1",
+    pubkey: SELLER_PUBKEY,
+    created_at: Math.floor(Date.now() / 1000),
+    kind: 30402,
+    tags,
+    content: "",
+    sig: "sig",
+    ...overrides,
+  } as NostrEvent;
+}
 
 function makeApiKey(overrides: Partial<ApiKeyRecord> = {}): ApiKeyRecord {
   return {
@@ -150,38 +168,38 @@ function createMockResponse(): MockResponse {
   return res;
 }
 
-describe("pages/api/mcp/create-order — Phase 1: request gating & routing", () => {
-  let handler: typeof import("@/pages/api/mcp/create-order").default;
-  let callOrder: string[];
+let handler: typeof import("@/pages/api/mcp/create-order").default;
+let callOrder: string[];
 
-  beforeEach(async () => {
-    jest.resetModules();
-    jest.clearAllMocks();
+beforeEach(async () => {
+  jest.resetModules();
+  jest.clearAllMocks();
 
-    callOrder = [];
+  callOrder = [];
 
-    applyRateLimitMock.mockReturnValue(true);
-    recordRequestMock.mockImplementation(() => undefined);
+  applyRateLimitMock.mockReturnValue(true);
+  recordRequestMock.mockImplementation(() => undefined);
 
-    initializeApiKeysTableMock.mockImplementation(async () => {
-      callOrder.push("initializeApiKeysTable");
-    });
-    authenticateRequestMock.mockImplementation(async () => {
-      callOrder.push("authenticateRequest");
-      return makeApiKey();
-    });
-
-    fetchAllProductsFromDbMock.mockResolvedValue([]);
-    fetchAllProfilesFromDbMock.mockResolvedValue([]);
-    validateDiscountCodeMock.mockResolvedValue({ valid: false });
-
-    getMcpOrderMock.mockResolvedValue(null);
-    listMcpOrdersMock.mockResolvedValue([]);
-    formatOrderForResponseMock.mockImplementation((order: unknown) => order);
-
-    handler = (await import("@/pages/api/mcp/create-order")).default;
+  initializeApiKeysTableMock.mockImplementation(async () => {
+    callOrder.push("initializeApiKeysTable");
+  });
+  authenticateRequestMock.mockImplementation(async () => {
+    callOrder.push("authenticateRequest");
+    return makeApiKey();
   });
 
+  fetchAllProductsFromDbMock.mockResolvedValue([]);
+  fetchAllProfilesFromDbMock.mockResolvedValue([]);
+  validateDiscountCodeMock.mockResolvedValue({ valid: false });
+
+  getMcpOrderMock.mockResolvedValue(null);
+  listMcpOrdersMock.mockResolvedValue([]);
+  formatOrderForResponseMock.mockImplementation((order: unknown) => order);
+
+  handler = (await import("@/pages/api/mcp/create-order")).default;
+});
+
+describe("request gating & routing", () => {
   describe("rate limiting", () => {
     it("returns 429 without calling authenticateRequest when the per-IP limit (mcp-create-order:ip) is exceeded", async () => {
       applyRateLimitMock.mockImplementationOnce(
@@ -371,6 +389,578 @@ describe("pages/api/mcp/create-order — Phase 1: request gating & routing", () 
         false,
         "create-order"
       );
+    });
+  });
+});
+
+describe("handleCreateOrder validation & pricing", () => {
+  type PricingBlock = {
+    unitPrice: number;
+    quantity: number;
+    subtotal: number;
+    discountPercentage?: number;
+    discountedSubtotal?: number;
+    shippingCost: number;
+    total: number;
+    currency: string;
+    selectedSpecs?: Record<string, unknown>;
+  };
+
+  beforeEach(() => {
+    // Defaults so paymentMethod:"lightning" (the handleCreateOrder default)
+    // dispatches all the way through to a 402 response without its own
+    // failures masking the pricing assertions under test.
+    walletLoadMintMock.mockResolvedValue(undefined);
+    walletCreateMintQuoteBolt11Mock.mockResolvedValue({
+      quote: "quote-1",
+      request: "lnbc1...",
+    });
+    getTrustedMintUrlMock.mockReturnValue("https://mint.example.com");
+    createMcpOrderMock.mockImplementation(
+      async (
+        orderId: string,
+        apiKeyId: number | null,
+        buyerPubkey: string,
+        sellerPubkey: string,
+        productId: string,
+        productTitle: string | null,
+        quantity: number,
+        amountTotal: number,
+        currency: string,
+        shippingAddress: Record<string, string> | null,
+        paymentRef: string | null
+      ) => ({
+        id: 1,
+        order_id: orderId,
+        api_key_id: apiKeyId,
+        buyer_pubkey: buyerPubkey,
+        seller_pubkey: sellerPubkey,
+        product_id: productId,
+        product_title: productTitle,
+        quantity,
+        amount_total: amountTotal,
+        currency,
+        shipping_address: shippingAddress,
+        payment_ref: paymentRef,
+        payment_status: "pending",
+        order_status: "pending",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+    );
+  });
+
+  async function createOrder(body: Record<string, unknown>) {
+    const req = createMockRequest({ method: "POST", body });
+    const res = createMockResponse();
+    await handler(req, res as unknown as NextApiResponse);
+    return res;
+  }
+
+  function pricingOf(res: MockResponse): PricingBlock {
+    return (res.jsonBody as { pricing: PricingBlock }).pricing;
+  }
+
+  describe("input validation", () => {
+    it("rejects when productId is missing", async () => {
+      const res = await createOrder({});
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({ error: "productId is required" });
+      expect(fetchAllProductsFromDbMock).not.toHaveBeenCalled();
+    });
+
+    it.each([0, -1, 1.5])(
+      "rejects quantity=%p as not a positive integer",
+      async (quantity) => {
+        const res = await createOrder({ productId: "product-1", quantity });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.jsonBody).toMatchObject({
+          error: "quantity must be a positive integer",
+        });
+        expect(fetchAllProductsFromDbMock).not.toHaveBeenCalled();
+      }
+    );
+
+    it("rejects an unrecognized paymentMethod", async () => {
+      const res = await createOrder({
+        productId: "product-1",
+        paymentMethod: "paypal",
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error: "Invalid paymentMethod. Must be one of: lightning, cashu",
+      });
+      expect(fetchAllProductsFromDbMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 when productId does not resolve to any listing", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([["title", "Other product"]], { id: "other" }),
+      ]);
+
+      const res = await createOrder({ productId: "product-1" });
+
+      expect(res.statusCode).toBe(404);
+      expect(res.jsonBody).toMatchObject({ error: "Product not found" });
+    });
+
+    it("returns 500 'Failed to parse product data' when parseTags returns undefined (event with no tags)", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent(undefined as unknown as string[][]),
+      ]);
+
+      const res = await createOrder({ productId: "product-1" });
+
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonBody).toMatchObject({
+        error: "Failed to parse product data",
+      });
+    });
+  });
+
+  describe("size selection", () => {
+    it("rejects an unrecognized selectedSize, listing availableSizes", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([
+          ["price", "1000", "sats"],
+          ["size", "S", "5"],
+          ["size", "M", "2"],
+        ]),
+      ]);
+
+      const res = await createOrder({
+        productId: "product-1",
+        selectedSize: "XL",
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error: 'Invalid size selection: "XL"',
+        availableSizes: ["S", "M"],
+      });
+    });
+
+    it("rejects when sizeQuantities stock for the selected size is less than quantity", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([
+          ["price", "1000", "sats"],
+          ["size", "S", "5"],
+        ]),
+      ]);
+
+      const res = await createOrder({
+        productId: "product-1",
+        selectedSize: "S",
+        quantity: 10,
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error: 'Insufficient stock for size "S"',
+        available: 5,
+        requested: 10,
+      });
+    });
+
+    it("falls back to the top-level quantity stock check only when selectedSize is not provided", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([
+          ["price", "1000", "sats"],
+          ["quantity", "3"],
+        ]),
+      ]);
+
+      const res = await createOrder({ productId: "product-1", quantity: 5 });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error: "Insufficient stock",
+        available: 3,
+        requested: 5,
+      });
+    });
+  });
+
+  describe("volume/weight pricing", () => {
+    it("rejects an unrecognized selectedVolume, listing availableVolumes", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([
+          ["price", "1000", "sats"],
+          ["volume", "250ml", "1500"],
+        ]),
+      ]);
+
+      const res = await createOrder({
+        productId: "product-1",
+        selectedVolume: "1L",
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error: 'Invalid volume selection: "1L"',
+        availableVolumes: ["250ml"],
+      });
+    });
+
+    it("overrides unitPrice with volumePrices when a valid selectedVolume is given", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([
+          ["price", "1000", "sats"],
+          ["volume", "250ml", "1500"],
+        ]),
+      ]);
+
+      const res = await createOrder({
+        productId: "product-1",
+        selectedVolume: "250ml",
+      });
+
+      expect(res.statusCode).toBe(402);
+      expect(pricingOf(res)).toMatchObject({
+        unitPrice: 1500,
+        subtotal: 1500,
+        total: 1500,
+      });
+    });
+
+    it("rejects an unrecognized selectedWeight, listing availableWeights", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([
+          ["price", "1000", "sats"],
+          ["weight", "100g", "800"],
+        ]),
+      ]);
+
+      const res = await createOrder({
+        productId: "product-1",
+        selectedWeight: "200g",
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error: 'Invalid weight selection: "200g"',
+        availableWeights: ["100g"],
+      });
+    });
+
+    it("uses volume pricing when both volume and weight are selected, matching shared pricing precedence", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([
+          ["price", "1000", "sats"],
+          ["volume", "250ml", "1500"],
+          ["weight", "100g", "800"],
+        ]),
+      ]);
+
+      const res = await createOrder({
+        productId: "product-1",
+        selectedVolume: "250ml",
+        selectedWeight: "100g",
+      });
+
+      expect(res.statusCode).toBe(402);
+      expect(pricingOf(res)).toMatchObject({
+        unitPrice: 1500,
+        total: 1500,
+        selectedSpecs: {
+          volume: "250ml",
+          volumePrice: 1500,
+          weight: "100g",
+          weightPrice: 800,
+        },
+      });
+    });
+  });
+
+  describe("bulk pricing", () => {
+    it("rejects an unrecognized selectedBulkUnits, listing availableBulkTiers", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([
+          ["price", "1000", "sats"],
+          ["bulk", "10", "9000"],
+        ]),
+      ]);
+
+      const res = await createOrder({
+        productId: "product-1",
+        selectedBulkUnits: 99,
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error: "Invalid bulk tier: 99 units",
+        availableBulkTiers: [{ units: 10, totalPrice: 9000 }],
+      });
+    });
+
+    it("computes subtotal as bulkTotalPrice * quantity and effectiveQuantity as selectedBulkUnits * quantity", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([
+          ["price", "1000", "sats"],
+          ["bulk", "10", "9000"],
+        ]),
+      ]);
+
+      const res = await createOrder({
+        productId: "product-1",
+        selectedBulkUnits: 10,
+        quantity: 2,
+      });
+
+      expect(res.statusCode).toBe(402);
+      expect(pricingOf(res)).toMatchObject({
+        quantity: 20,
+        subtotal: 18000,
+        total: 18000,
+      });
+    });
+  });
+
+  describe("shipping cost", () => {
+    it.each(["Free", "Free/Pickup", "Pickup", "N/A"])(
+      "zeroes shippingCost for shippingType %s even if the listing's tag carries a nonzero cost",
+      async (shippingType) => {
+        fetchAllProductsFromDbMock.mockResolvedValue([
+          makeProductEvent([
+            ["price", "1000", "sats"],
+            ["shipping", shippingType, "500", "sats"],
+          ]),
+        ]);
+
+        const res = await createOrder({ productId: "product-1" });
+
+        expect(res.statusCode).toBe(402);
+        expect(pricingOf(res)).toMatchObject({
+          shippingCost: 0,
+          total: 1000,
+        });
+      }
+    );
+
+    it("keeps the listing's shippingCost for any other shippingType", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([
+          ["price", "1000", "sats"],
+          ["shipping", "Added Cost", "300", "sats"],
+        ]),
+      ]);
+
+      const res = await createOrder({ productId: "product-1" });
+
+      expect(res.statusCode).toBe(402);
+      expect(pricingOf(res)).toMatchObject({
+        shippingCost: 300,
+        total: 1300,
+      });
+    });
+  });
+
+  describe("discount code", () => {
+    it("applies discountPercentage to subtotal when validateDiscountCode resolves valid", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([["price", "1000", "sats"]]),
+      ]);
+      validateDiscountCodeMock.mockResolvedValue({
+        valid: true,
+        discount_percentage: 10,
+      });
+
+      const res = await createOrder({
+        productId: "product-1",
+        discountCode: "SAVE10",
+      });
+
+      expect(res.statusCode).toBe(402);
+      expect(pricingOf(res)).toMatchObject({
+        subtotal: 1000,
+        discountPercentage: 10,
+        discountedSubtotal: 900,
+        total: 900,
+      });
+    });
+
+    it("leaves subtotal unchanged when validateDiscountCode resolves invalid", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([["price", "1000", "sats"]]),
+      ]);
+      validateDiscountCodeMock.mockResolvedValue({ valid: false });
+
+      const res = await createOrder({
+        productId: "product-1",
+        discountCode: "BOGUS",
+      });
+
+      expect(res.statusCode).toBe(402);
+      const pricing = pricingOf(res);
+      expect(pricing.discountPercentage).toBeUndefined();
+      expect(pricing.discountedSubtotal).toBeUndefined();
+      expect(pricing.total).toBe(1000);
+    });
+
+    it("scopes the discount lookup to the product's pubkey (seller), not the buyer", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([["price", "1000", "sats"]], {
+          pubkey: SELLER_PUBKEY,
+        }),
+      ]);
+      validateDiscountCodeMock.mockResolvedValue({ valid: false });
+
+      await createOrder({ productId: "product-1", discountCode: "SAVE10" });
+
+      expect(validateDiscountCodeMock).toHaveBeenCalledWith(
+        "SAVE10",
+        SELLER_PUBKEY
+      );
+      expect(validateDiscountCodeMock).not.toHaveBeenCalledWith(
+        "SAVE10",
+        BUYER_PUBKEY
+      );
+    });
+  });
+
+  describe("seller payment-method discount", () => {
+    function withSellerProfile(content: string) {
+      fetchAllProfilesFromDbMock.mockResolvedValue([
+        {
+          id: "profile-1",
+          pubkey: SELLER_PUBKEY,
+          created_at: Math.floor(Date.now() / 1000),
+          kind: 0,
+          tags: [],
+          content,
+          sig: "sig",
+        },
+      ]);
+    }
+
+    it("applies the seller bitcoin discount after a valid code discount", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([["price", "1000", "sats"]]),
+      ]);
+      validateDiscountCodeMock.mockResolvedValue({
+        valid: true,
+        discount_percentage: 10,
+      });
+      withSellerProfile(
+        JSON.stringify({ paymentMethodDiscounts: { bitcoin: 5 } })
+      );
+
+      const res = await createOrder({
+        productId: "product-1",
+        discountCode: "SAVE10",
+      });
+
+      expect(res.statusCode).toBe(402);
+      expect(pricingOf(res)).toMatchObject({
+        subtotal: 1000,
+        discountPercentage: 10,
+        discountedSubtotal: 855,
+        total: 855,
+      });
+    });
+
+    it.each([0, -5, "5"])(
+      "ignores bitcoin discount value %p when it is not a positive number",
+      async (methodDiscount) => {
+        fetchAllProductsFromDbMock.mockResolvedValue([
+          makeProductEvent([["price", "1000", "sats"]]),
+        ]);
+        withSellerProfile(
+          JSON.stringify({
+            paymentMethodDiscounts: { bitcoin: methodDiscount },
+          })
+        );
+
+        const res = await createOrder({ productId: "product-1" });
+
+        expect(res.statusCode).toBe(402);
+        expect(pricingOf(res).total).toBe(1000);
+      }
+    );
+
+    it("ignores a seller profile whose content isn't valid JSON (getSellerProfile catches and returns null)", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([["price", "1000", "sats"]]),
+      ]);
+      withSellerProfile("not json");
+
+      const res = await createOrder({ productId: "product-1" });
+
+      expect(res.statusCode).toBe(402);
+      expect(pricingOf(res).total).toBe(1000);
+    });
+  });
+
+  describe("pricing block shape", () => {
+    it("omits selectedSpecs when no size/volume/weight/bulk was selected", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([["price", "1000", "sats"]]),
+      ]);
+
+      const res = await createOrder({ productId: "product-1" });
+
+      expect(pricingOf(res).selectedSpecs).toBeUndefined();
+    });
+
+    it("includes selectedSpecs.size when selectedSize was selected", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([
+          ["price", "1000", "sats"],
+          ["size", "S", "5"],
+        ]),
+      ]);
+
+      const res = await createOrder({
+        productId: "product-1",
+        selectedSize: "S",
+      });
+
+      expect(pricingOf(res).selectedSpecs).toMatchObject({ size: "S" });
+    });
+
+    it("dispatches to handleCashuPayment when paymentMethod is 'cashu' (surfaces its own validation error instead of a Lightning invoice)", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([["price", "1000", "sats"]]),
+      ]);
+
+      const res = await createOrder({
+        productId: "product-1",
+        paymentMethod: "cashu",
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error:
+          "cashuToken is required for Cashu payments. Provide a serialized Cashu token string.",
+      });
+      expect(walletCreateMintQuoteBolt11Mock).not.toHaveBeenCalled();
+    });
+
+    it("dispatches to handleLightningPayment by default", async () => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([["price", "1000", "sats"]]),
+      ]);
+
+      const res = await createOrder({ productId: "product-1" });
+
+      expect(res.statusCode).toBe(402);
+      expect(res.jsonBody).toMatchObject({ paymentMethod: "lightning" });
+    });
+
+    it("returns a generic 500 response when fetchAllProductsFromDb rejects", async () => {
+      fetchAllProductsFromDbMock.mockRejectedValueOnce(
+        new Error("db unavailable")
+      );
+
+      const res = await createOrder({ productId: "product-1" });
+
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonBody).toEqual({
+        error: "Failed to create order",
+      });
     });
   });
 });
