@@ -29,9 +29,10 @@ export async function recoverProofsToBuyerWallet(
   creditProofsToLocalWallet(proofs, amount, 3);
 
   // Best-effort wallet event publish. Local proof cache is credited first, and
-  // publishProofEvent queues encrypted retries on relay failure before
-  // rethrowing, so claim completion does not depend on relay reachability.
-  void publishProofEvent(
+  // publishProofEvent queues encrypted retries on failure before rethrowing.
+  // Await it so the cache/pending-publish write finishes before callers mark
+  // the mint quote claimed.
+  await publishProofEvent(
     nostr,
     signer,
     mintUrl,
@@ -46,7 +47,7 @@ export async function recoverProofsToBuyerWallet(
   });
 }
 
-export function publishProofEventBestEffort(
+export async function publishProofEventBestEffort(
   nostr: Nostr,
   signer: Signer,
   mintUrl: string,
@@ -54,8 +55,8 @@ export function publishProofEventBestEffort(
   direction: "in" | "out",
   amount: string,
   deletedEventsArray?: string[]
-): void {
-  void publishProofEvent(
+): Promise<void> {
+  await publishProofEvent(
     nostr,
     signer,
     mintUrl,

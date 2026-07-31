@@ -1441,6 +1441,14 @@ describe("LogOut", () => {
     expect(localStorage.getItem("chats")).toBeNull();
   });
 
+  it("removes queued Cashu proof publishes", () => {
+    localStorage.setItem("shopstr.pendingProofPublishes", "[]");
+
+    LogOut();
+
+    expect(localStorage.getItem("shopstr.pendingProofPublishes")).toBeNull();
+  });
+
   it("dispatches a storage event on window", () => {
     const dispatchSpy = jest.spyOn(window, "dispatchEvent");
 

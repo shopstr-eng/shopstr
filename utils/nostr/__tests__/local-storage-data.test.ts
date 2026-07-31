@@ -86,12 +86,19 @@ describe("getLocalStorageData", () => {
   });
 
   it("reads volatile Cashu proofs without writing them to localStorage", () => {
+    const dispatchSpy = jest.spyOn(window, "dispatchEvent");
     setCachedCashuProofs([mockProof]);
 
     const data = getLocalStorageData();
 
     expect(data.tokens).toEqual([mockProof]);
     expect(localStorage.getItem("tokens")).toBeNull();
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "storage",
+        detail: { shouldReloadSigner: false },
+      })
+    );
   });
 
   it("keeps valid legacy Cashu proofs until migration removes them", () => {
@@ -160,6 +167,31 @@ describe("getLocalStorageData", () => {
       expect.objectContaining({ method: "POST" })
     );
     expect(nostr.publish).toHaveBeenCalled();
+    expect(getPendingCashuProofPublishes()).toHaveLength(0);
+  });
+
+  it("drops corrupted pending Cashu proof publish payloads", async () => {
+    const signer = {
+      getPubKey: jest.fn().mockResolvedValue("pubkey"),
+      encrypt: jest.fn().mockResolvedValue("encrypted-proofs"),
+      decrypt: jest.fn().mockResolvedValue(JSON.stringify({ proofs: [] })),
+      sign: jest.fn(),
+    } as any;
+    const nostr = {
+      publish: jest.fn(),
+    } as any;
+
+    await queuePendingCashuProofPublish(signer, {
+      mint: "https://mint.example",
+      proofs: [mockProof],
+      direction: "in",
+      amount: "1",
+    });
+
+    await expect(
+      retryPendingCashuProofPublishes(nostr, signer)
+    ).resolves.toMatchObject({ total: 1, recovered: 1, failed: 0 });
+    expect(nostr.publish).not.toHaveBeenCalled();
     expect(getPendingCashuProofPublishes()).toHaveLength(0);
   });
 });

@@ -978,7 +978,9 @@ export const setCachedCashuProofs = (proofs: Proof[] = []) => {
     : [];
 
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new Event("storage"));
+    window.dispatchEvent(
+      new CustomEvent("storage", { detail: { shouldReloadSigner: false } })
+    );
   }
 };
 
@@ -1117,8 +1119,9 @@ export async function retryPendingCashuProofPublishes(
         userPubkey,
         pendingPublish.encryptedProofs
       );
+      const parsedProofs = JSON.parse(decryptedProofs);
       const proofs = getUniqueCashuProofs(
-        JSON.parse(decryptedProofs).filter(isCashuProofLike)
+        Array.isArray(parsedProofs) ? parsedProofs.filter(isCashuProofLike) : []
       );
 
       if (proofs.length === 0) {
@@ -1548,6 +1551,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
 
 export const LogOut = () => {
   cashuProofCache = [];
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.pendingProofPublishes);
 
   // remove old data
   localStorage.removeItem("npub");

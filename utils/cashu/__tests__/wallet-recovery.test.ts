@@ -109,6 +109,34 @@ describe("recoverProofsToBuyerWallet", () => {
     expect(window.localStorage.getItem("tokens")).toBeNull();
   });
 
+  it("waits for proof publish handling before resolving", async () => {
+    let resolvePublish: (() => void) | undefined;
+    helpers.publishProofEvent.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolvePublish = resolve;
+      })
+    );
+
+    let settled = false;
+    const recoveryPromise = recoverProofsToBuyerWallet(
+      {} as never,
+      {} as never,
+      "https://mint.example",
+      [mkProof("s1", 5)],
+      5
+    ).then(() => {
+      settled = true;
+    });
+
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    resolvePublish?.();
+    await recoveryPromise;
+
+    expect(settled).toBe(true);
+  });
+
   it("credits proofs before best-effort history writes", async () => {
     jest
       .spyOn(window.localStorage.__proto__, "setItem")

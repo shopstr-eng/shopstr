@@ -14,6 +14,7 @@ import {
   buildSignedHttpRequestProofTemplate,
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
+import { creditProofsToLocalWallet } from "@/utils/cashu/local-wallet-cache";
 
 export type EscrowPaymentRequestPayload = {
   type: "escrow-payment-request";
@@ -118,7 +119,6 @@ export async function combineAndRedeem(params: {
     signer,
     mints,
     tokens,
-    history,
   } = params;
 
   if (proofs.length !== sig1.length || proofs.length !== sig2.length) {
@@ -142,24 +142,10 @@ export async function combineAndRedeem(params: {
     const uniqueProofs = freshProofs.filter(
       (proof: Proof) => !tokens.some((t: Proof) => t.C === proof.C)
     );
-    localStorage.setItem(
-      "tokens",
-      JSON.stringify([...tokens, ...uniqueProofs])
-    );
+    creditProofsToLocalWallet(uniqueProofs, tokenAmount, 1);
     if (!mints.includes(tokenMint)) {
       localStorage.setItem("mints", JSON.stringify([...mints, tokenMint]));
     }
-    localStorage.setItem(
-      "history",
-      JSON.stringify([
-        {
-          type: 1,
-          amount: tokenAmount,
-          date: Math.floor(Date.now() / 1000),
-        },
-        ...history,
-      ])
-    );
 
     await publishProofEvent(
       nostr,

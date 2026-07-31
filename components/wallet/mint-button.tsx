@@ -208,8 +208,7 @@ const MintButton = () => {
         );
         if (proofs && proofs.length > 0) {
           creditProofsToLocalWallet(proofs, invoiceAmount, 3);
-          markMintQuoteClaimed(hash);
-          publishProofEventBestEffort(
+          await publishProofEventBestEffort(
             nostr!,
             signer!,
             mints[0]!,
@@ -217,6 +216,7 @@ const MintButton = () => {
             "in",
             invoiceAmount.toString()
           );
+          markMintQuoteClaimed(hash);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {
