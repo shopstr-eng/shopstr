@@ -307,3 +307,30 @@ test("parses Gamma stock tag with fallback to legacy quantity", () => {
   assert.equal(legacyProduct.stock, 15);
   assert.equal(legacyProduct.quantity, 15);
 });
+
+test("parses display_name from NIP-24 profile metadata", () => {
+  const profile = parseProfileEvent(
+    event({
+      kind: 0,
+      content: JSON.stringify({
+        name: "alice",
+        display_name: "Alice ✨",
+        about: "Nostr user",
+      }),
+    })
+  );
+
+  assert.equal(profile.name, "alice");
+  assert.equal(profile.displayName, "Alice ✨");
+});
+
+test("defaults displayName to empty string when missing", () => {
+  const profile = parseProfileEvent(
+    event({
+      kind: 0,
+      content: JSON.stringify({ name: "bob" }),
+    })
+  );
+
+  assert.equal(profile.displayName, "");
+});

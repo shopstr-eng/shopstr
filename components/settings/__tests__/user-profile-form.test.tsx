@@ -92,6 +92,7 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalUserProfileKey: (pubkey: string) => `shopstr:user-profile:${pubkey}`,
   parseLocalProfileFallback: (raw: string | null) =>
     raw ? { content: JSON.parse(raw), updatedAt: 0 } : null,
+  isProfileContentPopulated: jest.fn(() => true),
 }));
 const mockCreateNostrProfileEvent = createNostrProfileEvent as jest.Mock;
 
@@ -339,6 +340,21 @@ describe("UserProfileForm", () => {
     await user.click(uploadPictureBtn);
     const newProfileImage = await screen.findByAltText("user profile picture");
     expect(newProfileImage).toHaveAttribute("src", "https://new.image/url");
+  });
+
+  test("updates the profile picture from a pasted URL", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<UserProfileForm />);
+
+    await user.type(
+      await screen.findByLabelText("Profile image URL"),
+      "https://cdn.example.com/profile.png"
+    );
+
+    expect(screen.getByAltText("user profile picture")).toHaveAttribute(
+      "src",
+      "https://cdn.example.com/profile.png"
+    );
   });
 
   test("updates payment preference and shopstr donation", async () => {

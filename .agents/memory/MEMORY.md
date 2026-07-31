@@ -1,1 +1,5 @@
 - [HeroUI version pin](heroui-version-pin.md) — keep @heroui/react on v2.8.10; v3 removes ModalContent/useDisclosure; deploy npm ci installs the lockfile exactly, so stale node_modules hides the break.
+- [Zap receipt validation](zap-receipt-validation.md) — purchase flow stays strict (preimage binding); inventory counts min-amount receipts from any client's p-tag; freshness upper bound is now-based, not startTime-based.
+- [Relay connection handling](relay-connection-handling.md) — never cache ensureRelay promises, never await all-relay connects before subscribing, always bound connect timeouts, fetch resolves partial on timeout.
+- [Contact list (kind 3) safety](contact-list-safety.md) — never create a first follow list unless every relay + DB confirm empty (`.every`, not `.some`); kind 3 replaces follows network-wide.
+- [Escrow record keying](escrow-record-keying.md) — p2pk_escrow_orders and the dispute plane are keyed by H(token), never the invoice orderId; any first-write-wins registration must be keyed by something an observer can't predict.

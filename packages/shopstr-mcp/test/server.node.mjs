@@ -26,7 +26,7 @@ function productEvent() {
   };
 }
 
-test("registers and calls PR3 core read tools", async () => {
+test("registers and calls PR4 read tools", async () => {
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "shopstr-mcp-test", version: "0.0.0" });
@@ -59,8 +59,12 @@ test("registers and calls PR3 core read tools", async () => {
 
     const tools = await client.listTools();
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
+      "get_company_details",
       "get_product_details",
       "get_reviews",
+      "get_seller_reputation",
+      "get_storefront",
+      "list_companies",
       "search_products",
     ]);
     assert.deepEqual(await client.listResources(), { resources: [] });

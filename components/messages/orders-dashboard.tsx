@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { nip19 } from "nostr-tools";
 import {
@@ -28,6 +28,7 @@ import { ProfileWithDropdown } from "@/components/utility-components/profile/pro
 import ClaimButton from "@/components/utility-components/claim-button";
 import DisplayProductModal from "@/components/display-product-modal";
 import AddressChangeModal from "@/components/utility-components/address-change-modal";
+import { getStoredBuyerP2pkEscrowRecords } from "@/utils/cashu/p2pk-escrow-records";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
@@ -38,14 +39,14 @@ import {
   registerTaggedOrderGroupingKey,
   resolveExplicitPaymentMethod,
 } from "@/utils/messages/order-message-utils";
+import { generateKeys } from "@/utils/nostr/key-utilities";
+import { publishReviewEvent } from "@/utils/nostr/nostr-helper-functions";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
-  generateKeys,
-  publishReviewEvent,
-} from "@/utils/nostr/nostr-helper-functions";
+} from "@/utils/nostr/gift-wrap";
 import {
   NostrContext,
   SignerContext,
@@ -101,6 +102,7 @@ interface OrderData {
   paymentTag?: string;
   paymentProof?: string;
   subject?: string;
+  hasP2pkEscrowRecord?: boolean;
   reviewRating?: number;
   isSale?: boolean;
   currency?: string;
@@ -139,12 +141,11 @@ const OrdersDashboard = ({
   const [selectedOrder, setSelectedOrder] = useState<OrderData | null>(null);
   const [isSendingShipping, setIsSendingShipping] = useState(false);
 
-  const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
-  const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
-  const [randomNpubForReceiver, setRandomNpubForReceiver] =
-    useState<string>("");
-  const [randomNsecForReceiver, setRandomNsecForReceiver] =
-    useState<string>("");
+  const randomNpubForSenderRef = useRef<string>("");
+  const randomNsecForSenderRef = useRef<string>("");
+  const randomNpubForReceiverRef = useRef<string>("");
+  const randomNsecForReceiverRef = useRef<string>("");
+  const failedStatusPersistKeysRef = useRef<Set<string>>(new Set());
 
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedThumb, setSelectedThumb] = useState<"up" | "down" | null>(
@@ -216,12 +217,12 @@ const OrdersDashboard = ({
   useEffect(() => {
     const fetchKeys = async () => {
       const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
-      setRandomNpubForSender(npubForSender);
-      setRandomNsecForSender(nsecForSender);
+      randomNpubForSenderRef.current = npubForSender;
+      randomNsecForSenderRef.current = nsecForSender;
       const { nsec: nsecForReceiver, npub: npubForReceiver } =
         await generateKeys();
-      setRandomNpubForReceiver(npubForReceiver);
-      setRandomNsecForReceiver(nsecForReceiver);
+      randomNpubForReceiverRef.current = npubForReceiver;
+      randomNsecForReceiverRef.current = nsecForReceiver;
     };
 
     fetchKeys();
@@ -635,6 +636,19 @@ const OrdersDashboard = ({
       }
 
       const consolidatedOrders = Array.from(consolidatedOrdersMap.values());
+      const localEscrowRecords = await getStoredBuyerP2pkEscrowRecords(signer);
+      for (const escrowRecord of localEscrowRecords) {
+        const order = consolidatedOrders.find(
+          (item) => item.orderId === escrowRecord.orderId
+        );
+        if (order) {
+          order.hasP2pkEscrowRecord = true;
+          if (!order.paymentToken) {
+            order.paymentToken = escrowRecord.token;
+            order.paymentMethod = order.paymentMethod || "ecash";
+          }
+        }
+      }
       consolidatedOrders.sort((a, b) => b.timestamp - a.timestamp);
 
       const returnRequestOrderIds = new Set<string>();
@@ -687,7 +701,16 @@ const OrdersDashboard = ({
         pending: 1,
       };
       for (const order of consolidatedOrders) {
-        if (order.status && order.orderId) {
+        if (order.status && order.orderId && signer) {
+          const statusPersistKey = `${order.orderId}:${
+            order.messageEvent?.id ?? ""
+          }:${order.status}`;
+          if (failedStatusPersistKeysRef.current.has(statusPersistKey)) {
+            continue;
+          }
+          if (order.subject === "order-receipt" && order.hasP2pkEscrowRecord) {
+            continue;
+          }
           const currentPriority = statusPriorityForPersist[order.status] || 0;
           const cachedStatusValue = order.statusLookupKeys
             .map((lookupKey) => cachedStatuses[lookupKey])
@@ -715,6 +738,12 @@ const OrdersDashboard = ({
                     Authorization: authHeader,
                   },
                   body,
+                }).then((response) => {
+                  if (response.status === 404) {
+                    failedStatusPersistKeysRef.current.add(statusPersistKey);
+                  } else if (!response.ok) {
+                    console.error("Failed to save order status");
+                  }
                 })
               )
               .catch((err) =>
@@ -880,13 +909,17 @@ const OrdersDashboard = ({
     setIsSendingShipping(true);
 
     try {
-      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
-      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      const decodedRandomPubkeyForSender = nip19.decode(
+        randomNpubForSenderRef.current
+      );
+      const decodedRandomPrivkeyForSender = nip19.decode(
+        randomNsecForSenderRef.current
+      );
       const decodedRandomPubkeyForReceiver = nip19.decode(
-        randomNpubForReceiver
+        randomNpubForReceiverRef.current
       );
       const decodedRandomPrivkeyForReceiver = nip19.decode(
-        randomNsecForReceiver
+        randomNsecForReceiverRef.current
       );
 
       const daysToAdd = parseInt(data["Delivery Time"]!);
@@ -1175,13 +1208,17 @@ const OrdersDashboard = ({
     setIsSendingReturnRequest(true);
 
     try {
-      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
-      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      const decodedRandomPubkeyForSender = nip19.decode(
+        randomNpubForSenderRef.current
+      );
+      const decodedRandomPrivkeyForSender = nip19.decode(
+        randomNsecForSenderRef.current
+      );
       const decodedRandomPubkeyForReceiver = nip19.decode(
-        randomNpubForReceiver
+        randomNpubForReceiverRef.current
       );
       const decodedRandomPrivkeyForReceiver = nip19.decode(
-        randomNsecForReceiver
+        randomNsecForReceiverRef.current
       );
 
       const sellerPubkey =
@@ -1274,13 +1311,17 @@ const OrdersDashboard = ({
     setIsSendingAddressChange(true);
 
     try {
-      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
-      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      const decodedRandomPubkeyForSender = nip19.decode(
+        randomNpubForSenderRef.current
+      );
+      const decodedRandomPrivkeyForSender = nip19.decode(
+        randomNsecForSenderRef.current
+      );
       const decodedRandomPubkeyForReceiver = nip19.decode(
-        randomNpubForReceiver
+        randomNpubForReceiverRef.current
       );
       const decodedRandomPrivkeyForReceiver = nip19.decode(
-        randomNsecForReceiver
+        randomNsecForReceiverRef.current
       );
 
       const sellerPubkey =
@@ -1694,12 +1735,22 @@ const OrdersDashboard = ({
                           })()}
                         </td>
                         <td className="px-4 py-4 text-sm">
-                          {order.subject === "order-receipt" ? (
+                          {order.paymentToken &&
+                          (order.subject !== "order-receipt" ||
+                            order.hasP2pkEscrowRecord) ? (
+                            <ClaimButton
+                              token={order.paymentToken}
+                              orderId={order.orderId}
+                              buyerPubkey={order.buyerPubkey}
+                              sellerPubkey={
+                                order.sellerPubkey ??
+                                (order.isSale ? userPubkey : undefined)
+                              }
+                            />
+                          ) : order.subject === "order-receipt" ? (
                             <span className="text-green-600 dark:text-green-400">
                               Payment Sent
                             </span>
-                          ) : order.paymentToken ? (
-                            <ClaimButton token={order.paymentToken} />
                           ) : (
                             <span className="text-gray-600 dark:text-gray-400">
                               {order.paymentMethod}

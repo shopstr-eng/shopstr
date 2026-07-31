@@ -284,6 +284,34 @@ describe("parseTags", () => {
     expect(result.volumePrices!.get("500g")).toBe(40);
   });
 
+  it("should parse bulk, condition, status, required, restrictions, pickup_location, and valid_until tags", () => {
+    const event = {
+      ...baseEvent,
+      tags: [
+        ["bulk", "10", "15.5"],
+        ["bulk", "25", "30"],
+        ["condition", "new"],
+        ["status", "available"],
+        ["required", "membership"],
+        ["restrictions", "18+ only"],
+        ["pickup_location", "Warehouse A"],
+        ["pickup_location", "Shop Front"],
+        ["valid_until", "1710001234"],
+      ],
+    };
+    const result = parseTags(event)!;
+
+    expect(result.bulkPrices).toBeInstanceOf(Map);
+    expect(result.bulkPrices!.get(10)).toBe(15.5);
+    expect(result.bulkPrices!.get(25)).toBe(30);
+    expect(result.condition).toBe("new");
+    expect(result.status).toBe("available");
+    expect(result.required).toBe("membership");
+    expect(result.restrictions).toBe("18+ only");
+    expect(result.pickupLocations).toEqual(["Warehouse A", "Shop Front"]);
+    expect(result.expiration).toBe(1710001234);
+  });
+
   it("should return undefined if tags array is missing", () => {
     const event = { ...baseEvent, tags: undefined } as unknown as NostrEvent;
     expect(parseTags(event)).toBeUndefined();
@@ -326,6 +354,15 @@ describe("parseTags", () => {
     expect(result.volumePrices!.get("100g")).toBeUndefined();
   });
 
+  it("should ignore a volume tag without a value", () => {
+    const event = { ...baseEvent, tags: [["volume"]] };
+    const result = parseTags(event)!;
+
+    expect(result.volumes).toEqual([]);
+    expect(result.volumePrices).toBeInstanceOf(Map);
+    expect(result.volumePrices!.size).toBe(0);
+  });
+
   it("should parse weight tags into weights array and prices map", () => {
     const event = {
       ...baseEvent,
@@ -348,6 +385,23 @@ describe("parseTags", () => {
 
     expect(result.weights).toEqual(["1 oz"]);
     expect(result.weightPrices!.get("1 oz")).toBeUndefined();
+  });
+
+  it("should ignore a weight tag without a value", () => {
+    const event = { ...baseEvent, tags: [["weight"]] };
+    const result = parseTags(event)!;
+
+    expect(result.weights).toEqual([]);
+    expect(result.weightPrices).toBeInstanceOf(Map);
+    expect(result.weightPrices!.size).toBe(0);
+  });
+
+  it("should ignore a bulk tag without enough values", () => {
+    const event = { ...baseEvent, tags: [["bulk", "10"]] };
+    const result = parseTags(event)!;
+
+    expect(result.bulkPrices).toBeInstanceOf(Map);
+    expect(result.bulkPrices!.size).toBe(0);
   });
 
   it("should ignore L/l tags that are not for content-warning", () => {

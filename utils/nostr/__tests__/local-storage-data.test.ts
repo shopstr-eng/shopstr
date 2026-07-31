@@ -11,11 +11,19 @@ type CashuCacheHelpers = typeof NostrHelpers & {
   setCachedCashuProofs?: (proofs?: unknown[]) => void;
 };
 
+type VolatileCashuCacheHelpers = typeof NostrHelpers & {
+  getCachedCashuProofs: () => unknown[];
+  setCachedCashuProofs: (proofs?: unknown[]) => void;
+};
+
 const cashuHelpers = NostrHelpers as CashuCacheHelpers;
 
-const hasVolatileCashuCache = () =>
+const getVolatileCashuCacheHelpers = ():
+  VolatileCashuCacheHelpers | undefined =>
   typeof cashuHelpers.getCachedCashuProofs === "function" &&
-  typeof cashuHelpers.setCachedCashuProofs === "function";
+  typeof cashuHelpers.setCachedCashuProofs === "function"
+    ? (cashuHelpers as VolatileCashuCacheHelpers)
+    : undefined;
 
 describe("getLocalStorageData", () => {
   beforeEach(() => {
@@ -84,7 +92,8 @@ describe("getLocalStorageData", () => {
   });
 
   it("keeps the volatile Cashu proof cache isolated from caller mutation when available", () => {
-    if (!hasVolatileCashuCache()) {
+    const volatileCashuHelpers = getVolatileCashuCacheHelpers();
+    if (!volatileCashuHelpers) {
       expect(cashuHelpers.setCachedCashuProofs).toBeUndefined();
       return;
     }
@@ -103,15 +112,15 @@ describe("getLocalStorageData", () => {
     };
     const originalProofs = [firstProof];
 
-    cashuHelpers.setCachedCashuProofs(originalProofs);
+    volatileCashuHelpers.setCachedCashuProofs(originalProofs);
     originalProofs.push(secondProof);
 
-    expect(cashuHelpers.getCachedCashuProofs()).toEqual([firstProof]);
+    expect(volatileCashuHelpers.getCachedCashuProofs()).toEqual([firstProof]);
 
-    const returnedProofs = cashuHelpers.getCachedCashuProofs();
+    const returnedProofs = volatileCashuHelpers.getCachedCashuProofs();
     returnedProofs.push(secondProof);
 
-    expect(cashuHelpers.getCachedCashuProofs()).toEqual([firstProof]);
+    expect(volatileCashuHelpers.getCachedCashuProofs()).toEqual([firstProof]);
     expect(getLocalStorageData().tokens).toEqual([firstProof]);
   });
 });

@@ -13,9 +13,16 @@ import {
 import { ChatsMap } from "@/utils/context/context";
 import {
   getLocalStorageData,
+  getLatestLocalContactListEvent,
   deleteEvent,
   verifyNip05Identifier,
+  publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { isHexPubkey } from "@/utils/nostr/pubkey";
+import {
+  pickPreferredReplaceableEvent,
+  selectPreferredReplaceableEvent,
+} from "@/utils/nostr/replaceable-events";
 import {
   ProductData,
   parseTags,
@@ -26,7 +33,22 @@ import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions"
 import { hashToCurve } from "@cashu/cashu-ts";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
-import { cacheEventsToDatabase } from "@/utils/db/db-client";
+import {
+  cacheEventsToDatabase,
+  cacheEventToDatabase,
+} from "@/utils/db/db-client";
+import { mapWithConcurrency } from "@/utils/concurrency";
+import {
+  applyWalletConfigContent,
+  generateCashuWalletKeypair,
+  LatestWalletKeypair,
+} from "@/utils/cashu/wallet-config";
+import {
+  BUYER_P2PK_ESCROW_EVENT_KIND,
+  BuyerP2pkEscrowRecord,
+  isBuyerP2pkEscrowRecord,
+  restoreEncryptedEscrowRecordLocally,
+} from "@/utils/cashu/p2pk-escrow-records";
 import {
   buildMessagesListProof,
   buildSignedHttpRequestProofTemplate,
@@ -44,6 +66,7 @@ type SearchFilter = Filter & { search: string };
 
 const PRODUCT_SEARCH_LIMIT = 100;
 export const NIP50_SEARCH_TIMEOUT_MS = 10_000;
+const COMMUNITY_POST_BATCH_CONCURRENCY = 4;
 export const DEFAULT_NIP50_SEARCH_RELAYS = [
   "wss://relay.nostr.band",
   "wss://nostr.wine",
@@ -77,12 +100,7 @@ function getUniqueRelayUrls(relays: string[]): string[] {
 }
 
 function getNip50SearchRelays(relays: string[]): string[] {
-  const knownSearchRelaySet = new Set(
-    DEFAULT_NIP50_SEARCH_RELAYS.map((relay) => relay.toLowerCase())
-  );
-  const selectedSearchRelays = getUniqueRelayUrls(relays).filter((relay) =>
-    knownSearchRelaySet.has(relay.toLowerCase())
-  );
+  const selectedSearchRelays = getUniqueRelayUrls(relays);
   const selectedSearchRelaySet = new Set(
     selectedSearchRelays.map((relay) => relay.toLowerCase())
   );
@@ -90,6 +108,12 @@ function getNip50SearchRelays(relays: string[]): string[] {
     (relay) => !selectedSearchRelaySet.has(relay.toLowerCase())
   );
 
+  // All user-selected relays are queried first, then any curated NIP-50 relays
+  // not already in the user's list are appended as fallbacks. Note: this means
+  // search terms are sent to every user-configured relay, not just those that
+  // advertise NIP-50 support. Non-NIP-50 relays may return unfiltered results,
+  // but fetchNip50ProductSearch post-filters via eventMatchesProductSearch so
+  // only matching events reach the UI — the only cost is extra bandwidth.
   return [...selectedSearchRelays, ...backupSearchRelays];
 }
 
@@ -246,6 +270,23 @@ export function getUniqueProofs(proofs: Proof[]): Proof[] {
 
 export function isHexString(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
+}
+
+function parseJsonSafely<T>(input: unknown): T | null {
+  if (typeof input !== "string") {
+    return null;
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    return null;
+  }
 }
 
 export const fetchAllPosts = async (
@@ -784,22 +825,20 @@ export const fetchProfile = async (
           }
 
           for (const [pubkey, event] of latestDbEvents.entries()) {
-            try {
-              const content = JSON.parse(event.content);
-              const profile: NipProfile = {
-                pubkey: event.pubkey,
-                created_at: event.created_at,
-                content,
-                nip05Verified: false,
-              };
-              dbProfileMap.set(pubkey, profile);
-              updateProfileIfNewer(profile);
-            } catch (error) {
-              console.error(
-                `Failed to parse profile from DB: ${pubkey}`,
-                error
-              );
+            const content = parseJsonSafely<Record<string, any>>(event.content);
+            if (!content) {
+              console.warn(`Skipping invalid profile JSON from DB: ${pubkey}`);
+              continue;
             }
+
+            const profile: NipProfile = {
+              pubkey: event.pubkey,
+              created_at: event.created_at,
+              content,
+              nip05Verified: false,
+            };
+            dbProfileMap.set(pubkey, profile);
+            updateProfileIfNewer(profile);
           }
 
           if (dbProfileMap.size > 0) {
@@ -835,23 +874,23 @@ export const fetchProfile = async (
           !existing ||
           event.created_at > existing.created_at
         ) {
-          try {
-            const content = JSON.parse(event.content);
-            const profile: NipProfile = {
-              pubkey: event.pubkey,
-              created_at: event.created_at,
-              content,
-              nip05Verified: false,
-            };
-            profileMap.set(event.pubkey, profile);
-            updatedProfiles.set(event.pubkey, profile);
-            updateProfileIfNewer(profile);
-          } catch (error) {
-            console.error(
-              `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
-              error
+          const content = parseJsonSafely<Record<string, any>>(event.content);
+          if (!content) {
+            console.warn(
+              `Skipping invalid profile JSON for pubkey: ${event.pubkey}`
             );
+            continue;
           }
+
+          const profile: NipProfile = {
+            pubkey: event.pubkey,
+            created_at: event.created_at,
+            content,
+            nip05Verified: false,
+          };
+          profileMap.set(event.pubkey, profile);
+          updatedProfiles.set(event.pubkey, profile);
+          updateProfileIfNewer(profile);
         }
       }
 
@@ -1273,97 +1312,193 @@ export const fetchAllFollows = async (
   nostr: NostrManager,
   relays: string[],
   editFollowsContext: (
+    directFollowList: string[],
     followList: string[],
     firstDegreeFollowsLength: number,
     isLoading: boolean
   ) => void,
   userPubkey?: string
 ): Promise<{
+  directFollowList: string[];
   followList: string[];
+  firstDegreeFollowsLength: number;
 }> => {
   const wot = getLocalStorageData().wot;
 
   if (!userPubkey) {
-    editFollowsContext([], 0, false);
+    editFollowsContext([], [], 0, false);
     return {
+      directFollowList: [],
       followList: [],
+      firstDegreeFollowsLength: 0,
     };
   }
 
-  const fetchFollows = async (userPubkey: string) => {
-    let secondDegreeFollowsArrayFromRelay: string[] = [];
-    let firstDegreeFollowsLength = 0;
-    const followsSet: Set<string> = new Set();
+  const localContactListEvent = getLatestLocalContactListEvent(userPubkey);
 
-    // fetch first-degree follows
-    const fetchedEvents = await nostr.fetch(
-      [
-        {
-          kinds: [3],
-          authors: [userPubkey],
-        },
-      ],
-      {},
-      relays
+  const extractValidFollowTags = (
+    tags: string[][],
+    excluded = new Set<string>()
+  ) =>
+    tags
+      .filter((tag) => tag[0] === "p")
+      .map((tag) => tag[1])
+      .filter(
+        (pubkey) => isHexPubkey(pubkey!) && !excluded.has(pubkey!)
+      ) as string[];
+
+  const getLatestEventByAuthor = (events: NostrEvent[]) => {
+    const latestByAuthor = new Map<string, NostrEvent>();
+    for (const event of events) {
+      const existing = latestByAuthor.get(event.pubkey);
+      latestByAuthor.set(
+        event.pubkey,
+        existing ? selectPreferredReplaceableEvent(event, existing) : event
+      );
+    }
+    return latestByAuthor;
+  };
+
+  let dbContactListEvent: NostrEvent | null = null;
+  if (localContactListEvent?.id) {
+    const localDirectFollows = Array.from(
+      new Set(extractValidFollowTags(localContactListEvent.tags))
     );
+    editFollowsContext(
+      localDirectFollows,
+      localDirectFollows,
+      localDirectFollows.length,
+      true
+    );
+  }
 
-    const latestContactListEvent = fetchedEvents.reduce<NostrEvent | null>(
-      (latestEvent, event) => {
-        if (!latestEvent || event.created_at > latestEvent.created_at) {
-          return event;
+  try {
+    // Bound the DB cache lookup so a hung API route can't stall the whole
+    // follows pipeline before the relay fetch even starts.
+    const response = await fetch(
+      `/api/db/fetch-contacts?pubkey=${encodeURIComponent(userPubkey)}`,
+      typeof AbortSignal !== "undefined" &&
+        typeof AbortSignal.timeout === "function"
+        ? { signal: AbortSignal.timeout(2500) }
+        : undefined
+    );
+    if (response.ok) {
+      const data = await response.json();
+      if (data?.contactList) {
+        dbContactListEvent = data.contactList as NostrEvent;
+        const dbDirectFollows = Array.from(
+          new Set(extractValidFollowTags(dbContactListEvent.tags))
+        );
+        if (!localContactListEvent?.id && dbDirectFollows.length > 0) {
+          editFollowsContext(
+            dbDirectFollows,
+            dbDirectFollows,
+            dbDirectFollows.length,
+            true
+          );
         }
-        return latestEvent;
-      },
-      null
-    );
+      }
+    }
+  } catch (error) {
+    console.error("Failed to fetch contact list from database:", error);
+  }
 
-    if (!latestContactListEvent) {
-      return {
-        followsArrayFromRelay: [],
-        firstDegreeFollowsLength: 0,
-      };
+  const fetchFollows = async (authorPubkey: string) => {
+    // fetch first-degree follows
+    let fetchedFirstDegreeEvents: NostrEvent[] = [];
+    try {
+      fetchedFirstDegreeEvents = (await nostr.fetch(
+        [{ kinds: [3], authors: [authorPubkey] }],
+        {},
+        relays
+      )) as NostrEvent[];
+    } catch (error) {
+      console.error(
+        "Relay fetch for first-degree follows failed, falling back to DB:",
+        error
+      );
     }
 
-    const authors: string[] = [];
-    const directFollowsArrayFromRelay = latestContactListEvent.tags
-      .map((tag) => tag[1])
-      .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
-    directFollowsArrayFromRelay.forEach((pubkey) => followsSet.add(pubkey!));
-    firstDegreeFollowsLength = directFollowsArrayFromRelay.length;
-    authors.push(...(directFollowsArrayFromRelay as string[]));
+    const allFirstDegreeEvents = [...fetchedFirstDegreeEvents];
+    if (
+      dbContactListEvent &&
+      authorPubkey === userPubkey &&
+      dbContactListEvent.id
+    ) {
+      allFirstDegreeEvents.push(dbContactListEvent);
+    }
+    if (
+      localContactListEvent &&
+      authorPubkey === userPubkey &&
+      localContactListEvent.id
+    ) {
+      allFirstDegreeEvents.push(localContactListEvent);
+    }
 
-    if (!authors.length) {
+    const latestFirstDegreeEvent =
+      pickPreferredReplaceableEvent(allFirstDegreeEvents);
+
+    if (
+      latestFirstDegreeEvent &&
+      (!dbContactListEvent ||
+        latestFirstDegreeEvent.id !== dbContactListEvent.id)
+    ) {
+      cacheEventToDatabase(latestFirstDegreeEvent).catch((error) =>
+        console.error("Failed to cache initial contact list:", error)
+      );
+    }
+
+    const directFollowList = latestFirstDegreeEvent
+      ? Array.from(new Set(extractValidFollowTags(latestFirstDegreeEvent.tags)))
+      : [];
+
+    const firstDegreeFollowsLength = directFollowList.length;
+
+    if (directFollowList.length > 0) {
+      editFollowsContext(
+        directFollowList,
+        directFollowList,
+        firstDegreeFollowsLength,
+        true
+      );
+    }
+
+    if (!directFollowList.length) {
       return {
+        directFollowList,
         followsArrayFromRelay: [],
         firstDegreeFollowsLength,
       };
     }
 
-    // Fetch second-degree follows
-    const fetchedSecondDegreeEvents = await nostr.fetch(
-      [
-        {
-          kinds: [3],
-          authors,
-        },
-      ],
-      {},
-      relays
-    );
+    const followsSet: Set<string> = new Set(directFollowList);
+    let secondDegreeFollowsArrayFromRelay: string[] = [];
 
-    const latestSecondDegreeEvents = new Map<string, NostrEvent>();
-    for (const followEvent of fetchedSecondDegreeEvents) {
-      const latestEvent = latestSecondDegreeEvents.get(followEvent.pubkey);
-      if (!latestEvent || followEvent.created_at > latestEvent.created_at) {
-        latestSecondDegreeEvents.set(followEvent.pubkey, followEvent);
-      }
+    // Fetch second-degree follows
+    let fetchedSecondDegreeEvents: NostrEvent[] = [];
+    try {
+      fetchedSecondDegreeEvents = (await nostr.fetch(
+        [
+          {
+            kinds: [3],
+            authors: directFollowList,
+          },
+        ],
+        {},
+        relays
+      )) as NostrEvent[];
+    } catch (error) {
+      console.error("Relay fetch for second-degree follows failed:", error);
     }
 
-    for (const followEvent of latestSecondDegreeEvents.values()) {
-      const validFollowTags = followEvent.tags
-        .map((tag) => tag[1])
-        .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
-      secondDegreeFollowsArrayFromRelay.push(...(validFollowTags as string[]));
+    for (const followEvent of getLatestEventByAuthor(
+      fetchedSecondDegreeEvents
+    ).values()) {
+      const validFollowTags = extractValidFollowTags(
+        followEvent.tags,
+        followsSet
+      );
+      secondDegreeFollowsArrayFromRelay.push(...validFollowTags);
     }
 
     const pubkeyCount: Map<string, number> = new Map();
@@ -1376,23 +1511,27 @@ export const fetchAllFollows = async (
       );
     // Concatenate arrays ensuring uniqueness
     const followsArrayFromRelay = Array.from(
-      new Set(
-        (directFollowsArrayFromRelay as string[]).concat(
-          secondDegreeFollowsArrayFromRelay
-        )
-      )
+      new Set(directFollowList.concat(secondDegreeFollowsArrayFromRelay))
     );
     return {
+      directFollowList,
       followsArrayFromRelay,
       firstDegreeFollowsLength,
     };
   };
 
-  const { followsArrayFromRelay, firstDegreeFollowsLength } =
+  const { directFollowList, followsArrayFromRelay, firstDegreeFollowsLength } =
     await fetchFollows(userPubkey);
-  editFollowsContext(followsArrayFromRelay, firstDegreeFollowsLength, false);
+  editFollowsContext(
+    directFollowList,
+    followsArrayFromRelay,
+    firstDegreeFollowsLength,
+    false
+  );
   return {
+    directFollowList,
     followList: followsArrayFromRelay,
+    firstDegreeFollowsLength,
   };
 };
 
@@ -1642,6 +1781,70 @@ export const fetchAllBlossomServers = async (
   });
 };
 
+export const fetchEscrowRecords = async (
+  nostr: NostrManager,
+  signer: NostrSigner | undefined,
+  relays: string[]
+): Promise<void> => {
+  const userPubkey = await signer?.getPubKey?.();
+  if (!userPubkey) return;
+
+  const restoreEncryptedRecordFromEvent = async (event: NostrEvent) => {
+    const decrypted = await signer!.decrypt(userPubkey, event.content);
+    const record = parseJsonSafely<BuyerP2pkEscrowRecord>(decrypted);
+    if (!isBuyerP2pkEscrowRecord(record)) return;
+
+    restoreEncryptedEscrowRecordLocally({
+      orderId: record.orderId,
+      createdAt: record.createdAt,
+      content: event.content,
+    });
+  };
+
+  // DB-first: restore from server-side cache so the orders dashboard has records
+  // even before the Nostr relay fetch completes
+  try {
+    const dbRes = await fetch(`/api/db/fetch-escrow?pubkey=${userPubkey}`);
+    const dbEvents: NostrEvent[] = dbRes.ok ? await dbRes.json() : [];
+    for (const event of dbEvents) {
+      if (event.kind !== BUYER_P2PK_ESCROW_EVENT_KIND) continue;
+      try {
+        await restoreEncryptedRecordFromEvent(event);
+      } catch {
+        // skip malformed cached events
+      }
+    }
+  } catch (error) {
+    console.error("Failed to restore escrow records from database:", error);
+  }
+
+  // Relay fetch: pick up records missing from the DB cache (e.g. first login on this server)
+  const escrowEvents: NostrEvent[] = await nostr.fetch(
+    [{ kinds: [BUYER_P2PK_ESCROW_EVENT_KIND], authors: [userPubkey] }],
+    {},
+    relays
+  );
+
+  const validEscrowEvents = escrowEvents.filter(
+    (e) => e.id && e.sig && e.pubkey && e.kind === BUYER_P2PK_ESCROW_EVENT_KIND
+  );
+  if (validEscrowEvents.length > 0) {
+    cacheEventsToDatabase(validEscrowEvents).catch((err) =>
+      console.error("Failed to cache escrow events to database:", err)
+    );
+  }
+
+  // restoreEncryptedEscrowRecordLocally deduplicates by orderId, so it is safe
+  // to call for the same record from DB and relay without creating duplicates.
+  for (const event of validEscrowEvents) {
+    try {
+      await restoreEncryptedRecordFromEvent(event);
+    } catch (error) {
+      console.error(`Failed to decrypt escrow record ${event.id}:`, error);
+    }
+  }
+};
+
 export const fetchCashuWallet = async (
   nostr: NostrManager,
   signer: NostrSigner | undefined,
@@ -1650,12 +1853,19 @@ export const fetchCashuWallet = async (
     proofEvents: any[],
     cashuMints: string[],
     cashuProofs: Proof[],
-    isLoading: boolean
+    isLoading: boolean,
+    keys?: {
+      cashuPubkey?: string;
+      cashuPrivkey?: string;
+      walletIdentityUnavailable?: boolean;
+    }
   ) => void
 ): Promise<{
   proofEvents: any[];
   cashuMints: string[];
   cashuProofs: Proof[];
+  cashuPubkey?: string;
+  cashuPrivkey?: string;
 }> => {
   return new Promise(async function (resolve, reject) {
     const { tokens } = getLocalStorageData();
@@ -1677,6 +1887,7 @@ export const fetchCashuWallet = async (
       const cashuRelays: string[] = [];
       const cashuMints: string[] = [];
       const cashuMintSet: Set<string> = new Set();
+      let latestKeypair: LatestWalletKeypair | null = null;
       let cashuProofs: Proof[] = [...tokens]; // Start with existing tokens
       const incomingSpendingHistory: [][] = [];
 
@@ -1695,15 +1906,13 @@ export const fetchCashuWallet = async (
                 userPubkey,
                 event.content
               );
-              const walletContent: string[][] = JSON.parse(decrypted);
-              walletContent
-                .filter((entry) => entry[0] === "mint")
-                .forEach((entry) => {
-                  if (entry[1] && !cashuMintSet.has(entry[1])) {
-                    cashuMintSet.add(entry[1]);
-                    cashuMints.push(entry[1]);
-                  }
-                });
+              latestKeypair = applyWalletConfigContent(
+                decrypted,
+                event.created_at,
+                cashuMintSet,
+                cashuMints,
+                latestKeypair
+              );
             } catch (error) {
               console.error(
                 `Failed to decrypt wallet config event from DB ${event.id}:`,
@@ -1788,11 +1997,17 @@ export const fetchCashuWallet = async (
         authors: [userPubkey],
       };
 
-      const hEvents: NostrEvent[] = await nostr.fetch(
-        [walletConfigFilter],
-        {},
-        relays
-      );
+      let walletRelayFetchSucceeded = false;
+      let hEvents: NostrEvent[] = [];
+      try {
+        hEvents = await nostr.fetch([walletConfigFilter], {}, relays);
+        walletRelayFetchSucceeded = true;
+      } catch (fetchError) {
+        console.error(
+          "Failed to fetch wallet config events from relay:",
+          fetchError
+        );
+      }
 
       // Cache wallet config events to database
       const validWalletConfigEvents = hEvents.filter(
@@ -1818,15 +2033,13 @@ export const fetchCashuWallet = async (
                 userPubkey,
                 event.content
               );
-              const walletContent: string[][] = JSON.parse(decrypted);
-              walletContent
-                .filter((entry) => entry[0] === "mint")
-                .forEach((entry) => {
-                  if (entry[1] && !cashuMintSet.has(entry[1])) {
-                    cashuMintSet.add(entry[1]);
-                    cashuMints.push(entry[1]);
-                  }
-                });
+              latestKeypair = applyWalletConfigContent(
+                decrypted,
+                event.created_at,
+                cashuMintSet,
+                cashuMints,
+                latestKeypair
+              );
             } catch (decryptError) {
               console.error(
                 `Failed to decrypt wallet config event ${event.id}:`,
@@ -1874,6 +2087,37 @@ export const fetchCashuWallet = async (
         } catch (error) {
           console.error("Failed to process most recent wallet event:", error);
         }
+      }
+
+      // Generate a new wallet identity only when the relay fetch definitively
+      // returned (even if empty). A failed relay fetch means we cannot confirm
+      // that no identity exists — generating one would silently replace a real
+      // identity on a broken relay.
+      const hasExistingKeypair =
+        latestKeypair?.cashuPubkey !== undefined &&
+        latestKeypair?.cashuPrivkey !== undefined;
+
+      if (!hasExistingKeypair && walletRelayFetchSucceeded && signer) {
+        try {
+          const { cashuPubkey, cashuPrivkey } = generateCashuWalletKeypair();
+          await publishWalletEvent(
+            nostr,
+            signer,
+            { cashuPubkey, cashuPrivkey },
+            { mints: cashuMints }
+          );
+          latestKeypair = {
+            createdAt: Math.floor(Date.now() / 1000),
+            cashuPubkey,
+            cashuPrivkey,
+          };
+        } catch (error) {
+          console.error("Failed to generate Cashu wallet identity:", error);
+        }
+      } else if (!hasExistingKeypair && !walletRelayFetchSucceeded) {
+        console.warn(
+          "Wallet identity unavailable: relay fetch failed. Skipping identity generation to avoid overwriting an existing identity."
+        );
       }
 
       // Use cashu-specific relays if available, otherwise use default relays
@@ -2082,12 +2326,32 @@ export const fetchCashuWallet = async (
       // Final deduplication
       cashuProofs = getUniqueProofs(cashuProofs);
 
-      editCashuWalletContext(proofEvents, cashuMints, cashuProofs, false);
+      const walletKeys = {
+        cashuPubkey: latestKeypair?.cashuPubkey,
+        cashuPrivkey: latestKeypair?.cashuPrivkey,
+        walletIdentityUnavailable:
+          !hasExistingKeypair && !walletRelayFetchSucceeded ? true : undefined,
+      };
+
+      editCashuWalletContext(
+        proofEvents,
+        cashuMints,
+        cashuProofs,
+        false,
+        walletKeys
+      );
 
       resolve({
         proofEvents: proofEvents,
         cashuMints: cashuMints,
         cashuProofs: cashuProofs,
+        ...(latestKeypair?.cashuPubkey !== undefined &&
+        latestKeypair?.cashuPrivkey !== undefined
+          ? {
+              cashuPubkey: latestKeypair.cashuPubkey,
+              cashuPrivkey: latestKeypair.cashuPrivkey,
+            }
+          : {}),
       });
     } catch (error) {
       console.error("Fatal error in fetchCashuWallet:", error);
@@ -2249,20 +2513,24 @@ export const fetchCommunityPosts = async (
         : combinedRelays;
       const batchSize = 50;
       const postEvents: NostrEvent[] = [];
+      const batches: string[][] = [];
       for (let i = 0; i < approvedEventIds.length; i += batchSize) {
         const batchIds = approvedEventIds.slice(i, i + batchSize);
-        if (batchIds.length > 0) {
+        if (batchIds.length > 0) batches.push(batchIds);
+      }
+      const batchResults = await mapWithConcurrency(
+        batches,
+        COMMUNITY_POST_BATCH_CONCURRENCY,
+        async (batchIds) => {
           const postsFilter: Filter = {
             kinds: [1111],
             ids: batchIds,
           };
-          const batchEvents = await nostr.fetch(
-            [postsFilter],
-            {},
-            requestRelays
-          );
-          postEvents.push(...batchEvents);
+          return nostr.fetch([postsFilter], {}, requestRelays);
         }
+      );
+      for (const batchEvents of batchResults) {
+        postEvents.push(...batchEvents);
       }
 
       // Annotate posts with approval metadata where available

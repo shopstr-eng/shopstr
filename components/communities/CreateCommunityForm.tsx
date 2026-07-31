@@ -90,6 +90,7 @@ const CreateCommunityForm: React.FC<CreateCommunityFormProps> = ({
         <FileUploaderButton
           className={`${SHOPSTRBUTTONCLASSNAMES} w-fit`}
           imgCallbackOnUpload={(imgUrl) => setValue("image", imgUrl)}
+          allowUrlInput
         >
           Upload Image
         </FileUploaderButton>

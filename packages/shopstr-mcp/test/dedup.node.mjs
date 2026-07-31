@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   getParameterizedReplaceableCoordinate,
   mergeAndDeduplicateProducts,
+  mergeAndDeduplicateProfiles,
   mergeAndDeduplicateReviews,
 } from "../dist/dedup.js";
 
@@ -142,4 +143,60 @@ test("far-future review does not beat a current valid review for the same target
 
   assert.equal(deduped.length, 1);
   assert.equal(deduped[0].id, hex("e"), "should prefer the non-future event");
+});
+
+test("deduplicates profiles by pubkey+kind keeping latest", () => {
+  const older = event({
+    id: hex("a"),
+    kind: 0,
+    created_at: 10,
+    content: JSON.stringify({ name: "Old Name" }),
+  });
+  const newer = event({
+    id: hex("b"),
+    kind: 0,
+    created_at: 20,
+    content: JSON.stringify({ name: "New Name" }),
+  });
+
+  const deduped = mergeAndDeduplicateProfiles([older, newer]);
+  assert.equal(deduped.length, 1);
+  assert.equal(deduped[0].id, hex("b"));
+});
+
+test("deduplicates profiles across mixed kinds (0 and 30019)", () => {
+  const userProfile = event({
+    id: hex("a"),
+    kind: 0,
+    created_at: 10,
+    content: JSON.stringify({ name: "User" }),
+  });
+  const shopProfile = event({
+    id: hex("b"),
+    kind: 30019,
+    created_at: 20,
+    content: JSON.stringify({ name: "Shop" }),
+  });
+  const olderShop = event({
+    id: hex("c"),
+    kind: 30019,
+    created_at: 15,
+    content: JSON.stringify({ name: "Old Shop" }),
+  });
+
+  const deduped = mergeAndDeduplicateProfiles([
+    userProfile,
+    shopProfile,
+    olderShop,
+  ]);
+  assert.equal(deduped.length, 2);
+  assert.deepEqual(deduped.map((p) => p.kind).sort(), [0, 30019]);
+  // Shop should be the newer one
+  const shop = deduped.find((p) => p.kind === 30019);
+  assert.equal(shop.id, hex("b"));
+});
+
+test("mergeAndDeduplicateProfiles returns empty array for empty input", () => {
+  const deduped = mergeAndDeduplicateProfiles([]);
+  assert.deepEqual(deduped, []);
 });

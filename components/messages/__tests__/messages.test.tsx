@@ -9,7 +9,8 @@ import "@testing-library/jest-dom";
 import Messages from "../messages";
 import { ChatsContext } from "../../../utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import * as nostrHelper from "@/utils/nostr/nostr-helper-functions";
+import * as keyUtils from "@/utils/nostr/key-utilities";
+import * as giftWrap from "@/utils/nostr/gift-wrap";
 import * as keypressHandler from "@/utils/keypress-handler";
 import { useRouter } from "next/router";
 
@@ -80,9 +81,12 @@ jest.mock("nostr-tools", () => ({
 }));
 
 jest.mock("@/utils/nostr/nostr-helper-functions");
+jest.mock("@/utils/nostr/key-utilities");
+jest.mock("@/utils/nostr/gift-wrap");
 jest.mock("@/utils/keypress-handler");
 
-const mockNostrHelper = nostrHelper as jest.Mocked<typeof nostrHelper>;
+const mockKeyUtils = keyUtils as jest.Mocked<typeof keyUtils>;
+const mockGiftWrap = giftWrap as jest.Mocked<typeof giftWrap>;
 const mockUseKeyPress = keypressHandler.useKeyPress as jest.Mock;
 
 describe("Messages Component", () => {
@@ -156,13 +160,11 @@ describe("Messages Component", () => {
     };
     (useRouter as jest.Mock).mockReturnValue(mockRouter);
 
-    mockNostrHelper.generateKeys.mockResolvedValue({
+    mockKeyUtils.generateKeys.mockResolvedValue({
       nsec: "testnsec",
       npub: "testnpub",
     });
-    mockNostrHelper.decryptNpub.mockImplementation(
-      (npub) => `${npub}-decrypted`
-    );
+    mockKeyUtils.decryptNpub.mockImplementation((npub) => `${npub}-decrypted`);
 
     mockUseKeyPress.mockReturnValue(false);
   });
@@ -240,7 +242,7 @@ describe("Messages Component", () => {
     mockRouter.query.pk = "broken_npub";
     mockChatsContextValue.isLoading = false;
     mockChatsContextValue.chatsMap = mockChatsMap;
-    mockNostrHelper.decryptNpub.mockReturnValue(null as any);
+    mockKeyUtils.decryptNpub.mockReturnValue(null as any);
 
     renderComponent();
 
@@ -264,16 +266,14 @@ describe("Messages Component", () => {
       created_at: 1005,
       tags: [["p", mockChatPubkey1]],
     };
-    mockNostrHelper.constructGiftWrappedEvent.mockResolvedValue(
+    mockGiftWrap.constructGiftWrappedEvent.mockResolvedValue(
       mockGiftWrappedEvent as any
     );
-    mockNostrHelper.constructMessageSeal.mockResolvedValue(
-      "sealed-event" as any
-    );
-    mockNostrHelper.constructMessageGiftWrap.mockResolvedValue(
+    mockGiftWrap.constructMessageSeal.mockResolvedValue("sealed-event" as any);
+    mockGiftWrap.constructMessageGiftWrap.mockResolvedValue(
       "gift-wrapped-event" as any
     );
-    mockNostrHelper.sendGiftWrappedMessageEvent.mockResolvedValue(undefined);
+    mockGiftWrap.sendGiftWrappedMessageEvent.mockResolvedValue(undefined);
 
     renderComponent();
     await waitFor(() => {
@@ -284,7 +284,7 @@ describe("Messages Component", () => {
       fireEvent.click(sendButton);
     });
     await waitFor(() => {
-      expect(mockNostrHelper.constructGiftWrappedEvent).toHaveBeenCalledWith(
+      expect(mockGiftWrap.constructGiftWrappedEvent).toHaveBeenCalledWith(
         mockUserPubkey,
         mockChatPubkey1,
         "Test message",
@@ -296,7 +296,7 @@ describe("Messages Component", () => {
   it("should handle errors when sending a message", async () => {
     mockChatsContextValue.isLoading = false;
     mockChatsContextValue.chatsMap = mockChatsMap;
-    mockNostrHelper.constructGiftWrappedEvent.mockRejectedValue(
+    mockGiftWrap.constructGiftWrappedEvent.mockRejectedValue(
       new Error("Send failed")
     );
 

@@ -140,6 +140,29 @@ describe("ShopProfileForm", () => {
     );
   });
 
+  test("updates shop image previews from pasted URLs", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ShopProfileForm />);
+
+    await user.type(
+      await screen.findByLabelText("Shop logo URL"),
+      "https://cdn.example.com/logo.png"
+    );
+    expect(screen.getByAltText("shop logo")).toHaveAttribute(
+      "src",
+      "https://cdn.example.com/logo.png"
+    );
+
+    await user.type(
+      screen.getByLabelText("Shop banner URL"),
+      "https://cdn.example.com/banner.png"
+    );
+    expect(screen.getByAltText("Shop banner image")).toHaveAttribute(
+      "src",
+      "https://cdn.example.com/banner.png"
+    );
+  });
+
   test("submits the form, shows loading state, and calls relevant functions", async () => {
     const user = userEvent.setup();
     let resolveCreateEvent: (value?: unknown) => void;

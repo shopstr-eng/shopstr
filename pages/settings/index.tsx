@@ -1,4 +1,5 @@
 import { Listbox, ListboxItem, ListboxSection } from "@heroui/react";
+import type { ComponentType } from "react";
 import {
   ArrowRightStartOnRectangleIcon,
   BuildingStorefrontIcon,
@@ -15,6 +16,7 @@ import ProtectedRoute from "@/components/utility-components/protected-route";
 
 const SettingsPage = () => {
   const router = useRouter();
+  const SettingsListbox = Listbox as ComponentType<any>;
   const listBoxSectionClassnames = {
     heading: "text-light-text dark:text-dark-text text-lg font-bold",
   };
@@ -29,7 +31,10 @@ const SettingsPage = () => {
       <div className="bg-light-bg dark:bg-dark-bg flex h-full flex-col pt-24">
         <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
           <SettingsBreadCrumbs />
-          <Listbox variant="flat" aria-label="Listbox menu with sections">
+          <SettingsListbox
+            variant="flat"
+            aria-label="Listbox menu with sections"
+          >
             <ListboxSection
               title="Account"
               showDivider
@@ -129,7 +134,7 @@ const SettingsPage = () => {
                 Log out
               </ListboxItem>
             </ListboxSection>
-          </Listbox>
+          </SettingsListbox>
         </div>
       </div>
     </ProtectedRoute>

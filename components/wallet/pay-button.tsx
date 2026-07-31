@@ -30,6 +30,7 @@ import {
 } from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
 import { CashuWalletContext } from "../../utils/context/context";
 import {
@@ -175,10 +176,7 @@ const PayButton = () => {
       const changeProofs = [...keep, ...meltOutcome.changeProofs];
       const changeAmount =
         Array.isArray(changeProofs) && changeProofs.length > 0
-          ? changeProofs.reduce(
-              (acc, current: Proof) => acc + current.amount.toNumber(),
-              0
-            )
+          ? sumProofAmounts(changeProofs)
           : 0;
       const remainingProofs = tokens.filter(
         (p: Proof) =>
@@ -191,10 +189,7 @@ const PayButton = () => {
         proofArray = [...remainingProofs];
       }
       localStorage.setItem("tokens", JSON.stringify(proofArray));
-      const filteredTokenAmount = filteredProofs.reduce(
-        (acc, token: Proof) => acc + token.amount.toNumber(),
-        0
-      );
+      const filteredTokenAmount = sumProofAmounts(filteredProofs);
       const transactionAmount = filteredTokenAmount - changeAmount;
       localStorage.setItem(
         "history",

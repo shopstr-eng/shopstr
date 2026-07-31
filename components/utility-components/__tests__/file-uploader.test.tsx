@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 import { FileUploaderButton } from "../file-uploader";
@@ -18,6 +18,23 @@ jest.mock(
       </button>
     ),
     Progress: (props: any) => <div data-testid="progress" {...props} />,
+    Input: ({
+      isDisabled,
+      onChange,
+      onKeyDown,
+      placeholder,
+      type,
+      value,
+    }: any) => (
+      <input
+        disabled={isDisabled}
+        onChange={onChange}
+        onKeyDown={onKeyDown}
+        placeholder={placeholder}
+        type={type}
+        value={value}
+      />
+    ),
   }),
   { virtual: true }
 );
@@ -32,6 +49,7 @@ jest.mock("@heroicons/react/24/outline", () => ({
   ArrowUpTrayIcon: (props: any) => (
     <svg data-testid="arrow-up-tray-icon" {...props} />
   ),
+  LinkIcon: (props: any) => <svg data-testid="link-icon" {...props} />,
   XCircleIcon: (props: any) => <svg data-testid="x-circle-icon" {...props} />,
   XMarkIcon: (props: any) => <svg data-testid="x-mark-icon" {...props} />,
 }));
@@ -74,5 +92,41 @@ describe("FileUploaderButton", () => {
     expect(root).toHaveClass("flex", "w-full", "flex-col", "gap-4");
     expect(root).not.toHaveClass("w-fit");
     expect(button).toHaveClass("inner-button-class");
+  });
+
+  test("accepts a pasted HTTPS image URL when enabled", () => {
+    const onUpload = jest.fn();
+    render(
+      <FileUploaderButton allowUrlInput imgCallbackOnUpload={onUpload}>
+        Upload Banner
+      </FileUploaderButton>
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/paste an image url/i), {
+      target: { value: "  https://cdn.example.com/banner.png  " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Use URL/i }));
+
+    expect(onUpload).toHaveBeenCalledWith("https://cdn.example.com/banner.png");
+    expect(screen.getByPlaceholderText(/paste an image url/i)).toHaveValue("");
+  });
+
+  test("rejects pasted non-HTTPS URLs", () => {
+    const onUpload = jest.fn();
+    render(
+      <FileUploaderButton allowUrlInput imgCallbackOnUpload={onUpload}>
+        Upload Banner
+      </FileUploaderButton>
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/paste an image url/i), {
+      target: { value: "http://cdn.example.com/banner.png" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Use URL/i }));
+
+    expect(onUpload).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("Please enter a valid image URL starting with https://.")
+    ).toBeInTheDocument();
   });
 });

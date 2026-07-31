@@ -41,6 +41,16 @@ Preferred communication style: Simple, everyday language.
 - **Multi-Payment Support**: Lightning Network, Cashu Ecash, NWC, and Zapsnags. Fiat-to-Bitcoin price conversion for display
 - **Order Management**: Encrypted buyer-seller communication (gift-wrapped messages), payment confirmation proof, post-fulfillment review system
 
+### Server-Priced Checkout
+
+Client-displayed prices are never trusted at payment time — every payment path reprices server-side against the latest cached listing event:
+
+- **Routes**: `POST /api/listing/mint-quote` (single listing) and `POST /api/cart/mint-quote` (multi-item cart, per-seller breakdown with free-shipping threshold, discount codes, shipping preference). Both accept `priceOnly: true` to return the validated amount + pricing details without creating a mint quote (used by the Cashu path, which spends buyer proofs instead of paying an invoice). Shared pure pricing logic in `utils/payments/listing-pricing.ts`, `utils/payments/cart-pricing.ts`, `utils/payments/cart-totals.ts`, and listing lookup in `utils/payments/listing-resolution.ts` — the client cart memo delegates to the same functions, so display and server totals agree by construction
+- **Error mapping**: `PricingValidationError` → 400, `ListingNotFoundError` → 404, `DatabaseUnavailableError` → 503, anything else → generic 500 (no internal details leaked)
+- **Price-change guard (NWC + Cashu only)**: auto-spend paths abort before funds move if `serverAmount − displayedAmount > max(2 sats, ceil(displayed × 1%))`. One-sided by design — server-side price _drops_ are accepted silently; Lightning is exempt because the buyer sees the invoice amount before paying
+- **Mint URL**: LN/NWC proofs are minted on the server-chosen `mintUrl` from the quote response; the Cashu path spends buyer proofs from the buyer's own `mints[0]`
+- **Clients**: `components/product-invoice-card.tsx` and `components/cart-invoice-card.tsx` fetch the quote, apply the guard, and thread the server amount/breakdown through pending-order records, token sends, history, and proof events
+
 ### Cashu Mint Operation Durability
 
 The user-paid → claim-proofs path is hardened against network blips, mint outages, rate limiting, and tab closes:

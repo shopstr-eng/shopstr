@@ -83,6 +83,24 @@ export function mergeAndDeduplicateReviews(
   return Array.from(byId.values()).sort((a, b) => b.created_at - a.created_at);
 }
 
+export function mergeAndDeduplicateProfiles(
+  events: readonly NostrEvent[]
+): NostrEvent[] {
+  const byKindAndAuthor = new Map<string, NostrEvent>();
+
+  for (const event of events) {
+    const key = `${event.kind}:${event.pubkey}`;
+    const existing = byKindAndAuthor.get(key);
+    if (!existing || isBetterEvent(event, existing)) {
+      byKindAndAuthor.set(key, event);
+    }
+  }
+
+  return Array.from(byKindAndAuthor.values()).sort(
+    (a, b) => b.created_at - a.created_at
+  );
+}
+
 function getReviewTarget(event: NostrEvent): string | undefined {
   const aTag = getTagValue(event, "a");
   if (aTag) return `a:${aTag}`;

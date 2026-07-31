@@ -641,6 +641,51 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           </div>
 
           <form onSubmit={handleSubmit(onSubmit as any)}>
+            <div className="grid gap-4 pb-4 md:grid-cols-2">
+              <Controller
+                name="picture"
+                control={control}
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <Input
+                    className="text-light-text dark:text-dark-text"
+                    classNames={{
+                      label: "text-light-text dark:text-dark-text text-lg",
+                    }}
+                    variant="bordered"
+                    fullWidth={true}
+                    type="url"
+                    label="Shop logo URL"
+                    labelPlacement="outside"
+                    placeholder="https://..."
+                    onChange={onChange}
+                    onBlur={onBlur}
+                    value={value || ""}
+                  />
+                )}
+              />
+              <Controller
+                name="banner"
+                control={control}
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <Input
+                    className="text-light-text dark:text-dark-text"
+                    classNames={{
+                      label: "text-light-text dark:text-dark-text text-lg",
+                    }}
+                    variant="bordered"
+                    fullWidth={true}
+                    type="url"
+                    label="Shop banner URL"
+                    labelPlacement="outside"
+                    placeholder="https://..."
+                    onChange={onChange}
+                    onBlur={onBlur}
+                    value={value || ""}
+                  />
+                )}
+              />
+            </div>
+
             <Controller
               name="name"
               control={control}

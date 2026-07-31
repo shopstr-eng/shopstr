@@ -6,6 +6,7 @@ import {
   ProductContext,
   ProfileMapContext,
   RelaysContext,
+  ReportsContext,
 } from "@/utils/context/context";
 import {
   NostrContext,
@@ -34,16 +35,27 @@ jest.mock(
     function MockProductCard({
       productData,
       href,
+      reportSignal,
     }: {
       productData: { id: string; title: string };
       href?: string | null;
+      reportSignal?: { level: string };
     }) {
       return href ? (
-        <a data-testid={`product-${productData.id}`} href={href}>
+        <a
+          data-testid={`product-${productData.id}`}
+          data-report-level={reportSignal?.level}
+          href={href}
+        >
           {productData.title}
         </a>
       ) : (
-        <div data-testid={`product-${productData.id}`}>{productData.title}</div>
+        <div
+          data-testid={`product-${productData.id}`}
+          data-report-level={reportSignal?.level}
+        >
+          {productData.title}
+        </div>
       );
     }
 );
@@ -51,6 +63,15 @@ jest.mock(
 jest.mock("../display-product-modal", () => () => null);
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   deleteEvent: jest.fn(),
+  REPORT_TYPES: [
+    "nudity",
+    "malware",
+    "profanity",
+    "illegal",
+    "spam",
+    "impersonation",
+    "other",
+  ],
 }));
 jest.mock("@/utils/db/db-client", () => ({
   cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -67,6 +88,9 @@ const renderDisplayProducts = ({
   productEvents = [],
   relayList = ["wss://relay.example"],
   selectedSearch = "coffee",
+  reportEvents = [],
+  followList = [],
+  firstDegreeFollowsLength = 0,
   addNewlyCreatedProductEvent = jest.fn(),
   removeDeletedProductEvent = jest.fn(),
 }: {
@@ -75,6 +99,9 @@ const renderDisplayProducts = ({
   productEvents?: NostrEvent[];
   relayList?: string[];
   selectedSearch?: string;
+  reportEvents?: NostrEvent[];
+  followList?: string[];
+  firstDegreeFollowsLength?: number;
   addNewlyCreatedProductEvent?: jest.Mock;
   removeDeletedProductEvent?: jest.Mock;
 }) =>
@@ -102,26 +129,37 @@ const renderDisplayProducts = ({
           >
             <FollowsContext.Provider
               value={{
-                followList: [],
-                firstDegreeFollowsLength: 0,
+                directFollowList: followList,
+                followList,
+                firstDegreeFollowsLength,
                 isLoading: false,
+                addFollow: async () => ({ ok: false, reason: "unknown" }),
+                removeFollow: async () => ({ ok: false, reason: "unknown" }),
               }}
             >
-              <ProductContext.Provider
+              <ReportsContext.Provider
                 value={{
-                  productEvents,
                   isLoading: false,
-                  addNewlyCreatedProductEvent,
-                  removeDeletedProductEvent,
+                  reportEvents,
+                  addReportEvent: jest.fn(),
                 }}
               >
-                <DisplayProducts
-                  focusedPubkey={focusedPubkey}
-                  selectedCategories={new Set()}
-                  selectedLocation=""
-                  selectedSearch={selectedSearch}
-                />
-              </ProductContext.Provider>
+                <ProductContext.Provider
+                  value={{
+                    productEvents,
+                    isLoading: false,
+                    addNewlyCreatedProductEvent,
+                    removeDeletedProductEvent,
+                  }}
+                >
+                  <DisplayProducts
+                    focusedPubkey={focusedPubkey}
+                    selectedCategories={new Set()}
+                    selectedLocation=""
+                    selectedSearch={selectedSearch}
+                  />
+                </ProductContext.Provider>
+              </ReportsContext.Provider>
             </FollowsContext.Provider>
           </ProfileMapContext.Provider>
         </RelaysContext.Provider>
@@ -131,10 +169,11 @@ const renderDisplayProducts = ({
 
 const expectNip50RelayFetches = (
   fetchMock: jest.Mock,
-  expectedFilter: Record<string, unknown>
+  expectedFilter: Record<string, unknown>,
+  expectedRelays = ["wss://relay.example", ...DEFAULT_NIP50_SEARCH_RELAYS]
 ) => {
-  expect(fetchMock).toHaveBeenCalledTimes(DEFAULT_NIP50_SEARCH_RELAYS.length);
-  DEFAULT_NIP50_SEARCH_RELAYS.forEach((relay, index) => {
+  expect(fetchMock).toHaveBeenCalledTimes(expectedRelays.length);
+  expectedRelays.forEach((relay, index) => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       index + 1,
       expect.arrayContaining([expect.objectContaining(expectedFilter)]),
@@ -161,9 +200,12 @@ describe("DisplayProducts search filtering", () => {
           >
             <FollowsContext.Provider
               value={{
+                directFollowList: [],
                 followList: [],
                 firstDegreeFollowsLength: 0,
                 isLoading: false,
+                addFollow: async () => ({ ok: false, reason: "unknown" }),
+                removeFollow: async () => ({ ok: false, reason: "unknown" }),
               }}
             >
               <ProductContext.Provider
@@ -251,9 +293,12 @@ describe("DisplayProducts search filtering", () => {
             >
               <FollowsContext.Provider
                 value={{
+                  directFollowList: [],
                   followList: [],
                   firstDegreeFollowsLength: 0,
                   isLoading: false,
+                  addFollow: async () => ({ ok: false, reason: "unknown" }),
+                  removeFollow: async () => ({ ok: false, reason: "unknown" }),
                 }}
               >
                 <ProductContext.Provider
@@ -283,6 +328,47 @@ describe("DisplayProducts search filtering", () => {
         search: "coffee",
       });
       expect(screen.getByText("Relay Coffee Beans")).toBeInTheDocument();
+    });
+  });
+
+  it("passes trusted report moderation signals to product cards", async () => {
+    const productEvent = {
+      id: "local-product-1",
+      pubkey: "seller-pubkey",
+      created_at: 10,
+      kind: 30402,
+      tags: [
+        ["d", "local-coffee"],
+        ["title", "Local Coffee"],
+        ["price", "12", "USD"],
+        ["image", "https://example.com/local-coffee.png"],
+      ],
+      content: "Fresh local coffee",
+      sig: "sig-local-product",
+    } as NostrEvent;
+
+    renderDisplayProducts({
+      nostr: { fetch: jest.fn().mockResolvedValue([]) },
+      productEvents: [productEvent],
+      selectedSearch: "",
+      reportEvents: [
+        {
+          id: "report-1",
+          pubkey: "viewer-pubkey",
+          created_at: 11,
+          kind: 1984,
+          tags: [["e", "local-product-1", "spam"]],
+          content: "",
+          sig: "sig-report-1",
+        } as NostrEvent,
+      ],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("product-local-product-1")).toHaveAttribute(
+        "data-report-level",
+        "reported_by_you"
+      );
     });
   });
 
@@ -318,6 +404,106 @@ describe("DisplayProducts search filtering", () => {
     });
     expect(addNewlyCreatedProductEvent).not.toHaveBeenCalled();
     expect(removeDeletedProductEvent).not.toHaveBeenCalled();
+  });
+
+  it("clears transient NIP-50 search results when the search query is cleared", async () => {
+    const relayProduct = {
+      id: "relay-product-1",
+      pubkey: "relay-seller",
+      created_at: 10,
+      kind: 30402,
+      tags: [
+        ["d", "relay-coffee"],
+        ["title", "Relay Coffee Beans"],
+        ["price", "12", "USD"],
+        ["image", "https://example.com/coffee.png"],
+      ],
+      content: "Fresh coffee discovered through relay search",
+      sig: "relay-sig",
+    };
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([relayProduct]),
+    };
+    let setSearch: Dispatch<SetStateAction<string>> | undefined;
+
+    function SearchableDisplayProducts() {
+      const [selectedSearch, updateSelectedSearch] = useState("coffee");
+      setSearch = updateSelectedSearch;
+
+      return (
+        <SignerContext.Provider
+          value={{ pubkey: "viewer-pubkey", isLoggedIn: true }}
+        >
+          <NostrContext.Provider
+            value={{ nostr: nostr as unknown as NostrManager }}
+          >
+            <RelaysContext.Provider
+              value={{
+                relayList: ["wss://relay.example"],
+                readRelayList: [],
+                writeRelayList: [],
+                isLoading: false,
+              }}
+            >
+              <ProfileMapContext.Provider
+                value={{
+                  profileData: new Map(),
+                  isLoading: false,
+                  updateProfileData: jest.fn(),
+                }}
+              >
+                <FollowsContext.Provider
+                  value={{
+                    directFollowList: [],
+                    followList: [],
+                    firstDegreeFollowsLength: 0,
+                    isLoading: false,
+                    addFollow: async () => ({ ok: false, reason: "unknown" }),
+                    removeFollow: async () => ({
+                      ok: false,
+                      reason: "unknown",
+                    }),
+                  }}
+                >
+                  <ProductContext.Provider
+                    value={{
+                      productEvents: [],
+                      isLoading: false,
+                      addNewlyCreatedProductEvent: jest.fn(),
+                      removeDeletedProductEvent: jest.fn(),
+                    }}
+                  >
+                    <DisplayProducts
+                      selectedCategories={new Set()}
+                      selectedLocation=""
+                      selectedSearch={selectedSearch}
+                    />
+                  </ProductContext.Provider>
+                </FollowsContext.Provider>
+              </ProfileMapContext.Provider>
+            </RelaysContext.Provider>
+          </NostrContext.Provider>
+        </SignerContext.Provider>
+      );
+    }
+
+    render(<SearchableDisplayProducts />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Relay Coffee Beans")).toBeInTheDocument();
+    });
+
+    act(() => {
+      setSearch?.("");
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Relay Coffee Beans")).not.toBeInTheDocument();
+      expect(screen.getByText("No products found...")).toBeInTheDocument();
+    });
+    expect(nostr.fetch).toHaveBeenCalledTimes(
+      DEFAULT_NIP50_SEARCH_RELAYS.length + 1
+    );
   });
 
   it("scopes NIP-50 relay search to the focused seller when viewing a storefront", async () => {
@@ -464,8 +650,7 @@ describe("DisplayProducts search filtering", () => {
       fetch: jest.fn().mockResolvedValue([relayProduct]),
     };
     let setContextProductEvents:
-      | Dispatch<SetStateAction<NostrEvent[]>>
-      | undefined;
+      Dispatch<SetStateAction<NostrEvent[]>> | undefined;
 
     function StatefulDisplayProducts() {
       const [contextProductEvents, setProductEvents] = useState<NostrEvent[]>(
@@ -497,9 +682,15 @@ describe("DisplayProducts search filtering", () => {
               >
                 <FollowsContext.Provider
                   value={{
+                    directFollowList: [],
                     followList: [],
                     firstDegreeFollowsLength: 0,
                     isLoading: false,
+                    addFollow: async () => ({ ok: false, reason: "unknown" }),
+                    removeFollow: async () => ({
+                      ok: false,
+                      reason: "unknown",
+                    }),
                   }}
                 >
                   <ProductContext.Provider

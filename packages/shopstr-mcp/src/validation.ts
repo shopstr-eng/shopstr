@@ -171,3 +171,20 @@ export const reviewsInputSchema = z
       message: "Either productId, productAddress, or sellerPubkey is required",
     }
   );
+
+export const listCompaniesSchema = z.object({
+  limit: limitSchema.default(50),
+  until: z.coerce.number().int().min(0).optional(),
+});
+
+export const companyDetailsInputSchema = z.object({
+  pubkey: pubkeySchema,
+});
+
+export const storefrontInputSchema = z.object({
+  pubkey: pubkeySchema,
+});
+
+export const sellerReputationInputSchema = z.object({
+  sellerPubkey: pubkeySchema,
+});
