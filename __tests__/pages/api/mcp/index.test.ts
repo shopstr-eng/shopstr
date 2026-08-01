@@ -113,6 +113,7 @@ type FakeTransport = {
   handleRequest: jest.Mock;
   close: jest.Mock;
   options: Record<string, unknown>;
+  sessionId: string;
 };
 
 let handler: typeof import("@/pages/api/mcp/index").default;
@@ -152,13 +153,45 @@ beforeEach(async () => {
   // res.end) have something to observe without a real transport in the loop.
   StreamableHTTPServerTransportMock.mockImplementation(
     (options: Record<string, unknown>) => {
+      const sessionId = `session-${transportInstances.length + 1}`;
+      let initialized = false;
       const instance: FakeTransport = {
-        handleRequest: jest.fn(async (_req: unknown, res: MockResponse) => {
-          res.status(200);
-          res.end();
-        }),
+        handleRequest: jest.fn(
+          async (
+            _req: unknown,
+            res: MockResponse,
+            parsedBody?: { method?: unknown }
+          ) => {
+            if (parsedBody?.method === "initialize") {
+              initialized = true;
+              const onSessionInitialized = options.onsessioninitialized;
+              if (typeof onSessionInitialized === "function") {
+                await onSessionInitialized(sessionId);
+              }
+              res.status(200);
+              res.end();
+              return;
+            }
+
+            if (!initialized) {
+              res.status(400).json({
+                jsonrpc: "2.0",
+                error: {
+                  code: -32000,
+                  message: "Bad Request: Server not initialized",
+                },
+                id: null,
+              });
+              return;
+            }
+
+            res.status(200);
+            res.end();
+          }
+        ),
         close: jest.fn(),
         options,
+        sessionId,
       };
       transportInstances.push(instance);
       return instance;
@@ -248,6 +281,7 @@ describe("request gating, routing, instrumentation", () => {
         id: null,
       });
       expect(validateApiKeyMock).not.toHaveBeenCalled();
+      expect(recordRequestMock).toHaveBeenCalledWith(expect.any(Number), false);
     });
 
     it("returns 401 'Invalid or revoked API key' when validateApiKey resolves null", async () => {
@@ -264,6 +298,7 @@ describe("request gating, routing, instrumentation", () => {
         error: { code: -32000, message: "Invalid or revoked API key" },
         id: null,
       });
+      expect(recordRequestMock).toHaveBeenCalledWith(expect.any(Number), false);
     });
 
     it("calls ensureTables/initializeApiKeysTable before validateApiKey", async () => {
@@ -304,7 +339,7 @@ describe("request gating, routing, instrumentation", () => {
       expect(StreamableHTTPServerTransportMock).not.toHaveBeenCalled();
     });
 
-    it("creates a new session when no mcp-session-id header is present, even when the body is NOT an 'initialize' call", async () => {
+    it("lets the transport reject a non-initialize POST when no mcp-session-id header is present", async () => {
       const req = createMockRequest({
         method: "POST",
         body: { jsonrpc: "2.0", method: "tools/call", id: 1 },
@@ -313,6 +348,15 @@ describe("request gating, routing, instrumentation", () => {
 
       await handler(req, res as unknown as NextApiResponse);
 
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toEqual({
+        jsonrpc: "2.0",
+        error: {
+          code: -32000,
+          message: "Bad Request: Server not initialized",
+        },
+        id: null,
+      });
       expect(StreamableHTTPServerTransportMock).toHaveBeenCalledTimes(1);
       expect(createMcpServerMock).toHaveBeenCalledTimes(1);
     });
@@ -331,6 +375,149 @@ describe("request gating, routing, instrumentation", () => {
       await handler(req, res as unknown as NextApiResponse);
 
       expect(StreamableHTTPServerTransportMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("reuses an initialized session for GET requests from the same API key", async () => {
+      const initializeReq = createMockRequest({
+        method: "POST",
+        body: { jsonrpc: "2.0", method: "initialize", id: 1 },
+      });
+      const initializeRes = createMockResponse();
+
+      await handler(initializeReq, initializeRes as unknown as NextApiResponse);
+
+      const sessionReq = createMockRequest({
+        method: "GET",
+        headers: {
+          host: "localhost:5000",
+          "mcp-session-id": "session-1",
+        },
+      });
+      const sessionRes = createMockResponse();
+
+      await handler(sessionReq, sessionRes as unknown as NextApiResponse);
+
+      expect(sessionRes.statusCode).toBe(200);
+      expect(transportInstances[0]?.handleRequest).toHaveBeenCalledWith(
+        sessionReq,
+        sessionRes
+      );
+    });
+
+    it("rejects requests when the session belongs to a different API key", async () => {
+      const initializeReq = createMockRequest({
+        method: "POST",
+        body: { jsonrpc: "2.0", method: "initialize", id: 1 },
+      });
+      const initializeRes = createMockResponse();
+
+      await handler(initializeReq, initializeRes as unknown as NextApiResponse);
+
+      validateApiKeyMock.mockResolvedValueOnce(makeApiKey({ id: 2 }));
+
+      const sessionReq = createMockRequest({
+        method: "GET",
+        headers: {
+          host: "localhost:5000",
+          "mcp-session-id": "session-1",
+        },
+      });
+      const sessionRes = createMockResponse();
+
+      await handler(sessionReq, sessionRes as unknown as NextApiResponse);
+
+      expect(sessionRes.statusCode).toBe(403);
+      expect(sessionRes.jsonBody).toEqual({
+        jsonrpc: "2.0",
+        error: {
+          code: -32000,
+          message: "Session belongs to a different API key",
+        },
+        id: null,
+      });
+    });
+
+    it("expires stale sessions before routing to the transport", async () => {
+      const initializeReq = createMockRequest({
+        method: "POST",
+        body: { jsonrpc: "2.0", method: "initialize", id: 1 },
+      });
+      const initializeRes = createMockResponse();
+
+      await handler(initializeReq, initializeRes as unknown as NextApiResponse);
+
+      jest.setSystemTime(Date.now() + 30 * 60 * 1000 + 1);
+
+      const sessionReq = createMockRequest({
+        method: "GET",
+        headers: {
+          host: "localhost:5000",
+          "mcp-session-id": "session-1",
+        },
+      });
+      const sessionRes = createMockResponse();
+
+      await handler(sessionReq, sessionRes as unknown as NextApiResponse);
+
+      expect(sessionRes.statusCode).toBe(404);
+      expect(sessionRes.jsonBody).toEqual({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Session expired" },
+        id: null,
+      });
+      expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
+      expect(transportInstances[0]?.handleRequest).not.toHaveBeenCalledWith(
+        sessionReq,
+        sessionRes
+      );
+    });
+
+    it("removes a session after DELETE handles the request", async () => {
+      const initializeReq = createMockRequest({
+        method: "POST",
+        body: { jsonrpc: "2.0", method: "initialize", id: 1 },
+      });
+      const initializeRes = createMockResponse();
+
+      await handler(initializeReq, initializeRes as unknown as NextApiResponse);
+
+      const deleteReq = createMockRequest({
+        method: "DELETE",
+        headers: {
+          host: "localhost:5000",
+          "mcp-session-id": "session-1",
+        },
+      });
+      const deleteRes = createMockResponse();
+
+      await handler(deleteReq, deleteRes as unknown as NextApiResponse);
+
+      expect(deleteRes.statusCode).toBe(200);
+      expect(transportInstances[0]?.handleRequest).toHaveBeenCalledWith(
+        deleteReq,
+        deleteRes
+      );
+
+      const secondDeleteReq = createMockRequest({
+        method: "DELETE",
+        headers: {
+          host: "localhost:5000",
+          "mcp-session-id": "session-1",
+        },
+      });
+      const secondDeleteRes = createMockResponse();
+
+      await handler(
+        secondDeleteReq,
+        secondDeleteRes as unknown as NextApiResponse
+      );
+
+      expect(secondDeleteRes.statusCode).toBe(404);
+      expect(secondDeleteRes.jsonBody).toEqual({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Session not found" },
+        id: null,
+      });
     });
 
     it("returns 400 'Bad Request: No valid session ID provided' only when mcp-session-id is present, unrecognized, AND the body is not an initialize call", async () => {
