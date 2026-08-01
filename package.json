@@ -30,10 +30,10 @@
     "@braintree/sanitize-url": "7.1.2",
     "@cashu/cashu-ts": "4.6.0",
     "@ducanh2912/next-pwa": "10.2.9",
-    "@getalby/lightning-tools": "8.1.1",
+    "@getalby/lightning-tools": "9.0.1",
     "@getalby/sdk": "8.0.3",
     "@heroicons/react": "2.2.0",
-    "@heroui/react": "2.8.10",
+    "@heroui/react": "3.2.2",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@tailwindcss/postcss": "4.3.2",
     "@typescript-eslint/eslint-plugin": "8.62.1",
@@ -63,7 +63,7 @@
   "devDependencies": {
     "@testcontainers/postgresql": "12.0.4",
     "@testing-library/dom": "10.4.1",
-    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/jest-dom": "7.0.0",
     "@testing-library/react": "16.3.2",
     "@testing-library/user-event": "14.6.1",
     "@types/crypto-js": "4.2.2",
@@ -82,7 +82,7 @@
     "pg-mem": "3.0.14",
     "prettier": "3.9.4",
     "prettier-plugin-tailwindcss": "0.8.0",
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   },
   "overrides": {
     "serialize-javascript": "7.0.5",
