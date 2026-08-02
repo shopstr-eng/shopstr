@@ -169,6 +169,7 @@ function createMockResponse(): MockResponse {
 }
 
 let handler: typeof import("@/pages/api/mcp/create-order").default;
+let pendingLightningPayments: typeof import("@/pages/api/mcp/create-order").pendingLightningPayments;
 let callOrder: string[];
 
 beforeEach(async () => {
@@ -196,8 +197,56 @@ beforeEach(async () => {
   listMcpOrdersMock.mockResolvedValue([]);
   formatOrderForResponseMock.mockImplementation((order: unknown) => order);
 
-  handler = (await import("@/pages/api/mcp/create-order")).default;
+  walletLoadMintMock.mockResolvedValue(undefined);
+  walletCreateMintQuoteBolt11Mock.mockResolvedValue({
+    quote: "quote-1",
+    request: "lnbc1...",
+  });
+  getTrustedMintUrlMock.mockReturnValue("https://mint.example.com");
+  createMcpOrderMock.mockImplementation(
+    async (
+      orderId: string,
+      apiKeyId: number | null,
+      buyerPubkey: string,
+      sellerPubkey: string,
+      productId: string,
+      productTitle: string | null,
+      quantity: number,
+      amountTotal: number,
+      currency: string,
+      shippingAddress: Record<string, string> | null,
+      paymentRef: string | null
+    ) => ({
+      id: 1,
+      order_id: orderId,
+      api_key_id: apiKeyId,
+      buyer_pubkey: buyerPubkey,
+      seller_pubkey: sellerPubkey,
+      product_id: productId,
+      product_title: productTitle,
+      quantity,
+      amount_total: amountTotal,
+      currency,
+      shipping_address: shippingAddress,
+      payment_ref: paymentRef,
+      payment_status: "pending",
+      order_status: "pending",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+  );
+
+  const mod = await import("@/pages/api/mcp/create-order");
+  handler = mod.default;
+  pendingLightningPayments = mod.pendingLightningPayments;
 });
+
+async function createOrder(body: Record<string, unknown>) {
+  const req = createMockRequest({ method: "POST", body });
+  const res = createMockResponse();
+  await handler(req, res as unknown as NextApiResponse);
+  return res;
+}
 
 describe("request gating & routing", () => {
   describe("rate limiting", () => {
@@ -405,57 +454,6 @@ describe("handleCreateOrder validation & pricing", () => {
     currency: string;
     selectedSpecs?: Record<string, unknown>;
   };
-
-  beforeEach(() => {
-    // Defaults so paymentMethod:"lightning" (the handleCreateOrder default)
-    // dispatches all the way through to a 402 response without its own
-    // failures masking the pricing assertions under test.
-    walletLoadMintMock.mockResolvedValue(undefined);
-    walletCreateMintQuoteBolt11Mock.mockResolvedValue({
-      quote: "quote-1",
-      request: "lnbc1...",
-    });
-    getTrustedMintUrlMock.mockReturnValue("https://mint.example.com");
-    createMcpOrderMock.mockImplementation(
-      async (
-        orderId: string,
-        apiKeyId: number | null,
-        buyerPubkey: string,
-        sellerPubkey: string,
-        productId: string,
-        productTitle: string | null,
-        quantity: number,
-        amountTotal: number,
-        currency: string,
-        shippingAddress: Record<string, string> | null,
-        paymentRef: string | null
-      ) => ({
-        id: 1,
-        order_id: orderId,
-        api_key_id: apiKeyId,
-        buyer_pubkey: buyerPubkey,
-        seller_pubkey: sellerPubkey,
-        product_id: productId,
-        product_title: productTitle,
-        quantity,
-        amount_total: amountTotal,
-        currency,
-        shipping_address: shippingAddress,
-        payment_ref: paymentRef,
-        payment_status: "pending",
-        order_status: "pending",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-    );
-  });
-
-  async function createOrder(body: Record<string, unknown>) {
-    const req = createMockRequest({ method: "POST", body });
-    const res = createMockResponse();
-    await handler(req, res as unknown as NextApiResponse);
-    return res;
-  }
 
   function pricingOf(res: MockResponse): PricingBlock {
     return (res.jsonBody as { pricing: PricingBlock }).pricing;
@@ -962,5 +960,163 @@ describe("handleCreateOrder validation & pricing", () => {
         error: "Failed to create order",
       });
     });
+  });
+});
+
+describe("handleLightningPayment", () => {
+  function withPricedProduct(tags: string[][] = [["price", "1000", "sats"]]) {
+    fetchAllProductsFromDbMock.mockResolvedValue([
+      makeProductEvent(tags, { pubkey: SELLER_PUBKEY }),
+    ]);
+  }
+
+  it("rounds a fractional totalAmount to the nearest integer sats before requesting a mint quote", async () => {
+    withPricedProduct([["price", "1000.6", "sats"]]);
+
+    const res = await createOrder({ productId: "product-1" });
+
+    expect(res.statusCode).toBe(402);
+    expect(walletCreateMintQuoteBolt11Mock).toHaveBeenCalledWith(1001);
+  });
+
+  it("creates the order with payment_ref 'ln_<quote>' using the buyer/seller/product/quantity/amount/currency/shippingAddress computed by handleCreateOrder", async () => {
+    withPricedProduct();
+    walletCreateMintQuoteBolt11Mock.mockResolvedValue({
+      quote: "quote-42",
+      request: "lnbc42...",
+    });
+    const shippingAddress = {
+      name: "Ada Lovelace",
+      address: "1 Infinite Loop",
+      city: "Cupertino",
+      postalCode: "95014",
+      stateProvince: "CA",
+      country: "US",
+    };
+
+    await createOrder({
+      productId: "product-1",
+      quantity: 2,
+      shippingAddress,
+    });
+
+    expect(createMcpOrderMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^mcp_\d+_[0-9a-f]{8}$/),
+      1,
+      BUYER_PUBKEY,
+      SELLER_PUBKEY,
+      "product-1",
+      "",
+      2,
+      2000,
+      "sats",
+      shippingAddress,
+      "ln_quote-42"
+    );
+  });
+
+  it("stores the pending payment (quote/mintUrl/amount/orderId) in pendingLightningPayments keyed by the generated orderId", async () => {
+    withPricedProduct();
+    walletCreateMintQuoteBolt11Mock.mockResolvedValue({
+      quote: "quote-7",
+      request: "lnbc7...",
+    });
+    getTrustedMintUrlMock.mockReturnValue("https://mint.example.com");
+
+    await createOrder({ productId: "product-1" });
+
+    const orderId = createMcpOrderMock.mock.calls[0]?.[0] as string;
+    expect(pendingLightningPayments.get(orderId)).toEqual({
+      quote: "quote-7",
+      mintUrl: "https://mint.example.com",
+      amount: 1000,
+      orderId,
+    });
+  });
+
+  it("returns 402 payment_required with the bolt11 invoice, quoteId, amount, mintUrl, and a ~10-minute expiresAt", async () => {
+    withPricedProduct();
+    walletCreateMintQuoteBolt11Mock.mockResolvedValue({
+      quote: "quote-9",
+      request: "lnbc9...",
+    });
+    getTrustedMintUrlMock.mockReturnValue("https://mint.example.com");
+
+    const before = Date.now();
+    const res = await createOrder({ productId: "product-1" });
+    const after = Date.now();
+
+    expect(res.statusCode).toBe(402);
+    const body = res.jsonBody as {
+      status: string;
+      paymentMethod: string;
+      payment: {
+        bolt11: string;
+        quoteId: string;
+        amount: number;
+        currency: string;
+        mintUrl: string;
+        expiresAt: string;
+      };
+    };
+    expect(body.status).toBe("payment_required");
+    expect(body.paymentMethod).toBe("lightning");
+    expect(body.payment).toMatchObject({
+      bolt11: "lnbc9...",
+      quoteId: "quote-9",
+      amount: 1000,
+      currency: "sats",
+      mintUrl: "https://mint.example.com",
+    });
+    const expiresAt = new Date(body.payment.expiresAt).getTime();
+    expect(expiresAt).toBeGreaterThanOrEqual(before + 10 * 60 * 1000);
+    expect(expiresAt).toBeLessThanOrEqual(after + 10 * 60 * 1000);
+  });
+
+  it.each([
+    [
+      "wallet.loadMint",
+      () => walletLoadMintMock.mockRejectedValueOnce(new Error("mint offline")),
+    ],
+    [
+      "wallet.createMintQuoteBolt11",
+      () =>
+        walletCreateMintQuoteBolt11Mock.mockRejectedValueOnce(
+          new Error("quote failed")
+        ),
+    ],
+  ])(
+    "returns 500 'Failed to generate Lightning invoice' with details when %s throws, without creating an order",
+    async (_label, setupFailure) => {
+      withPricedProduct();
+      setupFailure();
+
+      const res = await createOrder({ productId: "product-1" });
+
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonBody).toMatchObject({
+        error: "Failed to generate Lightning invoice",
+      });
+      expect(createMcpOrderMock).not.toHaveBeenCalled();
+    }
+  );
+
+  it("rejects with an unhandled error and never writes a response when the computed amount is invalid — neither handleLightningPayment's own catch nor handleCreateOrder's outer catch runs, because both call their inner async function via a bare 'return fn(...)' instead of 'return await fn(...)'", async () => {
+    withPricedProduct([]);
+
+    const req = createMockRequest({
+      method: "POST",
+      body: { productId: "product-1" },
+    });
+    const res = createMockResponse();
+
+    await expect(
+      handler(req, res as unknown as NextApiResponse)
+    ).rejects.toThrow("Payment amount must be greater than 0 sats");
+
+    expect(res.jsonBody).toBeUndefined();
+    expect(res.statusCode).toBe(200);
+    expect(walletCreateMintQuoteBolt11Mock).not.toHaveBeenCalled();
+    expect(createMcpOrderMock).not.toHaveBeenCalled();
   });
 });
