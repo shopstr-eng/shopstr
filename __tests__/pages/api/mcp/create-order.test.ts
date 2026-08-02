@@ -1365,3 +1365,136 @@ describe("handleCashuPayment", () => {
     );
   });
 });
+
+describe("handleGetOrder / handleListOrders", () => {
+  function makeMcpOrder(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 1,
+      order_id: "mcp_1",
+      api_key_id: 1,
+      buyer_pubkey: BUYER_PUBKEY,
+      seller_pubkey: SELLER_PUBKEY,
+      product_id: "product-1",
+      product_title: "Test Product",
+      quantity: 1,
+      amount_total: 1000,
+      currency: "sats",
+      shipping_address: null,
+      payment_ref: "ln_quote-1",
+      payment_status: "pending",
+      order_status: "pending",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      ...overrides,
+    };
+  }
+
+  async function getOrder(orderId: string) {
+    const req = createMockRequest({ method: "GET", query: { orderId } });
+    const res = createMockResponse();
+    await handler(req, res as unknown as NextApiResponse);
+    return res;
+  }
+
+  async function listOrders(query: Record<string, string> = {}) {
+    const req = createMockRequest({ method: "GET", query });
+    const res = createMockResponse();
+    await handler(req, res as unknown as NextApiResponse);
+    return res;
+  }
+
+  describe("handleGetOrder", () => {
+    it("returns 404 'Order not found' when getMcpOrder resolves null", async () => {
+      getMcpOrderMock.mockResolvedValueOnce(null);
+
+      const res = await getOrder("mcp_missing");
+
+      expect(res.statusCode).toBe(404);
+      expect(res.jsonBody).toEqual({ error: "Order not found" });
+    });
+
+    it("returns 403 'Not authorized to view this order' when the order belongs to a different buyer", async () => {
+      getMcpOrderMock.mockResolvedValueOnce(
+        makeMcpOrder({ buyer_pubkey: SELLER_PUBKEY })
+      );
+
+      const res = await getOrder("mcp_1");
+
+      expect(res.statusCode).toBe(403);
+      expect(res.jsonBody).toEqual({ error: "Not authorized to view this order" });
+    });
+
+    it("returns 200 with success:true and the formatted order when the buyer pubkeys match", async () => {
+      const order = makeMcpOrder({ buyer_pubkey: BUYER_PUBKEY });
+      getMcpOrderMock.mockResolvedValueOnce(order);
+
+      const res = await getOrder("mcp_1");
+
+      expect(res.statusCode).toBe(200);
+      expect(res.jsonBody).toEqual({ success: true, order });
+      expect(formatOrderForResponseMock).toHaveBeenCalledWith(order);
+    });
+
+    it("returns 500 'Failed to get order' when getMcpOrder throws", async () => {
+      getMcpOrderMock.mockRejectedValueOnce(new Error("db down"));
+
+      const res = await getOrder("mcp_1");
+
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonBody).toEqual({ error: "Failed to get order" });
+    });
+  });
+
+  describe("handleListOrders", () => {
+    it("defaults to limit=50 offset=0 when query params are absent", async () => {
+      await listOrders({});
+
+      expect(listMcpOrdersMock).toHaveBeenCalledWith(BUYER_PUBKEY, 50, 0);
+    });
+
+    it("parses limit/offset from query strings", async () => {
+      await listOrders({ limit: "5", offset: "20" });
+
+      expect(listMcpOrdersMock).toHaveBeenCalledWith(BUYER_PUBKEY, 5, 20);
+    });
+
+    it("falls back to defaults when limit/offset query params are non-numeric", async () => {
+      await listOrders({ limit: "abc", offset: "xyz" });
+
+      expect(listMcpOrdersMock).toHaveBeenCalledWith(BUYER_PUBKEY, 50, 0);
+    });
+
+    it("scopes the lookup to whichever pubkey authenticateRequest resolved for this request, not a fixed value", async () => {
+      const otherPubkey = "d".repeat(64);
+      authenticateRequestMock.mockImplementationOnce(async () =>
+        makeApiKey({ pubkey: otherPubkey })
+      );
+
+      await listOrders({});
+
+      expect(listMcpOrdersMock).toHaveBeenCalledWith(otherPubkey, 50, 0);
+    });
+
+    it("returns success:true, the formatted orders, and count equal to the returned array length", async () => {
+      const orders = [
+        makeMcpOrder({ order_id: "mcp_1" }),
+        makeMcpOrder({ order_id: "mcp_2" }),
+      ];
+      listMcpOrdersMock.mockResolvedValueOnce(orders);
+
+      const res = await listOrders({});
+
+      expect(res.statusCode).toBe(200);
+      expect(res.jsonBody).toEqual({ success: true, orders, count: 2 });
+    });
+
+    it("returns 500 'Failed to list orders' when listMcpOrders throws", async () => {
+      listMcpOrdersMock.mockRejectedValueOnce(new Error("db down"));
+
+      const res = await listOrders({});
+
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonBody).toEqual({ error: "Failed to list orders" });
+    });
+  });
+});
