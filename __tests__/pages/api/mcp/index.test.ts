@@ -206,6 +206,16 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+async function initializeSession() {
+  const initializeReq = createMockRequest({
+    method: "POST",
+    body: { jsonrpc: "2.0", method: "initialize", id: 1 },
+  });
+  const initializeRes = createMockResponse();
+  await handler(initializeReq, initializeRes as unknown as NextApiResponse);
+  return { initializeReq, initializeRes };
+}
+
 describe("request gating, routing, instrumentation", () => {
   describe("rate limiting", () => {
     it("returns 429 without checking auth when the per-IP limit (mcp-protocol:ip) is exceeded", async () => {
@@ -671,16 +681,6 @@ describe("request gating, routing, instrumentation", () => {
 });
 
 describe("session lifecycle", () => {
-  async function initializeSession() {
-    const initializeReq = createMockRequest({
-      method: "POST",
-      body: { jsonrpc: "2.0", method: "initialize", id: 1 },
-    });
-    const initializeRes = createMockResponse();
-    await handler(initializeReq, initializeRes as unknown as NextApiResponse);
-    return { initializeReq, initializeRes };
-  }
-
   describe("session reuse", () => {
     it("reuses the same transport instance for a second POST with the same mcp-session-id, without constructing a new transport or calling createMcpServer again", async () => {
       await initializeSession();
@@ -826,5 +826,193 @@ describe("session lifecycle", () => {
       // the eviction branch again and close() a second time.
       expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe("new session creation", () => {
+  it("passes a sessionIdGenerator function backed by crypto.randomUUID, and an onsessioninitialized callback, to the transport constructor", async () => {
+    const req = createMockRequest({
+      method: "POST",
+      body: { jsonrpc: "2.0", method: "initialize", id: 1 },
+    });
+    const res = createMockResponse();
+    await handler(req, res as unknown as NextApiResponse);
+
+    const options = StreamableHTTPServerTransportMock.mock.calls[0]?.[0] as {
+      sessionIdGenerator: () => string;
+      onsessioninitialized: (sid: string) => void;
+    };
+    expect(typeof options.sessionIdGenerator).toBe("function");
+    expect(typeof options.onsessioninitialized).toBe("function");
+
+    const uuidPattern =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const first = options.sessionIdGenerator();
+    const second = options.sessionIdGenerator();
+    expect(first).toMatch(uuidPattern);
+    expect(second).toMatch(uuidPattern);
+    expect(first).not.toBe(second);
+  });
+
+  it("constructs createMcpServer with exactly {apiKeyId: apiKey.id, pubkey: apiKey.pubkey}", async () => {
+    await initializeSession();
+
+    expect(createMcpServerMock).toHaveBeenCalledWith({
+      apiKeyId: 1,
+      pubkey: BUYER_PUBKEY,
+    });
+  });
+
+  it("registers the seven purchase-flow tools, by name, before calling server.connect", async () => {
+    await initializeSession();
+
+    const toolNames = fakeServer.tool.mock.calls.map((call) => call[0]);
+    expect(toolNames).toEqual([
+      "create_order",
+      "get_order_status",
+      "list_orders",
+      "verify_payment",
+      "get_payment_methods",
+      "get_notifications",
+      "list_seller_orders",
+    ]);
+
+    const lastToolCallOrder = Math.max(
+      ...fakeServer.tool.mock.invocationCallOrder
+    );
+    const connectCallOrder = fakeServer.connect.mock.invocationCallOrder[0]!;
+    expect(lastToolCallOrder).toBeLessThan(connectCallOrder);
+  });
+
+  it("does not register write tools alongside purchase tools for a read_write (non full_access) key", async () => {
+    await initializeSession();
+
+    expect(registerWriteToolsMock).not.toHaveBeenCalled();
+    expect(fakeServer.tool.mock.calls).toHaveLength(7);
+  });
+
+  it("calls server.connect(transport) before transport.handleRequest(req, res, req.body)", async () => {
+    const req = createMockRequest({
+      method: "POST",
+      body: { jsonrpc: "2.0", method: "initialize", id: 1 },
+    });
+    const res = createMockResponse();
+    await handler(req, res as unknown as NextApiResponse);
+
+    const transport = transportInstances[0]!;
+    expect(fakeServer.connect).toHaveBeenCalledWith(transport);
+
+    const connectCallOrder = fakeServer.connect.mock.invocationCallOrder[0]!;
+    const handleRequestCallOrder =
+      transport.handleRequest.mock.invocationCallOrder[0]!;
+    expect(connectCallOrder).toBeLessThan(handleRequestCallOrder);
+    expect(transport.handleRequest).toHaveBeenCalledWith(req, res, req.body);
+  });
+
+  it("onsessioninitialized inserts the session with lastActivityAt set to the creation time: a GET exactly SESSION_TTL_MS later (not SESSION_TTL_MS + 1) is still within the strictly-greater-than eviction threshold and is not evicted", async () => {
+    await initializeSession();
+
+    jest.setSystemTime(Date.now() + 30 * 60 * 1000);
+
+    const req = createMockRequest({
+      method: "GET",
+      headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+    });
+    const res = createMockResponse();
+    await handler(req, res as unknown as NextApiResponse);
+
+    expect(res.statusCode).toBe(200);
+    expect(transportInstances[0]?.close).not.toHaveBeenCalled();
+  });
+});
+
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+const SESSION_TTL_MS = 30 * 60 * 1000;
+
+describe("sweep interval", () => {
+  it("does not evict a session younger than SESSION_TTL_MS when the sweep fires", async () => {
+    await initializeSession();
+
+    jest.advanceTimersByTime(SWEEP_INTERVAL_MS);
+
+    expect(transportInstances[0]?.close).not.toHaveBeenCalled();
+
+    const req = createMockRequest({
+      method: "GET",
+      headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+    });
+    const res = createMockResponse();
+    await handler(req, res as unknown as NextApiResponse);
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("closes the transport and removes a session older than SESSION_TTL_MS when the sweep fires, independent of any request", async () => {
+    await initializeSession();
+
+    jest.advanceTimersByTime(SESSION_TTL_MS + SWEEP_INTERVAL_MS);
+
+    expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
+
+    const req = createMockRequest({
+      method: "GET",
+      headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+    });
+    const res = createMockResponse();
+    await handler(req, res as unknown as NextApiResponse);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonBody).toEqual({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: "Bad Request: Missing or invalid session ID for SSE stream",
+      },
+      id: null,
+    });
+  });
+
+  it("continues sweeping on every tick: two separate advances evict two different sessions independently", async () => {
+    await initializeSession(); // session-1, created at t=0
+
+    jest.advanceTimersByTime(SESSION_TTL_MS + SWEEP_INTERVAL_MS); // t=35min
+    expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
+
+    await initializeSession(); // session-2, created "now" (t=35min)
+    expect(transportInstances[1]?.close).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(SESSION_TTL_MS + SWEEP_INTERVAL_MS); // t=70min
+
+    // session-2 evicted by a later, independent tick of the same interval.
+    expect(transportInstances[1]?.close).toHaveBeenCalledTimes(1);
+    // session-1 was already removed from the map on the first tick, so the
+    // later ticks must not touch it again.
+    expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("swallows a transport.close() throw during sweep without crashing the interval, and keeps sweeping on later ticks", async () => {
+    await initializeSession(); // session-1
+    transportInstances[0]!.close.mockImplementation(() => {
+      throw new Error("boom");
+    });
+
+    expect(() => {
+      jest.advanceTimersByTime(SESSION_TTL_MS + SWEEP_INTERVAL_MS);
+    }).not.toThrow();
+
+    expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
+
+    const staleReq = createMockRequest({
+      method: "GET",
+      headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+    });
+    const staleRes = createMockResponse();
+    await handler(staleReq, staleRes as unknown as NextApiResponse);
+    expect(staleRes.statusCode).toBe(400);
+
+    // The interval itself must still be alive for later ticks.
+    await initializeSession(); // session-2, created "now"
+    jest.advanceTimersByTime(SESSION_TTL_MS + SWEEP_INTERVAL_MS);
+    expect(transportInstances[1]?.close).toHaveBeenCalledTimes(1);
   });
 });
