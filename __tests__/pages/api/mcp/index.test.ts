@@ -669,3 +669,162 @@ describe("request gating, routing, instrumentation", () => {
     });
   });
 });
+
+describe("session lifecycle", () => {
+  async function initializeSession() {
+    const initializeReq = createMockRequest({
+      method: "POST",
+      body: { jsonrpc: "2.0", method: "initialize", id: 1 },
+    });
+    const initializeRes = createMockResponse();
+    await handler(initializeReq, initializeRes as unknown as NextApiResponse);
+    return { initializeReq, initializeRes };
+  }
+
+  describe("session reuse", () => {
+    it("reuses the same transport instance for a second POST with the same mcp-session-id, without constructing a new transport or calling createMcpServer again", async () => {
+      await initializeSession();
+
+      expect(StreamableHTTPServerTransportMock).toHaveBeenCalledTimes(1);
+      expect(createMcpServerMock).toHaveBeenCalledTimes(1);
+
+      const secondReq = createMockRequest({
+        method: "POST",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+        body: { jsonrpc: "2.0", method: "tools/call", id: 2 },
+      });
+      const secondRes = createMockResponse();
+      await handler(secondReq, secondRes as unknown as NextApiResponse);
+
+      expect(secondRes.statusCode).toBe(200);
+      expect(transportInstances).toHaveLength(1);
+      expect(transportInstances[0]?.handleRequest).toHaveBeenLastCalledWith(
+        secondReq,
+        secondRes,
+        secondReq.body
+      );
+      expect(StreamableHTTPServerTransportMock).toHaveBeenCalledTimes(1);
+      expect(createMcpServerMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("updates lastActivityAt on reuse: touching a session twice, 29 minutes apart each time, never evicts it even though the total time since creation exceeds SESSION_TTL_MS (30 min)", async () => {
+      await initializeSession();
+
+      jest.setSystemTime(Date.now() + 29 * 60 * 1000);
+
+      const firstReuseReq = createMockRequest({
+        method: "GET",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+      });
+      const firstReuseRes = createMockResponse();
+      await handler(firstReuseReq, firstReuseRes as unknown as NextApiResponse);
+      expect(firstReuseRes.statusCode).toBe(200);
+
+      // Total elapsed since creation is now ~58 minutes, past SESSION_TTL_MS.
+      // This only survives if the first reuse above bumped lastActivityAt.
+      jest.setSystemTime(Date.now() + 29 * 60 * 1000);
+
+      const secondReuseReq = createMockRequest({
+        method: "GET",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+      });
+      const secondReuseRes = createMockResponse();
+      await handler(
+        secondReuseReq,
+        secondReuseRes as unknown as NextApiResponse
+      );
+
+      expect(secondReuseRes.statusCode).toBe(200);
+      expect(transportInstances[0]?.close).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("expiry", () => {
+    it("evicts a session whose lastActivityAt is more than SESSION_TTL_MS in the past on POST, closing its transport and returning 404 'Session expired'", async () => {
+      await initializeSession();
+
+      jest.setSystemTime(Date.now() + 30 * 60 * 1000 + 1);
+
+      const staleReq = createMockRequest({
+        method: "POST",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+        body: { jsonrpc: "2.0", method: "tools/call", id: 2 },
+      });
+      const staleRes = createMockResponse();
+      await handler(staleReq, staleRes as unknown as NextApiResponse);
+
+      expect(staleRes.statusCode).toBe(404);
+      expect(staleRes.jsonBody).toEqual({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Session expired" },
+        id: null,
+      });
+      expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
+      expect(transportInstances[0]?.handleRequest).not.toHaveBeenCalledWith(
+        staleReq,
+        staleRes,
+        staleReq.body
+      );
+    });
+
+    it("evicts and returns 404 'Session expired' for DELETE", async () => {
+      await initializeSession();
+
+      jest.setSystemTime(Date.now() + 30 * 60 * 1000 + 1);
+
+      const staleReq = createMockRequest({
+        method: "DELETE",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+      });
+      const staleRes = createMockResponse();
+      await handler(staleReq, staleRes as unknown as NextApiResponse);
+
+      expect(staleRes.statusCode).toBe(404);
+      expect(staleRes.jsonBody).toEqual({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Session expired" },
+        id: null,
+      });
+      expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
+      expect(transportInstances[0]?.handleRequest).not.toHaveBeenCalledWith(
+        staleReq,
+        staleRes
+      );
+    });
+
+    it("removes the session from the map on eviction: a later GET with the same id gets the unrecognized-session 400, not another 'Session expired' 404", async () => {
+      await initializeSession();
+
+      jest.setSystemTime(Date.now() + 30 * 60 * 1000 + 1);
+
+      const firstReq = createMockRequest({
+        method: "GET",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+      });
+      const firstRes = createMockResponse();
+      await handler(firstReq, firstRes as unknown as NextApiResponse);
+      expect(firstRes.statusCode).toBe(404);
+
+      const secondReq = createMockRequest({
+        method: "GET",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+      });
+      const secondRes = createMockResponse();
+      await handler(secondReq, secondRes as unknown as NextApiResponse);
+
+      expect(secondRes.statusCode).toBe(400);
+      expect(secondRes.jsonBody).toEqual({
+        jsonrpc: "2.0",
+        error: {
+          code: -32000,
+          message: "Bad Request: Missing or invalid session ID for SSE stream",
+        },
+        id: null,
+      });
+      // Only the first (evicting) GET should have triggered a close() call —
+      // if the map entry weren't actually removed, the second GET would hit
+      // the eviction branch again and close() a second time.
+      expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
+    });
+  });
+});
