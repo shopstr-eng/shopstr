@@ -1277,7 +1277,8 @@ describe("handleCashuPayment", () => {
 
       expect(res.statusCode).toBe(400);
       expect(res.jsonBody).toMatchObject({
-        error: "Failed to redeem Cashu token. It may be invalid or already spent.",
+        error:
+          "Failed to redeem Cashu token. It may be invalid or already spent.",
         details: "mint unreachable",
       });
       expect(createMcpOrderMock).not.toHaveBeenCalled();
@@ -1421,7 +1422,9 @@ describe("handleGetOrder / handleListOrders", () => {
       const res = await getOrder("mcp_1");
 
       expect(res.statusCode).toBe(403);
-      expect(res.jsonBody).toEqual({ error: "Not authorized to view this order" });
+      expect(res.jsonBody).toEqual({
+        error: "Not authorized to view this order",
+      });
     });
 
     it("returns 200 with success:true and the formatted order when the buyer pubkeys match", async () => {
