@@ -1016,3 +1016,262 @@ describe("sweep interval", () => {
     expect(transportInstances[1]?.close).toHaveBeenCalledTimes(1);
   });
 });
+
+type ToolResult = {
+  content: Array<{ type: string; text: string }>;
+  isError?: boolean;
+};
+type ToolCallbackFn = (
+  args: Record<string, unknown>,
+  extra?: unknown
+) => Promise<ToolResult>;
+
+async function getToolCallback(name: string): Promise<ToolCallbackFn> {
+  await initializeSession();
+  const call = fakeServer.tool.mock.calls.find((c) => c[0] === name);
+  if (!call) throw new Error(`tool "${name}" was not registered`);
+  return call[3] as ToolCallbackFn;
+}
+
+function parseResultJson<T = Record<string, unknown>>(result: ToolResult): T {
+  const text = result.content[0]?.text;
+  if (typeof text !== "string") throw new Error("tool result had no text");
+  return JSON.parse(text) as T;
+}
+
+describe("registerPurchaseTools: fetch-proxying tools", () => {
+  const originalFetch = global.fetch;
+  let fetchMock: jest.Mock;
+  let consoleErrorSpy: jest.SpiedFunction<typeof console.error>;
+
+  beforeEach(() => {
+    fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {
+      /* audit log noise, expected */
+    });
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    consoleErrorSpy.mockRestore();
+  });
+
+  describe("create_order", () => {
+    it("returns permissionError without calling fetch when apiKey.permissions is 'read'", async () => {
+      validateApiKeyMock.mockResolvedValueOnce(
+        makeApiKey({ permissions: "read" })
+      );
+      const createOrder = await getToolCallback("create_order");
+
+      const result = await createOrder({ productId: "prod-1" });
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(result.isError).toBe(true);
+      expect(parseResultJson(result)).toEqual({
+        error:
+          "Insufficient permissions. This action requires a read_write API key.",
+      });
+    });
+
+    it("POSTs to /api/mcp/create-order with the caller's bearer token and defaults quantity to 1 / paymentMethod to 'lightning'", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: true, orderId: "order-1" }),
+      });
+      const createOrder = await getToolCallback("create_order");
+
+      await createOrder({ productId: "prod-1" });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe("http://localhost:5000/api/mcp/create-order");
+      expect(init.method).toBe("POST");
+      expect((init.headers as Record<string, string>).Authorization).toBe(
+        "Bearer test-token"
+      );
+      const body = JSON.parse(init.body as string);
+      expect(body).toMatchObject({
+        productId: "prod-1",
+        quantity: 1,
+        paymentMethod: "lightning",
+      });
+    });
+
+    it("attaches _meta.responseTimeMs and dataSource:'live' to the proxied response", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: true, orderId: "order-1" }),
+      });
+      const createOrder = await getToolCallback("create_order");
+
+      const result = await createOrder({ productId: "prod-1" });
+      const parsed = parseResultJson<{
+        _meta: { dataSource: string; responseTimeMs: number };
+      }>(result);
+
+      expect(parsed._meta.dataSource).toBe("live");
+      expect(typeof parsed._meta.responseTimeMs).toBe("number");
+    });
+
+    it("sets isError based on '!data.success && !data.status' (a 402 payment_required response with status but no success is NOT an error)", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ status: "payment_required" }),
+      });
+      const createOrder = await getToolCallback("create_order");
+
+      const result = await createOrder({ productId: "prod-1" });
+
+      expect(result.isError).toBe(false);
+    });
+
+    it("sets isError = true when the proxied response has neither success nor status", async () => {
+      fetchMock.mockResolvedValueOnce({ json: async () => ({}) });
+      const createOrder = await getToolCallback("create_order");
+
+      const result = await createOrder({ productId: "prod-1" });
+
+      expect(result.isError).toBe(true);
+    });
+
+    it("returns an error-shaped result when fetch itself throws (network failure), not an unhandled rejection", async () => {
+      fetchMock.mockRejectedValueOnce(new Error("network down"));
+      const createOrder = await getToolCallback("create_order");
+
+      const result = await createOrder({ productId: "prod-1" });
+
+      expect(result.isError).toBe(true);
+      const parsed = parseResultJson<{ error: string; details: string }>(
+        result
+      );
+      expect(parsed.error).toBe("Failed to create order");
+      expect(parsed.details).toBe("network down");
+    });
+  });
+
+  describe("get_order_status", () => {
+    it("returns permissionError without calling fetch when apiKey.permissions is 'read'", async () => {
+      validateApiKeyMock.mockResolvedValueOnce(
+        makeApiKey({ permissions: "read" })
+      );
+      const getOrderStatus = await getToolCallback("get_order_status");
+
+      const result = await getOrderStatus({ orderId: "order-1" });
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(result.isError).toBe(true);
+    });
+
+    it("GETs /api/mcp/create-order?orderId=... with the bearer token, with isError = !data.success", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: true, order: { id: "order-1" } }),
+      });
+      const getOrderStatus = await getToolCallback("get_order_status");
+
+      const result = await getOrderStatus({ orderId: "order-1" });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:5000/api/mcp/create-order?orderId=order-1",
+        { headers: { Authorization: "Bearer test-token" } }
+      );
+      expect(result.isError).toBe(false);
+    });
+
+    it("sets isError = true when data.success is falsy", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: false, error: "Order not found" }),
+      });
+      const getOrderStatus = await getToolCallback("get_order_status");
+
+      const result = await getOrderStatus({ orderId: "order-1" });
+
+      expect(result.isError).toBe(true);
+    });
+  });
+
+  describe("list_orders", () => {
+    it("returns permissionError without calling fetch when apiKey.permissions is 'read'", async () => {
+      validateApiKeyMock.mockResolvedValueOnce(
+        makeApiKey({ permissions: "read" })
+      );
+      const listOrders = await getToolCallback("list_orders");
+
+      const result = await listOrders({});
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(result.isError).toBe(true);
+    });
+
+    it("defaults limit/offset to 50/0 and reports _meta.resultCount from data.orders?.length", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: true, orders: [{}, {}, {}] }),
+      });
+      const listOrders = await getToolCallback("list_orders");
+
+      const result = await listOrders({});
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:5000/api/mcp/create-order?limit=50&offset=0",
+        { headers: { Authorization: "Bearer test-token" } }
+      );
+      const parsed = parseResultJson<{ _meta: { resultCount: number } }>(
+        result
+      );
+      expect(parsed._meta.resultCount).toBe(3);
+    });
+
+    it("uses the supplied limit/offset instead of the defaults when provided", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: true, orders: [] }),
+      });
+      const listOrders = await getToolCallback("list_orders");
+
+      await listOrders({ limit: 5, offset: 10 });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:5000/api/mcp/create-order?limit=5&offset=10",
+        { headers: { Authorization: "Bearer test-token" } }
+      );
+    });
+  });
+
+  describe("verify_payment", () => {
+    it("returns permissionError without calling fetch when apiKey.permissions is 'read'", async () => {
+      validateApiKeyMock.mockResolvedValueOnce(
+        makeApiKey({ permissions: "read" })
+      );
+      const verifyPayment = await getToolCallback("verify_payment");
+
+      const result = await verifyPayment({ orderId: "order-1" });
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(result.isError).toBe(true);
+    });
+
+    it("POSTs to /api/mcp/verify-payment with { orderId }, with isError = !data.success", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: true }),
+      });
+      const verifyPayment = await getToolCallback("verify_payment");
+
+      const result = await verifyPayment({ orderId: "order-1" });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe("http://localhost:5000/api/mcp/verify-payment");
+      expect(init.method).toBe("POST");
+      expect(JSON.parse(init.body as string)).toEqual({ orderId: "order-1" });
+      expect(result.isError).toBe(false);
+    });
+
+    it("sets isError = true when data.success is falsy", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: false }),
+      });
+      const verifyPayment = await getToolCallback("verify_payment");
+
+      const result = await verifyPayment({ orderId: "order-1" });
+
+      expect(result.isError).toBe(true);
+    });
+  });
+});
