@@ -1101,7 +1101,7 @@ describe("handleLightningPayment", () => {
     }
   );
 
-  it("rejects with an unhandled error and never writes a response when the computed amount is invalid — neither handleLightningPayment's own catch nor handleCreateOrder's outer catch runs, because both call their inner async function via a bare 'return fn(...)' instead of 'return await fn(...)'", async () => {
+  it("returns the generic 500 'Failed to create order' (not an unhandled rejection) when the computed amount is invalid — handleCreateOrder awaits handleLightningPayment, so a synchronous throw from toCashuMintAmountSats is caught by handleCreateOrder's own try/catch", async () => {
     withPricedProduct([]);
 
     const req = createMockRequest({
@@ -1110,12 +1110,10 @@ describe("handleLightningPayment", () => {
     });
     const res = createMockResponse();
 
-    await expect(
-      handler(req, res as unknown as NextApiResponse)
-    ).rejects.toThrow("Payment amount must be greater than 0 sats");
+    await handler(req, res as unknown as NextApiResponse);
 
-    expect(res.jsonBody).toBeUndefined();
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(500);
+    expect(res.jsonBody).toEqual({ error: "Failed to create order" });
     expect(walletCreateMintQuoteBolt11Mock).not.toHaveBeenCalled();
     expect(createMcpOrderMock).not.toHaveBeenCalled();
   });
