@@ -1120,3 +1120,248 @@ describe("handleLightningPayment", () => {
     expect(createMcpOrderMock).not.toHaveBeenCalled();
   });
 });
+
+describe("handleCashuPayment", () => {
+  const VALID_MINT = "https://mint.example.com";
+  const CASHU_TOKEN = "cashuAbc123";
+
+  function withPricedProduct(tags: string[][] = [["price", "1000", "sats"]]) {
+    fetchAllProductsFromDbMock.mockResolvedValue([
+      makeProductEvent(tags, { pubkey: SELLER_PUBKEY }),
+    ]);
+  }
+
+  function decodedToken(
+    overrides: Partial<{
+      proofs: Array<{ amount: number }>;
+      mint: string | undefined;
+    }> = {}
+  ) {
+    return {
+      proofs: [{ amount: 1000 }],
+      mint: VALID_MINT,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    withPricedProduct();
+    getTrustedMintUrlMock.mockReturnValue(VALID_MINT);
+    getDecodedTokenMock.mockReturnValue(decodedToken());
+    withMintRetryMock.mockImplementation((fn: () => Promise<unknown>) => fn());
+    walletReceiveMock.mockResolvedValue(undefined);
+    updateMcpOrderPaymentMock.mockResolvedValue(undefined);
+  });
+
+  async function createCashuOrder(overrides: Record<string, unknown> = {}) {
+    return createOrder({
+      productId: "product-1",
+      paymentMethod: "cashu",
+      cashuToken: CASHU_TOKEN,
+      ...overrides,
+    });
+  }
+
+  describe("validation", () => {
+    it("returns 400 with an example payload when cashuToken is missing", async () => {
+      const res = await createOrder({
+        productId: "product-1",
+        paymentMethod: "cashu",
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error:
+          "cashuToken is required for Cashu payments. Provide a serialized Cashu token string.",
+        example: { paymentMethod: "cashu", cashuToken: "cashuBo2F0..." },
+      });
+      expect(getDecodedTokenMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 500 'Failed to process Cashu payment' (not a 400) when getDecodedToken throws on a malformed token", async () => {
+      getDecodedTokenMock.mockImplementationOnce(() => {
+        throw new Error("malformed token");
+      });
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonBody).toMatchObject({
+        error: "Failed to process Cashu payment",
+        details: "malformed token",
+      });
+    });
+
+    it("returns 400 'Invalid Cashu token: no proofs found' when getDecodedToken returns an empty proofs array", async () => {
+      getDecodedTokenMock.mockReturnValueOnce(decodedToken({ proofs: [] }));
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error: "Invalid Cashu token: no proofs found",
+      });
+    });
+
+    it("returns 400 with provided/required amounts when the token's total proof amount is less than the order total", async () => {
+      getDecodedTokenMock.mockReturnValueOnce(
+        decodedToken({ proofs: [{ amount: 500 }] })
+      );
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error: "Insufficient Cashu token amount",
+        provided: 500,
+        required: 1000,
+        currency: "sats",
+      });
+    });
+  });
+
+  describe("mint allowlist", () => {
+    it("rejects a token whose decoded mint URL does not equal the trusted mint, listing supportedMints, without calling withMintRetry", async () => {
+      getDecodedTokenMock.mockReturnValueOnce(
+        decodedToken({ mint: "https://evil-mint.example" })
+      );
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error:
+          "Cashu token issuer is not a supported mint. Only tokens from trusted mints are accepted.",
+        supportedMints: [VALID_MINT],
+      });
+      expect(withMintRetryMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects a token with no mint URL at all", async () => {
+      getDecodedTokenMock.mockReturnValueOnce(
+        decodedToken({ mint: undefined })
+      );
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error:
+          "Cashu token issuer is not a supported mint. Only tokens from trusted mints are accepted.",
+      });
+    });
+
+    it("accepts a token whose mint URL exactly matches the trusted mint", async () => {
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(201);
+    });
+  });
+
+  describe("redemption", () => {
+    it("redeems via withMintRetry with the documented retry budget", async () => {
+      await createCashuOrder();
+
+      expect(withMintRetryMock).toHaveBeenCalledWith(expect.any(Function), {
+        maxAttempts: 4,
+        perAttemptTimeoutMs: 20000,
+        totalTimeoutMs: 90000,
+      });
+      expect(walletReceiveMock).toHaveBeenCalledWith(CASHU_TOKEN);
+    });
+
+    it("returns 400 'Failed to redeem Cashu token' when withMintRetry/wallet.receive rejects, without creating an order", async () => {
+      withMintRetryMock.mockRejectedValueOnce(new Error("mint unreachable"));
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error: "Failed to redeem Cashu token. It may be invalid or already spent.",
+        details: "mint unreachable",
+      });
+      expect(createMcpOrderMock).not.toHaveBeenCalled();
+    });
+
+    it("creates the order with payment_ref 'cashu_<orderId>' using the buyer/seller/product/quantity/amount/currency computed by handleCreateOrder, then immediately marks it paid", async () => {
+      await createCashuOrder();
+
+      const orderId = createMcpOrderMock.mock.calls[0]?.[0] as string;
+      expect(createMcpOrderMock).toHaveBeenCalledWith(
+        orderId,
+        1,
+        BUYER_PUBKEY,
+        SELLER_PUBKEY,
+        "product-1",
+        "",
+        1,
+        1000,
+        "sats",
+        null,
+        `cashu_${orderId}`
+      );
+      expect(updateMcpOrderPaymentMock).toHaveBeenCalledWith(
+        orderId,
+        `paid_${orderId}`,
+        "paid"
+      );
+    });
+
+    it("returns 201 with paymentMethod cashu, status paid, and change = tokenAmount - requiredAmount", async () => {
+      getDecodedTokenMock.mockReturnValueOnce(
+        decodedToken({ proofs: [{ amount: 1200 }] })
+      );
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(201);
+      expect(res.jsonBody).toMatchObject({
+        success: true,
+        paymentMethod: "cashu",
+        payment: {
+          method: "cashu",
+          amount: 1200,
+          required: 1000,
+          status: "paid",
+          change: 200,
+        },
+      });
+    });
+
+    it("reports change:0 when the token amount exactly matches the required amount", async () => {
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(201);
+      expect(res.jsonBody).toMatchObject({ payment: { change: 0 } });
+    });
+
+    it.each([
+      [
+        "createMcpOrder",
+        () =>
+          createMcpOrderMock.mockRejectedValueOnce(
+            new Error("db insert failed")
+          ),
+      ],
+      [
+        "updateMcpOrderPayment",
+        () =>
+          updateMcpOrderPaymentMock.mockRejectedValueOnce(
+            new Error("payment status update failed")
+          ),
+      ],
+    ])(
+      "returns 500 'Failed to process Cashu payment' when %s throws after a successful token redemption — payment was already collected but the order write failed",
+      async (_label, setupFailure) => {
+        setupFailure();
+
+        const res = await createCashuOrder();
+
+        expect(res.statusCode).toBe(500);
+        expect(res.jsonBody).toMatchObject({
+          error: "Failed to process Cashu payment",
+        });
+      }
+    );
+  });
+});
