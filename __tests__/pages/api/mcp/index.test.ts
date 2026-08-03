@@ -1041,12 +1041,17 @@ function parseResultJson<T = Record<string, unknown>>(result: ToolResult): T {
 
 describe("registerPurchaseTools: fetch-proxying tools", () => {
   const originalFetch = global.fetch;
+  // The tools under test build baseUrl from process.env.PORT || 5000 at
+  // request time; pin it so the hardcoded localhost:5000 expectations below
+  // hold even when the Jest environment/CI exports a different PORT.
+  const originalPort = process.env.PORT;
   let fetchMock: jest.Mock;
   let consoleErrorSpy: jest.SpiedFunction<typeof console.error>;
 
   beforeEach(() => {
     fetchMock = jest.fn();
     global.fetch = fetchMock as unknown as typeof fetch;
+    process.env.PORT = "5000";
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {
       /* audit log noise, expected */
@@ -1055,6 +1060,11 @@ describe("registerPurchaseTools: fetch-proxying tools", () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+    if (originalPort === undefined) {
+      delete process.env.PORT;
+    } else {
+      process.env.PORT = originalPort;
+    }
     consoleErrorSpy.mockRestore();
   });
 
