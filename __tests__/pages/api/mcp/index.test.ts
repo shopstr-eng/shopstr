@@ -206,6 +206,16 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+async function initializeSession() {
+  const initializeReq = createMockRequest({
+    method: "POST",
+    body: { jsonrpc: "2.0", method: "initialize", id: 1 },
+  });
+  const initializeRes = createMockResponse();
+  await handler(initializeReq, initializeRes as unknown as NextApiResponse);
+  return { initializeReq, initializeRes };
+}
+
 describe("request gating, routing, instrumentation", () => {
   describe("rate limiting", () => {
     it("returns 429 without checking auth when the per-IP limit (mcp-protocol:ip) is exceeded", async () => {
@@ -666,6 +676,612 @@ describe("request gating, routing, instrumentation", () => {
         false,
         undefined
       );
+    });
+  });
+});
+
+describe("session lifecycle", () => {
+  describe("session reuse", () => {
+    it("reuses the same transport instance for a second POST with the same mcp-session-id, without constructing a new transport or calling createMcpServer again", async () => {
+      await initializeSession();
+
+      expect(StreamableHTTPServerTransportMock).toHaveBeenCalledTimes(1);
+      expect(createMcpServerMock).toHaveBeenCalledTimes(1);
+
+      const secondReq = createMockRequest({
+        method: "POST",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+        body: { jsonrpc: "2.0", method: "tools/call", id: 2 },
+      });
+      const secondRes = createMockResponse();
+      await handler(secondReq, secondRes as unknown as NextApiResponse);
+
+      expect(secondRes.statusCode).toBe(200);
+      expect(transportInstances).toHaveLength(1);
+      expect(transportInstances[0]?.handleRequest).toHaveBeenLastCalledWith(
+        secondReq,
+        secondRes,
+        secondReq.body
+      );
+      expect(StreamableHTTPServerTransportMock).toHaveBeenCalledTimes(1);
+      expect(createMcpServerMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("updates lastActivityAt on reuse: touching a session twice, 29 minutes apart each time, never evicts it even though the total time since creation exceeds SESSION_TTL_MS (30 min)", async () => {
+      await initializeSession();
+
+      jest.setSystemTime(Date.now() + 29 * 60 * 1000);
+
+      const firstReuseReq = createMockRequest({
+        method: "GET",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+      });
+      const firstReuseRes = createMockResponse();
+      await handler(firstReuseReq, firstReuseRes as unknown as NextApiResponse);
+      expect(firstReuseRes.statusCode).toBe(200);
+
+      // Total elapsed since creation is now ~58 minutes, past SESSION_TTL_MS.
+      // This only survives if the first reuse above bumped lastActivityAt.
+      jest.setSystemTime(Date.now() + 29 * 60 * 1000);
+
+      const secondReuseReq = createMockRequest({
+        method: "GET",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+      });
+      const secondReuseRes = createMockResponse();
+      await handler(
+        secondReuseReq,
+        secondReuseRes as unknown as NextApiResponse
+      );
+
+      expect(secondReuseRes.statusCode).toBe(200);
+      expect(transportInstances[0]?.close).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("expiry", () => {
+    it("evicts a session whose lastActivityAt is more than SESSION_TTL_MS in the past on POST, closing its transport and returning 404 'Session expired'", async () => {
+      await initializeSession();
+
+      jest.setSystemTime(Date.now() + 30 * 60 * 1000 + 1);
+
+      const staleReq = createMockRequest({
+        method: "POST",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+        body: { jsonrpc: "2.0", method: "tools/call", id: 2 },
+      });
+      const staleRes = createMockResponse();
+      await handler(staleReq, staleRes as unknown as NextApiResponse);
+
+      expect(staleRes.statusCode).toBe(404);
+      expect(staleRes.jsonBody).toEqual({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Session expired" },
+        id: null,
+      });
+      expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
+      expect(transportInstances[0]?.handleRequest).not.toHaveBeenCalledWith(
+        staleReq,
+        staleRes,
+        staleReq.body
+      );
+    });
+
+    it("evicts and returns 404 'Session expired' for DELETE", async () => {
+      await initializeSession();
+
+      jest.setSystemTime(Date.now() + 30 * 60 * 1000 + 1);
+
+      const staleReq = createMockRequest({
+        method: "DELETE",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+      });
+      const staleRes = createMockResponse();
+      await handler(staleReq, staleRes as unknown as NextApiResponse);
+
+      expect(staleRes.statusCode).toBe(404);
+      expect(staleRes.jsonBody).toEqual({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Session expired" },
+        id: null,
+      });
+      expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
+      expect(transportInstances[0]?.handleRequest).not.toHaveBeenCalledWith(
+        staleReq,
+        staleRes
+      );
+    });
+
+    it("removes the session from the map on eviction: a later GET with the same id gets the unrecognized-session 400, not another 'Session expired' 404", async () => {
+      await initializeSession();
+
+      jest.setSystemTime(Date.now() + 30 * 60 * 1000 + 1);
+
+      const firstReq = createMockRequest({
+        method: "GET",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+      });
+      const firstRes = createMockResponse();
+      await handler(firstReq, firstRes as unknown as NextApiResponse);
+      expect(firstRes.statusCode).toBe(404);
+
+      const secondReq = createMockRequest({
+        method: "GET",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+      });
+      const secondRes = createMockResponse();
+      await handler(secondReq, secondRes as unknown as NextApiResponse);
+
+      expect(secondRes.statusCode).toBe(400);
+      expect(secondRes.jsonBody).toEqual({
+        jsonrpc: "2.0",
+        error: {
+          code: -32000,
+          message: "Bad Request: Missing or invalid session ID for SSE stream",
+        },
+        id: null,
+      });
+      // Only the first (evicting) GET should have triggered a close() call —
+      // if the map entry weren't actually removed, the second GET would hit
+      // the eviction branch again and close() a second time.
+      expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe("new session creation", () => {
+  it("passes a sessionIdGenerator function backed by crypto.randomUUID, and an onsessioninitialized callback, to the transport constructor", async () => {
+    const req = createMockRequest({
+      method: "POST",
+      body: { jsonrpc: "2.0", method: "initialize", id: 1 },
+    });
+    const res = createMockResponse();
+    await handler(req, res as unknown as NextApiResponse);
+
+    const options = StreamableHTTPServerTransportMock.mock.calls[0]?.[0] as {
+      sessionIdGenerator: () => string;
+      onsessioninitialized: (sid: string) => void;
+    };
+    expect(typeof options.sessionIdGenerator).toBe("function");
+    expect(typeof options.onsessioninitialized).toBe("function");
+
+    const uuidPattern =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const first = options.sessionIdGenerator();
+    const second = options.sessionIdGenerator();
+    expect(first).toMatch(uuidPattern);
+    expect(second).toMatch(uuidPattern);
+    expect(first).not.toBe(second);
+  });
+
+  it("constructs createMcpServer with exactly {apiKeyId: apiKey.id, pubkey: apiKey.pubkey}", async () => {
+    await initializeSession();
+
+    expect(createMcpServerMock).toHaveBeenCalledWith({
+      apiKeyId: 1,
+      pubkey: BUYER_PUBKEY,
+    });
+  });
+
+  it("registers the seven purchase-flow tools, by name, before calling server.connect", async () => {
+    await initializeSession();
+
+    const toolNames = fakeServer.tool.mock.calls.map((call) => call[0]);
+    expect(toolNames).toEqual([
+      "create_order",
+      "get_order_status",
+      "list_orders",
+      "verify_payment",
+      "get_payment_methods",
+      "get_notifications",
+      "list_seller_orders",
+    ]);
+
+    const lastToolCallOrder = Math.max(
+      ...fakeServer.tool.mock.invocationCallOrder
+    );
+    const connectCallOrder = fakeServer.connect.mock.invocationCallOrder[0]!;
+    expect(lastToolCallOrder).toBeLessThan(connectCallOrder);
+  });
+
+  it("does not register write tools alongside purchase tools for a read_write (non full_access) key", async () => {
+    await initializeSession();
+
+    expect(registerWriteToolsMock).not.toHaveBeenCalled();
+    expect(fakeServer.tool.mock.calls).toHaveLength(7);
+  });
+
+  it("calls server.connect(transport) before transport.handleRequest(req, res, req.body)", async () => {
+    const req = createMockRequest({
+      method: "POST",
+      body: { jsonrpc: "2.0", method: "initialize", id: 1 },
+    });
+    const res = createMockResponse();
+    await handler(req, res as unknown as NextApiResponse);
+
+    const transport = transportInstances[0]!;
+    expect(fakeServer.connect).toHaveBeenCalledWith(transport);
+
+    const connectCallOrder = fakeServer.connect.mock.invocationCallOrder[0]!;
+    const handleRequestCallOrder =
+      transport.handleRequest.mock.invocationCallOrder[0]!;
+    expect(connectCallOrder).toBeLessThan(handleRequestCallOrder);
+    expect(transport.handleRequest).toHaveBeenCalledWith(req, res, req.body);
+  });
+
+  it("onsessioninitialized inserts the session with lastActivityAt set to the creation time: a GET exactly SESSION_TTL_MS later (not SESSION_TTL_MS + 1) is still within the strictly-greater-than eviction threshold and is not evicted", async () => {
+    await initializeSession();
+
+    jest.setSystemTime(Date.now() + 30 * 60 * 1000);
+
+    const req = createMockRequest({
+      method: "GET",
+      headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+    });
+    const res = createMockResponse();
+    await handler(req, res as unknown as NextApiResponse);
+
+    expect(res.statusCode).toBe(200);
+    expect(transportInstances[0]?.close).not.toHaveBeenCalled();
+  });
+});
+
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+const SESSION_TTL_MS = 30 * 60 * 1000;
+
+describe("sweep interval", () => {
+  it("does not evict a session younger than SESSION_TTL_MS when the sweep fires", async () => {
+    await initializeSession();
+
+    jest.advanceTimersByTime(SWEEP_INTERVAL_MS);
+
+    expect(transportInstances[0]?.close).not.toHaveBeenCalled();
+
+    const req = createMockRequest({
+      method: "GET",
+      headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+    });
+    const res = createMockResponse();
+    await handler(req, res as unknown as NextApiResponse);
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("closes the transport and removes a session older than SESSION_TTL_MS when the sweep fires, independent of any request", async () => {
+    await initializeSession();
+
+    jest.advanceTimersByTime(SESSION_TTL_MS + SWEEP_INTERVAL_MS);
+
+    expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
+
+    const req = createMockRequest({
+      method: "GET",
+      headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+    });
+    const res = createMockResponse();
+    await handler(req, res as unknown as NextApiResponse);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.jsonBody).toEqual({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: "Bad Request: Missing or invalid session ID for SSE stream",
+      },
+      id: null,
+    });
+  });
+
+  it("continues sweeping on every tick: two separate advances evict two different sessions independently", async () => {
+    await initializeSession(); // session-1, created at t=0
+
+    jest.advanceTimersByTime(SESSION_TTL_MS + SWEEP_INTERVAL_MS); // t=35min
+    expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
+
+    await initializeSession(); // session-2, created "now" (t=35min)
+    expect(transportInstances[1]?.close).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(SESSION_TTL_MS + SWEEP_INTERVAL_MS); // t=70min
+
+    // session-2 evicted by a later, independent tick of the same interval.
+    expect(transportInstances[1]?.close).toHaveBeenCalledTimes(1);
+    // session-1 was already removed from the map on the first tick, so the
+    // later ticks must not touch it again.
+    expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("swallows a transport.close() throw during sweep without crashing the interval, and keeps sweeping on later ticks", async () => {
+    await initializeSession(); // session-1
+    transportInstances[0]!.close.mockImplementation(() => {
+      throw new Error("boom");
+    });
+
+    expect(() => {
+      jest.advanceTimersByTime(SESSION_TTL_MS + SWEEP_INTERVAL_MS);
+    }).not.toThrow();
+
+    expect(transportInstances[0]?.close).toHaveBeenCalledTimes(1);
+
+    const staleReq = createMockRequest({
+      method: "GET",
+      headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+    });
+    const staleRes = createMockResponse();
+    await handler(staleReq, staleRes as unknown as NextApiResponse);
+    expect(staleRes.statusCode).toBe(400);
+
+    // The interval itself must still be alive for later ticks.
+    await initializeSession(); // session-2, created "now"
+    jest.advanceTimersByTime(SESSION_TTL_MS + SWEEP_INTERVAL_MS);
+    expect(transportInstances[1]?.close).toHaveBeenCalledTimes(1);
+  });
+});
+
+type ToolResult = {
+  content: Array<{ type: string; text: string }>;
+  isError?: boolean;
+};
+type ToolCallbackFn = (
+  args: Record<string, unknown>,
+  extra?: unknown
+) => Promise<ToolResult>;
+
+async function getToolCallback(name: string): Promise<ToolCallbackFn> {
+  await initializeSession();
+  const call = fakeServer.tool.mock.calls.find((c) => c[0] === name);
+  if (!call) throw new Error(`tool "${name}" was not registered`);
+  return call[3] as ToolCallbackFn;
+}
+
+function parseResultJson<T = Record<string, unknown>>(result: ToolResult): T {
+  const text = result.content[0]?.text;
+  if (typeof text !== "string") throw new Error("tool result had no text");
+  return JSON.parse(text) as T;
+}
+
+describe("registerPurchaseTools: fetch-proxying tools", () => {
+  const originalFetch = global.fetch;
+  // The tools under test build baseUrl from process.env.PORT || 5000 at
+  // request time; pin it so the hardcoded localhost:5000 expectations below
+  // hold even when the Jest environment/CI exports a different PORT.
+  const originalPort = process.env.PORT;
+  let fetchMock: jest.Mock;
+  let consoleErrorSpy: jest.SpiedFunction<typeof console.error>;
+
+  beforeEach(() => {
+    fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+    process.env.PORT = "5000";
+
+    consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {
+      /* audit log noise, expected */
+    });
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    if (originalPort === undefined) {
+      delete process.env.PORT;
+    } else {
+      process.env.PORT = originalPort;
+    }
+    consoleErrorSpy.mockRestore();
+  });
+
+  describe("create_order", () => {
+    it("returns permissionError without calling fetch when apiKey.permissions is 'read'", async () => {
+      validateApiKeyMock.mockResolvedValueOnce(
+        makeApiKey({ permissions: "read" })
+      );
+      const createOrder = await getToolCallback("create_order");
+
+      const result = await createOrder({ productId: "prod-1" });
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(result.isError).toBe(true);
+      expect(parseResultJson(result)).toEqual({
+        error:
+          "Insufficient permissions. This action requires a read_write API key.",
+      });
+    });
+
+    it("POSTs to /api/mcp/create-order with the caller's bearer token and defaults quantity to 1 / paymentMethod to 'lightning'", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: true, orderId: "order-1" }),
+      });
+      const createOrder = await getToolCallback("create_order");
+
+      await createOrder({ productId: "prod-1" });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe("http://localhost:5000/api/mcp/create-order");
+      expect(init.method).toBe("POST");
+      expect((init.headers as Record<string, string>).Authorization).toBe(
+        "Bearer test-token"
+      );
+      const body = JSON.parse(init.body as string);
+      expect(body).toMatchObject({
+        productId: "prod-1",
+        quantity: 1,
+        paymentMethod: "lightning",
+      });
+    });
+
+    it("attaches _meta.responseTimeMs and dataSource:'live' to the proxied response", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: true, orderId: "order-1" }),
+      });
+      const createOrder = await getToolCallback("create_order");
+
+      const result = await createOrder({ productId: "prod-1" });
+      const parsed = parseResultJson<{
+        _meta: { dataSource: string; responseTimeMs: number };
+      }>(result);
+
+      expect(parsed._meta.dataSource).toBe("live");
+      expect(typeof parsed._meta.responseTimeMs).toBe("number");
+    });
+
+    it("sets isError based on '!data.success && !data.status' (a 402 payment_required response with status but no success is NOT an error)", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ status: "payment_required" }),
+      });
+      const createOrder = await getToolCallback("create_order");
+
+      const result = await createOrder({ productId: "prod-1" });
+
+      expect(result.isError).toBe(false);
+    });
+
+    it("sets isError = true when the proxied response has neither success nor status", async () => {
+      fetchMock.mockResolvedValueOnce({ json: async () => ({}) });
+      const createOrder = await getToolCallback("create_order");
+
+      const result = await createOrder({ productId: "prod-1" });
+
+      expect(result.isError).toBe(true);
+    });
+
+    it("returns an error-shaped result when fetch itself throws (network failure), not an unhandled rejection", async () => {
+      fetchMock.mockRejectedValueOnce(new Error("network down"));
+      const createOrder = await getToolCallback("create_order");
+
+      const result = await createOrder({ productId: "prod-1" });
+
+      expect(result.isError).toBe(true);
+      const parsed = parseResultJson<{ error: string; details: string }>(
+        result
+      );
+      expect(parsed.error).toBe("Failed to create order");
+      expect(parsed.details).toBe("network down");
+    });
+  });
+
+  describe("get_order_status", () => {
+    it("returns permissionError without calling fetch when apiKey.permissions is 'read'", async () => {
+      validateApiKeyMock.mockResolvedValueOnce(
+        makeApiKey({ permissions: "read" })
+      );
+      const getOrderStatus = await getToolCallback("get_order_status");
+
+      const result = await getOrderStatus({ orderId: "order-1" });
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(result.isError).toBe(true);
+    });
+
+    it("GETs /api/mcp/create-order?orderId=... with the bearer token, with isError = !data.success", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: true, order: { id: "order-1" } }),
+      });
+      const getOrderStatus = await getToolCallback("get_order_status");
+
+      const result = await getOrderStatus({ orderId: "order-1" });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:5000/api/mcp/create-order?orderId=order-1",
+        { headers: { Authorization: "Bearer test-token" } }
+      );
+      expect(result.isError).toBe(false);
+    });
+
+    it("sets isError = true when data.success is falsy", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: false, error: "Order not found" }),
+      });
+      const getOrderStatus = await getToolCallback("get_order_status");
+
+      const result = await getOrderStatus({ orderId: "order-1" });
+
+      expect(result.isError).toBe(true);
+    });
+  });
+
+  describe("list_orders", () => {
+    it("returns permissionError without calling fetch when apiKey.permissions is 'read'", async () => {
+      validateApiKeyMock.mockResolvedValueOnce(
+        makeApiKey({ permissions: "read" })
+      );
+      const listOrders = await getToolCallback("list_orders");
+
+      const result = await listOrders({});
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(result.isError).toBe(true);
+    });
+
+    it("defaults limit/offset to 50/0 and reports _meta.resultCount from data.orders?.length", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: true, orders: [{}, {}, {}] }),
+      });
+      const listOrders = await getToolCallback("list_orders");
+
+      const result = await listOrders({});
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:5000/api/mcp/create-order?limit=50&offset=0",
+        { headers: { Authorization: "Bearer test-token" } }
+      );
+      const parsed = parseResultJson<{ _meta: { resultCount: number } }>(
+        result
+      );
+      expect(parsed._meta.resultCount).toBe(3);
+    });
+
+    it("uses the supplied limit/offset instead of the defaults when provided", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: true, orders: [] }),
+      });
+      const listOrders = await getToolCallback("list_orders");
+
+      await listOrders({ limit: 5, offset: 10 });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:5000/api/mcp/create-order?limit=5&offset=10",
+        { headers: { Authorization: "Bearer test-token" } }
+      );
+    });
+  });
+
+  describe("verify_payment", () => {
+    it("returns permissionError without calling fetch when apiKey.permissions is 'read'", async () => {
+      validateApiKeyMock.mockResolvedValueOnce(
+        makeApiKey({ permissions: "read" })
+      );
+      const verifyPayment = await getToolCallback("verify_payment");
+
+      const result = await verifyPayment({ orderId: "order-1" });
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(result.isError).toBe(true);
+    });
+
+    it("POSTs to /api/mcp/verify-payment with { orderId }, with isError = !data.success", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: true }),
+      });
+      const verifyPayment = await getToolCallback("verify_payment");
+
+      const result = await verifyPayment({ orderId: "order-1" });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe("http://localhost:5000/api/mcp/verify-payment");
+      expect(init.method).toBe("POST");
+      expect(JSON.parse(init.body as string)).toEqual({ orderId: "order-1" });
+      expect(result.isError).toBe(false);
+    });
+
+    it("sets isError = true when data.success is falsy", async () => {
+      fetchMock.mockResolvedValueOnce({
+        json: async () => ({ success: false }),
+      });
+      const verifyPayment = await getToolCallback("verify_payment");
+
+      const result = await verifyPayment({ orderId: "order-1" });
+
+      expect(result.isError).toBe(true);
     });
   });
 });
