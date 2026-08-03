@@ -176,14 +176,8 @@ beforeEach(async () => {
   getUnreadMessageCountMock.mockResolvedValue(0);
   listMcpOrdersMock.mockResolvedValue([]);
   listMcpOrdersAsSellerMock.mockResolvedValue([]);
-  // Identity by default — Phase 6 tests exercise index.ts's own logic
-  // (defaults, filtering, counting), not formatOrderForResponse's field
-  // mapping, so assertions read the raw McpOrder fields straight through.
   formatOrderForResponseMock.mockImplementation((order: unknown) => order);
 
-  // Default fake transport: simulates the real SDK writing a 200 response
-  // and ending it, so response-instrumentation tests (which only fire on
-  // res.end) have something to observe without a real transport in the loop.
   StreamableHTTPServerTransportMock.mockImplementation(
     (options: Record<string, unknown>) => {
       const sessionId = `session-${transportInstances.length + 1}`;
