@@ -1,18 +1,14 @@
 import { useContext, useEffect, useRef } from "react";
+import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import {
-  Mint as CashuMint,
-  Wallet as CashuWallet,
-  Proof,
-} from "@cashu/cashu-ts";
-import {
-  PendingMintQuote,
   recoverPendingMintQuotes,
   getPendingMintQuotes,
 } from "@/utils/cashu/pending-mint-operations";
 import {
-  getLocalStorageData,
-  publishProofEvent,
+  getPendingCashuProofPublishes,
+  retryPendingCashuProofPublishes,
 } from "@/utils/nostr/nostr-helper-functions";
+import { recoverProofsToBuyerWallet } from "@/utils/cashu/wallet-recovery";
 import {
   NostrContext,
   SignerContext,
@@ -41,7 +37,8 @@ export function MintRecoveryBoot(): null {
 
     // Cheap pre-check before doing any wallet construction work.
     const pending = getPendingMintQuotes();
-    if (pending.length === 0) {
+    const pendingProofPublishes = getPendingCashuProofPublishes();
+    if (pending.length === 0 && pendingProofPublishes.length === 0) {
       ranOnceRef.current = true;
       return;
     }
@@ -51,41 +48,37 @@ export function MintRecoveryBoot(): null {
 
     (async () => {
       try {
+        const proofPublishResult = await retryPendingCashuProofPublishes(
+          nostr,
+          signer
+        );
+        if (proofPublishResult.recovered > 0 || proofPublishResult.failed > 0) {
+          console.warn(
+            `[cashu-proof-retry] processed ${proofPublishResult.total} pending proof publish(es):`,
+            proofPublishResult
+          );
+        }
+
         const result = await recoverPendingMintQuotes({
           buildWallet: async (mintUrl: string) => {
             const wallet = new CashuWallet(new CashuMint(mintUrl));
             await wallet.loadMint();
             return wallet;
           },
-          onProofsClaimed: async (quote: PendingMintQuote, proofs: Proof[]) => {
+          onProofsClaimed: async (quote, proofs) => {
             if (cancelled) return;
-            const { tokens, history } = getLocalStorageData();
-            const proofArray = [...tokens, ...proofs];
-            window.localStorage.setItem("tokens", JSON.stringify(proofArray));
-            window.localStorage.setItem(
-              "history",
-              JSON.stringify([
-                {
-                  type: 3,
-                  amount: quote.amount,
-                  date: Math.floor(Date.now() / 1000),
-                },
-                ...history,
-              ])
-            );
-            await publishProofEvent(
+            await recoverProofsToBuyerWallet(
               nostr,
               signer,
               quote.mintUrl,
               proofs,
-              "in",
-              quote.amount.toString()
+              quote.amount
             );
           },
         });
 
         if (result.recovered > 0 || result.abandoned > 0) {
-          console.info(
+          console.warn(
             `[mint-recovery] processed ${result.total} pending quote(s):`,
             result
           );

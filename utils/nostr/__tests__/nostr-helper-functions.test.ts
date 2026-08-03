@@ -1077,9 +1077,10 @@ describe("getLocalStorageData", () => {
     expect(data.blossomServers).toEqual([getDefaultBlossomServer()]);
   });
 
-  it("initialises tokens to [] in localStorage when the key is absent", () => {
-    getLocalStorageData();
-    expect(localStorage.getItem("tokens")).toBe("[]");
+  it("keeps tokens out of localStorage when the key is absent", () => {
+    const data = getLocalStorageData();
+    expect(data.tokens).toEqual([]);
+    expect(localStorage.getItem("tokens")).toBeNull();
   });
 
   it("initialises history to [] in localStorage when the key is absent", () => {
@@ -1438,6 +1439,14 @@ describe("LogOut", () => {
     expect(localStorage.getItem("npub")).toBeNull();
     expect(localStorage.getItem("signIn")).toBeNull();
     expect(localStorage.getItem("chats")).toBeNull();
+  });
+
+  it("removes queued Cashu proof publishes", () => {
+    localStorage.setItem("shopstr.pendingProofPublishes", "[]");
+
+    LogOut();
+
+    expect(localStorage.getItem("shopstr.pendingProofPublishes")).toBeNull();
   });
 
   it("dispatches a storage event on window", () => {
@@ -3062,7 +3071,7 @@ describe("publishProofEvent", () => {
     expect(signedKinds).toContain(7376);
   });
 
-  it("returns silently on any inner error", async () => {
+  it("rejects when proof publishing cannot access the signer", async () => {
     const signer = {
       getPubKey: jest.fn().mockRejectedValue(new Error("Signer unavailable")),
       encrypt: jest.fn(),
@@ -3072,7 +3081,7 @@ describe("publishProofEvent", () => {
 
     await expect(
       publishProofEvent(nostr as any, signer as any, mint, proofs, "in", "100")
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow("Signer unavailable");
   });
 });
 

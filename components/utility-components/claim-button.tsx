@@ -21,9 +21,11 @@ import {
 } from "../../utils/context/context";
 import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
+  setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   constructGiftWrappedEvent,
@@ -115,7 +117,8 @@ export default function ClaimButton({
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
   const [isP2pkKeyMissing, setIsP2pkKeyMissing] = useState(false);
   const [p2pk, setP2PK] = useState<ParsedP2PK | null>(null);
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, history } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
 
   const [disputeStatus, setDisputeStatus] =
     useState<P2pkEscrowDisputeStatus>("none");
@@ -520,10 +523,7 @@ export default function ClaimButton({
           "in",
           tokenAmount.toString()
         );
-        localStorage.setItem(
-          "tokens",
-          JSON.stringify([...tokens, ...freshProofs])
-        );
+        setCachedCashuProofs([...tokens, ...freshProofs]);
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
@@ -585,7 +585,7 @@ export default function ClaimButton({
           tokenAmount.toString()
         );
         const tokenArray = [...tokens, ...uniqueProofs];
-        localStorage.setItem("tokens", JSON.stringify(tokenArray));
+        setCachedCashuProofs(tokenArray);
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));

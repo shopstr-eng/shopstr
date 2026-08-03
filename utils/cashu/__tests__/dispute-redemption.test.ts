@@ -1,7 +1,10 @@
 import { Proof } from "@cashu/cashu-ts";
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+  getCachedCashuProofs: jest.fn(() => []),
+  getLocalStorageData: jest.fn(() => ({ history: [] })),
   publishProofEvent: jest.fn().mockResolvedValue(undefined),
+  setCachedCashuProofs: jest.fn(),
 }));
 
 const verifyEventMock = jest.fn().mockReturnValue(true);
@@ -32,7 +35,10 @@ jest.mock("@cashu/cashu-ts", () => ({
   })),
 }));
 
-import { publishProofEvent } from "@/utils/nostr/nostr-helper-functions";
+import {
+  publishProofEvent,
+  setCachedCashuProofs,
+} from "@/utils/nostr/nostr-helper-functions";
 import {
   createPartialRedemption,
   combineAndRedeem,
@@ -118,7 +124,12 @@ describe("combineAndRedeem", () => {
       },
     ]);
 
-    expect(JSON.parse(localStorage.getItem("tokens")!)).toEqual(freshProofs);
+    expect(localStorage.getItem("tokens")).toBeNull();
+    expect(setCachedCashuProofs).toHaveBeenCalledWith(freshProofs);
+    expect(JSON.parse(localStorage.getItem("history")!)[0]).toMatchObject({
+      type: 1,
+      amount: 20,
+    });
     expect(JSON.parse(localStorage.getItem("mints")!)).toEqual([
       "https://mint.example",
     ]);

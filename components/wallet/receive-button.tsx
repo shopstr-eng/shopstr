@@ -17,9 +17,11 @@ import {
 } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
+  setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   Mint as CashuMint,
@@ -49,7 +51,8 @@ const ReceiveButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
   const { cashuPubkey, cashuPrivkey } = useContext(CashuWalletContext);
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, history } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
 
   const {
     handleSubmit: handleReceiveSubmit,
@@ -85,7 +88,7 @@ const ReceiveButton = () => {
     }
 
     const tokenArray = [...tokens, ...uniqueProofs];
-    localStorage.setItem("tokens", JSON.stringify(tokenArray));
+    setCachedCashuProofs(tokenArray);
     if (!mints.includes(tokenMint)) {
       const updatedMints = [...mints, tokenMint];
       localStorage.setItem("mints", JSON.stringify(updatedMints));
