@@ -169,6 +169,7 @@ function createMockResponse(): MockResponse {
 }
 
 let handler: typeof import("@/pages/api/mcp/create-order").default;
+let pendingLightningPayments: typeof import("@/pages/api/mcp/create-order").pendingLightningPayments;
 let callOrder: string[];
 
 beforeEach(async () => {
@@ -196,8 +197,56 @@ beforeEach(async () => {
   listMcpOrdersMock.mockResolvedValue([]);
   formatOrderForResponseMock.mockImplementation((order: unknown) => order);
 
-  handler = (await import("@/pages/api/mcp/create-order")).default;
+  walletLoadMintMock.mockResolvedValue(undefined);
+  walletCreateMintQuoteBolt11Mock.mockResolvedValue({
+    quote: "quote-1",
+    request: "lnbc1...",
+  });
+  getTrustedMintUrlMock.mockReturnValue("https://mint.example.com");
+  createMcpOrderMock.mockImplementation(
+    async (
+      orderId: string,
+      apiKeyId: number | null,
+      buyerPubkey: string,
+      sellerPubkey: string,
+      productId: string,
+      productTitle: string | null,
+      quantity: number,
+      amountTotal: number,
+      currency: string,
+      shippingAddress: Record<string, string> | null,
+      paymentRef: string | null
+    ) => ({
+      id: 1,
+      order_id: orderId,
+      api_key_id: apiKeyId,
+      buyer_pubkey: buyerPubkey,
+      seller_pubkey: sellerPubkey,
+      product_id: productId,
+      product_title: productTitle,
+      quantity,
+      amount_total: amountTotal,
+      currency,
+      shipping_address: shippingAddress,
+      payment_ref: paymentRef,
+      payment_status: "pending",
+      order_status: "pending",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+  );
+
+  const mod = await import("@/pages/api/mcp/create-order");
+  handler = mod.default;
+  pendingLightningPayments = mod.pendingLightningPayments;
 });
+
+async function createOrder(body: Record<string, unknown>) {
+  const req = createMockRequest({ method: "POST", body });
+  const res = createMockResponse();
+  await handler(req, res as unknown as NextApiResponse);
+  return res;
+}
 
 describe("request gating & routing", () => {
   describe("rate limiting", () => {
@@ -405,57 +454,6 @@ describe("handleCreateOrder validation & pricing", () => {
     currency: string;
     selectedSpecs?: Record<string, unknown>;
   };
-
-  beforeEach(() => {
-    // Defaults so paymentMethod:"lightning" (the handleCreateOrder default)
-    // dispatches all the way through to a 402 response without its own
-    // failures masking the pricing assertions under test.
-    walletLoadMintMock.mockResolvedValue(undefined);
-    walletCreateMintQuoteBolt11Mock.mockResolvedValue({
-      quote: "quote-1",
-      request: "lnbc1...",
-    });
-    getTrustedMintUrlMock.mockReturnValue("https://mint.example.com");
-    createMcpOrderMock.mockImplementation(
-      async (
-        orderId: string,
-        apiKeyId: number | null,
-        buyerPubkey: string,
-        sellerPubkey: string,
-        productId: string,
-        productTitle: string | null,
-        quantity: number,
-        amountTotal: number,
-        currency: string,
-        shippingAddress: Record<string, string> | null,
-        paymentRef: string | null
-      ) => ({
-        id: 1,
-        order_id: orderId,
-        api_key_id: apiKeyId,
-        buyer_pubkey: buyerPubkey,
-        seller_pubkey: sellerPubkey,
-        product_id: productId,
-        product_title: productTitle,
-        quantity,
-        amount_total: amountTotal,
-        currency,
-        shipping_address: shippingAddress,
-        payment_ref: paymentRef,
-        payment_status: "pending",
-        order_status: "pending",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-    );
-  });
-
-  async function createOrder(body: Record<string, unknown>) {
-    const req = createMockRequest({ method: "POST", body });
-    const res = createMockResponse();
-    await handler(req, res as unknown as NextApiResponse);
-    return res;
-  }
 
   function pricingOf(res: MockResponse): PricingBlock {
     return (res.jsonBody as { pricing: PricingBlock }).pricing;
@@ -961,6 +959,543 @@ describe("handleCreateOrder validation & pricing", () => {
       expect(res.jsonBody).toEqual({
         error: "Failed to create order",
       });
+    });
+  });
+});
+
+describe("handleLightningPayment", () => {
+  function withPricedProduct(tags: string[][] = [["price", "1000", "sats"]]) {
+    fetchAllProductsFromDbMock.mockResolvedValue([
+      makeProductEvent(tags, { pubkey: SELLER_PUBKEY }),
+    ]);
+  }
+
+  it("rounds a fractional totalAmount to the nearest integer sats before requesting a mint quote", async () => {
+    withPricedProduct([["price", "1000.6", "sats"]]);
+
+    const res = await createOrder({ productId: "product-1" });
+
+    expect(res.statusCode).toBe(402);
+    expect(walletCreateMintQuoteBolt11Mock).toHaveBeenCalledWith(1001);
+  });
+
+  it("creates the order with payment_ref 'ln_<quote>' using the buyer/seller/product/quantity/amount/currency/shippingAddress computed by handleCreateOrder", async () => {
+    withPricedProduct();
+    walletCreateMintQuoteBolt11Mock.mockResolvedValue({
+      quote: "quote-42",
+      request: "lnbc42...",
+    });
+    const shippingAddress = {
+      name: "Ada Lovelace",
+      address: "1 Infinite Loop",
+      city: "Cupertino",
+      postalCode: "95014",
+      stateProvince: "CA",
+      country: "US",
+    };
+
+    await createOrder({
+      productId: "product-1",
+      quantity: 2,
+      shippingAddress,
+    });
+
+    expect(createMcpOrderMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^mcp_\d+_[0-9a-f]{8}$/),
+      1,
+      BUYER_PUBKEY,
+      SELLER_PUBKEY,
+      "product-1",
+      "",
+      2,
+      2000,
+      "sats",
+      shippingAddress,
+      "ln_quote-42"
+    );
+  });
+
+  it("stores the pending payment (quote/mintUrl/amount/orderId) in pendingLightningPayments keyed by the generated orderId", async () => {
+    withPricedProduct();
+    walletCreateMintQuoteBolt11Mock.mockResolvedValue({
+      quote: "quote-7",
+      request: "lnbc7...",
+    });
+    getTrustedMintUrlMock.mockReturnValue("https://mint.example.com");
+
+    await createOrder({ productId: "product-1" });
+
+    const orderId = createMcpOrderMock.mock.calls[0]?.[0] as string;
+    expect(pendingLightningPayments.get(orderId)).toEqual({
+      quote: "quote-7",
+      mintUrl: "https://mint.example.com",
+      amount: 1000,
+      orderId,
+    });
+  });
+
+  it("returns 402 payment_required with the bolt11 invoice, quoteId, amount, mintUrl, and a ~10-minute expiresAt", async () => {
+    withPricedProduct();
+    walletCreateMintQuoteBolt11Mock.mockResolvedValue({
+      quote: "quote-9",
+      request: "lnbc9...",
+    });
+    getTrustedMintUrlMock.mockReturnValue("https://mint.example.com");
+
+    const before = Date.now();
+    const res = await createOrder({ productId: "product-1" });
+    const after = Date.now();
+
+    expect(res.statusCode).toBe(402);
+    const body = res.jsonBody as {
+      status: string;
+      paymentMethod: string;
+      payment: {
+        bolt11: string;
+        quoteId: string;
+        amount: number;
+        currency: string;
+        mintUrl: string;
+        expiresAt: string;
+      };
+    };
+    expect(body.status).toBe("payment_required");
+    expect(body.paymentMethod).toBe("lightning");
+    expect(body.payment).toMatchObject({
+      bolt11: "lnbc9...",
+      quoteId: "quote-9",
+      amount: 1000,
+      currency: "sats",
+      mintUrl: "https://mint.example.com",
+    });
+    const expiresAt = new Date(body.payment.expiresAt).getTime();
+    expect(expiresAt).toBeGreaterThanOrEqual(before + 10 * 60 * 1000);
+    expect(expiresAt).toBeLessThanOrEqual(after + 10 * 60 * 1000);
+  });
+
+  it.each([
+    [
+      "wallet.loadMint",
+      () => walletLoadMintMock.mockRejectedValueOnce(new Error("mint offline")),
+    ],
+    [
+      "wallet.createMintQuoteBolt11",
+      () =>
+        walletCreateMintQuoteBolt11Mock.mockRejectedValueOnce(
+          new Error("quote failed")
+        ),
+    ],
+  ])(
+    "returns 500 'Failed to generate Lightning invoice' with details when %s throws, without creating an order",
+    async (_label, setupFailure) => {
+      withPricedProduct();
+      setupFailure();
+
+      const res = await createOrder({ productId: "product-1" });
+
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonBody).toMatchObject({
+        error: "Failed to generate Lightning invoice",
+      });
+      expect(createMcpOrderMock).not.toHaveBeenCalled();
+    }
+  );
+
+  it("returns the generic 500 'Failed to create order' (not an unhandled rejection) when the computed amount is invalid — handleCreateOrder awaits handleLightningPayment, so a synchronous throw from toCashuMintAmountSats is caught by handleCreateOrder's own try/catch", async () => {
+    withPricedProduct([]);
+
+    const req = createMockRequest({
+      method: "POST",
+      body: { productId: "product-1" },
+    });
+    const res = createMockResponse();
+
+    await handler(req, res as unknown as NextApiResponse);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.jsonBody).toEqual({ error: "Failed to create order" });
+    expect(walletCreateMintQuoteBolt11Mock).not.toHaveBeenCalled();
+    expect(createMcpOrderMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("handleCashuPayment", () => {
+  const VALID_MINT = "https://mint.example.com";
+  const CASHU_TOKEN = "cashuAbc123";
+
+  function withPricedProduct(tags: string[][] = [["price", "1000", "sats"]]) {
+    fetchAllProductsFromDbMock.mockResolvedValue([
+      makeProductEvent(tags, { pubkey: SELLER_PUBKEY }),
+    ]);
+  }
+
+  function decodedToken(
+    overrides: Partial<{
+      proofs: Array<{ amount: number }>;
+      mint: string | undefined;
+    }> = {}
+  ) {
+    return {
+      proofs: [{ amount: 1000 }],
+      mint: VALID_MINT,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    withPricedProduct();
+    getTrustedMintUrlMock.mockReturnValue(VALID_MINT);
+    getDecodedTokenMock.mockReturnValue(decodedToken());
+    withMintRetryMock.mockImplementation((fn: () => Promise<unknown>) => fn());
+    walletReceiveMock.mockResolvedValue(undefined);
+    updateMcpOrderPaymentMock.mockResolvedValue(undefined);
+  });
+
+  async function createCashuOrder(overrides: Record<string, unknown> = {}) {
+    return createOrder({
+      productId: "product-1",
+      paymentMethod: "cashu",
+      cashuToken: CASHU_TOKEN,
+      ...overrides,
+    });
+  }
+
+  describe("validation", () => {
+    it("returns 400 with an example payload when cashuToken is missing", async () => {
+      const res = await createOrder({
+        productId: "product-1",
+        paymentMethod: "cashu",
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error:
+          "cashuToken is required for Cashu payments. Provide a serialized Cashu token string.",
+        example: { paymentMethod: "cashu", cashuToken: "cashuBo2F0..." },
+      });
+      expect(getDecodedTokenMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 500 'Failed to process Cashu payment' (not a 400) when getDecodedToken throws on a malformed token", async () => {
+      getDecodedTokenMock.mockImplementationOnce(() => {
+        throw new Error("malformed token");
+      });
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonBody).toMatchObject({
+        error: "Failed to process Cashu payment",
+        details: "malformed token",
+      });
+    });
+
+    it("returns 400 'Invalid Cashu token: no proofs found' when getDecodedToken returns an empty proofs array", async () => {
+      getDecodedTokenMock.mockReturnValueOnce(decodedToken({ proofs: [] }));
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error: "Invalid Cashu token: no proofs found",
+      });
+    });
+
+    it("returns 400 with provided/required amounts when the token's total proof amount is less than the order total", async () => {
+      getDecodedTokenMock.mockReturnValueOnce(
+        decodedToken({ proofs: [{ amount: 500 }] })
+      );
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error: "Insufficient Cashu token amount",
+        provided: 500,
+        required: 1000,
+        currency: "sats",
+      });
+    });
+  });
+
+  describe("mint allowlist", () => {
+    it("rejects a token whose decoded mint URL does not equal the trusted mint, listing supportedMints, without calling withMintRetry", async () => {
+      getDecodedTokenMock.mockReturnValueOnce(
+        decodedToken({ mint: "https://evil-mint.example" })
+      );
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error:
+          "Cashu token issuer is not a supported mint. Only tokens from trusted mints are accepted.",
+        supportedMints: [VALID_MINT],
+      });
+      expect(withMintRetryMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects a token with no mint URL at all", async () => {
+      getDecodedTokenMock.mockReturnValueOnce(
+        decodedToken({ mint: undefined })
+      );
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error:
+          "Cashu token issuer is not a supported mint. Only tokens from trusted mints are accepted.",
+      });
+    });
+
+    it("accepts a token whose mint URL exactly matches the trusted mint", async () => {
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(201);
+    });
+  });
+
+  describe("redemption", () => {
+    it("redeems via withMintRetry with the documented retry budget", async () => {
+      await createCashuOrder();
+
+      expect(withMintRetryMock).toHaveBeenCalledWith(expect.any(Function), {
+        maxAttempts: 4,
+        perAttemptTimeoutMs: 20000,
+        totalTimeoutMs: 90000,
+      });
+      expect(walletReceiveMock).toHaveBeenCalledWith(CASHU_TOKEN);
+    });
+
+    it("returns 400 'Failed to redeem Cashu token' when withMintRetry/wallet.receive rejects, without creating an order", async () => {
+      withMintRetryMock.mockRejectedValueOnce(new Error("mint unreachable"));
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error:
+          "Failed to redeem Cashu token. It may be invalid or already spent.",
+        details: "mint unreachable",
+      });
+      expect(createMcpOrderMock).not.toHaveBeenCalled();
+    });
+
+    it("creates the order with payment_ref 'cashu_<orderId>' using the buyer/seller/product/quantity/amount/currency computed by handleCreateOrder, then immediately marks it paid", async () => {
+      await createCashuOrder();
+
+      const orderId = createMcpOrderMock.mock.calls[0]?.[0] as string;
+      expect(createMcpOrderMock).toHaveBeenCalledWith(
+        orderId,
+        1,
+        BUYER_PUBKEY,
+        SELLER_PUBKEY,
+        "product-1",
+        "",
+        1,
+        1000,
+        "sats",
+        null,
+        `cashu_${orderId}`
+      );
+      expect(updateMcpOrderPaymentMock).toHaveBeenCalledWith(
+        orderId,
+        `paid_${orderId}`,
+        "paid"
+      );
+    });
+
+    it("returns 201 with paymentMethod cashu, status paid, and change = tokenAmount - requiredAmount", async () => {
+      getDecodedTokenMock.mockReturnValueOnce(
+        decodedToken({ proofs: [{ amount: 1200 }] })
+      );
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(201);
+      expect(res.jsonBody).toMatchObject({
+        success: true,
+        paymentMethod: "cashu",
+        payment: {
+          method: "cashu",
+          amount: 1200,
+          required: 1000,
+          status: "paid",
+          change: 200,
+        },
+      });
+    });
+
+    it("reports change:0 when the token amount exactly matches the required amount", async () => {
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(201);
+      expect(res.jsonBody).toMatchObject({ payment: { change: 0 } });
+    });
+
+    it.each([
+      [
+        "createMcpOrder",
+        () =>
+          createMcpOrderMock.mockRejectedValueOnce(
+            new Error("db insert failed")
+          ),
+      ],
+      [
+        "updateMcpOrderPayment",
+        () =>
+          updateMcpOrderPaymentMock.mockRejectedValueOnce(
+            new Error("payment status update failed")
+          ),
+      ],
+    ])(
+      "returns 500 'Failed to process Cashu payment' when %s throws after a successful token redemption — payment was already collected but the order write failed",
+      async (_label, setupFailure) => {
+        setupFailure();
+
+        const res = await createCashuOrder();
+
+        expect(res.statusCode).toBe(500);
+        expect(res.jsonBody).toMatchObject({
+          error: "Failed to process Cashu payment",
+        });
+      }
+    );
+  });
+});
+
+describe("handleGetOrder / handleListOrders", () => {
+  function makeMcpOrder(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 1,
+      order_id: "mcp_1",
+      api_key_id: 1,
+      buyer_pubkey: BUYER_PUBKEY,
+      seller_pubkey: SELLER_PUBKEY,
+      product_id: "product-1",
+      product_title: "Test Product",
+      quantity: 1,
+      amount_total: 1000,
+      currency: "sats",
+      shipping_address: null,
+      payment_ref: "ln_quote-1",
+      payment_status: "pending",
+      order_status: "pending",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      ...overrides,
+    };
+  }
+
+  async function getOrder(orderId: string) {
+    const req = createMockRequest({ method: "GET", query: { orderId } });
+    const res = createMockResponse();
+    await handler(req, res as unknown as NextApiResponse);
+    return res;
+  }
+
+  async function listOrders(query: Record<string, string> = {}) {
+    const req = createMockRequest({ method: "GET", query });
+    const res = createMockResponse();
+    await handler(req, res as unknown as NextApiResponse);
+    return res;
+  }
+
+  describe("handleGetOrder", () => {
+    it("returns 404 'Order not found' when getMcpOrder resolves null", async () => {
+      getMcpOrderMock.mockResolvedValueOnce(null);
+
+      const res = await getOrder("mcp_missing");
+
+      expect(res.statusCode).toBe(404);
+      expect(res.jsonBody).toEqual({ error: "Order not found" });
+    });
+
+    it("returns 403 'Not authorized to view this order' when the order belongs to a different buyer", async () => {
+      getMcpOrderMock.mockResolvedValueOnce(
+        makeMcpOrder({ buyer_pubkey: SELLER_PUBKEY })
+      );
+
+      const res = await getOrder("mcp_1");
+
+      expect(res.statusCode).toBe(403);
+      expect(res.jsonBody).toEqual({
+        error: "Not authorized to view this order",
+      });
+    });
+
+    it("returns 200 with success:true and the formatted order when the buyer pubkeys match", async () => {
+      const order = makeMcpOrder({ buyer_pubkey: BUYER_PUBKEY });
+      getMcpOrderMock.mockResolvedValueOnce(order);
+
+      const res = await getOrder("mcp_1");
+
+      expect(res.statusCode).toBe(200);
+      expect(res.jsonBody).toEqual({ success: true, order });
+      expect(formatOrderForResponseMock).toHaveBeenCalledWith(order);
+    });
+
+    it("returns 500 'Failed to get order' when getMcpOrder throws", async () => {
+      getMcpOrderMock.mockRejectedValueOnce(new Error("db down"));
+
+      const res = await getOrder("mcp_1");
+
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonBody).toEqual({ error: "Failed to get order" });
+    });
+  });
+
+  describe("handleListOrders", () => {
+    it("defaults to limit=50 offset=0 when query params are absent", async () => {
+      await listOrders({});
+
+      expect(listMcpOrdersMock).toHaveBeenCalledWith(BUYER_PUBKEY, 50, 0);
+    });
+
+    it("parses limit/offset from query strings", async () => {
+      await listOrders({ limit: "5", offset: "20" });
+
+      expect(listMcpOrdersMock).toHaveBeenCalledWith(BUYER_PUBKEY, 5, 20);
+    });
+
+    it("falls back to defaults when limit/offset query params are non-numeric", async () => {
+      await listOrders({ limit: "abc", offset: "xyz" });
+
+      expect(listMcpOrdersMock).toHaveBeenCalledWith(BUYER_PUBKEY, 50, 0);
+    });
+
+    it("scopes the lookup to whichever pubkey authenticateRequest resolved for this request, not a fixed value", async () => {
+      const otherPubkey = "d".repeat(64);
+      authenticateRequestMock.mockImplementationOnce(async () =>
+        makeApiKey({ pubkey: otherPubkey })
+      );
+
+      await listOrders({});
+
+      expect(listMcpOrdersMock).toHaveBeenCalledWith(otherPubkey, 50, 0);
+    });
+
+    it("returns success:true, the formatted orders, and count equal to the returned array length", async () => {
+      const orders = [
+        makeMcpOrder({ order_id: "mcp_1" }),
+        makeMcpOrder({ order_id: "mcp_2" }),
+      ];
+      listMcpOrdersMock.mockResolvedValueOnce(orders);
+
+      const res = await listOrders({});
+
+      expect(res.statusCode).toBe(200);
+      expect(res.jsonBody).toEqual({ success: true, orders, count: 2 });
+    });
+
+    it("returns 500 'Failed to list orders' when listMcpOrders throws", async () => {
+      listMcpOrdersMock.mockRejectedValueOnce(new Error("db down"));
+
+      const res = await listOrders({});
+
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonBody).toEqual({ error: "Failed to list orders" });
     });
   });
 });

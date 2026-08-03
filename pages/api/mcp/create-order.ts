@@ -102,7 +102,7 @@ export default async function handler(
   };
 
   if (req.method === "POST") {
-    return handleCreateOrder(req, res, apiKey.id, apiKey.pubkey);
+    return await handleCreateOrder(req, res, apiKey.id, apiKey.pubkey);
   }
 
   if (req.method === "GET") {
@@ -321,7 +321,7 @@ async function handleCreateOrder(
     }
 
     if (paymentMethod === "cashu") {
-      return handleCashuPayment(
+      return await handleCashuPayment(
         res,
         orderId,
         apiKeyId,
@@ -337,7 +337,7 @@ async function handleCreateOrder(
       );
     }
 
-    return handleLightningPayment(
+    return await handleLightningPayment(
       res,
       orderId,
       apiKeyId,
