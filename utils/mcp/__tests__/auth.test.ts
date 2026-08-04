@@ -437,6 +437,15 @@ describe("MCP auth helpers", () => {
       expect(result).toBe(false);
     });
 
+    it("releases the client when the update query fails", async () => {
+      mockQuery.mockRejectedValueOnce(new Error("update failed"));
+
+      await expect(updateApiKeyNsec(1, "f".repeat(64), "enc")).rejects.toThrow(
+        "update failed"
+      );
+      expect(mockRelease).toHaveBeenCalledTimes(1);
+    });
+
     it("does not attempt to release a client when pool.connect() itself fails", async () => {
       mockConnect.mockRejectedValueOnce(new Error("pool exhausted"));
 
@@ -565,6 +574,13 @@ describe("MCP auth helpers", () => {
       expect(mockRelease).toHaveBeenCalledTimes(1);
     });
 
+    it("releases the client when the list query fails", async () => {
+      mockQuery.mockRejectedValueOnce(new Error("list failed"));
+
+      await expect(listApiKeys("f".repeat(64))).rejects.toThrow("list failed");
+      expect(mockRelease).toHaveBeenCalledTimes(1);
+    });
+
     it("does not attempt to release a client when pool.connect() itself fails", async () => {
       mockConnect.mockRejectedValueOnce(new Error("pool exhausted"));
 
@@ -603,6 +619,15 @@ describe("MCP auth helpers", () => {
       const result = await revokeApiKey(1, "f".repeat(64));
 
       expect(result).toBe(false);
+    });
+
+    it("releases the client when the revoke query fails", async () => {
+      mockQuery.mockRejectedValueOnce(new Error("revoke failed"));
+
+      await expect(revokeApiKey(1, "f".repeat(64))).rejects.toThrow(
+        "revoke failed"
+      );
+      expect(mockRelease).toHaveBeenCalledTimes(1);
     });
 
     it("does not attempt to release a client when pool.connect() itself fails", async () => {
@@ -669,6 +694,27 @@ describe("MCP auth helpers", () => {
       });
     });
 
+    it("allows a read_write key through a read_write requirement", async () => {
+      const { key } = generateApiKey();
+      const record = {
+        id: 1,
+        key_hash: hashApiKey(key),
+        permissions: "read_write",
+      };
+      mockQuery
+        .mockResolvedValueOnce({ rows: [record] })
+        .mockResolvedValueOnce({});
+      const req = {
+        headers: { authorization: `Bearer ${key}` },
+      } as NextApiRequest;
+      const res = createMockRes();
+
+      const result = await authenticateRequest(req, res, "read_write");
+
+      expect(result).toBe(record);
+      expect(res.statusCode).toBe(0);
+    });
+
     it("allows a full_access key through a read_write requirement", async () => {
       const { key } = generateApiKey();
       const record = {
@@ -712,6 +758,27 @@ describe("MCP auth helpers", () => {
       expect(res.body).toEqual({
         error: "Insufficient permissions. This action requires full_access.",
       });
+    });
+
+    it("allows a full_access key through a full_access requirement", async () => {
+      const { key } = generateApiKey();
+      const record = {
+        id: 1,
+        key_hash: hashApiKey(key),
+        permissions: "full_access",
+      };
+      mockQuery
+        .mockResolvedValueOnce({ rows: [record] })
+        .mockResolvedValueOnce({});
+      const req = {
+        headers: { authorization: `Bearer ${key}` },
+      } as NextApiRequest;
+      const res = createMockRes();
+
+      const result = await authenticateRequest(req, res, "full_access");
+
+      expect(result).toBe(record);
+      expect(res.statusCode).toBe(0);
     });
 
     it("returns the api key record without touching res when no specific permission is required", async () => {
