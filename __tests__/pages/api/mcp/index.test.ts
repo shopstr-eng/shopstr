@@ -45,7 +45,6 @@ const fetchAllProfilesFromDbMock = jest.fn();
 const getUnreadMessageCountMock = jest.fn();
 const listMcpOrdersMock = jest.fn();
 const listMcpOrdersAsSellerMock = jest.fn();
-const formatOrderForResponseMock = jest.fn();
 
 jest.mock("@/utils/db/db-service", () => ({
   fetchAllProfilesFromDb: (...args: unknown[]) =>
@@ -54,13 +53,18 @@ jest.mock("@/utils/db/db-service", () => ({
     getUnreadMessageCountMock(...args),
 }));
 
-jest.mock("@/mcp/tools/purchase-tools", () => ({
-  listMcpOrders: (...args: unknown[]) => listMcpOrdersMock(...args),
-  listMcpOrdersAsSeller: (...args: unknown[]) =>
-    listMcpOrdersAsSellerMock(...args),
-  formatOrderForResponse: (...args: unknown[]) =>
-    formatOrderForResponseMock(...args),
-}));
+jest.mock("@/mcp/tools/purchase-tools", () => {
+  const actual = jest.requireActual<
+    typeof import("@/mcp/tools/purchase-tools")
+  >("@/mcp/tools/purchase-tools");
+
+  return {
+    listMcpOrders: (...args: unknown[]) => listMcpOrdersMock(...args),
+    listMcpOrdersAsSeller: (...args: unknown[]) =>
+      listMcpOrdersAsSellerMock(...args),
+    formatOrderForResponse: actual.formatOrderForResponse,
+  };
+});
 
 const BUYER_PUBKEY = "b".repeat(64);
 
@@ -176,7 +180,6 @@ beforeEach(async () => {
   getUnreadMessageCountMock.mockResolvedValue(0);
   listMcpOrdersMock.mockResolvedValue([]);
   listMcpOrdersAsSellerMock.mockResolvedValue([]);
-  formatOrderForResponseMock.mockImplementation((order: unknown) => order);
 
   StreamableHTTPServerTransportMock.mockImplementation(
     (options: Record<string, unknown>) => {
@@ -1796,10 +1799,10 @@ describe("registerPurchaseTools: direct-DB tools", () => {
 
       const parsed = parseResultJson<{
         total: number;
-        orders: Array<{ order_id: string }>;
+        orders: Array<{ orderId: string }>;
       }>(result);
       expect(parsed.total).toBe(1);
-      expect(parsed.orders[0]?.order_id).toBe("s-2");
+      expect(parsed.orders[0]?.orderId).toBe("s-2");
     });
 
     it("does not filter when params.status is omitted", async () => {
