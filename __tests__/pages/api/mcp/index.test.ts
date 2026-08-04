@@ -38,6 +38,34 @@ jest.mock("@modelcontextprotocol/sdk/server/streamableHttp.js", () => ({
   StreamableHTTPServerTransport: StreamableHTTPServerTransportMock,
 }));
 
+// Only get_payment_methods, get_notifications, and list_seller_orders reach
+// these two modules (via dynamic import() inside their tool callbacks) —
+// mocked here so Phase 6 can drive them without a real Postgres pool.
+const fetchAllProfilesFromDbMock = jest.fn();
+const getUnreadMessageCountMock = jest.fn();
+const listMcpOrdersMock = jest.fn();
+const listMcpOrdersAsSellerMock = jest.fn();
+
+jest.mock("@/utils/db/db-service", () => ({
+  fetchAllProfilesFromDb: (...args: unknown[]) =>
+    fetchAllProfilesFromDbMock(...args),
+  getUnreadMessageCount: (...args: unknown[]) =>
+    getUnreadMessageCountMock(...args),
+}));
+
+jest.mock("@/mcp/tools/purchase-tools", () => {
+  const actual = jest.requireActual<
+    typeof import("@/mcp/tools/purchase-tools")
+  >("@/mcp/tools/purchase-tools");
+
+  return {
+    listMcpOrders: (...args: unknown[]) => listMcpOrdersMock(...args),
+    listMcpOrdersAsSeller: (...args: unknown[]) =>
+      listMcpOrdersAsSellerMock(...args),
+    formatOrderForResponse: actual.formatOrderForResponse,
+  };
+});
+
 const BUYER_PUBKEY = "b".repeat(64);
 
 function makeApiKey(overrides: Partial<ApiKeyRecord> = {}): ApiKeyRecord {
@@ -148,9 +176,11 @@ beforeEach(async () => {
   createMcpServerMock.mockImplementation(() => fakeServer);
   registerWriteToolsMock.mockImplementation(() => undefined);
 
-  // Default fake transport: simulates the real SDK writing a 200 response
-  // and ending it, so response-instrumentation tests (which only fire on
-  // res.end) have something to observe without a real transport in the loop.
+  fetchAllProfilesFromDbMock.mockResolvedValue([]);
+  getUnreadMessageCountMock.mockResolvedValue(0);
+  listMcpOrdersMock.mockResolvedValue([]);
+  listMcpOrdersAsSellerMock.mockResolvedValue([]);
+
   StreamableHTTPServerTransportMock.mockImplementation(
     (options: Record<string, unknown>) => {
       const sessionId = `session-${transportInstances.length + 1}`;
@@ -438,6 +468,55 @@ describe("request gating, routing, instrumentation", () => {
 
       expect(sessionRes.statusCode).toBe(403);
       expect(sessionRes.jsonBody).toEqual({
+        jsonrpc: "2.0",
+        error: {
+          code: -32000,
+          message: "Session belongs to a different API key",
+        },
+        id: null,
+      });
+    });
+
+    it("rejects a POST reusing another API key's session with 403", async () => {
+      await initializeSession();
+
+      validateApiKeyMock.mockResolvedValueOnce(makeApiKey({ id: 2 }));
+
+      const req = createMockRequest({
+        method: "POST",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+        body: { jsonrpc: "2.0", method: "tools/call", id: 2 },
+      });
+      const res = createMockResponse();
+
+      await handler(req, res as unknown as NextApiResponse);
+
+      expect(res.statusCode).toBe(403);
+      expect(res.jsonBody).toEqual({
+        jsonrpc: "2.0",
+        error: {
+          code: -32000,
+          message: "Session belongs to a different API key",
+        },
+        id: null,
+      });
+    });
+
+    it("rejects a DELETE targeting another API key's session with 403", async () => {
+      await initializeSession();
+
+      validateApiKeyMock.mockResolvedValueOnce(makeApiKey({ id: 2 }));
+
+      const req = createMockRequest({
+        method: "DELETE",
+        headers: { host: "localhost:5000", "mcp-session-id": "session-1" },
+      });
+      const res = createMockResponse();
+
+      await handler(req, res as unknown as NextApiResponse);
+
+      expect(res.statusCode).toBe(403);
+      expect(res.jsonBody).toEqual({
         jsonrpc: "2.0",
         error: {
           code: -32000,
@@ -1039,6 +1118,30 @@ function parseResultJson<T = Record<string, unknown>>(result: ToolResult): T {
   return JSON.parse(text) as T;
 }
 
+function makeOrder(
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    id: 1,
+    order_id: "order-1",
+    api_key_id: 1,
+    buyer_pubkey: BUYER_PUBKEY,
+    seller_pubkey: "c".repeat(64),
+    product_id: "prod-1",
+    product_title: "Widget",
+    quantity: 1,
+    amount_total: 10,
+    currency: "USD",
+    shipping_address: null,
+    payment_ref: null,
+    payment_status: "pending",
+    order_status: "pending",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
 describe("registerPurchaseTools: fetch-proxying tools", () => {
   const originalFetch = global.fetch;
   // The tools under test build baseUrl from process.env.PORT || 5000 at
@@ -1156,6 +1259,17 @@ describe("registerPurchaseTools: fetch-proxying tools", () => {
       expect(parsed.error).toBe("Failed to create order");
       expect(parsed.details).toBe("network down");
     });
+
+    it("sets details to 'Unknown error' when the thrown value is not an Error instance", async () => {
+      fetchMock.mockRejectedValueOnce("boom");
+      const createOrder = await getToolCallback("create_order");
+
+      const result = await createOrder({ productId: "prod-1" });
+
+      expect(parseResultJson<{ details: string }>(result).details).toBe(
+        "Unknown error"
+      );
+    });
   });
 
   describe("get_order_status", () => {
@@ -1195,6 +1309,31 @@ describe("registerPurchaseTools: fetch-proxying tools", () => {
       const result = await getOrderStatus({ orderId: "order-1" });
 
       expect(result.isError).toBe(true);
+    });
+
+    it("returns an error-shaped result when fetch itself throws, not an unhandled rejection", async () => {
+      fetchMock.mockRejectedValueOnce(new Error("network down"));
+      const getOrderStatus = await getToolCallback("get_order_status");
+
+      const result = await getOrderStatus({ orderId: "order-1" });
+
+      expect(result.isError).toBe(true);
+      const parsed = parseResultJson<{ error: string; details: string }>(
+        result
+      );
+      expect(parsed.error).toBe("Failed to get order status");
+      expect(parsed.details).toBe("network down");
+    });
+
+    it("sets details to 'Unknown error' when the thrown value is not an Error instance", async () => {
+      fetchMock.mockRejectedValueOnce("boom");
+      const getOrderStatus = await getToolCallback("get_order_status");
+
+      const result = await getOrderStatus({ orderId: "order-1" });
+
+      expect(parseResultJson<{ details: string }>(result).details).toBe(
+        "Unknown error"
+      );
     });
   });
 
@@ -1242,6 +1381,31 @@ describe("registerPurchaseTools: fetch-proxying tools", () => {
         { headers: { Authorization: "Bearer test-token" } }
       );
     });
+
+    it("returns an error-shaped result when fetch itself throws, not an unhandled rejection", async () => {
+      fetchMock.mockRejectedValueOnce(new Error("network down"));
+      const listOrders = await getToolCallback("list_orders");
+
+      const result = await listOrders({});
+
+      expect(result.isError).toBe(true);
+      const parsed = parseResultJson<{ error: string; details: string }>(
+        result
+      );
+      expect(parsed.error).toBe("Failed to list orders");
+      expect(parsed.details).toBe("network down");
+    });
+
+    it("sets details to 'Unknown error' when the thrown value is not an Error instance", async () => {
+      fetchMock.mockRejectedValueOnce("boom");
+      const listOrders = await getToolCallback("list_orders");
+
+      const result = await listOrders({});
+
+      expect(parseResultJson<{ details: string }>(result).details).toBe(
+        "Unknown error"
+      );
+    });
   });
 
   describe("verify_payment", () => {
@@ -1282,6 +1446,400 @@ describe("registerPurchaseTools: fetch-proxying tools", () => {
       const result = await verifyPayment({ orderId: "order-1" });
 
       expect(result.isError).toBe(true);
+    });
+
+    it("returns an error-shaped result when fetch itself throws, not an unhandled rejection", async () => {
+      fetchMock.mockRejectedValueOnce(new Error("network down"));
+      const verifyPayment = await getToolCallback("verify_payment");
+
+      const result = await verifyPayment({ orderId: "order-1" });
+
+      expect(result.isError).toBe(true);
+      const parsed = parseResultJson<{ error: string; details: string }>(
+        result
+      );
+      expect(parsed.error).toBe("Failed to verify payment");
+      expect(parsed.details).toBe("network down");
+    });
+
+    it("sets details to 'Unknown error' when the thrown value is not an Error instance", async () => {
+      fetchMock.mockRejectedValueOnce("boom");
+      const verifyPayment = await getToolCallback("verify_payment");
+
+      const result = await verifyPayment({ orderId: "order-1" });
+
+      expect(parseResultJson<{ details: string }>(result).details).toBe(
+        "Unknown error"
+      );
+    });
+  });
+});
+
+describe("registerPurchaseTools: direct-DB tools", () => {
+  let consoleErrorSpy: jest.SpiedFunction<typeof console.error>;
+
+  beforeEach(() => {
+    consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {
+      /* audit log noise, expected */
+    });
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+  });
+
+  describe("get_payment_methods", () => {
+    it("has no permission gate (unlike the other six tools): a 'read'-only key still gets a result", async () => {
+      validateApiKeyMock.mockResolvedValueOnce(
+        makeApiKey({ permissions: "read" })
+      );
+      fetchAllProfilesFromDbMock.mockResolvedValueOnce([
+        { pubkey: "seller-x", kind: 0, content: JSON.stringify({}) },
+      ]);
+      const getPaymentMethods = await getToolCallback("get_payment_methods");
+
+      const result = await getPaymentMethods({ sellerPubkey: "seller-x" });
+
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("returns 'Seller not found' when no profile (kind 0 or 30019) matches sellerPubkey", async () => {
+      fetchAllProfilesFromDbMock.mockResolvedValueOnce([
+        { pubkey: "someone-else", kind: 0, content: "{}" },
+      ]);
+      const getPaymentMethods = await getToolCallback("get_payment_methods");
+
+      const result = await getPaymentMethods({ sellerPubkey: "seller-x" });
+
+      expect(result.isError).toBe(true);
+      expect(parseResultJson<{ error: string }>(result).error).toBe(
+        "Seller not found"
+      );
+    });
+
+    it("matches a kind:30019 profile just as well as kind:0", async () => {
+      fetchAllProfilesFromDbMock.mockResolvedValueOnce([
+        { pubkey: "seller-x", kind: 30019, content: "{}" },
+      ]);
+      const getPaymentMethods = await getToolCallback("get_payment_methods");
+
+      const result = await getPaymentMethods({ sellerPubkey: "seller-x" });
+
+      expect(result.isError).toBeFalsy();
+    });
+
+    it("always includes lightning and cashu as available, surfacing lud16 from profile content when present", async () => {
+      fetchAllProfilesFromDbMock.mockResolvedValueOnce([
+        {
+          pubkey: "seller-x",
+          kind: 0,
+          content: JSON.stringify({
+            name: "Alice's Shop",
+            lud16: "alice@getalby.com",
+          }),
+        },
+      ]);
+      const getPaymentMethods = await getToolCallback("get_payment_methods");
+
+      const result = await getPaymentMethods({ sellerPubkey: "seller-x" });
+      const parsed = parseResultJson<{
+        sellerName: string;
+        paymentMethods: Array<{
+          method: string;
+          available: boolean;
+          lud16?: string | null;
+        }>;
+      }>(result);
+
+      expect(parsed.sellerName).toBe("Alice's Shop");
+      expect(parsed.paymentMethods).toEqual([
+        expect.objectContaining({
+          method: "lightning",
+          available: true,
+          lud16: "alice@getalby.com",
+        }),
+        expect.objectContaining({ method: "cashu", available: true }),
+      ]);
+    });
+
+    it("returns discounts: null when paymentMethodDiscounts.bitcoin is falsy, else {bitcoin: <value>}", async () => {
+      fetchAllProfilesFromDbMock.mockResolvedValueOnce([
+        { pubkey: "seller-x", kind: 0, content: "{}" },
+      ]);
+      const getPaymentMethods = await getToolCallback("get_payment_methods");
+
+      const noDiscount = await getPaymentMethods({ sellerPubkey: "seller-x" });
+      expect(
+        parseResultJson<{ discounts: unknown }>(noDiscount).discounts
+      ).toBeNull();
+
+      fetchAllProfilesFromDbMock.mockResolvedValueOnce([
+        {
+          pubkey: "seller-x",
+          kind: 0,
+          content: JSON.stringify({ paymentMethodDiscounts: { bitcoin: 10 } }),
+        },
+      ]);
+      const withDiscount = await getPaymentMethods({
+        sellerPubkey: "seller-x",
+      });
+      expect(
+        parseResultJson<{ discounts: unknown }>(withDiscount).discounts
+      ).toEqual({ bitcoin: 10 });
+    });
+
+    it("catches a profile.content JSON.parse failure and treats it as {} rather than throwing", async () => {
+      fetchAllProfilesFromDbMock.mockResolvedValueOnce([
+        { pubkey: "seller-x", kind: 0, content: "not-json{" },
+      ]);
+      const getPaymentMethods = await getToolCallback("get_payment_methods");
+
+      const result = await getPaymentMethods({ sellerPubkey: "seller-x" });
+
+      expect(result.isError).toBeFalsy();
+      expect(
+        parseResultJson<{ sellerName: string | null }>(result).sellerName
+      ).toBeNull();
+    });
+
+    it("returns an error-shaped result when fetchAllProfilesFromDb throws, not an unhandled rejection", async () => {
+      fetchAllProfilesFromDbMock.mockRejectedValueOnce(new Error("db down"));
+      const getPaymentMethods = await getToolCallback("get_payment_methods");
+
+      const result = await getPaymentMethods({ sellerPubkey: "seller-x" });
+
+      expect(result.isError).toBe(true);
+      const parsed = parseResultJson<{ error: string; details: string }>(
+        result
+      );
+      expect(parsed.error).toBe("Failed to get payment methods");
+      expect(parsed.details).toBe("db down");
+    });
+
+    it("sets details to 'Unknown error' when the thrown value is not an Error instance", async () => {
+      fetchAllProfilesFromDbMock.mockRejectedValueOnce("boom");
+      const getPaymentMethods = await getToolCallback("get_payment_methods");
+
+      const result = await getPaymentMethods({ sellerPubkey: "seller-x" });
+
+      expect(parseResultJson<{ details: string }>(result).details).toBe(
+        "Unknown error"
+      );
+    });
+  });
+
+  describe("get_notifications", () => {
+    it("returns permissionError without touching the DB for a read-only key", async () => {
+      validateApiKeyMock.mockResolvedValueOnce(
+        makeApiKey({ permissions: "read" })
+      );
+      const getNotifications = await getToolCallback("get_notifications");
+
+      const result = await getNotifications({});
+
+      expect(result.isError).toBe(true);
+      expect(getUnreadMessageCountMock).not.toHaveBeenCalled();
+    });
+
+    it("always includes unreadMessages; omits ordersAsBuyer/ordersAsSeller/actionRequired when includeOrders is explicitly false", async () => {
+      getUnreadMessageCountMock.mockResolvedValueOnce(3);
+      const getNotifications = await getToolCallback("get_notifications");
+
+      const result = await getNotifications({ includeOrders: false });
+
+      const parsed = parseResultJson<Record<string, unknown>>(result);
+      expect(parsed.unreadMessages).toBe(3);
+      expect(parsed.ordersAsBuyer).toBeUndefined();
+      expect(parsed.ordersAsSeller).toBeUndefined();
+      expect(parsed.actionRequired).toBeUndefined();
+      expect(listMcpOrdersMock).not.toHaveBeenCalled();
+    });
+
+    it("includes ordersAsBuyer/ordersAsSeller/actionRequired when includeOrders is omitted", async () => {
+      listMcpOrdersMock.mockResolvedValueOnce([makeOrder({ order_id: "b-1" })]);
+      listMcpOrdersAsSellerMock.mockResolvedValueOnce([
+        makeOrder({ order_id: "s-1" }),
+      ]);
+      const getNotifications = await getToolCallback("get_notifications");
+
+      const result = await getNotifications({});
+
+      const parsed = parseResultJson<{
+        ordersAsBuyer: { total: number };
+        ordersAsSeller: { total: number };
+      }>(result);
+      expect(parsed.ordersAsBuyer.total).toBe(1);
+      expect(parsed.ordersAsSeller.total).toBe(1);
+    });
+
+    it("defaults orderLimit to 10", async () => {
+      const getNotifications = await getToolCallback("get_notifications");
+
+      await getNotifications({});
+
+      expect(listMcpOrdersMock).toHaveBeenCalledWith(BUYER_PUBKEY, 10);
+      expect(listMcpOrdersAsSellerMock).toHaveBeenCalledWith(BUYER_PUBKEY, 10);
+    });
+
+    it("counts actionRequired.pendingPayments from buyer orders with payment_status OR order_status 'pending'", async () => {
+      listMcpOrdersMock.mockResolvedValueOnce([
+        makeOrder({
+          order_id: "b-1",
+          payment_status: "pending",
+          order_status: "confirmed",
+        }),
+        makeOrder({
+          order_id: "b-2",
+          payment_status: "paid",
+          order_status: "pending",
+        }),
+        makeOrder({
+          order_id: "b-3",
+          payment_status: "paid",
+          order_status: "confirmed",
+        }),
+      ]);
+      const getNotifications = await getToolCallback("get_notifications");
+
+      const result = await getNotifications({});
+
+      const parsed = parseResultJson<{
+        actionRequired: { pendingPayments: number };
+      }>(result);
+      expect(parsed.actionRequired.pendingPayments).toBe(2);
+    });
+
+    it("counts actionRequired.ordersToFulfill from seller orders with order_status 'pending' or 'confirmed'", async () => {
+      listMcpOrdersAsSellerMock.mockResolvedValueOnce([
+        makeOrder({ order_id: "s-1", order_status: "pending" }),
+        makeOrder({ order_id: "s-2", order_status: "confirmed" }),
+        makeOrder({ order_id: "s-3", order_status: "shipped" }),
+      ]);
+      const getNotifications = await getToolCallback("get_notifications");
+
+      const result = await getNotifications({});
+
+      const parsed = parseResultJson<{
+        actionRequired: { ordersToFulfill: number };
+      }>(result);
+      expect(parsed.actionRequired.ordersToFulfill).toBe(2);
+    });
+
+    it("returns an error-shaped result when getUnreadMessageCount throws, not an unhandled rejection", async () => {
+      getUnreadMessageCountMock.mockRejectedValueOnce(new Error("db down"));
+      const getNotifications = await getToolCallback("get_notifications");
+
+      const result = await getNotifications({});
+
+      expect(result.isError).toBe(true);
+      const parsed = parseResultJson<{ error: string; details: string }>(
+        result
+      );
+      expect(parsed.error).toBe("Failed to get notifications");
+      expect(parsed.details).toBe("db down");
+    });
+
+    it("sets details to 'Unknown error' when the thrown value is not an Error instance", async () => {
+      getUnreadMessageCountMock.mockRejectedValueOnce("boom");
+      const getNotifications = await getToolCallback("get_notifications");
+
+      const result = await getNotifications({});
+
+      expect(parseResultJson<{ details: string }>(result).details).toBe(
+        "Unknown error"
+      );
+    });
+  });
+
+  describe("list_seller_orders", () => {
+    it("returns permissionError without touching the DB for a read-only key", async () => {
+      validateApiKeyMock.mockResolvedValueOnce(
+        makeApiKey({ permissions: "read" })
+      );
+      const listSellerOrders = await getToolCallback("list_seller_orders");
+
+      const result = await listSellerOrders({});
+
+      expect(result.isError).toBe(true);
+      expect(listMcpOrdersAsSellerMock).not.toHaveBeenCalled();
+    });
+
+    it("defaults limit/offset to 50/0", async () => {
+      const listSellerOrders = await getToolCallback("list_seller_orders");
+
+      await listSellerOrders({});
+
+      expect(listMcpOrdersAsSellerMock).toHaveBeenCalledWith(
+        BUYER_PUBKEY,
+        50,
+        0
+      );
+    });
+
+    it("uses the supplied limit/offset instead of the defaults when provided", async () => {
+      const listSellerOrders = await getToolCallback("list_seller_orders");
+
+      await listSellerOrders({ limit: 5, offset: 15 });
+
+      expect(listMcpOrdersAsSellerMock).toHaveBeenCalledWith(
+        BUYER_PUBKEY,
+        5,
+        15
+      );
+    });
+
+    it("filters by status client-side only when params.status is provided", async () => {
+      listMcpOrdersAsSellerMock.mockResolvedValueOnce([
+        makeOrder({ order_id: "s-1", order_status: "pending" }),
+        makeOrder({ order_id: "s-2", order_status: "shipped" }),
+      ]);
+      const listSellerOrders = await getToolCallback("list_seller_orders");
+
+      const result = await listSellerOrders({ status: "shipped" });
+
+      const parsed = parseResultJson<{
+        total: number;
+        orders: Array<{ orderId: string }>;
+      }>(result);
+      expect(parsed.total).toBe(1);
+      expect(parsed.orders[0]?.orderId).toBe("s-2");
+    });
+
+    it("does not filter when params.status is omitted", async () => {
+      listMcpOrdersAsSellerMock.mockResolvedValueOnce([
+        makeOrder({ order_id: "s-1", order_status: "pending" }),
+        makeOrder({ order_id: "s-2", order_status: "shipped" }),
+      ]);
+      const listSellerOrders = await getToolCallback("list_seller_orders");
+
+      const result = await listSellerOrders({});
+
+      expect(parseResultJson<{ total: number }>(result).total).toBe(2);
+    });
+
+    it("returns an error-shaped result when listMcpOrdersAsSeller throws, not an unhandled rejection", async () => {
+      listMcpOrdersAsSellerMock.mockRejectedValueOnce(new Error("db down"));
+      const listSellerOrders = await getToolCallback("list_seller_orders");
+
+      const result = await listSellerOrders({});
+
+      expect(result.isError).toBe(true);
+      const parsed = parseResultJson<{ error: string; details: string }>(
+        result
+      );
+      expect(parsed.error).toBe("Failed to list seller orders");
+      expect(parsed.details).toBe("db down");
+    });
+
+    it("sets details to 'Unknown error' when the thrown value is not an Error instance", async () => {
+      listMcpOrdersAsSellerMock.mockRejectedValueOnce("boom");
+      const listSellerOrders = await getToolCallback("list_seller_orders");
+
+      const result = await listSellerOrders({});
+
+      expect(parseResultJson<{ details: string }>(result).details).toBe(
+        "Unknown error"
+      );
     });
   });
 });
