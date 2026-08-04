@@ -68,16 +68,18 @@ export interface MintQuoteFixtureOverrides {
 export function makeMintQuoteResponse(
   overrides: MintQuoteFixtureOverrides = {}
 ) {
+  const amount = overrides.amount ?? 500;
+
   return {
     request: overrides.request ?? "lnbc5000n1mockinvoice",
     quote: overrides.quote ?? "quote_id_123",
-    amount: overrides.amount ?? 500,
+    amount,
     mintUrl: overrides.mintUrl ?? "https://mint.example.com",
     pricing: {
-      unitPrice: 500,
-      subtotal: 500,
+      unitPrice: amount,
+      subtotal: amount,
       shippingCost: 0,
-      total: 500,
+      total: amount,
       currency: "SATS",
       ...overrides.pricing,
     } as ListingPricingResult,
@@ -334,6 +336,7 @@ export function mockP2pkCheckoutModule(
   return {
     isP2pkEscrowFeatureEnabled: jest.fn().mockReturnValue(false),
     isP2pkMintAllowed: jest.fn().mockReturnValue(true),
+    isSellerP2pkEscrowActive: jest.fn().mockReturnValue(false),
     resolveSellerCheckoutProfile: jest.fn().mockResolvedValue(null),
     resolveP2pkCheckoutOutputConfig: jest.fn().mockResolvedValue(null),
     ...overrides,

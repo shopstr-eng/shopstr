@@ -7,6 +7,7 @@ import {
   makeMintQuoteResponse,
   installFetchMock,
   mockFetchJsonOnce,
+  mockP2pkCheckoutModule,
   renderWithCheckoutContext,
 } from "@/test-utils/checkout-test-helpers";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
@@ -40,14 +41,18 @@ describe("checkout-test-helpers", () => {
     expect(shop.content.ui).toBeDefined();
   });
 
-  it("makeMintQuoteResponse produces the ListingMintQuoteResponse shape", () => {
+  it("makeMintQuoteResponse keeps default SATS pricing coherent with amount", () => {
     const quote = makeMintQuoteResponse({ amount: 750 });
     expect(quote).toMatchObject({
       request: expect.any(String),
       quote: expect.any(String),
       amount: 750,
       mintUrl: expect.any(String),
-      pricing: expect.objectContaining({ total: 500 }),
+      pricing: expect.objectContaining({
+        unitPrice: 750,
+        subtotal: 750,
+        total: 750,
+      }),
     });
   });
 
@@ -67,6 +72,13 @@ describe("checkout-test-helpers", () => {
     expect(
       screen.getByText("mints:https://mint.example.com")
     ).toBeInTheDocument();
+  });
+
+  it("mockP2pkCheckoutModule includes the ProductInvoiceCard runtime contract", () => {
+    const p2pkModule = mockP2pkCheckoutModule();
+
+    expect(p2pkModule.isSellerP2pkEscrowActive).toEqual(expect.any(Function));
+    expect(p2pkModule.isSellerP2pkEscrowActive(undefined)).toBe(false);
   });
 
   describe("fetch mocking", () => {
