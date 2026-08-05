@@ -360,9 +360,23 @@ export function mockNostrHelperFunctionsModule(
 
 export function mockGiftWrapModule(overrides: Record<string, unknown> = {}) {
   return {
-    constructGiftWrappedEvent: jest.fn(),
-    constructMessageSeal: jest.fn(),
-    constructMessageGiftWrap: jest.fn(),
+    constructGiftWrappedEvent: jest
+      .fn()
+      .mockImplementation(
+        async (
+          sender: unknown,
+          receiver: unknown,
+          message: unknown,
+          subject: unknown,
+          options?: unknown
+        ) => ({ sender, receiver, message, subject, options })
+      ),
+    constructMessageSeal: jest
+      .fn()
+      .mockImplementation(async (_signer: unknown, event: unknown) => event),
+    constructMessageGiftWrap: jest
+      .fn()
+      .mockImplementation(async (event: unknown) => event),
     sendGiftWrappedMessageEvent: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
