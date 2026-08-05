@@ -360,9 +360,58 @@ export function mockNostrHelperFunctionsModule(
 
 export function mockGiftWrapModule(overrides: Record<string, unknown> = {}) {
   return {
-    constructGiftWrappedEvent: jest.fn(),
-    constructMessageSeal: jest.fn(),
-    constructMessageGiftWrap: jest.fn(),
+    constructGiftWrappedEvent: jest
+      .fn()
+      .mockImplementation(
+        async (
+          sender: unknown,
+          receiver: unknown,
+          message: unknown,
+          subject: unknown,
+          options: Record<string, unknown> = {}
+        ) => {
+          const tags = [
+            ["p", String(receiver)],
+            ["subject", String(subject)],
+          ];
+          if (options.address) tags.push(["address", String(options.address)]);
+          if (options.pickup) tags.push(["pickup", String(options.pickup)]);
+
+          return {
+            id: "mock-message-event-id",
+            pubkey: String(sender),
+            created_at: 0,
+            content: String(message),
+            kind: typeof options.kind === "number" ? options.kind : 14,
+            tags,
+          };
+        }
+      ),
+    constructMessageSeal: jest
+      .fn()
+      .mockImplementation(async (_signer: unknown, event: unknown) => ({
+        ...(event as Record<string, unknown>),
+        id: "mock-seal-event-id",
+        kind: 13,
+        tags: [],
+      })),
+    constructMessageGiftWrap: jest
+      .fn()
+      .mockImplementation(
+        async (
+          event: unknown,
+          randomPubkey: unknown,
+          _randomPrivkey: unknown,
+          recipientPubkey: unknown
+        ) => ({
+          id: "mock-gift-wrap-event-id",
+          pubkey: String(randomPubkey),
+          created_at: 0,
+          content: JSON.stringify(event),
+          kind: 1059,
+          tags: [["p", String(recipientPubkey)]],
+        })
+      ),
     sendGiftWrappedMessageEvent: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
