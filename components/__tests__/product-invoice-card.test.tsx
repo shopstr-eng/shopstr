@@ -19,7 +19,7 @@ import {
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { resolveSellerCheckoutProfile } from "@/utils/cashu/p2pk-checkout";
-import { sendGiftWrappedMessageEvent } from "@/utils/nostr/gift-wrap";
+import { constructGiftWrappedEvent } from "@/utils/nostr/gift-wrap";
 import { recoverProofsToBuyerWallet } from "@/utils/cashu/wallet-recovery";
 import { NostrWebLNProvider } from "@getalby/sdk";
 import QRCode from "qrcode";
@@ -227,8 +227,7 @@ const mockSafeSwap = safeSwap as jest.Mock;
 const mockSafeMeltProofs = safeMeltProofs as jest.Mock;
 const mockResolveSellerCheckoutProfile =
   resolveSellerCheckoutProfile as jest.Mock;
-const mockSendGiftWrappedMessageEvent =
-  sendGiftWrappedMessageEvent as jest.Mock;
+const mockConstructGiftWrappedEvent = constructGiftWrappedEvent as jest.Mock;
 const mockRecoverProofsToBuyerWallet = recoverProofsToBuyerWallet as jest.Mock;
 const mockNostrWebLNProvider = NostrWebLNProvider as unknown as jest.Mock;
 const mockQrCodeToDataURL = (QRCode as unknown as { toDataURL: jest.Mock })
@@ -364,7 +363,7 @@ beforeEach(() => {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("supportsShipping / supportsPickup / requiresPickupLocation", () => {
-  it("shows only the shipping form for a shippingType of 'Added Cost' with no pickup locations", () => {
+  it("shows only the shipping order option for a shippingType of 'Added Cost' with no pickup locations", () => {
     renderProductInvoiceCard({
       shippingType: "Added Cost",
       shippingCost: 100,
@@ -422,7 +421,7 @@ describe("supportsShipping / supportsPickup / requiresPickupLocation", () => {
 });
 
 describe("form validity (useEffect)", () => {
-  it("isFormValid is false until all required shipping fields are non-empty (post-trim)", () => {
+  it("isFormValid is false until all required shipping fields are non-empty (post-trim)", async () => {
     renderProductInvoiceCard({
       shippingType: "Added Cost",
       shippingCost: 100,
@@ -434,7 +433,7 @@ describe("form validity (useEffect)", () => {
     const payButton = screen.getByRole("button", {
       name: /Pay with Lightning/,
     });
-    expect(payButton).toBeDisabled();
+    await waitFor(() => expect(payButton).toBeDisabled());
 
     fillShippingForm({
       Name: "Ada Lovelace",
@@ -444,13 +443,13 @@ describe("form validity (useEffect)", () => {
       "State/Province": "  ",
       Country: "USA",
     });
-    expect(payButton).toBeDisabled();
+    await waitFor(() => expect(payButton).toBeDisabled());
 
     fillShippingForm({ "State/Province": "NY" });
-    expect(payButton).toBeEnabled();
+    await waitFor(() => expect(payButton).toBeEnabled());
   });
 
-  it("isFormValid depends on selectedPickupLocation, not the shipping fields, when formType is 'contact' and requiresPickupLocation", () => {
+  it("isFormValid depends on selectedPickupLocation, not the shipping fields, when formType is 'contact' and requiresPickupLocation", async () => {
     renderProductInvoiceCard({
       shippingType: "Pickup",
       pickupLocations: ["Downtown Store"],
@@ -460,13 +459,13 @@ describe("form validity (useEffect)", () => {
     const payButton = screen.getByRole("button", {
       name: /Pay with Lightning/,
     });
-    expect(payButton).toBeDisabled();
+    await waitFor(() => expect(payButton).toBeDisabled());
 
     fireEvent.change(screen.getByLabelText("Pickup Location"), {
       target: { value: "Downtown Store" },
     });
 
-    expect(payButton).toBeEnabled();
+    await waitFor(() => expect(payButton).toBeEnabled());
   });
 });
 
@@ -628,18 +627,26 @@ describe("server-side repricing guard (validateQuoteMatchesSelectedListingOption
     expect(await screen.findByText(/verified price/)).toBeInTheDocument();
   });
 
-  it("rejects a quote whose selectedSize/Volume/Weight/BulkOption doesn't match what the client sent", async () => {
-    renderNwcReady();
-    mockFetchJsonOnce(
-      makeMintQuoteResponse({ pricing: { selectedSize: "M" } })
-    );
+  it.each([
+    ["size", { selectedSize: "M" }],
+    ["volume", { selectedVolume: "1L" }],
+    ["weight", { selectedWeight: "1kg" }],
+    ["bulk option", { selectedBulkOption: 5 }],
+  ])(
+    "rejects a quote whose selected %s differs from the client",
+    async (_, pricing) => {
+      renderNwcReady();
+      mockFetchJsonOnce(makeMintQuoteResponse({ pricing }));
 
-    fireEvent.click(screen.getByRole("button", { name: /Pay with MyWallet/ }));
+      fireEvent.click(
+        screen.getByRole("button", { name: /Pay with MyWallet/ })
+      );
 
-    expect(
-      await screen.findByText(/did not match the selected listing options/)
-    ).toBeInTheDocument();
-  });
+      expect(
+        await screen.findByText(/did not match the selected listing options/)
+      ).toBeInTheDocument();
+    }
+  );
 });
 
 describe("handleLightningPayment", () => {
@@ -691,7 +698,7 @@ describe("handleLightningPayment", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("attempts window.webln auto-pay when available, and still shows the QR when it isn't", async () => {
+  it("attempts window.webln auto-pay when available", async () => {
     renderLightningReadyToPay();
     stallAfterFirstPoll();
     mockFetchJsonOnce(makeMintQuoteResponse({ request: "lnbc_test_invoice" }));
@@ -708,6 +715,17 @@ describe("handleLightningPayment", () => {
       expect(sendPayment).toHaveBeenCalledWith("lnbc_test_invoice")
     );
     expect(await screen.findByAltText("Lightning invoice")).toBeInTheDocument();
+  });
+
+  it("still shows the QR when window.webln is unavailable", async () => {
+    renderLightningReadyToPay();
+    stallAfterFirstPoll();
+    mockFetchJsonOnce(makeMintQuoteResponse({ request: "lnbc_test_invoice" }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Lightning/ }));
+
+    expect(await screen.findByAltText("Lightning invoice")).toBeInTheDocument();
+    expect(mockQrCodeToDataURL).toHaveBeenCalledWith("lnbc_test_invoice");
   });
 });
 
@@ -812,18 +830,62 @@ describe("handleCashuPayment", () => {
 
   it("reprices server-side via requestListingPriceQuote before spending proofs", async () => {
     renderCashuReadyToPay();
-    mockFetchJsonOnce(makeMintQuoteResponse());
+    let resolveQuote!: (quote: unknown) => void;
+    const parseQuote = jest.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveQuote = resolve;
+        })
+    );
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: parseQuote,
+    });
 
     fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
 
-    await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+    await waitFor(() => expect(parseQuote).toHaveBeenCalled());
     const [url, requestInit] = (global.fetch as jest.Mock).mock.calls[0];
     expect(url).toBe("/api/listing/mint-quote");
     const body = JSON.parse(requestInit.body);
     expect(body.priceOnly).toBe(true);
     expect(body.productId).toBeDefined();
+    expect(mockCashuWalletCtor).not.toHaveBeenCalled();
+    expect(mockSafeSwap).not.toHaveBeenCalled();
 
-    await waitFor(() => expect(mockCashuWalletCtor).toHaveBeenCalled());
+    resolveQuote(makeMintQuoteResponse());
+
+    await waitFor(() => expect(mockSafeSwap).toHaveBeenCalled());
+  });
+
+  it("does not construct a wallet or spend proofs when server repricing fails", async () => {
+    const { setCashuPaymentFailed } = renderCashuReadyToPay();
+    mockFetchJsonOnce({ error: "listing unavailable" }, { ok: false });
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(() =>
+      expect(setCashuPaymentFailed).toHaveBeenCalledWith(true)
+    );
+    expect(mockCashuWalletCtor).not.toHaveBeenCalled();
+    expect(mockSafeSwap).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["the amount exceeds tolerance", { amount: 2000 }],
+    ["a selected option does not match", { pricing: { selectedSize: "M" } }],
+  ])("does not spend proofs when %s", async (_, quoteOverrides) => {
+    const { setCashuPaymentFailed } = renderCashuReadyToPay();
+    mockFetchJsonOnce(makeMintQuoteResponse(quoteOverrides));
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(() =>
+      expect(setCashuPaymentFailed).toHaveBeenCalledWith(true)
+    );
+    expect(mockCashuWalletCtor).not.toHaveBeenCalled();
+    expect(mockSafeSwap).not.toHaveBeenCalled();
   });
 
   it("calls setCashuPaymentFailed(true) (not FailureModal) when sendTokens/safeSwap rejects", async () => {
@@ -881,25 +943,48 @@ describe("sendTokens — seller payout branches", () => {
     await waitFor(() => expect(mockSafeMeltProofs).toHaveBeenCalled());
   });
 
-  it("routes to safeSwap (ecash payout) otherwise", async () => {
+  it.each([
+    ["the seller prefers ecash", { payment_preference: "ecash" }],
+    ["a Lightning address is missing", { payment_preference: "lightning" }],
+    [
+      "the Lightning address is hosted by ZeusPay",
+      { payment_preference: "lightning", lud16: "seller@zeuspay.com" },
+    ],
+  ])("routes to ecash payout when %s", async (_, profileContent) => {
     const { setCashuPaymentSent } = renderCashuReadyToPay();
     mockFetchJsonOnce(makeMintQuoteResponse());
     mockResolveSellerCheckoutProfile.mockResolvedValueOnce({
-      content: { payment_preference: "ecash", shopstr_donation: 0 },
+      content: { ...profileContent, shopstr_donation: 0 },
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
 
-    await waitFor(() => expect(setCashuPaymentSent).toHaveBeenCalledWith(true));
+    await waitFor(
+      () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+      {
+        timeout: 5000,
+      }
+    );
     expect(mockSafeMeltProofs).not.toHaveBeenCalled();
+    const sentEcashToSeller = mockConstructGiftWrappedEvent.mock.calls.some(
+      ([, recipient, , subject, options]) =>
+        recipient === SELLER_PUBKEY &&
+        subject === "order-payment" &&
+        options?.paymentType === "ecash" &&
+        options?.paymentReference === "cashuAmocktoken"
+    );
+    expect(sentEcashToSeller).toBe(true);
   });
 
-  it("includes shipping address details in the order message only when formType is 'shipping'", async () => {
+  it("includes shipping address details in the order event when formType is 'shipping'", async () => {
     mockGetLocalStorageData.mockReturnValue({
       ...DEFAULT_LOCAL_STORAGE_DATA,
       tokens: [{ id: "ks1", amount: 1000, secret: "s1" }],
     });
-    renderProductInvoiceCard({ shippingType: "Added Cost", shippingCost: 100 });
+    const { setCashuPaymentSent } = renderProductInvoiceCard({
+      shippingType: "Added Cost",
+      shippingCost: 100,
+    });
     fireEvent.click(
       screen.getByRole("button", { name: /Online order with shipping/i })
     );
@@ -915,20 +1000,24 @@ describe("sendTokens — seller payout branches", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
 
-    await waitFor(() => {
-      const found = mockSendGiftWrappedMessageEvent.mock.calls.some(
-        ([, event]: any) => event?.options?.address?.includes("Ada Lovelace")
-      );
-      expect(found).toBe(true);
-    });
+    await waitFor(
+      () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+      {
+        timeout: 5000,
+      }
+    );
+    const found = mockConstructGiftWrappedEvent.mock.calls.some(
+      ([, , , , options]) => options?.address?.includes("Ada Lovelace")
+    );
+    expect(found).toBe(true);
   });
 
-  it("includes the selected pickup location in the order message when formType is 'contact'", async () => {
+  it("includes pickup and excludes shipping address when formType is 'contact'", async () => {
     mockGetLocalStorageData.mockReturnValue({
       ...DEFAULT_LOCAL_STORAGE_DATA,
       tokens: [{ id: "ks1", amount: 1000, secret: "s1" }],
     });
-    renderProductInvoiceCard({
+    const { setCashuPaymentSent } = renderProductInvoiceCard({
       shippingType: "Pickup",
       pickupLocations: ["Downtown Store"],
     });
@@ -940,12 +1029,25 @@ describe("sendTokens — seller payout branches", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
 
-    await waitFor(() => {
-      const found = mockSendGiftWrappedMessageEvent.mock.calls.some(
-        ([, event]: any) => event?.options?.pickup === "Downtown Store"
+    await waitFor(
+      () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+      {
+        timeout: 5000,
+      }
+    );
+    const options = mockConstructGiftWrappedEvent.mock.calls.map(
+      ([, , , , eventOptions]) => eventOptions
+    );
+    expect(
+      options.some((eventOptions) => eventOptions?.pickup === "Downtown Store")
+    ).toBe(true);
+    const shippingAddresses = options
+      .map((eventOptions) => eventOptions?.address)
+      .filter(
+        (address): address is string =>
+          typeof address === "string" && address.trim().length > 0
       );
-      expect(found).toBe(true);
-    });
+    expect(shippingAddresses).toEqual([]);
   });
 });
 
