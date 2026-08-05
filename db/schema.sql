@@ -202,3 +202,38 @@ CREATE TABLE IF NOT EXISTS p2pk_escrow_orders (
 
 CREATE INDEX IF NOT EXISTS idx_p2pk_escrow_orders_buyer ON p2pk_escrow_orders(buyer_nostr_pubkey);
 CREATE INDEX IF NOT EXISTS idx_p2pk_escrow_orders_seller ON p2pk_escrow_orders(seller_nostr_pubkey);
+
+-- Hold-invoice (HODL) escrow order commitments. One row per Lightning escrow
+-- order, written whole at order creation and never overwritten.
+--
+-- The row exists so a later step has an authoritative answer to "who are the
+-- three parties on this order?". A Nostr event about an order proves only
+-- which key signed it, and anyone can sign an event about a payment hash they
+-- have seen, so identity has to come from a record written before any such
+-- event could exist. That record is this table.
+CREATE TABLE IF NOT EXISTS hodl_escrow_orders (
+    -- Server-generated: sha256 of a CSPRNG preimage nothing outside this
+    -- process has seen. Keying on it means a seller who saw an order id
+    -- cannot pre-register the row, the same reason p2pk_escrow_orders is
+    -- keyed on H(token) rather than on the invoice order id.
+    payment_hash TEXT PRIMARY KEY,
+    -- Custodial by design: the arbiter holds the secret that settles the
+    -- invoice, not the seller. Never leaves the server and never appears in
+    -- an API response; no read path in db-service selects this column.
+    preimage TEXT NOT NULL,
+    -- The NIP-98-authenticated caller, never a client-submitted field.
+    buyer_nostr_pubkey TEXT NOT NULL,
+    -- The listing event's signer.
+    seller_nostr_pubkey TEXT NOT NULL,
+    -- Resolved from ARBITER_NOSTR_PUBKEY at write time; not caller-supplied.
+    arbiter_nostr_pubkey TEXT NOT NULL,
+    invoice TEXT NOT NULL,
+    amount_sats BIGINT NOT NULL CHECK (amount_sats > 0),
+    -- Mirrors HodlInvoiceStatus in utils/lightning/hodl-invoice-provider.ts.
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'accepted', 'settled', 'cancelled')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_hodl_escrow_orders_buyer ON hodl_escrow_orders(buyer_nostr_pubkey);
+CREATE INDEX IF NOT EXISTS idx_hodl_escrow_orders_seller ON hodl_escrow_orders(seller_nostr_pubkey);

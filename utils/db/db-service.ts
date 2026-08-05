@@ -4,6 +4,7 @@ import {
   pickPreferredReplaceableEvent,
   selectPreferredReplaceableEvent,
 } from "../nostr/replaceable-events";
+import { getConfiguredArbiterNostrPubkey } from "../nostr/arbiter-pubkey";
 import { findListingBySlug } from "../url-slugs";
 
 let pool: Pool | null = null;
@@ -481,6 +482,25 @@ async function initializeTables(): Promise<void> {
 
       -- Migration for tables created before invoice_order_id existed.
       ALTER TABLE p2pk_escrow_orders ADD COLUMN IF NOT EXISTS invoice_order_id TEXT;
+
+      -- Hold-invoice escrow order commitments. Written whole at order
+      -- creation and never overwritten; db/schema.sql documents why each
+      -- column is server-derived rather than client-supplied.
+      CREATE TABLE IF NOT EXISTS hodl_escrow_orders (
+          payment_hash TEXT PRIMARY KEY,
+          preimage TEXT NOT NULL,
+          buyer_nostr_pubkey TEXT NOT NULL,
+          seller_nostr_pubkey TEXT NOT NULL,
+          arbiter_nostr_pubkey TEXT NOT NULL,
+          invoice TEXT NOT NULL,
+          amount_sats BIGINT NOT NULL CHECK (amount_sats > 0),
+          status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'accepted', 'settled', 'cancelled')),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          expires_at TIMESTAMP NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_hodl_escrow_orders_buyer ON hodl_escrow_orders(buyer_nostr_pubkey);
+      CREATE INDEX IF NOT EXISTS idx_hodl_escrow_orders_seller ON hodl_escrow_orders(seller_nostr_pubkey);
 
       -- Shop slugs table (storefront URL slugs)
       CREATE TABLE IF NOT EXISTS shop_slugs (
@@ -1736,6 +1756,169 @@ export async function recordP2pkEscrowRuling(
       // Preserve the original database error.
     }
     throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * The commitment written when a Lightning (hold-invoice) escrow order is
+ * created.
+ *
+ * There is no `arbiterNostrPubkey` field on purpose: the arbiter is resolved
+ * from configuration inside {@link registerHodlEscrowOrder}, so no caller —
+ * now or later — can pick which arbiter a row is bound to.
+ */
+export type HodlEscrowOrderRegistration = {
+  /** sha256 of `preimage`, 32 bytes of hex. Primary key. */
+  paymentHash: string;
+  /**
+   * The settlement secret, stored so the arbiter can settle later. Write-only
+   * as far as this module is concerned: no read path selects this column.
+   */
+  preimage: string;
+  /** From the NIP-98-authenticated request, never from a request body. */
+  buyerNostrPubkey: string;
+  /** From the listing event's signer, never from a request body. */
+  sellerNostrPubkey: string;
+  invoice: string;
+  amountSats: number;
+  expiresAt: Date;
+};
+
+/**
+ * Raised when a hodl escrow commitment is refused before it is attempted,
+ * because the arbiter identity is missing or a caller tried to supply one.
+ * Distinct from a database failure: nothing was written and nothing was tried.
+ */
+export class HodlEscrowArbiterConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "HodlEscrowArbiterConfigError";
+  }
+}
+
+/**
+ * The fields compared to decide whether a second write of the same payment
+ * hash describes the same order.
+ *
+ * Excludes `preimage` (never read back), `created_at`/`expires_at`
+ * (wall-clock, so two writes of an identical order legitimately differ), and
+ * `status` (mutates after creation). `invoice` is included and pins the
+ * terms: a BOLT-11 payment request encodes its own amount and expiry, so two
+ * equal invoice strings cannot disagree about them.
+ */
+type HodlEscrowOrderIdentityRow = {
+  payment_hash: string;
+  buyer_nostr_pubkey: string;
+  seller_nostr_pubkey: string;
+  arbiter_nostr_pubkey: string;
+  invoice: string;
+  amount_sats: string | number;
+};
+
+/**
+ * Writes the single commitment row for a hold-invoice escrow order.
+ *
+ * First-write-wins: `ON CONFLICT DO NOTHING` means an existing row is never
+ * overwritten. Re-writing an identical order reports `existing`, so a retry
+ * is a no-op; a write that disagrees with the stored row reports `conflict`,
+ * which the caller must surface as an error rather than assume its own view
+ * of the order won.
+ *
+ * Callers must have created the hold invoice already. This row is the record
+ * of an invoice that exists, so a row must never appear for one that does not.
+ *
+ * @throws {HodlEscrowArbiterConfigError} if the arbiter pubkey is
+ * unconfigured, or if `registration` carries an arbiter pubkey of its own.
+ */
+export async function registerHodlEscrowOrder(
+  registration: HodlEscrowOrderRegistration
+): Promise<"created" | "existing" | "conflict"> {
+  const arbiterNostrPubkey = getConfiguredArbiterNostrPubkey();
+  if (!arbiterNostrPubkey) {
+    throw new HodlEscrowArbiterConfigError(
+      "Arbiter Nostr pubkey is not configured; refusing to write a hodl escrow commitment"
+    );
+  }
+
+  // The type has no arbiter field, so this can only fire on an object that
+  // smuggled one past the compiler — a request body spread into the
+  // registration, say. Rejecting beats ignoring: the caller would otherwise
+  // get a success for a row bound to an arbiter it did not ask for.
+  const suppliedArbiter = (registration as { arbiterNostrPubkey?: unknown })
+    .arbiterNostrPubkey;
+  if (suppliedArbiter !== undefined) {
+    throw new HodlEscrowArbiterConfigError(
+      "Hodl escrow arbiter pubkey comes from configuration and cannot be supplied by the caller"
+    );
+  }
+
+  const paymentHash = registration.paymentHash.toLowerCase();
+  const buyerNostrPubkey = registration.buyerNostrPubkey.toLowerCase();
+  const sellerNostrPubkey = registration.sellerNostrPubkey.toLowerCase();
+
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    // Every column is populated by this one statement: there is no moment at
+    // which a row exists without the preimage that settles it, or without the
+    // parties it binds.
+    const inserted = await client.query(
+      `INSERT INTO hodl_escrow_orders (
+         payment_hash,
+         preimage,
+         buyer_nostr_pubkey,
+         seller_nostr_pubkey,
+         arbiter_nostr_pubkey,
+         invoice,
+         amount_sats,
+         status,
+         expires_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'open', $8)
+       ON CONFLICT (payment_hash) DO NOTHING
+       RETURNING payment_hash`,
+      [
+        paymentHash,
+        registration.preimage,
+        buyerNostrPubkey,
+        sellerNostrPubkey,
+        arbiterNostrPubkey,
+        registration.invoice,
+        registration.amountSats,
+        registration.expiresAt,
+      ]
+    );
+    if ((inserted.rowCount ?? 0) > 0) return "created";
+
+    // Note the column list: the preimage is not selected here, so it cannot
+    // reach a caller by way of an equality check.
+    const existing = await client.query<HodlEscrowOrderIdentityRow>(
+      `SELECT payment_hash,
+              buyer_nostr_pubkey,
+              seller_nostr_pubkey,
+              arbiter_nostr_pubkey,
+              invoice,
+              amount_sats
+       FROM hodl_escrow_orders
+       WHERE payment_hash = $1`,
+      [paymentHash]
+    );
+    const row = existing.rows[0];
+    // A row that vanished between the two statements is a conflict, not a
+    // reason to retry into a race.
+    if (!row) return "conflict";
+
+    const matches =
+      row.payment_hash === paymentHash &&
+      row.buyer_nostr_pubkey === buyerNostrPubkey &&
+      row.seller_nostr_pubkey === sellerNostrPubkey &&
+      row.arbiter_nostr_pubkey === arbiterNostrPubkey &&
+      row.invoice === registration.invoice &&
+      Number(row.amount_sats) === registration.amountSats;
+    return matches ? "existing" : "conflict";
   } finally {
     client.release();
   }
