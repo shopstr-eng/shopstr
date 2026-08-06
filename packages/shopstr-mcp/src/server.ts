@@ -23,7 +23,9 @@ export function createMcpServer(
       connectionTimeout: config.relayConnectTimeoutMs,
       logger,
     });
-  const cache = dependencies.cache ?? new MemoryCache(config.profileCacheTtlMs);
+  const cache =
+    dependencies.cache ??
+    new MemoryCache(config.profileCacheTtlMs, config.cacheMaxEntries);
   const server = new McpServer({
     name: "shopstr-mcp",
     version: config.version,

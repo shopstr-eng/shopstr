@@ -30,10 +30,12 @@ import {
   REVIEW_PRODUCT_FILTER_LIMIT,
   REVIEW_RESPONSE_BUDGET,
   SHOP_PROFILE_KIND,
+  CACHE_KINDS,
   allRelaysFailed,
   buildToolMeta,
   createRelayUnavailableResponse,
   emptyRelayMeta,
+  observeProductEventsForCategories,
 } from "./common.js";
 import type { CoreToolContext } from "./context.js";
 import {
@@ -59,6 +61,9 @@ export type SellerProductsResult = {
   returnedProducts: ProductResponse[];
   truncated: boolean;
   meta: RelayFetchMeta;
+  cache: {
+    products: boolean;
+  };
 };
 
 export type SellerReviewsResult = {
@@ -67,6 +72,9 @@ export type SellerReviewsResult = {
   truncated: boolean;
   reviewLookupPartial: boolean;
   meta: RelayFetchMeta;
+  cache: {
+    reviews: boolean;
+  };
 };
 
 export function isPublicProduct(product: ProductResponse): boolean {
@@ -147,33 +155,52 @@ export async function fetchSellerProducts(
   pubkey: string,
   context: CoreToolContext
 ): Promise<SellerProductsResult> {
-  const relayResult = await fetchFromRelays(
-    context.nostr,
-    context.relays,
-    [
-      {
-        kinds: [PRODUCT_KIND],
-        authors: [pubkey],
-        limit: 500,
-      },
-    ],
-    { timeoutMs: context.timeoutMs }
-  );
+  const cached = context.cache.get<NostrEvent[]>({
+    pubkey,
+    kind: CACHE_KINDS.SELLER_PRODUCTS,
+  });
 
-  const events = mergeAndDeduplicateProducts(relayResult.events);
-  const publicProducts = events
+  let events = cached?.value;
+  let meta = emptyRelayMeta();
+
+  if (!events) {
+    const relayResult = await fetchFromRelays(
+      context.nostr,
+      context.relays,
+      [
+        {
+          kinds: [PRODUCT_KIND],
+          authors: [pubkey],
+          limit: 500,
+        },
+      ],
+      { timeoutMs: context.timeoutMs }
+    );
+    events = relayResult.events;
+    meta = relayResult.meta;
+    if (!allRelaysFailed(meta)) {
+      context.cache.set({ pubkey, kind: CACHE_KINDS.SELLER_PRODUCTS }, events);
+      observeProductEventsForCategories(events);
+    }
+  }
+
+  const productEvents = mergeAndDeduplicateProducts(events);
+  const publicProducts = productEvents
     .map((event) => ({ event, product: parseProductEvent(event) }))
     .filter(({ product }) => isPublicProduct(product));
   const products = publicProducts.map(({ product }) => product);
-  const productEvents = publicProducts.map(({ event }) => event);
+  const publicProductEvents = publicProducts.map(({ event }) => event);
   const returnedProducts = products.slice(0, PRODUCT_RESPONSE_BUDGET);
 
   return {
-    events: productEvents,
+    events: publicProductEvents,
     products,
     returnedProducts,
     truncated: returnedProducts.length < products.length,
-    meta: relayResult.meta,
+    meta,
+    cache: {
+      products: cached?.cached ?? false,
+    },
   };
 }
 
@@ -182,6 +209,10 @@ export async function fetchSellerReviews(
   productEvents: readonly NostrEvent[],
   context: CoreToolContext
 ): Promise<SellerReviewsResult> {
+  const cached = context.cache.get<NostrEvent[]>({
+    pubkey: sellerPubkey,
+    kind: CACHE_KINDS.SELLER_REVIEWS,
+  });
   const allProductAddresses = Array.from(
     new Set(
       productEvents
@@ -193,15 +224,31 @@ export async function fetchSellerReviews(
     0,
     REVIEW_PRODUCT_FILTER_LIMIT
   );
-  const relayFilters = buildSellerReviewFilters(productAddresses, sellerPubkey);
-  const relayResult = await fetchFromRelays(
-    context.nostr,
-    context.relays,
-    relayFilters,
-    { timeoutMs: context.timeoutMs }
-  );
+  let events = cached?.value;
+  let meta = emptyRelayMeta();
 
-  const reviews = mergeAndDeduplicateReviews(relayResult.events)
+  if (!events) {
+    const relayFilters = buildSellerReviewFilters(
+      productAddresses,
+      sellerPubkey
+    );
+    const relayResult = await fetchFromRelays(
+      context.nostr,
+      context.relays,
+      relayFilters,
+      { timeoutMs: context.timeoutMs }
+    );
+    events = relayResult.events;
+    meta = relayResult.meta;
+    if (!allRelaysFailed(meta)) {
+      context.cache.set(
+        { pubkey: sellerPubkey, kind: CACHE_KINDS.SELLER_REVIEWS },
+        events
+      );
+    }
+  }
+
+  const reviews = mergeAndDeduplicateReviews(events)
     .filter((event) =>
       reviewMatchesSeller(event, sellerPubkey, allProductAddresses)
     )
@@ -216,7 +263,10 @@ export async function fetchSellerReviews(
     returnedReviews,
     truncated: returnedReviews.length < reviews.length,
     reviewLookupPartial,
-    meta: relayResult.meta,
+    meta,
+    cache: {
+      reviews: cached?.cached ?? false,
+    },
   };
 }
 

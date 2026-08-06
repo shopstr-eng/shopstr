@@ -1,20 +1,29 @@
 import { z } from "zod";
 
-import { mergeAndDeduplicateProfiles } from "../dedup.js";
+import {
+  mergeAndDeduplicateProducts,
+  mergeAndDeduplicateProfiles,
+} from "../dedup.js";
 import { createSuccessResponse, type ToolTextResponse } from "../errors.js";
-import { parseProfileEvent } from "../parse-tags.js";
+import { parseProductEvent, parseProfileEvent } from "../parse-tags.js";
 import { fetchFromRelays } from "../relay-fetch.js";
 import { listCompaniesSchema } from "../validation.js";
 import {
+  PRODUCT_KIND,
   SELLER_LIST_RESPONSE_BUDGET,
   SHOP_PROFILE_KIND,
   allRelaysFailed,
   buildToolMeta,
+  combineRelayMetas,
   createRelayUnavailableResponse,
   createValidationErrorResponse,
   getDataFreshness,
+  getCategoryQueryVariants,
+  normalizeCategoryTag,
+  observeProductEventsForCategories,
 } from "./utils/common.js";
 import type { CoreToolContext } from "./utils/context.js";
+import { isPublicProduct } from "./utils/seller.js";
 
 export const listCompaniesInputSchema = {
   limit: z
@@ -34,6 +43,13 @@ export const listCompaniesInputSchema = {
     .describe(
       "Unix timestamp. Only return profiles created at or before this time. Use for pagination by passing the oldest createdAt from the previous response."
     ),
+  category: z
+    .string()
+    .max(100)
+    .optional()
+    .describe(
+      "Optional product category filter. Sellers are included only when they have at least one public product tagged with this category."
+    ),
 };
 
 export async function handleListCompanies(
@@ -43,7 +59,9 @@ export async function handleListCompanies(
   const parsed = listCompaniesSchema.safeParse(args);
   if (!parsed.success) return createValidationErrorResponse(parsed.error);
 
-  const relayResult = await fetchFromRelays(
+  const startedAt = Date.now();
+  const relayMetas = [];
+  const profileRelayResult = await fetchFromRelays(
     context.nostr,
     context.relays,
     [
@@ -58,12 +76,13 @@ export async function handleListCompanies(
     ],
     { timeoutMs: context.timeoutMs }
   );
+  relayMetas.push(profileRelayResult.meta);
 
-  if (allRelaysFailed(relayResult.meta)) {
-    return createRelayUnavailableResponse(relayResult.meta);
+  if (allRelaysFailed(profileRelayResult.meta)) {
+    return createRelayUnavailableResponse(profileRelayResult.meta);
   }
 
-  const companies = mergeAndDeduplicateProfiles(relayResult.events).map(
+  let companies = mergeAndDeduplicateProfiles(profileRelayResult.events).map(
     parseProfileEvent
   );
   for (const company of companies) {
@@ -73,22 +92,71 @@ export async function handleListCompanies(
     );
   }
 
+  const hints: string[] = [];
+  if (parsed.data.category) {
+    const category = normalizeCategoryTag(parsed.data.category);
+    const categoryRelayResult = await fetchFromRelays(
+      context.nostr,
+      context.relays,
+      [
+        {
+          kinds: [PRODUCT_KIND],
+          "#t": getCategoryQueryVariants(category),
+          limit: 500,
+        },
+      ],
+      { timeoutMs: context.timeoutMs }
+    );
+    relayMetas.push(categoryRelayResult.meta);
+
+    if (allRelaysFailed(categoryRelayResult.meta)) {
+      return createRelayUnavailableResponse(categoryRelayResult.meta, [
+        "Could not fetch products for the category filter; retry later or remove category.",
+      ]);
+    }
+
+    observeProductEventsForCategories(categoryRelayResult.events);
+    const sellerPubkeys = new Set(
+      mergeAndDeduplicateProducts(categoryRelayResult.events)
+        .map(parseProductEvent)
+        .filter(
+          (product) =>
+            isPublicProduct(product) &&
+            product.categories.some(
+              (value) => normalizeCategoryTag(value) === category
+            )
+        )
+        .map((product) => product.pubkey)
+    );
+    companies = companies.filter((company) =>
+      sellerPubkeys.has(company.pubkey)
+    );
+    if (sellerPubkeys.size === 0) {
+      hints.push(
+        `No public products tagged with category "${category}" were observed in the sampled relay results.`
+      );
+    }
+  }
+
   const requestedLimit = parsed.data.limit;
   const responseLimit = Math.min(requestedLimit, SELLER_LIST_RESPONSE_BUDGET);
   const returnedCompanies = companies.slice(0, responseLimit);
   const truncated = returnedCompanies.length < companies.length;
-  const hints = truncated
-    ? [
-        "Too many seller profiles matched; use get_company_details with a specific pubkey to inspect one seller.",
-      ]
-    : [];
-  const meta = buildToolMeta(relayResult.meta, {
-    resultCount: returnedCompanies.length,
-    totalMatches: companies.length,
-    truncated,
-    dataFreshness: getDataFreshness(returnedCompanies),
-    hints,
-  });
+  if (truncated) {
+    hints.push(
+      "Too many seller profiles matched; use get_company_details with a specific sellerPubkey to inspect one seller."
+    );
+  }
+  const meta = buildToolMeta(
+    combineRelayMetas(relayMetas, Date.now() - startedAt),
+    {
+      resultCount: returnedCompanies.length,
+      totalMatches: companies.length,
+      truncated,
+      dataFreshness: getDataFreshness(returnedCompanies),
+      hints,
+    }
+  );
 
   return createSuccessResponse(
     {
@@ -100,6 +168,7 @@ export async function handleListCompanies(
           returnedCompanies.length > 0
             ? returnedCompanies[returnedCompanies.length - 1]!.createdAt
             : null,
+        hasMore: truncated,
       },
     },
     meta,

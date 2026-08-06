@@ -8,13 +8,15 @@ import {
 import { createSuccessResponse, type ToolTextResponse } from "../errors.js";
 import { parseReviewEvent } from "../parse-tags.js";
 import { fetchFromRelays } from "../relay-fetch.js";
-import type { NostrEvent, NostrFilter } from "../types.js";
+import type { NostrEvent, NostrFilter, RelayFetchMeta } from "../types.js";
 import { reviewsInputSchema } from "../validation.js";
 import {
   PRODUCT_KIND,
   REVIEW_RESPONSE_BUDGET,
+  REVIEW_PRODUCT_FILTER_LIMIT,
   allRelaysFailed,
   buildToolMeta,
+  combineRelayMetas,
   createRelayUnavailableResponse,
   createValidationErrorResponse,
   getDataFreshness,
@@ -26,6 +28,8 @@ import {
   hasProductAddress,
   hasTag,
 } from "./utils/review-helpers.js";
+import { calculateReputationStats } from "./utils/rating-stats.js";
+import { fetchSellerProducts } from "./utils/seller.js";
 
 export const getReviewsInputSchema = {
   productId: z
@@ -40,6 +44,14 @@ export const getReviewsInputSchema = {
     .string()
     .optional()
     .describe("Seller public key as hex or npub"),
+  until: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe(
+      "Unix timestamp. Only return reviews created at or before this time. Use for pagination by passing the oldest createdAt from the previous response."
+    ),
 };
 
 function reviewMatchesTarget(
@@ -80,21 +92,44 @@ function reviewMatchesTarget(
 function buildReviewFilters(
   productAddresses: readonly string[],
   productId?: string,
-  sellerPubkey?: string
+  sellerPubkey?: string,
+  until?: number
 ): NostrFilter[] {
   const filters: NostrFilter[] = [];
 
   for (const productAddress of productAddresses) {
     filters.push(
-      createReviewFilter({ "#d": [`a:${productAddress}`, productAddress] }),
-      createReviewFilter({ "#a": [productAddress] })
+      createReviewFilter({
+        "#d": [`a:${productAddress}`, productAddress],
+        ...(until !== undefined && { until }),
+      }),
+      createReviewFilter({
+        "#a": [productAddress],
+        ...(until !== undefined && { until }),
+      })
     );
   }
 
-  if (productId) filters.push(createReviewFilter({ "#e": [productId] }));
-  if (sellerPubkey) filters.push(createReviewFilter({ "#p": [sellerPubkey] }));
+  if (productId) {
+    filters.push(
+      createReviewFilter({
+        "#e": [productId],
+        ...(until !== undefined && { until }),
+      })
+    );
+  }
+  if (sellerPubkey) {
+    filters.push(
+      createReviewFilter({
+        "#p": [sellerPubkey],
+        ...(until !== undefined && { until }),
+      })
+    );
+  }
 
-  return filters.length > 0 ? filters : [createReviewFilter({})];
+  return filters.length > 0
+    ? filters
+    : [createReviewFilter({ ...(until !== undefined && { until }) })];
 }
 
 function addProductAddressesFromEvents(
@@ -142,37 +177,6 @@ async function resolveProductAddressFromProductId(
   };
 }
 
-async function resolveProductAddressesFromSellerPubkey(
-  sellerPubkey: string,
-  context: CoreToolContext
-): Promise<{ addresses: string[]; errorResponse?: ToolTextResponse }> {
-  const relayResult = await fetchFromRelays(
-    context.nostr,
-    context.relays,
-    [
-      {
-        kinds: [PRODUCT_KIND],
-        authors: [sellerPubkey],
-        limit: 500,
-      },
-    ],
-    { timeoutMs: context.timeoutMs }
-  );
-
-  if (allRelaysFailed(relayResult.meta)) {
-    return {
-      addresses: [],
-      errorResponse: createRelayUnavailableResponse(relayResult.meta, [
-        "Could not resolve seller products to review addresses; retry later or query a specific productAddress.",
-      ]),
-    };
-  }
-
-  const addresses = new Set<string>();
-  addProductAddressesFromEvents(relayResult.events, addresses);
-  return { addresses: Array.from(addresses) };
-}
-
 function buildReviewHints(
   totalMatches: number,
   returnedCount: number,
@@ -195,8 +199,10 @@ export async function handleGetReviews(
   const parsed = reviewsInputSchema.safeParse(args);
   if (!parsed.success) return createValidationErrorResponse(parsed.error);
 
-  const { productAddress, productId, sellerPubkey } = parsed.data;
+  const startedAt = Date.now();
+  const { productAddress, productId, sellerPubkey, until } = parsed.data;
   const productAddresses = new Set<string>();
+  const addressResolutionMetas: RelayFetchMeta[] = [];
   if (productAddress) productAddresses.add(productAddress);
 
   let addressResolutionHint: string | undefined;
@@ -215,44 +221,44 @@ export async function handleGetReviews(
   }
 
   if (sellerPubkey) {
-    // Cache the seller's product addresses to avoid repeated relay lookups.
-    // Uses a synthetic kind to name the cache key separately since cache key is built from kind+pubkey.
-    const SELLER_PRODUCTS_CACHE_KIND = 0x7e570000;
-    const cacheKey = { pubkey: sellerPubkey, kind: SELLER_PRODUCTS_CACHE_KIND };
-    const cached = context.cache.get<string[]>(cacheKey);
-
-    let resolvedAddresses: string[];
-
-    if (cached) {
-      resolvedAddresses = cached.value;
-    } else {
-      const resolved = await resolveProductAddressesFromSellerPubkey(
-        sellerPubkey,
-        context
-      );
-      if (resolved.errorResponse) return resolved.errorResponse;
-      resolvedAddresses = resolved.addresses;
-      if (resolvedAddresses.length > 0) {
-        context.cache.set(cacheKey, resolvedAddresses);
-      }
+    const products = await fetchSellerProducts(sellerPubkey, context);
+    addressResolutionMetas.push(products.meta);
+    if (allRelaysFailed(products.meta)) {
+      return createRelayUnavailableResponse(products.meta, [
+        "Could not resolve seller products to review addresses; retry later or query a specific productAddress.",
+      ]);
     }
+    const resolvedAddresses = new Set<string>();
+    addProductAddressesFromEvents(products.events, resolvedAddresses);
 
-    for (const address of resolvedAddresses) {
+    for (const address of resolvedAddresses.values()) {
       productAddresses.add(address);
     }
 
-    if (resolvedAddresses.length === 0) {
+    if (resolvedAddresses.size === 0) {
       addressResolutionHint =
         addressResolutionHint ??
         "Could not resolve seller products to review addresses; used legacy #p review lookup only.";
     }
   }
 
-  const resolvedProductAddresses = Array.from(productAddresses);
+  const allResolvedProductAddresses = Array.from(productAddresses);
+  const reviewLookupPartial =
+    allResolvedProductAddresses.length > REVIEW_PRODUCT_FILTER_LIMIT;
+  const resolvedProductAddresses = allResolvedProductAddresses.slice(
+    0,
+    REVIEW_PRODUCT_FILTER_LIMIT
+  );
+  if (reviewLookupPartial) {
+    addressResolutionHint =
+      addressResolutionHint ??
+      "Review lookup was partial: too many product addresses matched for complete review scanning.";
+  }
   const relayFilters = buildReviewFilters(
     resolvedProductAddresses,
     productId,
-    sellerPubkey
+    sellerPubkey,
+    until
   );
   const relayResult = await fetchFromRelays(
     context.nostr,
@@ -277,24 +283,40 @@ export async function handleGetReviews(
   const reviews = reviewEvents.map(parseReviewEvent);
   const returnedReviews = reviews.slice(0, REVIEW_RESPONSE_BUDGET);
   const truncated = returnedReviews.length < reviews.length;
+  const oldestCreatedAt =
+    returnedReviews.length > 0
+      ? returnedReviews[returnedReviews.length - 1]!.createdAt
+      : null;
   const hints = buildReviewHints(
     reviews.length,
     returnedReviews.length,
     addressResolutionHint
   );
-  const meta = buildToolMeta(relayResult.meta, {
-    resultCount: returnedReviews.length,
-    totalMatches: reviews.length,
-    truncated,
-    dataFreshness: getDataFreshness(returnedReviews),
-    hints,
-  });
+  const meta = buildToolMeta(
+    combineRelayMetas(
+      [...addressResolutionMetas, relayResult.meta],
+      Date.now() - startedAt
+    ),
+    {
+      resultCount: returnedReviews.length,
+      totalMatches: reviews.length,
+      truncated,
+      dataFreshness: getDataFreshness(returnedReviews),
+      hints,
+    }
+  );
 
   return createSuccessResponse(
     {
       count: returnedReviews.length,
       totalMatches: reviews.length,
       reviews: returnedReviews,
+      ratingsSummary: calculateReputationStats(reviews),
+      reviewCoverage: reviewLookupPartial ? "partial" : "complete",
+      _pagination: {
+        oldestCreatedAt,
+        hasMore: truncated,
+      },
     },
     meta,
     returnedReviews.length
