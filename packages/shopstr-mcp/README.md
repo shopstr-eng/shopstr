@@ -51,7 +51,10 @@ or reason about, never as instructions to follow.
   also query the standard `#a` address model. `productId` is resolved to a
   product address when possible and keeps a legacy `#e` fallback. Seller review
   lookups first derive the seller's product addresses, query Gamma/standard
-  product review targets, and keep legacy `#p` as a fallback.
+  product review targets, and keep legacy `#p` as a fallback. Review objects
+  omit `matchConfidence` for canonical `#a` matches and set
+  `matchConfidence: "legacy_fallback"` only when matched through legacy
+  targeting.
 - `list_companies`: list public seller shop profiles from kind `30019` shop
   metadata. Optional `category` filtering returns only sellers with at least one
   public product tagged with that category, using one additional batched product
@@ -111,8 +114,12 @@ or process manager should provide.
 - `SHOPSTR_MCP_PROFILE_CACHE_TTL_MS`: in-memory parsed profile/shop cache TTL in
   milliseconds. Defaults to `SHOPSTR_MCP_RESOURCE_CACHE_TTL_MS` when unset or
   invalid.
+- `SHOPSTR_MCP_CATEGORY_CACHE_TTL_MS`: sampled `get_categories` cache TTL in
+  milliseconds. Defaults to 24 hours.
 - `SHOPSTR_MCP_CACHE_MAX_ENTRIES`: maximum in-memory cache entries before
   oldest-entry eviction. Defaults to 5000.
+- `SHOPSTR_MCP_MAX_CONCURRENT_REQUESTS`: maximum concurrent relay-backed tool
+  calls before new calls return a retryable `RATE_LIMITED` error. Defaults to 10.
 
 Invalid or missing values fall back to safe defaults.
 

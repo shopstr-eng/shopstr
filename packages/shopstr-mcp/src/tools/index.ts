@@ -13,6 +13,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { wrapWithAudit } from "../audit-log.js";
+import { InFlightRateLimiter, wrapWithRateLimit } from "../rate-limiter.js";
 import type { CoreToolContext } from "./utils/context.js";
 import {
   getProductDetailsInputSchema,
@@ -48,6 +49,8 @@ export function registerCoreTools(
   server: McpServer,
   context: CoreToolContext
 ): void {
+  const rateLimiter = new InFlightRateLimiter(context.maxConcurrentRequests);
+
   server.registerTool(
     "search_products",
     {
@@ -56,8 +59,11 @@ export function registerCoreTools(
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: searchProductsInputSchema,
     },
-    wrapWithAudit("search_products", (args, _extra) =>
-      handleSearchProducts(args, context)
+    wrapWithRateLimit(
+      rateLimiter,
+      wrapWithAudit("search_products", (args, _extra) =>
+        handleSearchProducts(args, context)
+      )
     )
   );
 
@@ -69,8 +75,11 @@ export function registerCoreTools(
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: getProductDetailsInputSchema,
     },
-    wrapWithAudit("get_product_details", (args, _extra) =>
-      handleGetProductDetails(args, context)
+    wrapWithRateLimit(
+      rateLimiter,
+      wrapWithAudit("get_product_details", (args, _extra) =>
+        handleGetProductDetails(args, context)
+      )
     )
   );
 
@@ -81,8 +90,11 @@ export function registerCoreTools(
         "List public Shopstr seller/shop profiles, optionally paginated with until or filtered to sellers with at least one public product in a category. Use sellerPubkey from results with seller-specific tools.",
       inputSchema: listCompaniesInputSchema,
     },
-    wrapWithAudit("list_companies", (args, _extra) =>
-      handleListCompanies(args, context)
+    wrapWithRateLimit(
+      rateLimiter,
+      wrapWithAudit("list_companies", (args, _extra) =>
+        handleListCompanies(args, context)
+      )
     )
   );
 
@@ -94,8 +106,11 @@ export function registerCoreTools(
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: getCompanyDetailsInputSchema,
     },
-    wrapWithAudit("get_company_details", (args, _extra) =>
-      handleGetCompanyDetails(args, context)
+    wrapWithRateLimit(
+      rateLimiter,
+      wrapWithAudit("get_company_details", (args, _extra) =>
+        handleGetCompanyDetails(args, context)
+      )
     )
   );
 
@@ -107,8 +122,11 @@ export function registerCoreTools(
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: getReviewsInputSchema,
     },
-    wrapWithAudit("get_reviews", (args, _extra) =>
-      handleGetReviews(args, context)
+    wrapWithRateLimit(
+      rateLimiter,
+      wrapWithAudit("get_reviews", (args, _extra) =>
+        handleGetReviews(args, context)
+      )
     )
   );
 
@@ -120,8 +138,11 @@ export function registerCoreTools(
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: getSellerReputationInputSchema,
     },
-    wrapWithAudit("get_seller_reputation", (args, _extra) =>
-      handleGetSellerReputation(args, context)
+    wrapWithRateLimit(
+      rateLimiter,
+      wrapWithAudit("get_seller_reputation", (args, _extra) =>
+        handleGetSellerReputation(args, context)
+      )
     )
   );
 
@@ -132,8 +153,11 @@ export function registerCoreTools(
         "Return product categories currently observed by this MCP instance from a cached, sampled scan of recent public products. This is best-effort discovery, not an exhaustive Nostr category catalog; normal product-fetching calls keep enriching the in-memory category variant registry.",
       inputSchema: getCategoriesInputSchema,
     },
-    wrapWithAudit("get_categories", (args, _extra) =>
-      handleGetCategories(args, context)
+    wrapWithRateLimit(
+      rateLimiter,
+      wrapWithAudit("get_categories", (args, _extra) =>
+        handleGetCategories(args, context)
+      )
     )
   );
 }

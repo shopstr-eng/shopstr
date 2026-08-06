@@ -439,7 +439,10 @@ export function parseProfileEvent(event: NostrEvent): ProfileResponse {
   return response;
 }
 
-export function parseReviewEvent(event: NostrEvent): ReviewResponse {
+export function parseReviewEvent(
+  event: NostrEvent,
+  matchConfidence?: ReviewResponse["matchConfidence"]
+): ReviewResponse {
   const tags = event.tags || [];
   const ratings: Record<string, number> = {};
 
@@ -458,5 +461,6 @@ export function parseReviewEvent(event: NostrEvent): ReviewResponse {
     content: event.content,
     ratings,
     createdAt: event.created_at,
+    ...(matchConfidence && { matchConfidence }),
   };
 }

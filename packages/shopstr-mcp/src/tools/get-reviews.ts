@@ -23,10 +23,12 @@ import {
 } from "./utils/common.js";
 import type { CoreToolContext } from "./utils/context.js";
 import {
+  confidenceField,
   createReviewFilter,
   eventReferencesSeller,
   hasProductAddress,
   hasTag,
+  reviewMatchConfidence,
 } from "./utils/review-helpers.js";
 import { calculateReputationStats } from "./utils/rating-stats.js";
 import { fetchSellerProducts } from "./utils/seller.js";
@@ -93,7 +95,8 @@ function buildReviewFilters(
   productAddresses: readonly string[],
   productId?: string,
   sellerPubkey?: string,
-  until?: number
+  until?: number,
+  limit = REVIEW_RESPONSE_BUDGET + 1
 ): NostrFilter[] {
   const filters: NostrFilter[] = [];
 
@@ -101,10 +104,12 @@ function buildReviewFilters(
     filters.push(
       createReviewFilter({
         "#d": [`a:${productAddress}`, productAddress],
+        limit,
         ...(until !== undefined && { until }),
       }),
       createReviewFilter({
         "#a": [productAddress],
+        limit,
         ...(until !== undefined && { until }),
       })
     );
@@ -114,6 +119,7 @@ function buildReviewFilters(
     filters.push(
       createReviewFilter({
         "#e": [productId],
+        limit,
         ...(until !== undefined && { until }),
       })
     );
@@ -122,6 +128,7 @@ function buildReviewFilters(
     filters.push(
       createReviewFilter({
         "#p": [sellerPubkey],
+        limit,
         ...(until !== undefined && { until }),
       })
     );
@@ -129,7 +136,12 @@ function buildReviewFilters(
 
   return filters.length > 0
     ? filters
-    : [createReviewFilter({ ...(until !== undefined && { until }) })];
+    : [
+        createReviewFilter({
+          limit,
+          ...(until !== undefined && { until }),
+        }),
+      ];
 }
 
 function addProductAddressesFromEvents(
@@ -258,7 +270,8 @@ export async function handleGetReviews(
     resolvedProductAddresses,
     productId,
     sellerPubkey,
-    until
+    until,
+    REVIEW_RESPONSE_BUDGET + 1
   );
   const relayResult = await fetchFromRelays(
     context.nostr,
@@ -280,9 +293,15 @@ export async function handleGetReviews(
         sellerPubkey
       )
   );
-  const reviews = reviewEvents.map(parseReviewEvent);
-  const returnedReviews = reviews.slice(0, REVIEW_RESPONSE_BUDGET);
-  const truncated = returnedReviews.length < reviews.length;
+  const reviews = reviewEvents.map((event) =>
+    parseReviewEvent(
+      event,
+      confidenceField(reviewMatchConfidence(event, resolvedProductAddresses))
+    )
+  );
+  const pageReviews = reviews.slice(0, REVIEW_RESPONSE_BUDGET + 1);
+  const hasMore = pageReviews.length > REVIEW_RESPONSE_BUDGET;
+  const returnedReviews = pageReviews.slice(0, REVIEW_RESPONSE_BUDGET);
   const oldestCreatedAt =
     returnedReviews.length > 0
       ? returnedReviews[returnedReviews.length - 1]!.createdAt
@@ -300,7 +319,7 @@ export async function handleGetReviews(
     {
       resultCount: returnedReviews.length,
       totalMatches: reviews.length,
-      truncated,
+      truncated: hasMore,
       dataFreshness: getDataFreshness(returnedReviews),
       hints,
     }
@@ -315,7 +334,7 @@ export async function handleGetReviews(
       reviewCoverage: reviewLookupPartial ? "partial" : "complete",
       _pagination: {
         oldestCreatedAt,
-        hasMore: truncated,
+        hasMore,
       },
     },
     meta,

@@ -6,4 +6,6 @@ export type CoreToolContext = {
   relays: string[];
   timeoutMs: number;
   cache: MemoryCache;
+  categoryCache: MemoryCache;
+  maxConcurrentRequests: number;
 };

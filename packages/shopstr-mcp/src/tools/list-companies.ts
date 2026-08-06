@@ -61,16 +61,17 @@ export async function handleListCompanies(
 
   const startedAt = Date.now();
   const relayMetas = [];
+  const responseLimit = Math.min(
+    parsed.data.limit,
+    SELLER_LIST_RESPONSE_BUDGET
+  );
   const profileRelayResult = await fetchFromRelays(
     context.nostr,
     context.relays,
     [
       {
         kinds: [SHOP_PROFILE_KIND],
-        limit: Math.min(
-          500,
-          Math.min(parsed.data.limit, SELLER_LIST_RESPONSE_BUDGET) * 5
-        ),
+        limit: parsed.data.category ? 500 : Math.min(500, responseLimit + 1),
         ...(parsed.data.until !== undefined && { until: parsed.data.until }),
       },
     ],
@@ -138,11 +139,10 @@ export async function handleListCompanies(
     }
   }
 
-  const requestedLimit = parsed.data.limit;
-  const responseLimit = Math.min(requestedLimit, SELLER_LIST_RESPONSE_BUDGET);
-  const returnedCompanies = companies.slice(0, responseLimit);
-  const truncated = returnedCompanies.length < companies.length;
-  if (truncated) {
+  const pageCompanies = companies.slice(0, responseLimit + 1);
+  const hasMore = pageCompanies.length > responseLimit;
+  const returnedCompanies = pageCompanies.slice(0, responseLimit);
+  if (hasMore) {
     hints.push(
       "Too many seller profiles matched; use get_company_details with a specific sellerPubkey to inspect one seller."
     );
@@ -152,7 +152,7 @@ export async function handleListCompanies(
     {
       resultCount: returnedCompanies.length,
       totalMatches: companies.length,
-      truncated,
+      truncated: hasMore,
       dataFreshness: getDataFreshness(returnedCompanies),
       hints,
     }
@@ -168,7 +168,7 @@ export async function handleListCompanies(
           returnedCompanies.length > 0
             ? returnedCompanies[returnedCompanies.length - 1]!.createdAt
             : null,
-        hasMore: truncated,
+        hasMore,
       },
     },
     meta,

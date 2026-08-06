@@ -10,6 +10,8 @@ export const DEFAULT_TOOL_TIMEOUT_MS = 10_000;
 export const DEFAULT_RELAY_CONNECT_TIMEOUT_MS = 5_000;
 export const DEFAULT_RESOURCE_CACHE_TTL_MS = 60_000;
 export const DEFAULT_CACHE_MAX_ENTRIES = 5_000;
+export const DEFAULT_MAX_CONCURRENT_REQUESTS = 10;
+export const DEFAULT_CATEGORY_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
 
 const LOG_LEVEL_VALUES = ["error", "warn", "info", "debug"] as const;
 const logLevelSchema = z.enum(LOG_LEVEL_VALUES);
@@ -25,7 +27,9 @@ export type ShopstrMcpConfig = {
   relayConnectTimeoutMs: number;
   resourceCacheTtlMs: number;
   profileCacheTtlMs: number;
+  categoryCacheTtlMs: number;
   cacheMaxEntries: number;
+  maxConcurrentRequests: number;
 };
 
 export function validateRelayUrl(value: string): boolean {
@@ -67,6 +71,10 @@ export function parsePositiveInteger(
   return parsed.success ? parsed.data : fallback;
 }
 
+export function parseBooleanFlag(rawValue: string | undefined): boolean {
+  return rawValue === "true" || rawValue === "1";
+}
+
 export function loadConfig(
   env: NodeJS.ProcessEnv = process.env
 ): ShopstrMcpConfig {
@@ -92,9 +100,17 @@ export function loadConfig(
       env.SHOPSTR_MCP_PROFILE_CACHE_TTL_MS,
       resourceCacheTtlMs
     ),
+    categoryCacheTtlMs: parsePositiveInteger(
+      env.SHOPSTR_MCP_CATEGORY_CACHE_TTL_MS,
+      DEFAULT_CATEGORY_CACHE_TTL_MS
+    ),
     cacheMaxEntries: parsePositiveInteger(
       env.SHOPSTR_MCP_CACHE_MAX_ENTRIES,
       DEFAULT_CACHE_MAX_ENTRIES
+    ),
+    maxConcurrentRequests: parsePositiveInteger(
+      env.SHOPSTR_MCP_MAX_CONCURRENT_REQUESTS,
+      DEFAULT_MAX_CONCURRENT_REQUESTS
     ),
   };
 }

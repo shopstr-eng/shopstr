@@ -153,7 +153,7 @@ function buildSearchFilters(filters: SearchProductsInput): {
   fallback: NostrFilter | undefined;
 } {
   const effectiveLimit = Math.min(filters.limit, PRODUCT_RESPONSE_BUDGET);
-  const relayLimit = Math.min(500, effectiveLimit * 5);
+  const relayLimit = Math.min(500, effectiveLimit + 1);
   const base: NostrFilter = {
     kinds: [PRODUCT_KIND],
     limit: relayLimit,
@@ -242,8 +242,9 @@ export async function handleSearchProducts(
   products = sortProducts(products, filters.sortBy);
   const requestedLimit = filters.limit;
   const responseLimit = Math.min(requestedLimit, PRODUCT_RESPONSE_BUDGET);
-  const returnedProducts = products.slice(0, responseLimit);
-  const truncated = returnedProducts.length < products.length;
+  const pageProducts = products.slice(0, responseLimit + 1);
+  const hasMore = pageProducts.length > responseLimit;
+  const returnedProducts = pageProducts.slice(0, responseLimit);
   const hints = buildSearchHints(
     filters,
     products.length,
@@ -253,7 +254,7 @@ export async function handleSearchProducts(
     ...buildToolMeta(combineRelayMetas(relayMetas, Date.now() - startedAt), {
       resultCount: returnedProducts.length,
       totalMatches: products.length,
-      truncated,
+      truncated: hasMore,
       dataFreshness: getDataFreshness(returnedProducts),
       hints,
     }),
@@ -270,7 +271,7 @@ export async function handleSearchProducts(
           returnedProducts.length > 0
             ? returnedProducts[returnedProducts.length - 1]!.createdAt
             : null,
-        hasMore: truncated,
+        hasMore,
       },
     },
     meta,

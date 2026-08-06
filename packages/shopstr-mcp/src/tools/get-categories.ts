@@ -44,7 +44,7 @@ export async function handleGetCategories(
   const parsed = getCategoriesSchema.safeParse(args);
   if (!parsed.success) return createValidationErrorResponse(parsed.error);
 
-  const cached = context.cache.get<CategorySummary>({
+  const cached = context.categoryCache.get<CategorySummary>({
     pubkey: CATEGORY_CACHE_KEY,
     kind: CACHE_KINDS.CATEGORY_SUMMARY,
   });
@@ -88,7 +88,7 @@ export async function handleGetCategories(
     const events = mergeAndDeduplicateProducts(relayResult.events);
     observeProductEventsForCategories(events);
     categories = summarizeCategories(events);
-    context.cache.set(
+    context.categoryCache.set(
       { pubkey: CATEGORY_CACHE_KEY, kind: CACHE_KINDS.CATEGORY_SUMMARY },
       categories
     );

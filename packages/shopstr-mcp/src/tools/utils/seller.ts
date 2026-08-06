@@ -39,10 +39,12 @@ import {
 } from "./common.js";
 import type { CoreToolContext } from "./context.js";
 import {
+  confidenceField,
   createReviewFilter,
   eventReferencesSeller,
   hasProductAddress,
   hasTag,
+  reviewMatchConfidence,
 } from "./review-helpers.js";
 
 export type SellerProfilesResult = {
@@ -252,7 +254,12 @@ export async function fetchSellerReviews(
     .filter((event) =>
       reviewMatchesSeller(event, sellerPubkey, allProductAddresses)
     )
-    .map(parseReviewEvent);
+    .map((event) =>
+      parseReviewEvent(
+        event,
+        confidenceField(reviewMatchConfidence(event, allProductAddresses))
+      )
+    );
   const returnedReviews = reviews.slice(0, REVIEW_RESPONSE_BUDGET);
 
   const reviewLookupPartial =
