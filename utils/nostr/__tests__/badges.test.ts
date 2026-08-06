@@ -2,6 +2,7 @@ import {
   buildNip58BadgeDefinitionFilters,
   fetchNip58ProfileBadges,
   isNip58ProfileBadgesEvent,
+  MAX_NIP58_PROFILE_BADGES,
   NIP58_BADGE_AWARD_KIND,
   NIP58_BADGE_DEFINITION_KIND,
   NIP58_BADGE_SET_KIND,
@@ -311,14 +312,17 @@ describe("NIP-58 badge helpers", () => {
       [profilePubkey]
     );
 
-    expect(badgesByPubkey.get(profilePubkey)).toEqual([
-      expect.objectContaining({
-        definitionAddress: badgeAddress,
-        awardEventId,
-        name: "Medal of Bravery",
-        image: "https://nostr.academy/awards/bravery.png",
-      }),
-    ]);
+    expect(badgesByPubkey.get(profilePubkey)).toEqual({
+      badges: [
+        expect.objectContaining({
+          definitionAddress: badgeAddress,
+          awardEventId,
+          name: "Medal of Bravery",
+          image: "https://nostr.academy/awards/bravery.png",
+        }),
+      ],
+      complete: true,
+    });
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       [
@@ -345,7 +349,7 @@ describe("NIP-58 badge helpers", () => {
         },
       ],
       {},
-      ["wss://relay.example", "wss://badge.relay"],
+      ["wss://relay.example"],
       expect.any(Number)
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -358,8 +362,195 @@ describe("NIP-58 badge helpers", () => {
         },
       ],
       {},
-      ["wss://relay.example", "wss://badge.relay"],
+      ["wss://relay.example"],
       expect.any(Number)
+    );
+  });
+
+  it("distinguishes an explicit empty list from incomplete relay data", async () => {
+    const emptyProfileBadgesEvent = makeEvent({
+      kind: NIP58_PROFILE_BADGES_KIND,
+      pubkey: profilePubkey,
+      tags: [],
+    });
+    const referencedProfileBadgesEvent = makeEvent({
+      kind: NIP58_PROFILE_BADGES_KIND,
+      pubkey: otherIssuerPubkey,
+      tags: [
+        ["a", badgeAddress],
+        ["e", awardEventId],
+      ],
+    });
+    const nostr: Pick<NostrManager, "fetch"> = { fetch: jest.fn() };
+    const fetchMock = nostr.fetch as jest.MockedFunction<NostrManager["fetch"]>;
+    fetchMock
+      .mockResolvedValueOnce([
+        emptyProfileBadgesEvent,
+        referencedProfileBadgesEvent,
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const result = await fetchNip58ProfileBadges(
+      nostr,
+      ["wss://relay.example"],
+      [profilePubkey, otherIssuerPubkey]
+    );
+
+    expect(result.get(profilePubkey)).toEqual({ badges: [], complete: true });
+    expect(result.get(otherIssuerPubkey)).toEqual({
+      badges: [],
+      complete: false,
+    });
+  });
+
+  it("uses validated relay hints only for their associated references", async () => {
+    const hintedProfileBadgesEvent = makeEvent({
+      kind: NIP58_PROFILE_BADGES_KIND,
+      pubkey: profilePubkey,
+      tags: [
+        ["a", badgeAddress, "wss://definition.relay"],
+        ["e", awardEventId, "wss://award.relay"],
+        ["a", otherBadgeAddress, "https://not-a-websocket.example"],
+        ["e", otherAwardEventId, "wss://user:secret@credentialed.relay"],
+      ],
+    });
+    const awardEvent = makeEvent({
+      id: awardEventId,
+      kind: NIP58_BADGE_AWARD_KIND,
+      tags: [
+        ["a", badgeAddress, "wss://award-definition.relay"],
+        ["p", profilePubkey],
+      ],
+    });
+    const definitionEvent = makeEvent({
+      kind: NIP58_BADGE_DEFINITION_KIND,
+      tags: [
+        ["d", "bravery"],
+        ["name", "Medal of Bravery"],
+      ],
+    });
+    const nostr: Pick<NostrManager, "fetch"> = { fetch: jest.fn() };
+    const fetchMock = nostr.fetch as jest.MockedFunction<NostrManager["fetch"]>;
+    fetchMock.mockImplementation(async (filters, _params, relayUrls) => {
+      if (filters[0]?.kinds?.includes(NIP58_PROFILE_BADGES_KIND)) {
+        return [hintedProfileBadgesEvent];
+      }
+      if (relayUrls?.[0] === "wss://award.relay") return [awardEvent];
+      if (relayUrls?.[0] === "wss://definition.relay") {
+        return [definitionEvent];
+      }
+      return [];
+    });
+
+    const result = await fetchNip58ProfileBadges(
+      nostr,
+      ["wss://relay.example"],
+      [profilePubkey]
+    );
+
+    expect(result.get(profilePubkey)).toEqual({
+      badges: [expect.objectContaining({ awardEventId })],
+      complete: false,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      [{ kinds: [NIP58_BADGE_AWARD_KIND], ids: [awardEventId] }],
+      {},
+      ["wss://award.relay"],
+      expect.any(Number)
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      [
+        {
+          kinds: [NIP58_BADGE_DEFINITION_KIND],
+          authors: [issuerPubkey],
+          "#d": ["bravery"],
+        },
+      ],
+      {},
+      ["wss://definition.relay"],
+      expect.any(Number)
+    );
+    const contactedRelays = fetchMock.mock.calls.flatMap(
+      (call) => call[2] || []
+    );
+    expect(contactedRelays).not.toContain("https://not-a-websocket.example");
+    expect(contactedRelays).not.toContain(
+      "wss://user:secret@credentialed.relay"
+    );
+  });
+
+  it("caps badge references and untrusted hinted relays before fetching", async () => {
+    const tags: string[][] = [];
+    for (let index = 0; index < MAX_NIP58_PROFILE_BADGES + 2; index += 1) {
+      const id = index.toString(16).padStart(64, "0");
+      tags.push(
+        ["a", `${badgeAddress}:${index}`, `wss://definition-${index}.relay`],
+        ["e", id, `wss://award-${index}.relay`]
+      );
+    }
+    const profileBadgesEvent = makeEvent({
+      kind: NIP58_PROFILE_BADGES_KIND,
+      pubkey: profilePubkey,
+      tags,
+    });
+    const nostr: Pick<NostrManager, "fetch"> = { fetch: jest.fn() };
+    const fetchMock = nostr.fetch as jest.MockedFunction<NostrManager["fetch"]>;
+    fetchMock.mockResolvedValueOnce([profileBadgesEvent]).mockResolvedValue([]);
+
+    await fetchNip58ProfileBadges(
+      nostr,
+      ["wss://relay.example"],
+      [profilePubkey]
+    );
+
+    const awardIds = fetchMock.mock.calls
+      .flatMap((call) => call[0])
+      .filter((filter) => filter.kinds?.includes(NIP58_BADGE_AWARD_KIND))
+      .flatMap((filter) => filter.ids || []);
+    expect(new Set(awardIds).size).toBe(MAX_NIP58_PROFILE_BADGES);
+
+    const hintedRelays = new Set(
+      fetchMock.mock.calls
+        .flatMap((call) => call[2] || [])
+        .filter((relay) => relay !== "wss://relay.example")
+    );
+    expect(hintedRelays.size).toBeLessThanOrEqual(8);
+  });
+
+  it("does not follow definition hints from an invalid award", async () => {
+    const profileBadgesEvent = makeEvent({
+      kind: NIP58_PROFILE_BADGES_KIND,
+      pubkey: profilePubkey,
+      tags: [
+        ["a", badgeAddress],
+        ["e", awardEventId],
+      ],
+    });
+    const invalidAwardEvent = makeEvent({
+      id: awardEventId,
+      kind: NIP58_BADGE_AWARD_KIND,
+      tags: [
+        ["a", badgeAddress, "wss://do-not-contact.relay"],
+        ["p", otherIssuerPubkey],
+      ],
+    });
+    const nostr: Pick<NostrManager, "fetch"> = { fetch: jest.fn() };
+    const fetchMock = nostr.fetch as jest.MockedFunction<NostrManager["fetch"]>;
+    fetchMock
+      .mockResolvedValueOnce([profileBadgesEvent])
+      .mockResolvedValueOnce([invalidAwardEvent])
+      .mockResolvedValue([]);
+
+    const result = await fetchNip58ProfileBadges(
+      nostr,
+      ["wss://relay.example"],
+      [profilePubkey]
+    );
+
+    expect(result.get(profilePubkey)).toEqual({ badges: [], complete: true });
+    expect(fetchMock.mock.calls.flatMap((call) => call[2] || [])).not.toContain(
+      "wss://do-not-contact.relay"
     );
   });
 });
