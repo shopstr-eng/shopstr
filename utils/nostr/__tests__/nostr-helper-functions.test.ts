@@ -76,6 +76,7 @@ import {
   verifyNip05Identifier,
   withBlastr,
 } from "../nostr-helper-functions";
+import * as NostrHelpers from "../nostr-helper-functions";
 import {
   constructGiftWrappedEvent,
   constructMessageGiftWrap,
@@ -106,6 +107,29 @@ import {
   buildSignedHttpRequestProofTemplate,
 } from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
+
+type CashuCacheHelpers = typeof NostrHelpers & {
+  getCachedCashuProofs?: () => unknown[];
+  setCachedCashuProofs?: (proofs?: unknown[]) => void;
+};
+
+type VolatileCashuCacheHelpers = typeof NostrHelpers & {
+  getCachedCashuProofs: () => unknown[];
+  setCachedCashuProofs: (proofs?: unknown[]) => void;
+};
+
+const cashuHelpers = NostrHelpers as CashuCacheHelpers;
+
+const getVolatileCashuCacheHelpers = ():
+  VolatileCashuCacheHelpers | undefined =>
+  typeof cashuHelpers.getCachedCashuProofs === "function" &&
+  typeof cashuHelpers.setCachedCashuProofs === "function"
+    ? (cashuHelpers as VolatileCashuCacheHelpers)
+    : undefined;
+
+beforeEach(() => {
+  cashuHelpers.setCachedCashuProofs?.([]);
+});
 
 describe("constructGiftWrappedEvent", () => {
   const senderPubkey =
@@ -427,6 +451,61 @@ describe("local storage sign-in helpers", () => {
         "bunker://remote-pubkey?secret=shared-secret&relay=wss://one.example&relay=wss://two.example",
       appPrivKey: "client-secret",
     });
+  });
+
+  it("clears stale volatile Cashu proofs during sign-in setup when available", () => {
+    const volatileCashuHelpers = getVolatileCashuCacheHelpers();
+    if (!volatileCashuHelpers) {
+      expect(cashuHelpers.setCachedCashuProofs).toBeUndefined();
+      return;
+    }
+
+    volatileCashuHelpers.setCachedCashuProofs([
+      {
+        id: "00d0a1b24d1c1a53",
+        amount: 1,
+        secret: "stale-proof",
+        C: "stale-c",
+      },
+    ]);
+
+    setLocalStorageDataOnSignIn({
+      relays: ["wss://relay.example"],
+      mints: ["https://mint.example"],
+      blossomServers: ["https://blossom.example"],
+      wot: 3,
+    });
+
+    expect(volatileCashuHelpers.getCachedCashuProofs()).toEqual([]);
+    expect(getLocalStorageData().tokens).toEqual([]);
+  });
+});
+
+describe("Cashu proof cache logout cleanup", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("clears the volatile Cashu proof cache on logout when available", () => {
+    const volatileCashuHelpers = getVolatileCashuCacheHelpers();
+    if (!volatileCashuHelpers) {
+      expect(cashuHelpers.setCachedCashuProofs).toBeUndefined();
+      return;
+    }
+
+    volatileCashuHelpers.setCachedCashuProofs([
+      {
+        id: "00d0a1b24d1c1a53",
+        amount: 1,
+        secret: "session-proof",
+        C: "session-c",
+      },
+    ]);
+
+    LogOut();
+
+    expect(volatileCashuHelpers.getCachedCashuProofs()).toEqual([]);
+    expect(getLocalStorageData().tokens).toEqual([]);
   });
 });
 
@@ -1077,9 +1156,9 @@ describe("getLocalStorageData", () => {
     expect(data.blossomServers).toEqual([getDefaultBlossomServer()]);
   });
 
-  it("initialises tokens to [] in localStorage when the key is absent", () => {
+  it("does not initialise persistent Cashu tokens when the key is absent", () => {
     getLocalStorageData();
-    expect(localStorage.getItem("tokens")).toBe("[]");
+    expect(localStorage.getItem("tokens")).toBeNull();
   });
 
   it("initialises history to [] in localStorage when the key is absent", () => {
