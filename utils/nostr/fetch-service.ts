@@ -66,7 +66,7 @@ type SearchFilter = Filter & { search: string };
 
 const PRODUCT_SEARCH_LIMIT = 100;
 export const NIP50_SEARCH_TIMEOUT_MS = 10_000;
-export const NIP11_RELAY_INFO_TIMEOUT_MS = 3_000;
+const NIP11_RELAY_INFO_TIMEOUT_MS = 3_000;
 const COMMUNITY_POST_BATCH_CONCURRENCY = 4;
 export const DEFAULT_NIP50_SEARCH_RELAYS = [
   "wss://relay.nostr.band",
