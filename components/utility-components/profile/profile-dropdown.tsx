@@ -56,6 +56,7 @@ const inFlightProfileRequests = new Map<
   Promise<ProfileData["content"] | null>
 >();
 const MAX_PROFILE_CACHE_ENTRIES = 100;
+const MAX_VISIBLE_PROFILE_BADGES = 4;
 
 const trimProfileContentCache = () => {
   while (fetchedProfileContentCache.size > MAX_PROFILE_CACHE_ENTRIES) {
@@ -203,21 +204,50 @@ export const ProfileWithDropdown = ({
   const pfp = profileContent?.picture || `https://robohash.org/${pubkey}`;
   const isNip05Verified = profile?.nip05Verified || false;
   const showFollowingIndicator = dropDownKeys.includes("follow") && isFollowing;
-  const displayNameContent = showFollowingIndicator ? (
+  const profileBadges = Array.isArray(profile?.badges)
+    ? (profile.badges as NonNullable<ProfileData["badges"]>)
+        .filter((badge) => badge.thumbnail || badge.image)
+        .slice(0, MAX_VISIBLE_PROFILE_BADGES)
+    : [];
+  const displayNameContent = (
     <span className="flex min-w-0 items-center gap-1.5">
       <span className="overflow-hidden text-ellipsis whitespace-nowrap">
         {displayName}
       </span>
-      <span className="text-shopstr-purple dark:text-shopstr-yellow inline-flex shrink-0 items-center gap-1 text-[10px] font-medium">
-        <span
-          aria-hidden="true"
-          className="h-1.5 w-1.5 rounded-full bg-current"
-        />
-        Following
-      </span>
+      {profileBadges.length > 0 ? (
+        <span className="inline-flex shrink-0 items-center -space-x-1">
+          {profileBadges.map((badge) => {
+            const badgeImage = badge.thumbnail || badge.image;
+            if (!badgeImage) return null;
+
+            return (
+              <img
+                key={`${badge.definitionAddress}:${badge.awardEventId}`}
+                src={badgeImage}
+                alt={`${badge.name} badge`}
+                title={
+                  badge.description
+                    ? `${badge.name}: ${badge.description}`
+                    : badge.name
+                }
+                className="h-4 w-4 rounded-full border border-white bg-white object-cover shadow-sm dark:border-black dark:bg-black"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+              />
+            );
+          })}
+        </span>
+      ) : null}
+      {showFollowingIndicator ? (
+        <span className="text-shopstr-purple dark:text-shopstr-yellow inline-flex shrink-0 items-center gap-1 text-[10px] font-medium">
+          <span
+            aria-hidden="true"
+            className="h-1.5 w-1.5 rounded-full bg-current"
+          />
+          Following
+        </span>
+      ) : null}
     </span>
-  ) : (
-    displayName
   );
 
   const DropDownItems: {

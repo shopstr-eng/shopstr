@@ -8,6 +8,13 @@ import {
   isHexString,
   NIP50_SEARCH_TIMEOUT_MS,
 } from "../fetch-service";
+import {
+  NIP58_BADGE_AWARD_KIND,
+  NIP58_BADGE_DEFINITION_KIND,
+  NIP58_BADGE_SET_KIND,
+  NIP58_DEPRECATED_PROFILE_BADGES_D_TAG,
+  NIP58_PROFILE_BADGES_KIND,
+} from "../badges";
 
 jest.mock("@/utils/db/db-client", () => ({
   cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
@@ -2281,6 +2288,175 @@ describe("fetchProfile", () => {
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([validProfile]);
   });
 
+  it("adds resolved NIP-58 profile badges to fetched profiles", async () => {
+    const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier,
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchProfile } = await import("../fetch-service");
+
+    const issuerPubkey =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const awardEventId =
+      "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+    const badgeAddress = `${NIP58_BADGE_DEFINITION_KIND}:${issuerPubkey}:bravery`;
+    const relayProfile = makeProfileEvent({
+      id: "relay-profile-with-badge",
+      pubkey,
+      created_at: 200,
+      content: JSON.stringify({ display_name: "Badged Seller" }),
+      sig: "sig-relay-profile-with-badge",
+    });
+    const profileBadgesEvent = makeBaseEvent({
+      id: "profile-badges-list",
+      pubkey,
+      created_at: 210,
+      kind: NIP58_PROFILE_BADGES_KIND,
+      tags: [
+        ["a", badgeAddress],
+        ["e", awardEventId, "wss://badge.relay"],
+      ],
+      sig: "sig-profile-badges-list",
+    });
+    const awardEvent = makeBaseEvent({
+      id: awardEventId,
+      pubkey: issuerPubkey,
+      created_at: 190,
+      kind: NIP58_BADGE_AWARD_KIND,
+      tags: [
+        ["a", badgeAddress],
+        ["p", pubkey],
+      ],
+      sig: "sig-badge-award",
+    });
+    const definitionEvent = makeBaseEvent({
+      id: "badge-definition",
+      pubkey: issuerPubkey,
+      created_at: 180,
+      kind: NIP58_BADGE_DEFINITION_KIND,
+      tags: [
+        ["d", "bravery"],
+        ["name", "Medal of Bravery"],
+        ["image", "https://nostr.academy/awards/bravery.png", "1024x1024"],
+        ["thumb", "https://nostr.academy/awards/bravery_32.png", "32x32"],
+      ],
+      sig: "sig-badge-definition",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = {
+      fetch: jest.fn(),
+    } as unknown as NostrManager;
+    const fetchMock = nostr.fetch as jest.MockedFunction<NostrManager["fetch"]>;
+    fetchMock
+      .mockResolvedValueOnce([relayProfile])
+      .mockResolvedValueOnce([profileBadgesEvent])
+      .mockResolvedValueOnce([awardEvent])
+      .mockResolvedValueOnce([definitionEvent]);
+    const editProfileContext = jest.fn();
+
+    const { profileMap } = await fetchProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      editProfileContext
+    );
+
+    expect(profileMap.get(pubkey)?.badges).toEqual([
+      expect.objectContaining({
+        definitionAddress: badgeAddress,
+        awardEventId,
+        issuerPubkey,
+        badgeDefinitionDTag: "bravery",
+        name: "Medal of Bravery",
+        image: "https://nostr.academy/awards/bravery.png",
+        thumbnail: "https://nostr.academy/awards/bravery_32.png",
+      }),
+    ]);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      [
+        {
+          kinds: [NIP58_PROFILE_BADGES_KIND],
+          authors: [pubkey],
+        },
+        {
+          kinds: [NIP58_BADGE_SET_KIND],
+          authors: [pubkey],
+          "#d": [NIP58_DEPRECATED_PROFILE_BADGES_D_TAG],
+        },
+      ],
+      {},
+      ["wss://relay.example"]
+    );
+  });
+
+  it("keeps profiles when NIP-58 badge resolution fails", async () => {
+    const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier,
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchProfile } = await import("../fetch-service");
+
+    const relayProfile = makeProfileEvent({
+      id: "relay-profile-badge-fetch-fails",
+      pubkey,
+      created_at: 200,
+      content: JSON.stringify({ display_name: "Still Loads" }),
+      sig: "sig-relay-profile-badge-fetch-fails",
+    });
+    const badgeError = new Error("badge relay down");
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = {
+      fetch: jest.fn(),
+    } as unknown as NostrManager;
+    const fetchMock = nostr.fetch as jest.MockedFunction<NostrManager["fetch"]>;
+    fetchMock
+      .mockResolvedValueOnce([relayProfile])
+      .mockRejectedValueOnce(badgeError);
+
+    const { profileMap } = await fetchProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      jest.fn(),
+      new Map()
+    );
+
+    expect(profileMap.get(pubkey)).toMatchObject({
+      content: { display_name: "Still Loads" },
+    });
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      "Failed to fetch NIP-58 profile badges:",
+      badgeError
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
   it("catches and logs a DB fetch throw and still queries the relay", async () => {
     const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
     const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
@@ -2326,7 +2502,11 @@ describe("fetchProfile", () => {
       "Failed to fetch profiles from database: ",
       dbError
     );
-    expect(nostr.fetch).toHaveBeenCalledTimes(1);
+    expect(nostr.fetch).toHaveBeenCalledWith(
+      [{ kinds: [0], authors: [pubkey] }],
+      {},
+      ["wss://relay.example"]
+    );
     expect(profileMap.get(pubkey)).toMatchObject({
       pubkey,
       created_at: 200,

@@ -263,6 +263,43 @@ describe("ProfileWithDropdown", () => {
     expect(screen.getByText("testuser")).toBeInTheDocument();
   });
 
+  it("renders NIP-58 profile badge thumbnails from context", () => {
+    const profile = {
+      content: { name: "testuser", picture: "http://pic.com/img.png" },
+      badges: [
+        {
+          definitionAddress:
+            "30009:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:bravery",
+          awardEventId:
+            "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          issuerPubkey:
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          badgeDefinitionDTag: "bravery",
+          name: "Medal of Bravery",
+          description: "Awarded for demonstrating bravery",
+          image: "https://nostr.academy/awards/bravery.png",
+          thumbnail: "https://nostr.academy/awards/bravery_32.png",
+        },
+      ],
+    };
+    const profileMap = new Map();
+    profileMap.set(pubkey, profile);
+
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={[]} />,
+      { profileData: profileMap }
+    );
+
+    expect(screen.getByText("testuser")).toBeInTheDocument();
+    expect(screen.getByAltText("Medal of Bravery badge")).toHaveAttribute(
+      "src",
+      "https://nostr.academy/awards/bravery_32.png"
+    );
+    expect(
+      screen.getByTitle("Medal of Bravery: Awarded for demonstrating bravery")
+    ).toBeInTheDocument();
+  });
+
   it('handles "Visit Seller" click', () => {
     jest.useFakeTimers();
     renderWithProviders(

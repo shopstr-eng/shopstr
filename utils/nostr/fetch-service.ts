@@ -54,12 +54,15 @@ import {
   buildSignedHttpRequestProofTemplate,
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
+import { fetchNip58ProfileBadges } from "@/utils/nostr/badges";
+import type { Nip58ProfileBadge } from "@/utils/types/types";
 
 interface NipProfile {
   pubkey: string;
   created_at: number;
   content: { nip05?: string; [key: string]: any };
   nip05Verified: boolean;
+  badges?: Nip58ProfileBadge[];
 }
 
 type SearchFilter = Filter & { search: string };
@@ -904,6 +907,26 @@ export const fetchProfile = async (
         cacheEventsToDatabase(validProfileEvents).catch((error) =>
           console.error("Failed to cache profiles to database:", error)
         );
+      }
+
+      try {
+        const profileBadgesMap = await fetchNip58ProfileBadges(
+          nostr,
+          relays,
+          pubkeyProfilesToFetch
+        );
+
+        for (const [pubkey, badges] of profileBadgesMap.entries()) {
+          const profile =
+            mergedProfileMap.get(pubkey) || profileMap.get(pubkey);
+          if (!profile) continue;
+
+          const profileWithBadges = { ...profile, badges };
+          mergedProfileMap.set(pubkey, profileWithBadges);
+          profileMap.set(pubkey, profileWithBadges);
+        }
+      } catch (error) {
+        console.error("Failed to fetch NIP-58 profile badges:", error);
       }
 
       editProfileContext(new Map(mergedProfileMap), false);
