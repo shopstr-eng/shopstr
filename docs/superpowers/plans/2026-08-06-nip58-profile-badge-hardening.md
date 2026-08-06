@@ -22,10 +22,12 @@
 ### Task 1: Deterministic and bounded protocol parsing
 
 **Files:**
+
 - Modify: `utils/nostr/badges.ts`
 - Test: `utils/nostr/__tests__/badges.test.ts`
 
 **Interfaces:**
+
 - Produces: `Nip58ProfileBadgeReference` with `awardRelayHint` and `definitionRelayHint`.
 - Produces: deterministic profile-list and definition selection using `created_at`, then lexical `id`.
 - Produces: `MAX_NIP58_PROFILE_BADGES = 4`.
@@ -45,7 +47,10 @@ Expected: failures for the current arrival-order tie handling and absent definit
 Use a shared comparison equivalent to:
 
 ```ts
-function isPreferredReplaceableEvent(candidate: NostrEvent, current: NostrEvent) {
+function isPreferredReplaceableEvent(
+  candidate: NostrEvent,
+  current: NostrEvent
+) {
   if (candidate.created_at !== current.created_at) {
     return candidate.created_at > current.created_at;
   }
@@ -69,10 +74,12 @@ git commit -m "fix: make NIP-58 replacement deterministic"
 ### Task 2: Safe scoped relay resolution and conclusive results
 
 **Files:**
+
 - Modify: `utils/nostr/badges.ts`
 - Test: `utils/nostr/__tests__/badges.test.ts`
 
 **Interfaces:**
+
 - Produces: `Nip58ProfileBadgesResult { badges: Nip58ProfileBadge[]; complete: boolean }` per pubkey.
 - Produces: credential-free `ws:`/`wss:` hint validation, global hint cap `8`, and reference-scoped requests.
 
@@ -110,12 +117,14 @@ git commit -m "fix: bound NIP-58 relay hint resolution"
 ### Task 3: Non-blocking resilient profile hydration
 
 **Files:**
+
 - Modify: `utils/nostr/fetch-service.ts`
 - Modify: `components/utility-components/profile/profile-dropdown.tsx`
 - Test: `utils/nostr/__tests__/fetch-service.test.ts`
 - Test: `components/utility-components/profile/__tests__/profile-dropdown.test.tsx`
 
 **Interfaces:**
+
 - Produces: `hydrateNip58ProfileBadges(nostr, relays, pubkeys, editProfileContext, existingProfileMap): Promise<void>`.
 - `fetchProfile` schedules this hydrator without awaiting it.
 - In-flight and retry keys contain Nostr manager identity, normalized relay set, and pubkey; retry backoff is five seconds.
@@ -166,6 +175,7 @@ git commit -m "fix: hydrate profile badges in the background"
 ### Task 4: Full regression and website verification
 
 **Files:**
+
 - Modify only files required by failures found below.
 
 - [ ] **Step 1: Run focused tests**

@@ -27,6 +27,7 @@ const mockFetchProfile = jest.fn();
 const mockHydrateProfileBadges = jest.fn();
 
 jest.mock("@/utils/nostr/fetch-service", () => ({
+  NIP58_BADGE_HYDRATION_RETRY_MS: 5_000,
   fetchProfile: (...args: unknown[]) => mockFetchProfile(...args),
   hydrateNip58ProfileBadges: (...args: unknown[]) =>
     mockHydrateProfileBadges(...args),
@@ -569,6 +570,118 @@ describe("ProfileWithDropdown", () => {
       expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(2);
     });
     consoleErrorSpy.mockRestore();
+  });
+
+  it("retries incomplete badge hydration after the bounded backoff", async () => {
+    jest.useFakeTimers();
+    const sellerPubkey =
+      "abababababababababababababababababababababababababababababababab";
+    const nostr = { fetch: jest.fn() };
+    const profileMap = new Map([
+      [
+        sellerPubkey,
+        {
+          pubkey: sellerPubkey,
+          created_at: 100,
+          content: { name: "seller" },
+        },
+      ],
+    ]);
+
+    const rendered = renderWithProviders(
+      <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />,
+      {
+        profileData: profileMap,
+        nostr,
+        relayList: ["wss://relay.example"],
+      }
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(5_000);
+      await Promise.resolve();
+    });
+    expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(2);
+    rendered.unmount();
+  });
+
+  it("merges hydrated badges without reverting newer profile metadata", async () => {
+    const sellerPubkey =
+      "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
+    const nostr = { fetch: jest.fn() };
+    const initialProfile = {
+      pubkey: sellerPubkey,
+      created_at: 100,
+      content: { name: "Old seller" },
+    };
+    const profileMap = new Map([[sellerPubkey, initialProfile]]);
+    let applyStaleHydration = () => {};
+    mockHydrateProfileBadges.mockImplementation(
+      async (_nostr, _relays, _pubkeys, editProfileContext) => {
+        applyStaleHydration = () => {
+          editProfileContext(
+            new Map([
+              [
+                sellerPubkey,
+                {
+                  ...initialProfile,
+                  badges: [
+                    {
+                      name: "Race-safe badge",
+                      thumbnail: "https://example.com/badge.png",
+                    },
+                  ],
+                },
+              ],
+            ]),
+            false
+          );
+        };
+      }
+    );
+    const AdvanceProfile = () => {
+      const context = React.useContext(ProfileMapContext);
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            context.updateProfileData({
+              ...initialProfile,
+              created_at: 200,
+              content: { name: "New seller" },
+            })
+          }
+        >
+          advance profile
+        </button>
+      );
+    };
+
+    renderWithProviders(
+      <>
+        <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />
+        <AdvanceProfile />
+      </>,
+      {
+        profileData: profileMap,
+        nostr,
+        relayList: ["wss://relay.example"],
+      }
+    );
+    await waitFor(() => {
+      expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(1);
+    });
+    fireEvent.click(screen.getByText("advance profile"));
+    expect(screen.getByText("New seller")).toBeInTheDocument();
+
+    act(() => applyStaleHydration());
+
+    expect(screen.getByText("New seller")).toBeInTheDocument();
+    expect(screen.getByAltText("Race-safe badge badge")).toBeInTheDocument();
   });
 
   it("does not hydrate missing profile data from relays by default", async () => {

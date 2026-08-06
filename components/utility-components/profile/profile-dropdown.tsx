@@ -15,7 +15,7 @@ import {
   useDisclosure,
 } from "@heroui/react";
 import { nip19 } from "nostr-tools";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { getProfileSlug } from "@/utils/url-slugs";
 import {
   ArrowRightStartOnRectangleIcon,
@@ -43,6 +43,7 @@ import {
   clearNip58ProfileBadgeHydrationCache,
   fetchProfile,
   hydrateNip58ProfileBadges,
+  NIP58_BADGE_HYDRATION_RETRY_MS,
 } from "@/utils/nostr/fetch-service";
 import { getDefaultRelays } from "@/utils/nostr/relay-config";
 import { sanitizeUrl } from "@braintree/sanitize-url";
@@ -146,6 +147,9 @@ export const ProfileWithDropdown = ({
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const profileContext = useContext(ProfileMapContext);
+  const profileDataRef = useRef(profileContext.profileData);
+  profileDataRef.current = profileContext.profileData;
+  const [badgeHydrationRetry, setBadgeHydrationRetry] = useState(0);
   const shopMapContext = useContext(ShopMapContext);
   const relaysContext = useContext(RelaysContext);
   const { nostr } = useContext(NostrContext);
@@ -253,7 +257,13 @@ export const ProfileWithDropdown = ({
     const updateProfileContext = (profileMap: Map<string, unknown>) => {
       const profile = profileMap.get(pubkey);
       if (profile) {
-        profileContext.updateProfileData(profile as ProfileData);
+        const incomingProfile = profile as ProfileData;
+        const currentProfile = profileDataRef.current.get(pubkey);
+        profileContext.updateProfileData(
+          currentProfile && Array.isArray(incomingProfile.badges)
+            ? { ...currentProfile, badges: incomingProfile.badges }
+            : incomingProfile
+        );
       }
     };
     const request = contextProfile
@@ -272,10 +282,25 @@ export const ProfileWithDropdown = ({
           profileContext.profileData
         ).then(() => undefined);
 
-    void request.catch((error) => {
-      console.error("Failed to hydrate profile from relays:", error);
-    });
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    void request
+      .catch((error) => {
+        console.error("Failed to hydrate profile from relays:", error);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        retryTimer = setTimeout(() => {
+          setBadgeHydrationRetry((retry) => retry + 1);
+        }, NIP58_BADGE_HYDRATION_RETRY_MS);
+      });
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, [
+    badgeHydrationRetry,
     pubkey,
     hydrateMissingProfileFromRelays,
     nostr,

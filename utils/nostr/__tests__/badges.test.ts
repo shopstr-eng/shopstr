@@ -553,4 +553,123 @@ describe("NIP-58 badge helpers", () => {
       "wss://do-not-contact.relay"
     );
   });
+
+  it("marks a time-limited profile badge list fetch as incomplete", async () => {
+    const emptyProfileBadgesEvent = makeEvent({
+      kind: NIP58_PROFILE_BADGES_KIND,
+      pubkey: profilePubkey,
+      tags: [],
+    });
+    const nostr = {
+      fetch: jest.fn(),
+      fetchWithStatus: jest.fn().mockResolvedValue({
+        events: [emptyProfileBadgesEvent],
+        complete: false,
+      }),
+    };
+
+    const result = await fetchNip58ProfileBadges(
+      nostr,
+      ["wss://relay.example"],
+      [profilePubkey]
+    );
+
+    expect(result.get(profilePubkey)).toEqual({ badges: [], complete: false });
+  });
+
+  it("queries a definition hint even when configured relays returned an older definition", async () => {
+    const profileBadgesEvent = makeEvent({
+      kind: NIP58_PROFILE_BADGES_KIND,
+      pubkey: profilePubkey,
+      tags: [
+        ["a", badgeAddress, "wss://definition.relay"],
+        ["e", awardEventId],
+      ],
+    });
+    const awardEvent = makeEvent({
+      id: awardEventId,
+      kind: NIP58_BADGE_AWARD_KIND,
+      tags: [
+        ["a", badgeAddress],
+        ["p", profilePubkey],
+      ],
+    });
+    const olderDefinitionEvent = makeEvent({
+      id: "1111111111111111111111111111111111111111111111111111111111111111",
+      created_at: 10,
+      kind: NIP58_BADGE_DEFINITION_KIND,
+      tags: [
+        ["d", "bravery"],
+        ["name", "Older definition"],
+      ],
+    });
+    const newerDefinitionEvent = makeEvent({
+      id: "2222222222222222222222222222222222222222222222222222222222222222",
+      created_at: 20,
+      kind: NIP58_BADGE_DEFINITION_KIND,
+      tags: [
+        ["d", "bravery"],
+        ["name", "Newer hinted definition"],
+      ],
+    });
+    const nostr: Pick<NostrManager, "fetch"> = { fetch: jest.fn() };
+    const fetchMock = nostr.fetch as jest.MockedFunction<NostrManager["fetch"]>;
+    fetchMock.mockImplementation(async (filters, _params, relayUrls) => {
+      if (filters[0]?.kinds?.includes(NIP58_PROFILE_BADGES_KIND)) {
+        return [profileBadgesEvent];
+      }
+      if (filters[0]?.kinds?.includes(NIP58_BADGE_AWARD_KIND)) {
+        return [awardEvent];
+      }
+      if (filters[0]?.kinds?.includes(NIP58_BADGE_DEFINITION_KIND)) {
+        return relayUrls?.[0] === "wss://definition.relay"
+          ? [newerDefinitionEvent]
+          : [olderDefinitionEvent];
+      }
+      return [];
+    });
+
+    const result = await fetchNip58ProfileBadges(
+      nostr,
+      ["wss://relay.example"],
+      [profilePubkey]
+    );
+
+    expect(result.get(profilePubkey)).toEqual({
+      badges: [expect.objectContaining({ name: "Newer hinted definition" })],
+      complete: true,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      [
+        {
+          kinds: [NIP58_BADGE_DEFINITION_KIND],
+          authors: [issuerPubkey],
+          "#d": ["bravery"],
+        },
+      ],
+      {},
+      ["wss://definition.relay"],
+      expect.any(Number)
+    );
+  });
+
+  it("stops parsing after the requested number of usable references", () => {
+    const tags = [
+      ["a", badgeAddress],
+      ["e", awardEventId],
+      ["a", otherBadgeAddress],
+      ["e", otherAwardEventId],
+    ];
+
+    expect(
+      parseNip58ProfileBadgesEvent(
+        makeEvent({
+          kind: NIP58_PROFILE_BADGES_KIND,
+          pubkey: profilePubkey,
+          tags,
+        }),
+        1
+      )
+    ).toHaveLength(1);
+  });
 });

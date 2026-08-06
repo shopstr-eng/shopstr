@@ -588,6 +588,13 @@ function Shopstr({ props }: { props: AppProps }) {
 
       profileData.forEach((incomingProfile, pubkey) => {
         const existingProfile = mergedProfileData.get(pubkey);
+        if (existingProfile && Array.isArray(incomingProfile?.badges)) {
+          mergedProfileData.set(pubkey, {
+            ...existingProfile,
+            badges: incomingProfile.badges,
+          });
+          return;
+        }
         if (
           !existingProfile ||
           (incomingProfile?.created_at ?? 0) >

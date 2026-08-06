@@ -2920,6 +2920,137 @@ describe("fetchProfile", () => {
       )
     ).rejects.toThrow("profile relay down");
   });
+
+  it("carries existing badges onto newer kind-0 metadata until hydration is conclusive", async () => {
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier: jest.fn().mockResolvedValue(false),
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+    }));
+
+    const { fetchProfile } = await import("../fetch-service");
+    const existingBadge = {
+      definitionAddress:
+        "30009:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:bravery",
+      awardEventId:
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      issuerPubkey:
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      badgeDefinitionDTag: "bravery",
+      name: "Preserved badge",
+    };
+    const existingProfileMap = new Map([
+      [
+        pubkey,
+        {
+          pubkey,
+          created_at: 100,
+          content: { display_name: "Old metadata" },
+          nip05Verified: false,
+          badges: [existingBadge],
+        },
+      ],
+    ]);
+    const newerProfile = makeProfileEvent({
+      pubkey,
+      created_at: 200,
+      content: JSON.stringify({ display_name: "New metadata" }),
+    });
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValueOnce([newerProfile])
+        .mockResolvedValueOnce([]),
+    } as any;
+
+    const { profileMap } = await fetchProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      jest.fn(),
+      existingProfileMap
+    );
+
+    expect(profileMap.get(pubkey)).toMatchObject({
+      created_at: 200,
+      content: { display_name: "New metadata" },
+      badges: [existingBadge],
+    });
+  });
+
+  it("ignores an older badge hydration that finishes after a newer relay request", async () => {
+    type BadgeResult = Map<
+      string,
+      { badges: Array<{ name: string }>; complete: boolean }
+    >;
+    let resolveFirst: (result: BadgeResult) => void = () => {};
+    let resolveSecond: (result: BadgeResult) => void = () => {};
+    const fetchBadges = jest
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<BadgeResult>((resolve) => {
+            resolveFirst = resolve;
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<BadgeResult>((resolve) => {
+            resolveSecond = resolve;
+          })
+      );
+    jest.doMock("@/utils/nostr/badges", () => ({
+      fetchNip58ProfileBadges: fetchBadges,
+    }));
+    const { hydrateNip58ProfileBadges } = await import("../fetch-service");
+    const nostr = { fetch: jest.fn() } as any;
+    const existingProfileMap = new Map([
+      [
+        pubkey,
+        {
+          pubkey,
+          created_at: 100,
+          content: { display_name: "Seller" },
+          nip05Verified: false,
+        },
+      ],
+    ]);
+    const editProfileContext = jest.fn();
+
+    const first = hydrateNip58ProfileBadges(
+      nostr,
+      ["wss://first.relay"],
+      [pubkey],
+      editProfileContext,
+      existingProfileMap
+    );
+    const second = hydrateNip58ProfileBadges(
+      nostr,
+      ["wss://second.relay"],
+      [pubkey],
+      editProfileContext,
+      existingProfileMap
+    );
+    resolveSecond(
+      new Map([[pubkey, { badges: [{ name: "New badge" }], complete: true }]])
+    );
+    await second;
+    resolveFirst(
+      new Map([[pubkey, { badges: [{ name: "Old badge" }], complete: true }]])
+    );
+    await first;
+
+    expect(editProfileContext).toHaveBeenCalledTimes(1);
+    expect(editProfileContext.mock.calls[0]?.[0].get(pubkey)?.badges).toEqual([
+      { name: "New badge" },
+    ]);
+  });
 });
 
 describe("fetchAllFollows", () => {

@@ -70,11 +70,13 @@ type SearchFilter = Filter & { search: string };
 const PRODUCT_SEARCH_LIMIT = 100;
 export const NIP50_SEARCH_TIMEOUT_MS = 10_000;
 const COMMUNITY_POST_BATCH_CONCURRENCY = 4;
-const NIP58_BADGE_HYDRATION_RETRY_MS = 5_000;
+export const NIP58_BADGE_HYDRATION_RETRY_MS = 5_000;
 const nip58ManagerIds = new WeakMap<object, number>();
 const nip58BadgeHydrationsInFlight = new Map<string, Promise<void>>();
 const nip58BadgeHydrationRetryAfter = new Map<string, number>();
+const nip58BadgeHydrationGenerationByProfile = new Map<string, number>();
 let nextNip58ManagerId = 1;
+let nextNip58BadgeHydrationGeneration = 1;
 export const DEFAULT_NIP50_SEARCH_RELAYS = [
   "wss://relay.nostr.band",
   "wss://nostr.wine",
@@ -129,9 +131,14 @@ function getNip58HydrationKey(
   return `${getNip58ManagerId(nostr)}:${relayKey}:${pubkey}`;
 }
 
+function getNip58HydrationProfileKey(nostr: object, pubkey: string): string {
+  return `${getNip58ManagerId(nostr)}:${pubkey}`;
+}
+
 export function clearNip58ProfileBadgeHydrationCache(): void {
   nip58BadgeHydrationsInFlight.clear();
   nip58BadgeHydrationRetryAfter.clear();
+  nip58BadgeHydrationGenerationByProfile.clear();
 }
 
 export async function hydrateNip58ProfileBadges(
@@ -149,13 +156,13 @@ export async function hydrateNip58ProfileBadges(
   const pendingHydrations = new Set<Promise<void>>();
   const pubkeysToHydrate: string[] = [];
   const hydrationKeys = new Map<string, string>();
+  const hydrationGenerations = new Map<string, number>();
 
   for (const pubkey of uniquePubkeys) {
     const hydrationKey = getNip58HydrationKey(nostr, relays, pubkey);
     hydrationKeys.set(pubkey, hydrationKey);
 
-    const pendingHydration =
-      nip58BadgeHydrationsInFlight.get(hydrationKey);
+    const pendingHydration = nip58BadgeHydrationsInFlight.get(hydrationKey);
     if (pendingHydration) {
       pendingHydrations.add(pendingHydration);
       continue;
@@ -163,8 +170,14 @@ export async function hydrateNip58ProfileBadges(
     if ((nip58BadgeHydrationRetryAfter.get(hydrationKey) ?? 0) > now) {
       continue;
     }
+    nip58BadgeHydrationRetryAfter.delete(hydrationKey);
 
     pubkeysToHydrate.push(pubkey);
+    const profileKey = getNip58HydrationProfileKey(nostr, pubkey);
+    const generation = nextNip58BadgeHydrationGeneration;
+    nextNip58BadgeHydrationGeneration += 1;
+    nip58BadgeHydrationGenerationByProfile.set(profileKey, generation);
+    hydrationGenerations.set(pubkey, generation);
   }
 
   if (pubkeysToHydrate.length) {
@@ -179,6 +192,14 @@ export async function hydrateNip58ProfileBadges(
 
         for (const pubkey of pubkeysToHydrate) {
           const hydrationKey = hydrationKeys.get(pubkey)!;
+          const profileKey = getNip58HydrationProfileKey(nostr, pubkey);
+          const generation = hydrationGenerations.get(pubkey)!;
+          if (
+            nip58BadgeHydrationGenerationByProfile.get(profileKey) !==
+            generation
+          ) {
+            continue;
+          }
           const badgeResult = badgeResults.get(pubkey);
           if (!badgeResult?.complete) {
             nip58BadgeHydrationRetryAfter.set(
@@ -208,6 +229,14 @@ export async function hydrateNip58ProfileBadges(
       } catch (error) {
         for (const pubkey of pubkeysToHydrate) {
           const hydrationKey = hydrationKeys.get(pubkey)!;
+          const profileKey = getNip58HydrationProfileKey(nostr, pubkey);
+          const generation = hydrationGenerations.get(pubkey)!;
+          if (
+            nip58BadgeHydrationGenerationByProfile.get(profileKey) !==
+            generation
+          ) {
+            continue;
+          }
           nip58BadgeHydrationRetryAfter.set(
             hydrationKey,
             Date.now() + NIP58_BADGE_HYDRATION_RETRY_MS
@@ -218,7 +247,11 @@ export async function hydrateNip58ProfileBadges(
     })().finally(() => {
       for (const pubkey of pubkeysToHydrate) {
         const hydrationKey = hydrationKeys.get(pubkey)!;
-        nip58BadgeHydrationsInFlight.delete(hydrationKey);
+        if (
+          nip58BadgeHydrationsInFlight.get(hydrationKey) === hydrationPromise
+        ) {
+          nip58BadgeHydrationsInFlight.delete(hydrationKey);
+        }
       }
     });
 
@@ -934,7 +967,11 @@ export const fetchProfile = async (
           !existingProfile ||
           (profile.created_at ?? 0) >= (existingProfile.created_at ?? 0)
         ) {
-          mergedProfileMap.set(profile.pubkey, profile);
+          const nextProfile =
+            profile.badges === undefined && existingProfile?.badges
+              ? { ...profile, badges: existingProfile.badges }
+              : profile;
+          mergedProfileMap.set(profile.pubkey, nextProfile);
         }
       };
 
