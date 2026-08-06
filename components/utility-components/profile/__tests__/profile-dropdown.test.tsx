@@ -7,14 +7,27 @@ import {
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { ProfileWithDropdown } from "../profile-dropdown";
-import { FollowsContext, ProfileMapContext } from "@/utils/context/context";
-import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import {
+  FollowsContext,
+  ProfileMapContext,
+  RelaysContext,
+} from "@/utils/context/context";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
 import React from "react";
+import type { NostrManager } from "@/utils/nostr/nostr-manager";
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
+const mockFetchProfile = jest.fn();
+
+jest.mock("@/utils/nostr/fetch-service", () => ({
+  fetchProfile: (...args: unknown[]) => mockFetchProfile(...args),
+}));
 
 const mockRouterPush = jest.fn();
 jest.mock("next/router", () => ({
@@ -91,8 +104,8 @@ jest.mock("@heroui/react", () => {
       items,
       children,
     }: {
-      items: any[];
-      children: (item: any) => React.ReactNode;
+      items: unknown[];
+      children: (item: unknown) => React.ReactNode;
     }) => {
       const { isOpen } = React.useContext(DropdownContext);
 
@@ -145,11 +158,13 @@ Object.defineProperty(navigator, "clipboard", {
 const renderWithProviders = (
   ui: React.ReactElement,
   options: {
-    profileData?: Map<string, any>;
+    profileData?: Map<string, unknown>;
     isLoggedIn?: boolean;
     directFollowList?: string[];
     addFollow?: jest.Mock;
     removeFollow?: jest.Mock;
+    nostr?: Partial<Pick<NostrManager, "fetch">>;
+    relayList?: string[];
   } = {}
 ) => {
   const {
@@ -166,31 +181,56 @@ const renderWithProviders = (
       event: {},
       alreadyApplied: false,
     }),
+    nostr = {},
+    relayList = [],
   } = options;
-  return render(
-    <ProfileMapContext.Provider
-      value={{
-        profileData,
-        isLoading: false,
-        updateProfileData: jest.fn(),
-      }}
-    >
-      <SignerContext.Provider value={{ isLoggedIn }}>
-        <FollowsContext.Provider
+  const Providers = ({ children }: { children: React.ReactNode }) => {
+    const [profileDataState, setProfileDataState] = React.useState(profileData);
+
+    return (
+      <NostrContext.Provider value={{ nostr: nostr as NostrManager }}>
+        <RelaysContext.Provider
           value={{
-            directFollowList,
-            followList: directFollowList,
-            firstDegreeFollowsLength: directFollowList.length,
+            relayList,
+            readRelayList: [],
+            writeRelayList: [],
             isLoading: false,
-            addFollow,
-            removeFollow,
           }}
         >
-          {ui}
-        </FollowsContext.Provider>
-      </SignerContext.Provider>
-    </ProfileMapContext.Provider>
-  );
+          <ProfileMapContext.Provider
+            value={{
+              profileData: profileDataState,
+              isLoading: false,
+              updateProfileData: (incomingProfile) => {
+                setProfileDataState((currentProfileData) => {
+                  const nextProfileData = new Map(currentProfileData);
+                  nextProfileData.set(incomingProfile.pubkey, incomingProfile);
+                  return nextProfileData;
+                });
+              },
+            }}
+          >
+            <SignerContext.Provider value={{ isLoggedIn }}>
+              <FollowsContext.Provider
+                value={{
+                  directFollowList,
+                  followList: directFollowList,
+                  firstDegreeFollowsLength: directFollowList.length,
+                  isLoading: false,
+                  addFollow,
+                  removeFollow,
+                }}
+              >
+                {children}
+              </FollowsContext.Provider>
+            </SignerContext.Provider>
+          </ProfileMapContext.Provider>
+        </RelaysContext.Provider>
+      </NostrContext.Provider>
+    );
+  };
+
+  return render(ui, { wrapper: Providers });
 };
 
 const openDropdownMenu = () => {
@@ -215,6 +255,7 @@ describe("ProfileWithDropdown", () => {
     mockRouterPush.mockClear();
     mockOnOpen.mockClear();
     mockOpenReportFlow.mockClear();
+    mockFetchProfile.mockReset();
     (LogOut as jest.Mock).mockClear();
     (navigator.clipboard.writeText as jest.Mock).mockClear();
     mockFetch.mockResolvedValue({
@@ -298,6 +339,94 @@ describe("ProfileWithDropdown", () => {
     expect(
       screen.getByTitle("Medal of Bravery: Awarded for demonstrating bravery")
     ).toBeInTheDocument();
+  });
+
+  it("does not render unsafe NIP-58 profile badge image URLs", () => {
+    const profile = {
+      content: { name: "testuser", picture: "http://pic.com/img.png" },
+      badges: [
+        {
+          definitionAddress:
+            "30009:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:unsafe",
+          awardEventId:
+            "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          issuerPubkey:
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          badgeDefinitionDTag: "unsafe",
+          name: "Unsafe Badge",
+          image: "javascript:alert(1)",
+        },
+      ],
+    };
+    const profileMap = new Map();
+    profileMap.set(pubkey, profile);
+
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={[]} />,
+      { profileData: profileMap }
+    );
+
+    expect(screen.getByText("testuser")).toBeInTheDocument();
+    expect(screen.queryByAltText("Unsafe Badge badge")).not.toBeInTheDocument();
+  });
+
+  it("hydrates missing profile data from relays so marketplace rows can show badges", async () => {
+    const sellerPubkey =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const sellerProfile = {
+      pubkey: sellerPubkey,
+      created_at: 100,
+      content: { name: "seller", picture: "http://pic.com/seller.png" },
+      nip05Verified: false,
+      badges: [
+        {
+          definitionAddress:
+            "30009:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc:bravery",
+          awardEventId:
+            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          issuerPubkey:
+            "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          badgeDefinitionDTag: "bravery",
+          name: "Medal of Bravery",
+          thumbnail: "https://nostr.academy/awards/bravery_32.png",
+        },
+      ],
+    };
+    const nostr = { fetch: jest.fn() };
+    const profileMap = new Map<string, unknown>();
+
+    mockFetchProfile.mockImplementation(
+      async (_nostr, _relays, _pubkeys, editProfileContext) => {
+        const fetchedProfileMap = new Map([[sellerPubkey, sellerProfile]]);
+        editProfileContext(fetchedProfileMap, false);
+        return { profileMap: fetchedProfileMap };
+      }
+    );
+
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />,
+      {
+        profileData: profileMap,
+        nostr,
+        relayList: ["wss://relay.example"],
+      }
+    );
+
+    await waitFor(() => {
+      expect(mockFetchProfile).toHaveBeenCalledWith(
+        nostr,
+        ["wss://relay.example"],
+        [sellerPubkey],
+        expect.any(Function),
+        profileMap
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByAltText("Medal of Bravery badge")).toHaveAttribute(
+        "src",
+        "https://nostr.academy/awards/bravery_32.png"
+      );
+    });
   });
 
   it('handles "Visit Seller" click', () => {

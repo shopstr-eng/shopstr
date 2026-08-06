@@ -916,11 +916,12 @@ export const fetchProfile = async (
           pubkeyProfilesToFetch
         );
 
-        for (const [pubkey, badges] of profileBadgesMap.entries()) {
+        for (const pubkey of pubkeyProfilesToFetch) {
           const profile =
             mergedProfileMap.get(pubkey) || profileMap.get(pubkey);
           if (!profile) continue;
 
+          const badges = profileBadgesMap.get(pubkey) ?? [];
           const profileWithBadges = { ...profile, badges };
           mergedProfileMap.set(pubkey, profileWithBadges);
           profileMap.set(pubkey, profileWithBadges);

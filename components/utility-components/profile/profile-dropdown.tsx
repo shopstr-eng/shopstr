@@ -1,5 +1,9 @@
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
-import { ProfileMapContext, ShopMapContext } from "@/utils/context/context";
+import {
+  ProfileMapContext,
+  RelaysContext,
+  ShopMapContext,
+} from "@/utils/context/context";
 import {
   Dropdown,
   DropdownItem,
@@ -27,11 +31,17 @@ import {
   UserPlusIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
-import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../../sign-in/SignInModal";
 import useReportEventFlow from "../use-report-event-flow";
 import { ProfileData } from "@/utils/types/types";
 import { useFollowToggle } from "@/components/hooks/use-follow-toggle";
+import { fetchProfile } from "@/utils/nostr/fetch-service";
+import { getDefaultRelays } from "@/utils/nostr/relay-config";
+import { sanitizeUrl } from "@braintree/sanitize-url";
 
 type DropDownKeys =
   | "shop"
@@ -49,12 +59,19 @@ type DropdownActionItem = Omit<DropdownItemProps, "onClick"> & {
   label: string;
   onClick?: () => void | Promise<void>;
 };
+type ProfileBadge = NonNullable<ProfileData["badges"]>[number];
+type VisibleProfileBadge = {
+  badge: ProfileBadge;
+  imageUrl: string;
+};
 
 const fetchedProfileContentCache = new Map<string, ProfileData["content"]>();
 const inFlightProfileRequests = new Map<
   string,
   Promise<ProfileData["content"] | null>
 >();
+const hydratedProfilePubkeys = new Set<string>();
+const inFlightProfileHydrationRequests = new Map<string, Promise<void>>();
 const MAX_PROFILE_CACHE_ENTRIES = 100;
 const MAX_VISIBLE_PROFILE_BADGES = 4;
 
@@ -69,6 +86,22 @@ const trimProfileContentCache = () => {
 const clearProfileRequestCaches = () => {
   fetchedProfileContentCache.clear();
   inFlightProfileRequests.clear();
+  hydratedProfilePubkeys.clear();
+  inFlightProfileHydrationRequests.clear();
+};
+
+const sanitizeBadgeImageUrl = (imageUrl?: string) => {
+  const sanitizedUrl = sanitizeUrl(imageUrl || "");
+  if (!sanitizedUrl || sanitizedUrl === "about:blank") return "";
+
+  try {
+    const parsedUrl = new URL(sanitizedUrl);
+    return parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:"
+      ? sanitizedUrl
+      : "";
+  } catch {
+    return "";
+  }
 };
 
 const fetchProfileContent = async (pubkey: string) => {
@@ -111,6 +144,8 @@ export const ProfileWithDropdown = ({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const profileContext = useContext(ProfileMapContext);
   const shopMapContext = useContext(ShopMapContext);
+  const relaysContext = useContext(RelaysContext);
+  const { nostr } = useContext(NostrContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
   const { isLoggedIn } = useContext(SignerContext);
@@ -191,6 +226,57 @@ export const ProfileWithDropdown = ({
     };
   }, [pubkey, profileContext.profileData]);
 
+  useEffect(() => {
+    if (!pubkey || !nostr || typeof nostr.fetch !== "function") return;
+
+    const contextProfile = profileContext.profileData.get(pubkey);
+    if (
+      Array.isArray(contextProfile?.badges) ||
+      hydratedProfilePubkeys.has(pubkey)
+    ) {
+      return;
+    }
+
+    const relays = Array.from(
+      new Set([
+        ...(relaysContext.relayList || []),
+        ...(relaysContext.readRelayList || []),
+      ])
+    );
+    const relaysToFetch = relays.length > 0 ? relays : getDefaultRelays();
+
+    let request = inFlightProfileHydrationRequests.get(pubkey);
+    if (!request) {
+      request = fetchProfile(
+        nostr,
+        relaysToFetch,
+        [pubkey],
+        (profileMap) => {
+          const profile = profileMap.get(pubkey);
+          if (profile) {
+            profileContext.updateProfileData(profile as ProfileData);
+          }
+        },
+        profileContext.profileData
+      )
+        .then(() => undefined)
+        .catch((error) => {
+          console.error("Failed to hydrate profile from relays:", error);
+        })
+        .finally(() => {
+          hydratedProfilePubkeys.add(pubkey);
+          inFlightProfileHydrationRequests.delete(pubkey);
+        });
+      inFlightProfileHydrationRequests.set(pubkey, request);
+    }
+  }, [
+    pubkey,
+    nostr,
+    profileContext,
+    relaysContext.readRelayList,
+    relaysContext.relayList,
+  ]);
+
   const profile = profileContext.profileData.get(pubkey);
   const profileContent = profile?.content ?? fetchedProfileContent;
   const displayName = (() => {
@@ -204,9 +290,17 @@ export const ProfileWithDropdown = ({
   const pfp = profileContent?.picture || `https://robohash.org/${pubkey}`;
   const isNip05Verified = profile?.nip05Verified || false;
   const showFollowingIndicator = dropDownKeys.includes("follow") && isFollowing;
-  const profileBadges = Array.isArray(profile?.badges)
-    ? (profile.badges as NonNullable<ProfileData["badges"]>)
-        .filter((badge) => badge.thumbnail || badge.image)
+  const profileBadges: VisibleProfileBadge[] = Array.isArray(profile?.badges)
+    ? (profile.badges as ProfileBadge[])
+        .reduce<VisibleProfileBadge[]>((visibleBadges, badge) => {
+          const imageUrl = sanitizeBadgeImageUrl(
+            badge.thumbnail || badge.image
+          );
+          if (imageUrl) {
+            visibleBadges.push({ badge, imageUrl });
+          }
+          return visibleBadges;
+        }, [])
         .slice(0, MAX_VISIBLE_PROFILE_BADGES)
     : [];
   const displayNameContent = (
@@ -216,14 +310,11 @@ export const ProfileWithDropdown = ({
       </span>
       {profileBadges.length > 0 ? (
         <span className="inline-flex shrink-0 items-center -space-x-1">
-          {profileBadges.map((badge) => {
-            const badgeImage = badge.thumbnail || badge.image;
-            if (!badgeImage) return null;
-
+          {profileBadges.map(({ badge, imageUrl }) => {
             return (
               <img
                 key={`${badge.definitionAddress}:${badge.awardEventId}`}
-                src={badgeImage}
+                src={imageUrl}
                 alt={`${badge.name} badge`}
                 title={
                   badge.description

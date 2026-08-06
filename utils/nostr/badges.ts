@@ -286,6 +286,7 @@ export async function fetchNip58ProfileBadges(
   pubkeys: string[]
 ): Promise<Map<string, Nip58ProfileBadge[]>> {
   const uniquePubkeys = Array.from(new Set(pubkeys.filter(isHexPubkey)));
+  const uniquePubkeySet = new Set(uniquePubkeys);
   const badgesByPubkey = new Map<string, Nip58ProfileBadge[]>();
   if (!uniquePubkeys.length) return badgesByPubkey;
 
@@ -308,7 +309,7 @@ export async function fetchNip58ProfileBadges(
   const profileBadgeEventsByPubkey = new Map<string, NostrEvent[]>();
   for (const event of profileBadgeEvents) {
     if (
-      !uniquePubkeys.includes(event.pubkey) ||
+      !uniquePubkeySet.has(event.pubkey) ||
       !isNip58ProfileBadgesEvent(event)
     ) {
       continue;

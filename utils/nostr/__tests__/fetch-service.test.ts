@@ -2401,6 +2401,81 @@ describe("fetchProfile", () => {
     );
   });
 
+  it("clears stale NIP-58 badges when the latest badge resolution has none", async () => {
+    const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier,
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchProfile } = await import("../fetch-service");
+
+    const staleBadge = {
+      definitionAddress:
+        "30009:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:bravery",
+      awardEventId:
+        "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      issuerPubkey:
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      badgeDefinitionDTag: "bravery",
+      name: "Stale Badge",
+      image: "https://nostr.academy/awards/stale.png",
+    };
+    const existingProfileMap = new Map([
+      [
+        pubkey,
+        {
+          pubkey,
+          created_at: 200,
+          content: { display_name: "Previously Badged" },
+          nip05Verified: false,
+          badges: [staleBadge],
+        },
+      ],
+    ]);
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = {
+      fetch: jest.fn(),
+    } as unknown as NostrManager;
+    const fetchMock = nostr.fetch as jest.MockedFunction<NostrManager["fetch"]>;
+    fetchMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+    const { profileMap } = await fetchProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      jest.fn(),
+      existingProfileMap
+    );
+
+    expect(profileMap.get(pubkey)?.badges).toEqual([]);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      [
+        {
+          kinds: [NIP58_PROFILE_BADGES_KIND],
+          authors: [pubkey],
+        },
+        {
+          kinds: [NIP58_BADGE_SET_KIND],
+          authors: [pubkey],
+          "#d": [NIP58_DEPRECATED_PROFILE_BADGES_D_TAG],
+        },
+      ],
+      {},
+      ["wss://relay.example"]
+    );
+  });
+
   it("keeps profiles when NIP-58 badge resolution fails", async () => {
     const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
     const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
