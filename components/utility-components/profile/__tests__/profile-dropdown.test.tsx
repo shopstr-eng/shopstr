@@ -24,9 +24,13 @@ import type { NostrManager } from "@/utils/nostr/nostr-manager";
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 const mockFetchProfile = jest.fn();
+const mockHydrateProfileBadges = jest.fn();
 
 jest.mock("@/utils/nostr/fetch-service", () => ({
   fetchProfile: (...args: unknown[]) => mockFetchProfile(...args),
+  hydrateNip58ProfileBadges: (...args: unknown[]) =>
+    mockHydrateProfileBadges(...args),
+  clearNip58ProfileBadgeHydrationCache: jest.fn(),
 }));
 
 const mockRouterPush = jest.fn();
@@ -257,7 +261,8 @@ describe("ProfileWithDropdown", () => {
     mockRouterPush.mockClear();
     mockOnOpen.mockClear();
     mockOpenReportFlow.mockClear();
-    mockFetchProfile.mockReset();
+    mockFetchProfile.mockReset().mockResolvedValue({ profileMap: new Map() });
+    mockHydrateProfileBadges.mockReset().mockResolvedValue(undefined);
     (LogOut as jest.Mock).mockClear();
     (navigator.clipboard.writeText as jest.Mock).mockClear();
     mockFetch.mockResolvedValue({
@@ -479,6 +484,91 @@ describe("ProfileWithDropdown", () => {
         profileMap
       );
     });
+  });
+
+  it("hydrates missing badges directly when profile metadata already exists", async () => {
+    const sellerPubkey =
+      "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+    const nostr = { fetch: jest.fn() };
+    const profileMap = new Map([
+      [
+        sellerPubkey,
+        {
+          pubkey: sellerPubkey,
+          created_at: 100,
+          content: { name: "seller" },
+        },
+      ],
+    ]);
+
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />,
+      {
+        profileData: profileMap,
+        nostr,
+        relayList: ["wss://relay.example"],
+      }
+    );
+
+    await waitFor(() => {
+      expect(mockHydrateProfileBadges).toHaveBeenCalledWith(
+        nostr,
+        ["wss://relay.example"],
+        [sellerPubkey],
+        expect.any(Function),
+        profileMap
+      );
+    });
+    expect(mockFetchProfile).not.toHaveBeenCalled();
+  });
+
+  it("retries badge hydration immediately when the relay set changes", async () => {
+    const sellerPubkey =
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    const nostr = { fetch: jest.fn() };
+    const profileMap = new Map([
+      [
+        sellerPubkey,
+        {
+          pubkey: sellerPubkey,
+          created_at: 100,
+          content: { name: "seller" },
+        },
+      ],
+    ]);
+    mockHydrateProfileBadges
+      .mockRejectedValueOnce(new Error("relay unavailable"))
+      .mockResolvedValueOnce(undefined);
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const firstRender = renderWithProviders(
+      <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />,
+      {
+        profileData: profileMap,
+        nostr,
+        relayList: ["wss://first.relay"],
+      }
+    );
+    await waitFor(() => {
+      expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(1);
+    });
+    firstRender.unmount();
+
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />,
+      {
+        profileData: profileMap,
+        nostr,
+        relayList: ["wss://second.relay"],
+      }
+    );
+
+    await waitFor(() => {
+      expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(2);
+    });
+    consoleErrorSpy.mockRestore();
   });
 
   it("does not hydrate missing profile data from relays by default", async () => {

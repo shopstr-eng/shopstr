@@ -2372,7 +2372,10 @@ describe("fetchProfile", () => {
       editProfileContext
     );
 
-    expect(profileMap.get(pubkey)?.badges).toEqual([
+    expect(profileMap.get(pubkey)?.badges).toBeUndefined();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const hydratedProfileMap = editProfileContext.mock.calls.at(-1)?.[0];
+    expect(hydratedProfileMap.get(pubkey)?.badges).toEqual([
       expect.objectContaining({
         definitionAddress: badgeAddress,
         awardEventId,
@@ -2402,7 +2405,7 @@ describe("fetchProfile", () => {
     );
   });
 
-  it("updates relay profile context before waiting for NIP-58 badge resolution", async () => {
+  it("resolves core profiles without waiting for NIP-58 badge resolution", async () => {
     const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
     const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
 
@@ -2457,13 +2460,26 @@ describe("fetchProfile", () => {
       content: { display_name: "Loads Before Badges" },
     });
 
-    resolveBadgeFetch([]);
-    const { profileMap } = await profilePromise;
+    const earlyResult = await Promise.race([
+      profilePromise,
+      new Promise<"blocked">((resolve) =>
+        setTimeout(() => resolve("blocked"), 25)
+      ),
+    ]);
 
-    expect(profileMap.get(pubkey)?.badges).toEqual([]);
+    expect(earlyResult).not.toBe("blocked");
+    if (earlyResult === "blocked") {
+      throw new Error("profile loading remained blocked on badge hydration");
+    }
+    expect(earlyResult.profileMap.get(pubkey)).toMatchObject({
+      content: { display_name: "Loads Before Badges" },
+    });
+
+    resolveBadgeFetch([]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
-  it("clears stale NIP-58 badges when the latest badge resolution has none", async () => {
+  it("preserves stale NIP-58 badges when no profile badge list is returned", async () => {
     const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
     const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
 
@@ -2519,7 +2535,7 @@ describe("fetchProfile", () => {
       existingProfileMap
     );
 
-    expect(profileMap.get(pubkey)?.badges).toEqual([]);
+    expect(profileMap.get(pubkey)?.badges).toEqual([staleBadge]);
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       [
@@ -2537,6 +2553,81 @@ describe("fetchProfile", () => {
       ["wss://relay.example"],
       expect.any(Number)
     );
+  });
+
+  it("hydrates badges for a pubkey without kind-0 metadata", async () => {
+    const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier,
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchProfile } = await import("../fetch-service");
+    const issuerPubkey =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const awardEventId =
+      "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+    const badgeAddress = `${NIP58_BADGE_DEFINITION_KIND}:${issuerPubkey}:bravery`;
+    const profileBadgesEvent = makeBaseEvent({
+      id: "profile-badges-without-metadata",
+      pubkey,
+      kind: NIP58_PROFILE_BADGES_KIND,
+      tags: [
+        ["a", badgeAddress],
+        ["e", awardEventId],
+      ],
+    });
+    const awardEvent = makeBaseEvent({
+      id: awardEventId,
+      pubkey: issuerPubkey,
+      kind: NIP58_BADGE_AWARD_KIND,
+      tags: [
+        ["a", badgeAddress],
+        ["p", pubkey],
+      ],
+    });
+    const definitionEvent = makeBaseEvent({
+      id: "definition-without-metadata",
+      pubkey: issuerPubkey,
+      kind: NIP58_BADGE_DEFINITION_KIND,
+      tags: [
+        ["d", "bravery"],
+        ["name", "Metadata-independent badge"],
+      ],
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = { fetch: jest.fn() } as unknown as NostrManager;
+    const fetchMock = nostr.fetch as jest.MockedFunction<NostrManager["fetch"]>;
+    fetchMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([profileBadgesEvent])
+      .mockResolvedValueOnce([awardEvent])
+      .mockResolvedValueOnce([definitionEvent]);
+    const editProfileContext = jest.fn();
+
+    await fetchProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      editProfileContext,
+      new Map()
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const finalProfileMap = editProfileContext.mock.calls.at(-1)?.[0];
+    expect(finalProfileMap.get(pubkey)).toMatchObject({
+      pubkey,
+      created_at: 0,
+      content: {},
+      badges: [expect.objectContaining({ name: "Metadata-independent badge" })],
+    });
   });
 
   it("keeps profiles when NIP-58 badge resolution fails", async () => {
@@ -2588,6 +2679,7 @@ describe("fetchProfile", () => {
     expect(profileMap.get(pubkey)).toMatchObject({
       content: { display_name: "Still Loads" },
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(consoleErrorSpy).toHaveBeenCalledWith(
       "Failed to fetch NIP-58 profile badges:",
       badgeError

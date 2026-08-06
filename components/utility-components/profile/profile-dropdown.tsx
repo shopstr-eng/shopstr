@@ -39,7 +39,11 @@ import SignInModal from "../../sign-in/SignInModal";
 import useReportEventFlow from "../use-report-event-flow";
 import { ProfileData } from "@/utils/types/types";
 import { useFollowToggle } from "@/components/hooks/use-follow-toggle";
-import { fetchProfile } from "@/utils/nostr/fetch-service";
+import {
+  clearNip58ProfileBadgeHydrationCache,
+  fetchProfile,
+  hydrateNip58ProfileBadges,
+} from "@/utils/nostr/fetch-service";
 import { getDefaultRelays } from "@/utils/nostr/relay-config";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 
@@ -70,8 +74,6 @@ const inFlightProfileRequests = new Map<
   string,
   Promise<ProfileData["content"] | null>
 >();
-const hydratedProfilePubkeys = new Set<string>();
-const inFlightProfileHydrationRequests = new Map<string, Promise<void>>();
 const MAX_PROFILE_CACHE_ENTRIES = 100;
 const MAX_VISIBLE_PROFILE_BADGES = 4;
 
@@ -86,8 +88,7 @@ const trimProfileContentCache = () => {
 const clearProfileRequestCaches = () => {
   fetchedProfileContentCache.clear();
   inFlightProfileRequests.clear();
-  hydratedProfilePubkeys.clear();
-  inFlightProfileHydrationRequests.clear();
+  clearNip58ProfileBadgeHydrationCache();
 };
 
 const sanitizeBadgeImageUrl = (imageUrl?: string) => {
@@ -238,12 +239,7 @@ export const ProfileWithDropdown = ({
     if (profileContext.isLoading && !hydrateMissingProfileFromRelays) return;
 
     const contextProfile = profileContext.profileData.get(pubkey);
-    if (
-      Array.isArray(contextProfile?.badges) ||
-      hydratedProfilePubkeys.has(pubkey)
-    ) {
-      return;
-    }
+    if (Array.isArray(contextProfile?.badges)) return;
     if (!contextProfile && !hydrateMissingProfileFromRelays) return;
 
     const relays = Array.from(
@@ -254,30 +250,31 @@ export const ProfileWithDropdown = ({
     );
     const relaysToFetch = relays.length > 0 ? relays : getDefaultRelays();
 
-    let request = inFlightProfileHydrationRequests.get(pubkey);
-    if (!request) {
-      request = fetchProfile(
-        nostr,
-        relaysToFetch,
-        [pubkey],
-        (profileMap) => {
-          const profile = profileMap.get(pubkey);
-          if (profile) {
-            profileContext.updateProfileData(profile as ProfileData);
-          }
-        },
-        profileContext.profileData
-      )
-        .then(() => undefined)
-        .catch((error) => {
-          console.error("Failed to hydrate profile from relays:", error);
-        })
-        .finally(() => {
-          hydratedProfilePubkeys.add(pubkey);
-          inFlightProfileHydrationRequests.delete(pubkey);
-        });
-      inFlightProfileHydrationRequests.set(pubkey, request);
-    }
+    const updateProfileContext = (profileMap: Map<string, unknown>) => {
+      const profile = profileMap.get(pubkey);
+      if (profile) {
+        profileContext.updateProfileData(profile as ProfileData);
+      }
+    };
+    const request = contextProfile
+      ? hydrateNip58ProfileBadges(
+          nostr,
+          relaysToFetch,
+          [pubkey],
+          updateProfileContext,
+          profileContext.profileData
+        )
+      : fetchProfile(
+          nostr,
+          relaysToFetch,
+          [pubkey],
+          updateProfileContext,
+          profileContext.profileData
+        ).then(() => undefined);
+
+    void request.catch((error) => {
+      console.error("Failed to hydrate profile from relays:", error);
+    });
   }, [
     pubkey,
     hydrateMissingProfileFromRelays,
