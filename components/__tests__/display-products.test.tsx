@@ -170,7 +170,7 @@ const renderDisplayProducts = ({
 const expectNip50RelayFetches = (
   fetchMock: jest.Mock,
   expectedFilter: Record<string, unknown>,
-  expectedRelays = ["wss://relay.example", ...DEFAULT_NIP50_SEARCH_RELAYS]
+  expectedRelays = [...DEFAULT_NIP50_SEARCH_RELAYS, "wss://relay.example"]
 ) => {
   expect(fetchMock).toHaveBeenCalledTimes(expectedRelays.length);
   expectedRelays.forEach((relay, index) => {
@@ -185,6 +185,13 @@ const expectNip50RelayFetches = (
 };
 
 describe("DisplayProducts search filtering", () => {
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ supported_nips: [1, 11, 50] }),
+    }) as unknown as typeof global.fetch;
+  });
+
   it("matches literal special characters in search queries", async () => {
     render(
       <SignerContext.Provider

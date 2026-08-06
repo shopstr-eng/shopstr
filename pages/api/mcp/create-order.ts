@@ -102,7 +102,7 @@ export default async function handler(
   };
 
   if (req.method === "POST") {
-    return handleCreateOrder(req, res, apiKey.id, apiKey.pubkey);
+    return await handleCreateOrder(req, res, apiKey.id, apiKey.pubkey);
   }
 
   if (req.method === "GET") {
@@ -227,11 +227,13 @@ async function handleCreateOrder(
         });
       }
       const weightPrice = product.weightPrices?.get(selectedWeight);
-      if (weightPrice !== undefined) {
+      // Match shared listing pricing: volume takes precedence when both
+      // dimensions are selected, while retaining the weight selection.
+      if (!selectedVolume && weightPrice !== undefined) {
         unitPrice = weightPrice;
       }
       selectedSpecs.weight = selectedWeight;
-      selectedSpecs.weightPrice = unitPrice;
+      selectedSpecs.weightPrice = weightPrice ?? unitPrice;
     }
 
     let effectiveQuantity = quantity;
@@ -319,7 +321,7 @@ async function handleCreateOrder(
     }
 
     if (paymentMethod === "cashu") {
-      return handleCashuPayment(
+      return await handleCashuPayment(
         res,
         orderId,
         apiKeyId,
@@ -335,7 +337,7 @@ async function handleCreateOrder(
       );
     }
 
-    return handleLightningPayment(
+    return await handleLightningPayment(
       res,
       orderId,
       apiKeyId,
@@ -352,7 +354,6 @@ async function handleCreateOrder(
     console.error("Failed to create MCP order:", error);
     return res.status(500).json({
       error: "Failed to create order",
-      details: error instanceof Error ? error.message : "Unknown error",
     });
   }
 }
