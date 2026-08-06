@@ -30,6 +30,17 @@ describe("NostrManager", () => {
     relayCloseMock = jest.fn().mockResolvedValue(undefined);
     timeoutOptionsMock = [];
     latestAbortController = undefined;
+    fakePoolInstance.ensureRelay.mockReset();
+    fakePoolInstance.ensureRelay.mockImplementation(() =>
+      Promise.resolve({
+        connect: relayConnectMock,
+        close: relayCloseMock,
+      })
+    );
+    fakePoolInstance.subscribeMap.mockReset();
+    fakePoolInstance.subscribeMap.mockReturnValue({ close: jest.fn() });
+    fakePoolInstance.publish.mockReset();
+    fakePoolInstance.publish.mockReturnValue([Promise.resolve("ok")]);
 
     jest.doMock("nostr-tools", () => ({
       SimplePool: FakePool,
@@ -98,6 +109,16 @@ describe("NostrManager", () => {
   });
 
   describe("relay management", () => {
+    it("defaults relay connection attempts to a bounded timeout", () => {
+      const mgr = new NostrManager(["r1"]);
+
+      expect(fakePoolInstance.ensureRelay).toHaveBeenCalledWith("r1", {
+        connectionTimeout: 4000,
+      });
+
+      mgr.close();
+    });
+
     it("addRelay/addRelays avoids duplicates", () => {
       const mgr = new NostrManager([], { keepAliveTime: 10, gcInterval: 10 });
       mgr.addRelay("r1");
@@ -116,26 +137,18 @@ describe("NostrManager", () => {
       expect(sub.close).toHaveBeenCalled();
     });
 
-    it("passes a bounded default connectionTimeout to the pool", async () => {
-      const mgr = new NostrManager(["r1"]);
-      await mgr.relays[0].connect();
-      expect(fakePoolInstance.ensureRelay).toHaveBeenCalledWith("r1", {
-        connectionTimeout: 4000,
-      });
-    });
-
-    it("retries a failed connection instead of caching the rejection", async () => {
-      const mgr = new NostrManager(["r1"]);
+    it("retries with a fresh relay promise after an initial connection failure", async () => {
+      const firstFailure = Promise.reject(new Error("first relay failed"));
+      firstFailure.catch(() => undefined);
+      const nextRelayHandle = {
+        connect: relayConnectMock,
+        close: relayCloseMock,
+      };
       fakePoolInstance.ensureRelay
-        .mockRejectedValueOnce(new Error("connection failed"))
-        .mockResolvedValueOnce({
-          connect: relayConnectMock,
-          close: relayCloseMock,
-        });
+        .mockReturnValueOnce(firstFailure)
+        .mockResolvedValue(nextRelayHandle);
 
-      await expect(mgr.relays[0].connect()).rejects.toThrow(
-        "connection failed"
-      );
+      const mgr = new NostrManager(["flaky"]);
       await expect(mgr.relays[0].connect()).resolves.toBeUndefined();
       expect(fakePoolInstance.ensureRelay).toHaveBeenCalledTimes(2);
     });
@@ -180,6 +193,16 @@ describe("NostrManager", () => {
       await mgr.subscribe([], {}, ["u1"]);
 
       expect(fakePoolInstance.subscribeMap).toHaveBeenCalledTimes(1);
+    });
+
+    it("adds relay URLs with the default connection timeout before subscribing", async () => {
+      mgr = new NostrManager([], { readable: true });
+
+      await mgr.subscribe([], {}, ["u2"]);
+
+      expect(fakePoolInstance.ensureRelay).toHaveBeenCalledWith("u2", {
+        connectionTimeout: 4000,
+      });
     });
   });
 
@@ -268,7 +291,7 @@ describe("NostrManager", () => {
       expect(subClose).toHaveBeenCalledTimes(1);
     });
 
-    it("resolves with partial events when the timeout aborts", async () => {
+    it("resolves collected events when the fetch timeout aborts", async () => {
       const subClose = jest.fn();
       fakePoolInstance.subscribeMap.mockReturnValueOnce({ close: subClose });
 
