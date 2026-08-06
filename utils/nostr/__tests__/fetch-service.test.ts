@@ -2736,7 +2736,7 @@ describe("fetchProfile", () => {
     const fetchMock = nostr.fetch as jest.MockedFunction<NostrManager["fetch"]>;
     fetchMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
 
-    const { profileMap } = await fetchProfile(
+    const { profileMap, badgeHydration } = await fetchProfile(
       nostr,
       ["wss://relay.example"],
       [pubkey],
@@ -2745,6 +2745,7 @@ describe("fetchProfile", () => {
     );
 
     expect(profileMap.get(pubkey)?.badges).toEqual([staleBadge]);
+    await expect(badgeHydration).resolves.toEqual({ retryAt: null });
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       [

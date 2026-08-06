@@ -147,8 +147,14 @@ export const ProfileWithDropdown = ({
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const profileContext = useContext(ProfileMapContext);
+  const {
+    profileData,
+    isLoading: isProfileLoading,
+    updateProfileData,
+  } = profileContext;
   const profileDataRef = useRef(profileContext.profileData);
   profileDataRef.current = profileContext.profileData;
+  const contextProfile = profileData.get(pubkey);
   const [badgeHydrationRetry, setBadgeHydrationRetry] = useState(0);
   const shopMapContext = useContext(ShopMapContext);
   const relaysContext = useContext(RelaysContext);
@@ -191,8 +197,7 @@ export const ProfileWithDropdown = ({
     if (!pubkey) return;
     if (typeof fetch !== "function") return;
 
-    const contextProfileContent =
-      profileContext.profileData.get(pubkey)?.content;
+    const contextProfileContent = contextProfile?.content;
     if (contextProfileContent) {
       setFetchedProfileContent(contextProfileContent);
       return;
@@ -204,7 +209,7 @@ export const ProfileWithDropdown = ({
       return;
     }
 
-    if (profileContext.isLoading) {
+    if (isProfileLoading) {
       setFetchedProfileContent(null);
       return;
     }
@@ -236,13 +241,12 @@ export const ProfileWithDropdown = ({
     return () => {
       isCancelled = true;
     };
-  }, [pubkey, profileContext.isLoading, profileContext.profileData]);
+  }, [contextProfile?.content, isProfileLoading, pubkey]);
 
   useEffect(() => {
     if (!pubkey || !nostr || typeof nostr.fetch !== "function") return;
-    if (profileContext.isLoading && !hydrateMissingProfileFromRelays) return;
+    if (isProfileLoading && !hydrateMissingProfileFromRelays) return;
 
-    const contextProfile = profileContext.profileData.get(pubkey);
     if (Array.isArray(contextProfile?.badges)) return;
     if (!contextProfile && !hydrateMissingProfileFromRelays) return;
 
@@ -259,7 +263,7 @@ export const ProfileWithDropdown = ({
       if (profile) {
         const incomingProfile = profile as ProfileData;
         const currentProfile = profileDataRef.current.get(pubkey);
-        profileContext.updateProfileData(
+        updateProfileData(
           currentProfile && Array.isArray(incomingProfile.badges)
             ? { ...currentProfile, badges: incomingProfile.badges }
             : incomingProfile
@@ -272,27 +276,34 @@ export const ProfileWithDropdown = ({
           relaysToFetch,
           [pubkey],
           updateProfileContext,
-          profileContext.profileData
+          profileDataRef.current
         )
       : fetchProfile(
           nostr,
           relaysToFetch,
           [pubkey],
           updateProfileContext,
-          profileContext.profileData
-        ).then(() => undefined);
+          profileDataRef.current
+        ).then(
+          ({ badgeHydration }) =>
+            badgeHydration || Promise.resolve({ retryAt: null })
+        );
 
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     void request
       .catch((error) => {
         console.error("Failed to hydrate profile from relays:", error);
+        return { retryAt: Date.now() + NIP58_BADGE_HYDRATION_RETRY_MS };
       })
-      .finally(() => {
-        if (cancelled) return;
-        retryTimer = setTimeout(() => {
-          setBadgeHydrationRetry((retry) => retry + 1);
-        }, NIP58_BADGE_HYDRATION_RETRY_MS);
+      .then((outcome) => {
+        if (cancelled || !outcome?.retryAt) return;
+        retryTimer = setTimeout(
+          () => {
+            setBadgeHydrationRetry((retry) => retry + 1);
+          },
+          Math.max(0, outcome.retryAt - Date.now())
+        );
       });
 
     return () => {
@@ -301,15 +312,17 @@ export const ProfileWithDropdown = ({
     };
   }, [
     badgeHydrationRetry,
+    contextProfile,
     pubkey,
     hydrateMissingProfileFromRelays,
+    isProfileLoading,
     nostr,
-    profileContext,
     relaysContext.readRelayList,
     relaysContext.relayList,
+    updateProfileData,
   ]);
 
-  const profile = profileContext.profileData.get(pubkey);
+  const profile = contextProfile;
   const profileContent = profile?.content ?? fetchedProfileContent;
   const displayName = (() => {
     let name =

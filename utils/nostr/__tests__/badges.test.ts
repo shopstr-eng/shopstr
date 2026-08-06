@@ -554,7 +554,7 @@ describe("NIP-58 badge helpers", () => {
     );
   });
 
-  it("marks a time-limited profile badge list fetch as incomplete", async () => {
+  it("distinguishes retryable timeouts from a conclusive absent list", async () => {
     const emptyProfileBadgesEvent = makeEvent({
       kind: NIP58_PROFILE_BADGES_KIND,
       pubkey: profilePubkey,
@@ -575,6 +575,18 @@ describe("NIP-58 badge helpers", () => {
     );
 
     expect(result.get(profilePubkey)).toEqual({ badges: [], complete: false });
+
+    nostr.fetchWithStatus.mockResolvedValue({ events: [], complete: true });
+    const absentResult = await fetchNip58ProfileBadges(
+      nostr,
+      ["wss://relay.example"],
+      [profilePubkey]
+    );
+    expect(absentResult.get(profilePubkey)).toEqual({
+      badges: [],
+      complete: false,
+      retryable: false,
+    });
   });
 
   it("queries a definition hint even when configured relays returned an older definition", async () => {
@@ -651,6 +663,93 @@ describe("NIP-58 badge helpers", () => {
       ["wss://definition.relay"],
       expect.any(Number)
     );
+  });
+
+  it("keeps completion scoped to the profile whose definition hint timed out", async () => {
+    const secondProfilePubkey =
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    const firstProfileList = makeEvent({
+      id: "1010101010101010101010101010101010101010101010101010101010101010",
+      kind: NIP58_PROFILE_BADGES_KIND,
+      pubkey: profilePubkey,
+      tags: [
+        ["a", badgeAddress, "wss://slow-definition.relay"],
+        ["e", awardEventId],
+      ],
+    });
+    const secondProfileList = makeEvent({
+      id: "2020202020202020202020202020202020202020202020202020202020202020",
+      kind: NIP58_PROFILE_BADGES_KIND,
+      pubkey: secondProfilePubkey,
+      tags: [
+        ["a", otherBadgeAddress],
+        ["e", otherAwardEventId],
+      ],
+    });
+    const awards = [
+      makeEvent({
+        id: awardEventId,
+        kind: NIP58_BADGE_AWARD_KIND,
+        pubkey: issuerPubkey,
+        tags: [
+          ["a", badgeAddress],
+          ["p", profilePubkey],
+        ],
+      }),
+      makeEvent({
+        id: otherAwardEventId,
+        kind: NIP58_BADGE_AWARD_KIND,
+        pubkey: otherIssuerPubkey,
+        tags: [
+          ["a", otherBadgeAddress],
+          ["p", secondProfilePubkey],
+        ],
+      }),
+    ];
+    const secondDefinition = makeEvent({
+      id: "3030303030303030303030303030303030303030303030303030303030303030",
+      kind: NIP58_BADGE_DEFINITION_KIND,
+      pubkey: otherIssuerPubkey,
+      tags: [
+        ["d", "honor"],
+        ["name", "Resolved badge"],
+      ],
+    });
+    const nostr = {
+      fetch: jest.fn(),
+      fetchWithStatus: jest
+        .fn()
+        .mockImplementation((filters, _params, relays) => {
+          if (filters[0]?.kinds?.includes(NIP58_PROFILE_BADGES_KIND)) {
+            return Promise.resolve({
+              events: [firstProfileList, secondProfileList],
+              complete: true,
+            });
+          }
+          if (filters[0]?.kinds?.includes(NIP58_BADGE_AWARD_KIND)) {
+            return Promise.resolve({ events: awards, complete: true });
+          }
+          if (relays?.[0] === "wss://slow-definition.relay") {
+            return Promise.resolve({ events: [], complete: false });
+          }
+          return Promise.resolve({
+            events: [secondDefinition],
+            complete: true,
+          });
+        }),
+    };
+
+    const result = await fetchNip58ProfileBadges(
+      nostr,
+      ["wss://relay.example"],
+      [profilePubkey, secondProfilePubkey]
+    );
+
+    expect(result.get(profilePubkey)?.complete).toBe(false);
+    expect(result.get(secondProfilePubkey)).toEqual({
+      badges: [expect.objectContaining({ name: "Resolved badge" })],
+      complete: true,
+    });
   });
 
   it("stops parsing after the requested number of usable references", () => {

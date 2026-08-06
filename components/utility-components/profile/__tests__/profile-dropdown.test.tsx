@@ -263,7 +263,7 @@ describe("ProfileWithDropdown", () => {
     mockOnOpen.mockClear();
     mockOpenReportFlow.mockClear();
     mockFetchProfile.mockReset().mockResolvedValue({ profileMap: new Map() });
-    mockHydrateProfileBadges.mockReset().mockResolvedValue(undefined);
+    mockHydrateProfileBadges.mockReset().mockResolvedValue({ retryAt: null });
     (LogOut as jest.Mock).mockClear();
     (navigator.clipboard.writeText as jest.Mock).mockClear();
     mockFetch.mockResolvedValue({
@@ -574,6 +574,9 @@ describe("ProfileWithDropdown", () => {
 
   it("retries incomplete badge hydration after the bounded backoff", async () => {
     jest.useFakeTimers();
+    mockHydrateProfileBadges.mockResolvedValue({
+      retryAt: Date.now() + 5_000,
+    });
     const sellerPubkey =
       "abababababababababababababababababababababababababababababababab";
     const nostr = { fetch: jest.fn() };
@@ -606,6 +609,43 @@ describe("ProfileWithDropdown", () => {
       await Promise.resolve();
     });
     expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(2);
+    rendered.unmount();
+  });
+
+  it("does not retry when badge hydration is conclusive or absent", async () => {
+    jest.useFakeTimers();
+    const sellerPubkey =
+      "acacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacac";
+    const nostr = { fetch: jest.fn() };
+    const profileMap = new Map([
+      [
+        sellerPubkey,
+        {
+          pubkey: sellerPubkey,
+          created_at: 100,
+          content: { name: "seller without badges" },
+        },
+      ],
+    ]);
+
+    const rendered = renderWithProviders(
+      <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />,
+      {
+        profileData: profileMap,
+        nostr,
+        relayList: ["wss://relay.example"],
+      }
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(20_000);
+      await Promise.resolve();
+    });
+    expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(1);
     rendered.unmount();
   });
 

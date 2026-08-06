@@ -40,6 +40,7 @@ export interface Nip58ProfileBadgeReference {
 export interface Nip58ProfileBadgesResult {
   badges: Nip58ProfileBadge[];
   complete: boolean;
+  retryable?: boolean;
 }
 
 function getTagValue(tags: string[][], key: string): string | undefined {
@@ -280,6 +281,39 @@ function buildDefinitionsByAddress(
   return definitionsByAddress;
 }
 
+function resolveNip58BadgeReferences(
+  profilePubkey: string,
+  references: readonly Nip58ProfileBadgeReference[],
+  awardEventsById: ReadonlyMap<string, NostrEvent>,
+  definitionsByAddress: ReadonlyMap<
+    string,
+    { definition: Nip58BadgeDefinition }
+  >
+): Nip58ProfileBadge[] {
+  const badges: Nip58ProfileBadge[] = [];
+
+  for (const reference of references) {
+    const awardEvent = getAwardEventForReference(reference, awardEventsById);
+    const definitionEntry = definitionsByAddress.get(
+      reference.definitionAddress
+    );
+    if (
+      !awardEvent ||
+      !definitionEntry ||
+      !isValidAwardForReference(awardEvent, reference, profilePubkey)
+    ) {
+      continue;
+    }
+
+    badges.push({
+      ...definitionEntry.definition,
+      awardEventId: reference.awardEventId,
+    });
+  }
+
+  return badges;
+}
+
 export function resolveNip58ProfileBadgesForProfile({
   profilePubkey,
   profileBadgesEvent,
@@ -299,27 +333,12 @@ export function resolveNip58ProfileBadgesForProfile({
   );
   const awardEventsById = buildAwardEventsById(awardEvents);
   const definitionsByAddress = buildDefinitionsByAddress(definitionEvents);
-
-  const badges: Nip58ProfileBadge[] = [];
-
-  for (const reference of references) {
-    const awardEvent = getAwardEventForReference(reference, awardEventsById);
-    const definitionEntry = definitionsByAddress.get(
-      reference.definitionAddress
-    );
-    if (!awardEvent || !definitionEntry) continue;
-
-    if (!isValidAwardForReference(awardEvent, reference, profilePubkey)) {
-      continue;
-    }
-
-    badges.push({
-      ...definitionEntry.definition,
-      awardEventId: reference.awardEventId,
-    });
-  }
-
-  return badges;
+  return resolveNip58BadgeReferences(
+    profilePubkey,
+    references,
+    awardEventsById,
+    definitionsByAddress
+  );
 }
 
 function getUniqueRelayUrls(relays: string[]): string[] {
@@ -464,6 +483,15 @@ export async function fetchNip58ProfileBadges(
     }
   }
 
+  for (const pubkey of uniquePubkeys) {
+    if (selectedProfileBadgeEvents.has(pubkey)) continue;
+    badgesByPubkey.set(pubkey, {
+      badges: [],
+      complete: false,
+      retryable: !profileBadgeFetch.complete,
+    });
+  }
+
   if (!selectedProfileBadgeEvents.size) {
     return badgesByPubkey;
   }
@@ -488,7 +516,6 @@ export async function fetchNip58ProfileBadges(
   };
 
   let awardEvents: NostrEvent[] = [];
-  let allFetchesComplete = profileBadgeFetch.complete;
   if (awardIds.size) {
     const awardFetch = await fetchNip58Events(
       nostr,
@@ -501,7 +528,6 @@ export async function fetchNip58ProfileBadges(
       configuredRelays
     );
     awardEvents = awardFetch.events;
-    allFetchesComplete = allFetchesComplete && awardFetch.complete;
   }
 
   let awardEventsById = buildAwardEventsById(awardEvents);
@@ -527,8 +553,6 @@ export async function fetchNip58ProfileBadges(
       ).catch(() => ({ events: [], complete: false }))
     )
   );
-  allFetchesComplete =
-    allFetchesComplete && hintedAwardEvents.every((result) => result.complete);
   awardEvents = deduplicateEvents([
     ...awardEvents,
     ...hintedAwardEvents.flatMap((result) => result.events),
@@ -554,8 +578,12 @@ export async function fetchNip58ProfileBadges(
     ? await fetchNip58Events(nostr, definitionFilters, configuredRelays)
     : { events: [], complete: true };
   let definitionEvents = definitionFetch.events;
-  allFetchesComplete = allFetchesComplete && definitionFetch.complete;
-  let definitionsByAddress = buildDefinitionsByAddress(definitionEvents);
+  const incompleteDefinitionAddresses = new Set<string>();
+  if (!definitionFetch.complete) {
+    for (const address of definitionAddresses) {
+      incompleteDefinitionAddresses.add(address);
+    }
+  }
 
   const definitionAddressesByHint = new Map<string, Set<string>>();
   for (const [pubkey, { references }] of selectedProfileBadgeEvents) {
@@ -586,33 +614,37 @@ export async function fetchNip58ProfileBadges(
 
   const hintedDefinitionEvents = await Promise.all(
     Array.from(definitionAddressesByHint.entries()).map(
-      ([relayHint, addresses]) =>
-        fetchNip58Events(nostr, buildNip58BadgeDefinitionFilters(addresses), [
-          relayHint,
-        ]).catch(() => ({ events: [], complete: false }))
+      async ([relayHint, addresses]) => ({
+        addresses,
+        result: await fetchNip58Events(
+          nostr,
+          buildNip58BadgeDefinitionFilters(addresses),
+          [relayHint]
+        ).catch(() => ({ events: [], complete: false })),
+      })
     )
   );
-  allFetchesComplete =
-    allFetchesComplete &&
-    hintedDefinitionEvents.every((result) => result.complete);
+  for (const { addresses, result } of hintedDefinitionEvents) {
+    if (result.complete) continue;
+    for (const address of addresses) {
+      incompleteDefinitionAddresses.add(address);
+    }
+  }
   definitionEvents = deduplicateEvents([
     ...definitionEvents,
-    ...hintedDefinitionEvents.flatMap((result) => result.events),
+    ...hintedDefinitionEvents.flatMap(({ result }) => result.events),
   ]);
-  definitionsByAddress = buildDefinitionsByAddress(definitionEvents);
+  const definitionsByAddress = buildDefinitionsByAddress(definitionEvents);
 
-  for (const [
-    pubkey,
-    { event: profileBadgesEvent, references },
-  ] of selectedProfileBadgeEvents) {
-    const badges = resolveNip58ProfileBadgesForProfile({
-      profilePubkey: pubkey,
-      profileBadgesEvent,
-      awardEvents,
-      definitionEvents,
-    });
+  for (const [pubkey, { references }] of selectedProfileBadgeEvents) {
+    const badges = resolveNip58BadgeReferences(
+      pubkey,
+      references,
+      awardEventsById,
+      definitionsByAddress
+    );
     const complete =
-      allFetchesComplete &&
+      profileBadgeFetch.complete &&
       references.every((reference) => {
         const awardEvent = getAwardEventForReference(
           reference,
@@ -621,7 +653,10 @@ export async function fetchNip58ProfileBadges(
         if (!awardEvent) return false;
         if (!isValidAwardForReference(awardEvent, reference, pubkey))
           return true;
-        return definitionsByAddress.has(reference.definitionAddress);
+        return (
+          definitionsByAddress.has(reference.definitionAddress) &&
+          !incompleteDefinitionAddresses.has(reference.definitionAddress)
+        );
       });
 
     badgesByPubkey.set(pubkey, { badges, complete });
