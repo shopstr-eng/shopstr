@@ -45,6 +45,25 @@ const expectNip50RelayFetches = (
   });
 };
 
+const makeRelayInfoResponse = (supportedNips: unknown[]) => ({
+  ok: true,
+  json: jest.fn().mockResolvedValue({ supported_nips: supportedNips }),
+});
+
+const mockRelayInfoSupport = (
+  supportByRelay: Record<string, unknown[]> = {}
+) => {
+  global.fetch = jest.fn((url: string) => {
+    const relayUrl = String(url)
+      .replace(/^https:/i, "wss:")
+      .replace(/^http:/i, "ws:")
+      .replace(/\/+$/, "");
+    return Promise.resolve(
+      makeRelayInfoResponse(supportByRelay[relayUrl] ?? [1, 11])
+    );
+  }) as unknown as typeof global.fetch;
+};
+
 describe("getProductEventKey", () => {
   it("builds the correct key for every input shape", () => {
     expect(
@@ -543,6 +562,7 @@ describe("getUniqueProofs", () => {
 describe("fetch-service NIP-50 search helpers", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRelayInfoSupport();
   });
 
   it("builds NIP-50 search filters only for marketplace listings", () => {
@@ -678,10 +698,7 @@ describe("fetch-service NIP-50 search helpers", () => {
       "coffee"
     );
 
-    expectNip50RelayFetches(nostr.fetch, [
-      "wss://relay.example",
-      ...DEFAULT_NIP50_SEARCH_RELAYS,
-    ]);
+    expectNip50RelayFetches(nostr.fetch);
     expect(result.productEvents).toEqual([newer]);
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([newer]);
   });
@@ -721,7 +738,7 @@ describe("fetch-service NIP-50 search helpers", () => {
       return result;
     });
 
-    for (let index = 0; index < 5 && !resolveCache; index += 1) {
+    for (let index = 0; index < 20 && !resolveCache; index += 1) {
       await Promise.resolve();
     }
 
@@ -816,7 +833,7 @@ describe("fetch-service NIP-50 search helpers", () => {
     expect(result.productEvents).toEqual([firstRelayResult, secondRelayResult]);
   });
 
-  it("routes search to selected relays before curated NIP-50 fallbacks", async () => {
+  it("routes search to selected relays that advertise NIP-50 before curated fallbacks", async () => {
     const searchListing = {
       id: "fallback-product",
       pubkey: "fallback-seller",
@@ -833,6 +850,10 @@ describe("fetch-service NIP-50 search helpers", () => {
     const nostr = {
       fetch: jest.fn().mockResolvedValue([searchListing]),
     };
+    mockRelayInfoSupport({
+      "wss://relay.damus.io": [1, 11, 50],
+      "wss://nos.lol": [1, 11],
+    });
 
     const result = await fetchNip50ProductSearch(
       nostr as unknown as NostrManager,
@@ -842,9 +863,15 @@ describe("fetch-service NIP-50 search helpers", () => {
 
     expectNip50RelayFetches(nostr.fetch, [
       "wss://relay.damus.io",
-      "wss://nos.lol",
       ...DEFAULT_NIP50_SEARCH_RELAYS,
     ]);
+    expect(global.fetch).toHaveBeenCalledWith(
+      "https://relay.damus.io/",
+      expect.objectContaining({
+        headers: { Accept: "application/nostr+json" },
+        signal: expect.any(AbortSignal),
+      })
+    );
     expect(result.productEvents).toEqual([searchListing]);
     expect(cacheEventsToDatabase).toHaveBeenCalledWith([searchListing]);
   });
@@ -953,7 +980,7 @@ describe("fetch-service NIP-50 search helpers", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it("queries selected relays before adding backup NIP-50 relays", async () => {
+  it("queries selected NIP-50 relays before adding backup NIP-50 relays", async () => {
     const selectedSearchRelay = "wss://relay.nostr.band";
     const searchRelays = [
       "wss://relay.damus.io",
@@ -966,6 +993,10 @@ describe("fetch-service NIP-50 search helpers", () => {
     const nostr = {
       fetch: jest.fn().mockResolvedValue([]),
     };
+    mockRelayInfoSupport({
+      "wss://relay.damus.io": [1, 11, 50],
+      "wss://nos.lol": [1, 11, "50"],
+    });
 
     await fetchNip50ProductSearch(
       nostr as unknown as NostrManager,
@@ -991,6 +1022,9 @@ describe("fetch-service NIP-50 search helpers", () => {
     const nostr = {
       fetch: jest.fn().mockResolvedValue([]),
     };
+    mockRelayInfoSupport({
+      "wss://relay.damus.io": [1, 11, 50],
+    });
 
     await fetchNip50ProductSearch(
       nostr as unknown as NostrManager,
@@ -1004,6 +1038,52 @@ describe("fetch-service NIP-50 search helpers", () => {
     );
 
     expectNip50RelayFetches(nostr.fetch, searchRelays);
+  });
+
+  it("skips selected relays that do not advertise NIP-50", async () => {
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([]),
+    };
+    mockRelayInfoSupport({
+      "wss://relay.example": [1, 11],
+      "wss://search.example": [1, 11, 50],
+    });
+
+    await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      ["wss://relay.example", "wss://search.example"],
+      "coffee"
+    );
+
+    expectNip50RelayFetches(nostr.fetch, [
+      "wss://search.example",
+      ...DEFAULT_NIP50_SEARCH_RELAYS,
+    ]);
+  });
+
+  it("caches selected relay NIP-50 metadata checks across searches", async () => {
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([]),
+    };
+    mockRelayInfoSupport({
+      "wss://search.example": [1, 11, 50],
+    });
+
+    await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      ["wss://search.example"],
+      "coffee"
+    );
+    await fetchNip50ProductSearch(
+      nostr as unknown as NostrManager,
+      ["wss://search.example"],
+      "coffee"
+    );
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(nostr.fetch).toHaveBeenCalledTimes(
+      (DEFAULT_NIP50_SEARCH_RELAYS.length + 1) * 2
+    );
   });
 
   it("uses default NIP-50 relays when no selected relays are available", async () => {

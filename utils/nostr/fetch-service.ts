@@ -66,6 +66,7 @@ type SearchFilter = Filter & { search: string };
 
 const PRODUCT_SEARCH_LIMIT = 100;
 export const NIP50_SEARCH_TIMEOUT_MS = 10_000;
+export const NIP11_RELAY_INFO_TIMEOUT_MS = 3_000;
 const COMMUNITY_POST_BATCH_CONCURRENCY = 4;
 export const DEFAULT_NIP50_SEARCH_RELAYS = [
   "wss://relay.nostr.band",
@@ -75,6 +76,9 @@ export const DEFAULT_NIP50_SEARCH_RELAYS = [
   "wss://antiprimal.net",
   "wss://relay.ditto.pub",
 ];
+
+const nip50RelaySupportCache = new Map<string, Promise<boolean>>();
+let relayInfoFetchImpl: typeof globalThis.fetch | undefined;
 
 function normalizeRelayUrl(relay: string): string {
   const trimmedRelay = relay.trim();
@@ -99,8 +103,91 @@ function getUniqueRelayUrls(relays: string[]): string[] {
   return Array.from(relayMap.values());
 }
 
-function getNip50SearchRelays(relays: string[]): string[] {
-  const selectedSearchRelays = getUniqueRelayUrls(relays);
+function buildRelayInformationUrl(relay: string): string | null {
+  try {
+    const url = new URL(relay);
+
+    if (url.protocol === "wss:") {
+      url.protocol = "https:";
+    } else if (url.protocol === "ws:") {
+      url.protocol = "http:";
+    } else if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return null;
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function relayInfoAdvertisesNip50(relayInfo: unknown): boolean {
+  if (!relayInfo || typeof relayInfo !== "object") return false;
+
+  const supportedNips = (relayInfo as { supported_nips?: unknown })
+    .supported_nips;
+
+  return (
+    Array.isArray(supportedNips) &&
+    supportedNips.some((nip) => nip === 50 || nip === "50")
+  );
+}
+
+async function fetchRelayAdvertisesNip50(relay: string): Promise<boolean> {
+  const fetchImpl = globalThis.fetch;
+  if (typeof fetchImpl !== "function") return false;
+
+  if (relayInfoFetchImpl !== fetchImpl) {
+    nip50RelaySupportCache.clear();
+    relayInfoFetchImpl = fetchImpl;
+  }
+
+  const relayCacheKey = relay.toLowerCase();
+  const cachedSupport = nip50RelaySupportCache.get(relayCacheKey);
+  if (cachedSupport) return cachedSupport;
+
+  const supportPromise = (async () => {
+    const relayInformationUrl = buildRelayInformationUrl(relay);
+    if (!relayInformationUrl) return false;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      NIP11_RELAY_INFO_TIMEOUT_MS
+    );
+
+    try {
+      const response = await fetchImpl(relayInformationUrl, {
+        headers: { Accept: "application/nostr+json" },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) return false;
+
+      return relayInfoAdvertisesNip50(await response.json());
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  })();
+
+  nip50RelaySupportCache.set(relayCacheKey, supportPromise);
+  return supportPromise;
+}
+
+async function getNip50SearchRelays(relays: string[]): Promise<string[]> {
+  const knownSearchRelaySet = new Set(
+    DEFAULT_NIP50_SEARCH_RELAYS.map((relay) => relay.toLowerCase())
+  );
+  const selectedSearchRelays = (
+    await Promise.all(
+      getUniqueRelayUrls(relays).map(async (relay) => {
+        if (knownSearchRelaySet.has(relay.toLowerCase())) return relay;
+        return (await fetchRelayAdvertisesNip50(relay)) ? relay : null;
+      })
+    )
+  ).filter((relay): relay is string => !!relay);
   const selectedSearchRelaySet = new Set(
     selectedSearchRelays.map((relay) => relay.toLowerCase())
   );
@@ -108,12 +195,9 @@ function getNip50SearchRelays(relays: string[]): string[] {
     (relay) => !selectedSearchRelaySet.has(relay.toLowerCase())
   );
 
-  // All user-selected relays are queried first, then any curated NIP-50 relays
-  // not already in the user's list are appended as fallbacks. Note: this means
-  // search terms are sent to every user-configured relay, not just those that
-  // advertise NIP-50 support. Non-NIP-50 relays may return unfiltered results,
-  // but fetchNip50ProductSearch post-filters via eventMatchesProductSearch so
-  // only matching events reach the UI — the only cost is extra bandwidth.
+  // User-selected relays that advertise NIP-50 are queried first, then curated
+  // search relays are appended as fallbacks. Results are still post-filtered
+  // because relays can return extraneous events.
   return [...selectedSearchRelays, ...backupSearchRelays];
 }
 
@@ -202,7 +286,7 @@ export async function fetchNip50ProductSearch(
     return { productEvents: [] };
   }
 
-  const searchRelays = getNip50SearchRelays(relays);
+  const searchRelays = await getNip50SearchRelays(relays);
 
   const fetchSearchEvents = async (targetRelays: string[]) => {
     if (targetRelays.length === 0) return Promise.resolve([]);

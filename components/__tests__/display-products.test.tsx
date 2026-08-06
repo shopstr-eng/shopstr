@@ -185,6 +185,13 @@ const expectNip50RelayFetches = (
 };
 
 describe("DisplayProducts search filtering", () => {
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({ supported_nips: [1, 11, 50] }),
+    }) as unknown as typeof global.fetch;
+  });
+
   it("matches literal special characters in search queries", async () => {
     render(
       <SignerContext.Provider
