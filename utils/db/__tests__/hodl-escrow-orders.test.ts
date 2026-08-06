@@ -208,4 +208,65 @@ describe("hodl escrow order commitments", () => {
 
     expect(releaseMock).toHaveBeenCalled();
   });
+
+  describe("getHodlEscrowOrderParties", () => {
+    const partiesRow = {
+      payment_hash: PAYMENT_HASH,
+      buyer_nostr_pubkey: registration.buyerNostrPubkey,
+      seller_nostr_pubkey: registration.sellerNostrPubkey,
+      arbiter_nostr_pubkey: ARBITER_PUBKEY,
+    };
+
+    it("returns the parties committed to the payment hash", async () => {
+      queryMock.mockResolvedValueOnce({ rowCount: 1, rows: [partiesRow] });
+
+      const parties = await dbService.getHodlEscrowOrderParties(PAYMENT_HASH);
+
+      expect(parties).toEqual({
+        paymentHash: PAYMENT_HASH,
+        buyerNostrPubkey: registration.buyerNostrPubkey,
+        sellerNostrPubkey: registration.sellerNostrPubkey,
+        arbiterNostrPubkey: ARBITER_PUBKEY,
+      });
+      expect(releaseMock).toHaveBeenCalled();
+    });
+
+    it("never selects the preimage", async () => {
+      queryMock.mockResolvedValueOnce({ rowCount: 1, rows: [partiesRow] });
+
+      await dbService.getHodlEscrowOrderParties(PAYMENT_HASH);
+
+      const [sql] = queryMock.mock.calls[0];
+      expect(sql).toContain("FROM hodl_escrow_orders");
+      expect(sql).not.toContain("preimage");
+      expect(sql).not.toContain("*");
+    });
+
+    it("looks up the lowercased payment hash", async () => {
+      queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+      await dbService.getHodlEscrowOrderParties(PAYMENT_HASH.toUpperCase());
+
+      const [, values] = queryMock.mock.calls[0];
+      expect(values).toEqual([PAYMENT_HASH]);
+    });
+
+    it("returns null for an unregistered payment hash", async () => {
+      queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+      await expect(
+        dbService.getHodlEscrowOrderParties(PAYMENT_HASH)
+      ).resolves.toBeNull();
+    });
+
+    it("releases the client when the lookup fails", async () => {
+      queryMock.mockRejectedValueOnce(new Error("db down"));
+
+      await expect(
+        dbService.getHodlEscrowOrderParties(PAYMENT_HASH)
+      ).rejects.toThrow("db down");
+
+      expect(releaseMock).toHaveBeenCalled();
+    });
+  });
 });

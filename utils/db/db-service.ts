@@ -1924,6 +1924,69 @@ export async function registerHodlEscrowOrder(
   }
 }
 
+/**
+ * The identities a hold-invoice escrow order was bound to when it was created.
+ *
+ * No preimage field, and the query below does not select that column. Deciding
+ * whether an event's author is a party to an order needs to know who the
+ * parties are; it never needs the secret that settles the invoice.
+ */
+export type HodlEscrowOrderParties = {
+  paymentHash: string;
+  buyerNostrPubkey: string;
+  sellerNostrPubkey: string;
+  arbiterNostrPubkey: string;
+};
+
+type HodlEscrowOrderPartiesRow = Pick<
+  HodlEscrowOrderIdentityRow,
+  | "payment_hash"
+  | "buyer_nostr_pubkey"
+  | "seller_nostr_pubkey"
+  | "arbiter_nostr_pubkey"
+>;
+
+/**
+ * Loads the parties committed to a payment hash, or null when no commitment
+ * row exists.
+ *
+ * Null means "no order was ever registered under this payment hash". That is a
+ * refusal, not an absent constraint: an unregistered payment hash has no
+ * buyer and no arbiter, so nothing can be authorized against it.
+ */
+export async function getHodlEscrowOrderParties(
+  paymentHash: string
+): Promise<HodlEscrowOrderParties | null> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    // Column list is exhaustive on purpose — no SELECT * anywhere near a table
+    // that holds a settlement secret.
+    const result = await client.query<HodlEscrowOrderPartiesRow>(
+      `SELECT payment_hash,
+              buyer_nostr_pubkey,
+              seller_nostr_pubkey,
+              arbiter_nostr_pubkey
+       FROM hodl_escrow_orders
+       WHERE payment_hash = $1`,
+      [paymentHash.toLowerCase()]
+    );
+
+    const row = result.rows[0];
+    if (!row) return null;
+
+    return {
+      paymentHash: row.payment_hash,
+      buyerNostrPubkey: row.buyer_nostr_pubkey,
+      sellerNostrPubkey: row.seller_nostr_pubkey,
+      arbiterNostrPubkey: row.arbiter_nostr_pubkey,
+    };
+  } finally {
+    client.release();
+  }
+}
+
 export async function getOrderParticipants(orderId: string): Promise<{
   buyerPubkey: string | null;
   sellerPubkey: string | null;
