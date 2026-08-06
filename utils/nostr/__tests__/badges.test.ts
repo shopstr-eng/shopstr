@@ -84,7 +84,7 @@ describe("NIP-58 badge helpers", () => {
         kind: NIP58_PROFILE_BADGES_KIND,
         pubkey: profilePubkey,
         tags: [
-          ["a", badgeAddress],
+          ["a", badgeAddress, "wss://definition.relay"],
           ["e", awardEventId, "wss://badge.relay"],
           ["e", otherAwardEventId],
           ["a", otherBadgeAddress],
@@ -101,7 +101,8 @@ describe("NIP-58 badge helpers", () => {
       {
         definitionAddress: badgeAddress,
         awardEventId,
-        relayHint: "wss://badge.relay",
+        definitionRelayHint: "wss://definition.relay",
+        awardRelayHint: "wss://badge.relay",
       },
     ]);
   });
@@ -132,10 +133,54 @@ describe("NIP-58 badge helpers", () => {
     ).toHaveLength(1);
     expect(
       selectLatestNip58ProfileBadgesEvent([
-        deprecatedProfileBadgesEvent,
         standardProfileBadgesEvent,
+        deprecatedProfileBadgesEvent,
       ])
-    ).toBe(standardProfileBadgesEvent);
+    ).toBe(deprecatedProfileBadgesEvent);
+  });
+
+  it("uses the lowest event id for equal-timestamp badge definitions", () => {
+    const profileBadgesEvent = makeEvent({
+      kind: NIP58_PROFILE_BADGES_KIND,
+      pubkey: profilePubkey,
+      tags: [
+        ["a", badgeAddress],
+        ["e", awardEventId],
+      ],
+    });
+    const awardEvent = makeEvent({
+      id: awardEventId,
+      kind: NIP58_BADGE_AWARD_KIND,
+      tags: [
+        ["a", badgeAddress],
+        ["p", profilePubkey],
+      ],
+    });
+    const higherIdDefinition = makeEvent({
+      id: "2222222222222222222222222222222222222222222222222222222222222222",
+      kind: NIP58_BADGE_DEFINITION_KIND,
+      tags: [
+        ["d", "bravery"],
+        ["name", "Higher id"],
+      ],
+    });
+    const lowerIdDefinition = makeEvent({
+      id: "1111111111111111111111111111111111111111111111111111111111111111",
+      kind: NIP58_BADGE_DEFINITION_KIND,
+      tags: [
+        ["d", "bravery"],
+        ["name", "Lower id"],
+      ],
+    });
+
+    expect(
+      resolveNip58ProfileBadgesForProfile({
+        profilePubkey,
+        profileBadgesEvent,
+        awardEvents: [awardEvent],
+        definitionEvents: [higherIdDefinition, lowerIdDefinition],
+      })
+    ).toEqual([expect.objectContaining({ name: "Lower id" })]);
   });
 
   it("builds definition filters grouped by issuer pubkey and d tag", () => {

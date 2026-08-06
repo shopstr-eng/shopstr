@@ -15,6 +15,7 @@ export const NIP58_DEPRECATED_PROFILE_BADGES_D_TAG = "profile_badges";
 const HEX_ID_PATTERN = /^[0-9a-fA-F]{64}$/;
 const COMPACT_THUMBNAIL_DIMENSIONS = ["32x32", "64x64", "16x16", "256x256"];
 const NIP58_BADGE_FETCH_TIMEOUT_MS = 5_000;
+export const MAX_NIP58_PROFILE_BADGES = 4;
 
 export interface Nip58BadgeAddress {
   kind: typeof NIP58_BADGE_DEFINITION_KIND;
@@ -28,7 +29,8 @@ export type Nip58BadgeDefinition = Omit<Nip58ProfileBadge, "awardEventId">;
 export interface Nip58ProfileBadgeReference {
   definitionAddress: string;
   awardEventId: string;
-  relayHint?: string;
+  definitionRelayHint?: string;
+  awardRelayHint?: string;
 }
 
 function getTagValue(tags: string[][], key: string): string | undefined {
@@ -136,7 +138,8 @@ export function parseNip58ProfileBadgesEvent(
     references.push({
       definitionAddress: badgeAddress.address,
       awardEventId,
-      relayHint: eTag[2],
+      definitionRelayHint: aTag[2],
+      awardRelayHint: eTag[2],
     });
     seenReferences.add(referenceKey);
     index += 1;
@@ -178,21 +181,23 @@ export function selectLatestNip58ProfileBadgesEvent(
       continue;
     }
 
-    if (event.created_at > latestEvent.created_at) {
-      latestEvent = event;
-      continue;
-    }
-
-    if (
-      event.created_at === latestEvent.created_at &&
-      event.kind === NIP58_PROFILE_BADGES_KIND &&
-      latestEvent.kind !== NIP58_PROFILE_BADGES_KIND
-    ) {
+    if (isPreferredReplaceableEvent(event, latestEvent)) {
       latestEvent = event;
     }
   }
 
   return latestEvent;
+}
+
+function isPreferredReplaceableEvent(
+  candidate: NostrEvent,
+  current: NostrEvent
+): boolean {
+  if (candidate.created_at !== current.created_at) {
+    return candidate.created_at > current.created_at;
+  }
+
+  return candidate.id.localeCompare(current.id) < 0;
 }
 
 export function resolveNip58ProfileBadgesForProfile({
@@ -219,7 +224,7 @@ export function resolveNip58ProfileBadgesForProfile({
   );
   const definitionsByAddress = new Map<
     string,
-    { definition: Nip58BadgeDefinition; createdAt: number }
+    { definition: Nip58BadgeDefinition; event: NostrEvent }
   >();
 
   for (const event of definitionEvents) {
@@ -229,10 +234,13 @@ export function resolveNip58ProfileBadgesForProfile({
     const currentDefinition = definitionsByAddress.get(
       definition.definitionAddress
     );
-    if (!currentDefinition || event.created_at > currentDefinition.createdAt) {
+    if (
+      !currentDefinition ||
+      isPreferredReplaceableEvent(event, currentDefinition.event)
+    ) {
       definitionsByAddress.set(definition.definitionAddress, {
         definition,
-        createdAt: event.created_at,
+        event,
       });
     }
   }
@@ -337,10 +345,13 @@ export async function fetchNip58ProfileBadges(
 
     for (const reference of parseNip58ProfileBadgesEvent(
       latestProfileBadgesEvent
-    )) {
+    ).slice(0, MAX_NIP58_PROFILE_BADGES)) {
       awardIds.add(reference.awardEventId);
       definitionAddresses.add(reference.definitionAddress);
-      if (reference.relayHint) relayHints.push(reference.relayHint);
+      if (reference.awardRelayHint) relayHints.push(reference.awardRelayHint);
+      if (reference.definitionRelayHint) {
+        relayHints.push(reference.definitionRelayHint);
+      }
     }
   }
 
