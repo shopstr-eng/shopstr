@@ -67,6 +67,7 @@ type SearchFilter = Filter & { search: string };
 const PRODUCT_SEARCH_LIMIT = 100;
 export const NIP50_SEARCH_TIMEOUT_MS = 10_000;
 const NIP11_RELAY_INFO_TIMEOUT_MS = 3_000;
+const NIP11_RELAY_INFO_CACHE_TTL_MS = 5 * 60_000;
 const COMMUNITY_POST_BATCH_CONCURRENCY = 4;
 export const DEFAULT_NIP50_SEARCH_RELAYS = [
   "wss://relay.nostr.band",
@@ -77,7 +78,12 @@ export const DEFAULT_NIP50_SEARCH_RELAYS = [
   "wss://relay.ditto.pub",
 ];
 
-const nip50RelaySupportCache = new Map<string, Promise<boolean>>();
+interface Nip50RelaySupportCacheEntry {
+  expiresAt: number;
+  supportPromise: Promise<boolean>;
+}
+
+const nip50RelaySupportCache = new Map<string, Nip50RelaySupportCacheEntry>();
 let relayInfoFetchImpl: typeof globalThis.fetch | undefined;
 
 function normalizeRelayUrl(relay: string): string {
@@ -144,12 +150,20 @@ async function fetchRelayAdvertisesNip50(relay: string): Promise<boolean> {
 
   const relayCacheKey = relay.toLowerCase();
   const cachedSupport = nip50RelaySupportCache.get(relayCacheKey);
-  if (cachedSupport) return cachedSupport;
+  if (cachedSupport && cachedSupport.expiresAt > Date.now()) {
+    return cachedSupport.supportPromise;
+  }
+  if (cachedSupport) nip50RelaySupportCache.delete(relayCacheKey);
 
-  const supportPromise = (async () => {
-    const relayInformationUrl = buildRelayInformationUrl(relay);
-    if (!relayInformationUrl) return false;
+  const relayInformationUrl = buildRelayInformationUrl(relay);
+  if (!relayInformationUrl) return false;
 
+  const cacheEntry: Nip50RelaySupportCacheEntry = {
+    expiresAt: Date.now() + NIP11_RELAY_INFO_CACHE_TTL_MS,
+    supportPromise: Promise.resolve(false),
+  };
+
+  cacheEntry.supportPromise = (async () => {
     const controller = new AbortController();
     const timeoutId = setTimeout(
       () => controller.abort(),
@@ -162,21 +176,26 @@ async function fetchRelayAdvertisesNip50(relay: string): Promise<boolean> {
         signal: controller.signal,
       });
 
-      if (!response.ok) return false;
+      if (!response.ok) throw new Error("Relay information request failed");
 
       return relayInfoAdvertisesNip50(await response.json());
     } catch {
+      if (nip50RelaySupportCache.get(relayCacheKey) === cacheEntry) {
+        nip50RelaySupportCache.delete(relayCacheKey);
+      }
       return false;
     } finally {
       clearTimeout(timeoutId);
     }
   })();
 
-  nip50RelaySupportCache.set(relayCacheKey, supportPromise);
-  return supportPromise;
+  nip50RelaySupportCache.set(relayCacheKey, cacheEntry);
+  return cacheEntry.supportPromise;
 }
 
-async function getNip50SearchRelays(relays: string[]): Promise<string[]> {
+async function getSelectedNip50SearchRelays(
+  relays: string[]
+): Promise<string[]> {
   const knownSearchRelaySet = new Set(
     DEFAULT_NIP50_SEARCH_RELAYS.map((relay) => relay.toLowerCase())
   );
@@ -188,17 +207,8 @@ async function getNip50SearchRelays(relays: string[]): Promise<string[]> {
       })
     )
   ).filter((relay): relay is string => !!relay);
-  const selectedSearchRelaySet = new Set(
-    selectedSearchRelays.map((relay) => relay.toLowerCase())
-  );
-  const backupSearchRelays = DEFAULT_NIP50_SEARCH_RELAYS.filter(
-    (relay) => !selectedSearchRelaySet.has(relay.toLowerCase())
-  );
 
-  // User-selected relays that advertise NIP-50 are queried first, then curated
-  // search relays are appended as fallbacks. Results are still post-filtered
-  // because relays can return extraneous events.
-  return [...selectedSearchRelays, ...backupSearchRelays];
+  return selectedSearchRelays;
 }
 
 export function getProductEventKey(event: NostrEvent): string {
@@ -286,8 +296,6 @@ export async function fetchNip50ProductSearch(
     return { productEvents: [] };
   }
 
-  const searchRelays = await getNip50SearchRelays(relays);
-
   const fetchSearchEvents = async (targetRelays: string[]) => {
     if (targetRelays.length === 0) return Promise.resolve([]);
 
@@ -308,14 +316,42 @@ export async function fetchNip50ProductSearch(
     return relayResults.flat();
   };
 
+  const curatedSearchEventsByRelay = new Map(
+    DEFAULT_NIP50_SEARCH_RELAYS.map((relay) => [
+      relay.toLowerCase(),
+      fetchSearchEvents([relay]),
+    ])
+  );
+  const selectedSearchRelays = await getSelectedNip50SearchRelays(relays);
+  const selectedSearchRelaySet = new Set(
+    selectedSearchRelays.map((relay) => relay.toLowerCase())
+  );
+  const selectedSearchEventsPromise = Promise.all(
+    selectedSearchRelays.map(
+      (relay) =>
+        curatedSearchEventsByRelay.get(relay.toLowerCase()) ??
+        fetchSearchEvents([relay])
+    )
+  ).then((relayResults) => relayResults.flat());
+  const fallbackSearchEventsPromise = Promise.all(
+    DEFAULT_NIP50_SEARCH_RELAYS.filter(
+      (relay) => !selectedSearchRelaySet.has(relay.toLowerCase())
+    ).map((relay) => curatedSearchEventsByRelay.get(relay.toLowerCase())!)
+  ).then((relayResults) => relayResults.flat());
+
   const filterSearchProductEvents = (events: NostrEvent[]) =>
     events.filter(
       (event) => event.id && event.sig && event.pubkey && event.kind === 30402
     );
 
-  let searchProductEvents = filterSearchProductEvents(
-    await fetchSearchEvents(searchRelays)
-  );
+  const [selectedSearchEvents, fallbackSearchEvents] = await Promise.all([
+    selectedSearchEventsPromise,
+    fallbackSearchEventsPromise,
+  ]);
+  let searchProductEvents = filterSearchProductEvents([
+    ...selectedSearchEvents,
+    ...fallbackSearchEvents,
+  ]);
   let relevantSearchProductEvents = searchProductEvents.filter((event) =>
     eventMatchesProductSearch(event, searchQuery)
   );

@@ -170,7 +170,7 @@ const renderDisplayProducts = ({
 const expectNip50RelayFetches = (
   fetchMock: jest.Mock,
   expectedFilter: Record<string, unknown>,
-  expectedRelays = ["wss://relay.example", ...DEFAULT_NIP50_SEARCH_RELAYS]
+  expectedRelays = [...DEFAULT_NIP50_SEARCH_RELAYS, "wss://relay.example"]
 ) => {
   expect(fetchMock).toHaveBeenCalledTimes(expectedRelays.length);
   expectedRelays.forEach((relay, index) => {
