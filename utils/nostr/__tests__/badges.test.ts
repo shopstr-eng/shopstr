@@ -288,7 +288,8 @@ describe("NIP-58 badge helpers", () => {
         },
       ],
       {},
-      ["wss://relay.example"]
+      ["wss://relay.example"],
+      expect.any(Number)
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
@@ -299,7 +300,8 @@ describe("NIP-58 badge helpers", () => {
         },
       ],
       {},
-      ["wss://relay.example", "wss://badge.relay"]
+      ["wss://relay.example", "wss://badge.relay"],
+      expect.any(Number)
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
@@ -311,7 +313,8 @@ describe("NIP-58 badge helpers", () => {
         },
       ],
       {},
-      ["wss://relay.example", "wss://badge.relay"]
+      ["wss://relay.example", "wss://badge.relay"],
+      expect.any(Number)
     );
   });
 });

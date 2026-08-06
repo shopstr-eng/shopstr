@@ -909,6 +909,8 @@ export const fetchProfile = async (
         );
       }
 
+      editProfileContext(new Map(mergedProfileMap), false);
+
       try {
         const profileBadgesMap = await fetchNip58ProfileBadges(
           nostr,

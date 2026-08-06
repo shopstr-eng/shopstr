@@ -14,6 +14,7 @@ export const NIP58_DEPRECATED_PROFILE_BADGES_D_TAG = "profile_badges";
 
 const HEX_ID_PATTERN = /^[0-9a-fA-F]{64}$/;
 const COMPACT_THUMBNAIL_DIMENSIONS = ["32x32", "64x64", "16x16", "256x256"];
+const NIP58_BADGE_FETCH_TIMEOUT_MS = 5_000;
 
 export interface Nip58BadgeAddress {
   kind: typeof NIP58_BADGE_DEFINITION_KIND;
@@ -303,7 +304,8 @@ export async function fetchNip58ProfileBadges(
       },
     ],
     {},
-    relays
+    relays,
+    NIP58_BADGE_FETCH_TIMEOUT_MS
   );
 
   const profileBadgeEventsByPubkey = new Map<string, NostrEvent[]>();
@@ -347,22 +349,29 @@ export async function fetchNip58ProfileBadges(
   }
 
   const resolutionRelays = getUniqueRelayUrls([...relays, ...relayHints]);
-  const awardEvents = await nostr.fetch(
-    [
-      {
-        kinds: [NIP58_BADGE_AWARD_KIND],
-        ids: Array.from(awardIds),
-      },
-    ],
-    {},
-    resolutionRelays
-  );
-
   const definitionFilters =
     buildNip58BadgeDefinitionFilters(definitionAddresses);
-  const definitionEvents = definitionFilters.length
-    ? await nostr.fetch(definitionFilters, {}, resolutionRelays)
-    : [];
+  const [awardEvents, definitionEvents] = await Promise.all([
+    nostr.fetch(
+      [
+        {
+          kinds: [NIP58_BADGE_AWARD_KIND],
+          ids: Array.from(awardIds),
+        },
+      ],
+      {},
+      resolutionRelays,
+      NIP58_BADGE_FETCH_TIMEOUT_MS
+    ),
+    definitionFilters.length
+      ? nostr.fetch(
+          definitionFilters,
+          {},
+          resolutionRelays,
+          NIP58_BADGE_FETCH_TIMEOUT_MS
+        )
+      : Promise.resolve([]),
+  ]);
 
   for (const [pubkey, profileBadgesEvent] of selectedProfileBadgeEvents) {
     const badges = resolveNip58ProfileBadgesForProfile({

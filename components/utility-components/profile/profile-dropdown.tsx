@@ -131,11 +131,13 @@ export const ProfileWithDropdown = ({
   baseClassname,
   nameClassname = "block",
   dropDownKeys,
+  hydrateMissingProfileFromRelays = false,
 }: {
   baseClassname?: string;
   nameClassname?: string;
   pubkey: string;
   dropDownKeys: DropDownKeys[];
+  hydrateMissingProfileFromRelays?: boolean;
 }) => {
   const [fetchedProfileContent, setFetchedProfileContent] = useState<
     ProfileData["content"] | null
@@ -197,6 +199,11 @@ export const ProfileWithDropdown = ({
       return;
     }
 
+    if (profileContext.isLoading) {
+      setFetchedProfileContent(null);
+      return;
+    }
+
     setFetchedProfileContent(null);
     let request = inFlightProfileRequests.get(pubkey);
     if (!request) {
@@ -224,10 +231,11 @@ export const ProfileWithDropdown = ({
     return () => {
       isCancelled = true;
     };
-  }, [pubkey, profileContext.profileData]);
+  }, [pubkey, profileContext.isLoading, profileContext.profileData]);
 
   useEffect(() => {
     if (!pubkey || !nostr || typeof nostr.fetch !== "function") return;
+    if (profileContext.isLoading && !hydrateMissingProfileFromRelays) return;
 
     const contextProfile = profileContext.profileData.get(pubkey);
     if (
@@ -236,6 +244,7 @@ export const ProfileWithDropdown = ({
     ) {
       return;
     }
+    if (!contextProfile && !hydrateMissingProfileFromRelays) return;
 
     const relays = Array.from(
       new Set([
@@ -271,6 +280,7 @@ export const ProfileWithDropdown = ({
     }
   }, [
     pubkey,
+    hydrateMissingProfileFromRelays,
     nostr,
     profileContext,
     relaysContext.readRelayList,

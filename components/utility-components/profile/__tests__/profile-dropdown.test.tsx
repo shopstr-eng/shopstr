@@ -165,6 +165,7 @@ const renderWithProviders = (
     removeFollow?: jest.Mock;
     nostr?: Partial<Pick<NostrManager, "fetch">>;
     relayList?: string[];
+    isProfileLoading?: boolean;
   } = {}
 ) => {
   const {
@@ -183,6 +184,7 @@ const renderWithProviders = (
     }),
     nostr = {},
     relayList = [],
+    isProfileLoading = false,
   } = options;
   const Providers = ({ children }: { children: React.ReactNode }) => {
     const [profileDataState, setProfileDataState] = React.useState(profileData);
@@ -200,7 +202,7 @@ const renderWithProviders = (
           <ProfileMapContext.Provider
             value={{
               profileData: profileDataState,
-              isLoading: false,
+              isLoading: isProfileLoading,
               updateProfileData: (incomingProfile) => {
                 setProfileDataState((currentProfileData) => {
                   const nextProfileData = new Map(currentProfileData);
@@ -404,7 +406,11 @@ describe("ProfileWithDropdown", () => {
     );
 
     renderWithProviders(
-      <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />,
+      <ProfileWithDropdown
+        pubkey={sellerPubkey}
+        dropDownKeys={[]}
+        hydrateMissingProfileFromRelays
+      />,
       {
         profileData: profileMap,
         nostr,
@@ -427,6 +433,72 @@ describe("ProfileWithDropdown", () => {
         "https://nostr.academy/awards/bravery_32.png"
       );
     });
+  });
+
+  it("hydrates opted-in profile rows while global profile loading is still running", async () => {
+    const sellerPubkey =
+      "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+    const sellerProfile = {
+      pubkey: sellerPubkey,
+      created_at: 100,
+      content: { name: "seller", picture: "http://pic.com/seller.png" },
+      nip05Verified: false,
+      badges: [],
+    };
+    const nostr = { fetch: jest.fn() };
+    const profileMap = new Map<string, unknown>();
+
+    mockFetchProfile.mockImplementation(
+      async (_nostr, _relays, _pubkeys, editProfileContext) => {
+        const fetchedProfileMap = new Map([[sellerPubkey, sellerProfile]]);
+        editProfileContext(fetchedProfileMap, false);
+        return { profileMap: fetchedProfileMap };
+      }
+    );
+
+    renderWithProviders(
+      <ProfileWithDropdown
+        pubkey={sellerPubkey}
+        dropDownKeys={[]}
+        hydrateMissingProfileFromRelays
+      />,
+      {
+        profileData: profileMap,
+        isProfileLoading: true,
+        nostr,
+        relayList: ["wss://relay.example"],
+      }
+    );
+
+    await waitFor(() => {
+      expect(mockFetchProfile).toHaveBeenCalledWith(
+        nostr,
+        ["wss://relay.example"],
+        [sellerPubkey],
+        expect.any(Function),
+        profileMap
+      );
+    });
+  });
+
+  it("does not hydrate missing profile data from relays by default", async () => {
+    const sellerPubkey =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const nostr = { fetch: jest.fn() };
+
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />,
+      {
+        profileData: new Map(),
+        nostr,
+        relayList: ["wss://relay.example"],
+      }
+    );
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(mockFetchProfile).not.toHaveBeenCalled();
   });
 
   it('handles "Visit Seller" click', () => {

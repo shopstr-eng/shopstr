@@ -2397,8 +2397,70 @@ describe("fetchProfile", () => {
         },
       ],
       {},
-      ["wss://relay.example"]
+      ["wss://relay.example"],
+      expect.any(Number)
     );
+  });
+
+  it("updates relay profile context before waiting for NIP-58 badge resolution", async () => {
+    const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+
+    jest.doMock("@/utils/nostr/nostr-helper-functions", () => ({
+      getLocalStorageData: jest.fn(),
+      deleteEvent: jest.fn(),
+      verifyNip05Identifier,
+    }));
+    jest.doMock("@/utils/db/db-client", () => ({
+      cacheEventsToDatabase,
+    }));
+
+    const { fetchProfile } = await import("../fetch-service");
+
+    const relayProfile = makeProfileEvent({
+      id: "relay-profile-before-badges",
+      pubkey,
+      created_at: 200,
+      content: JSON.stringify({ display_name: "Loads Before Badges" }),
+      sig: "sig-relay-profile-before-badges",
+    });
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue(makeDbPayload([])) as typeof global.fetch;
+    const nostr = {
+      fetch: jest.fn(),
+    } as unknown as NostrManager;
+    const fetchMock = nostr.fetch as jest.MockedFunction<NostrManager["fetch"]>;
+    let resolveBadgeFetch: (events: NostrEvent[]) => void = () => {};
+    fetchMock.mockResolvedValueOnce([relayProfile]).mockImplementationOnce(
+      () =>
+        new Promise<NostrEvent[]>((resolve) => {
+          resolveBadgeFetch = resolve;
+        })
+    );
+    const editProfileContext = jest.fn();
+
+    const profilePromise = fetchProfile(
+      nostr,
+      ["wss://relay.example"],
+      [pubkey],
+      editProfileContext
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(editProfileContext).toHaveBeenCalledTimes(1);
+    expect(editProfileContext.mock.calls[0]?.[0].get(pubkey)).toMatchObject({
+      pubkey,
+      content: { display_name: "Loads Before Badges" },
+    });
+
+    resolveBadgeFetch([]);
+    const { profileMap } = await profilePromise;
+
+    expect(profileMap.get(pubkey)?.badges).toEqual([]);
   });
 
   it("clears stale NIP-58 badges when the latest badge resolution has none", async () => {
@@ -2472,7 +2534,8 @@ describe("fetchProfile", () => {
         },
       ],
       {},
-      ["wss://relay.example"]
+      ["wss://relay.example"],
+      expect.any(Number)
     );
   });
 
