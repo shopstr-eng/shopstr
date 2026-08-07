@@ -1507,6 +1507,10 @@ export default function CartInvoiceCard({
           );
           setShowFailureModal(true);
           break;
+        } else {
+          retryCount++;
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+          continue;
         }
       } catch (error) {
         retryCount++;

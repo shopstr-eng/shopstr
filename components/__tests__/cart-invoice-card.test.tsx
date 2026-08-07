@@ -836,23 +836,18 @@ describe("invoiceHasBeenPaid polling", () => {
     }
   }, 15000);
 
-  it("[regression] does not wait between retries when checkMintQuoteBolt11 returns a state string other than PAID/UNPAID/ISSUED — no final `else` branch increments retryCount or delays, unlike product-invoice-card's polling loop", async () => {
+  it("[regression] waits and counts retries when checkMintQuoteBolt11 returns an unknown state", async () => {
     jest.useFakeTimers();
     try {
       const { products } = renderDigitalReadyToPay();
       mockFetchJsonOnce(makeCartQuoteResponse(products));
       const checkMintQuoteBolt11 = jest
         .fn()
-        .mockResolvedValueOnce({ state: "WEIRD" })
-        .mockResolvedValueOnce({ state: "WEIRD" })
-        .mockResolvedValueOnce({ state: "WEIRD" })
-        .mockResolvedValue({ state: "PAID" });
+        .mockResolvedValue({ state: "WEIRD" });
       mockCashuWalletCtor.mockImplementation(() => ({
         loadMint: jest.fn().mockResolvedValue(undefined),
         checkMintQuoteBolt11,
-        mintProofsBolt11: jest
-          .fn()
-          .mockResolvedValue([{ id: "ks1", amount: 1500, secret: "s1" }]),
+        mintProofsBolt11: jest.fn(),
         keyChain: { getKeysets: jest.fn().mockResolvedValue([]) },
       }));
 
@@ -861,7 +856,16 @@ describe("invoiceHasBeenPaid polling", () => {
       );
 
       await jest.advanceTimersByTimeAsync(0);
-      expect(checkMintQuoteBolt11).toHaveBeenCalledTimes(4);
+      expect(checkMintQuoteBolt11).toHaveBeenCalledTimes(1);
+
+      await jest.advanceTimersByTimeAsync(2100);
+      expect(checkMintQuoteBolt11).toHaveBeenCalledTimes(2);
+
+      await jest.advanceTimersByTimeAsync(2100 * 28);
+      expect(checkMintQuoteBolt11).toHaveBeenCalledTimes(30);
+
+      await jest.advanceTimersByTimeAsync(2100 * 5);
+      expect(checkMintQuoteBolt11).toHaveBeenCalledTimes(30);
     } finally {
       jest.useRealTimers();
     }
