@@ -138,10 +138,10 @@ export default function CartInvoiceCard({
   discountCodes?: { [key: string]: string };
   shopProfiles?: Map<string, ShopProfile>;
   onBackToCart?: () => void;
-  setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
-  setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
-  setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
-  setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
+  setInvoiceIsPaid: (invoiceIsPaid: boolean) => void;
+  setInvoiceGenerationFailed: (invoiceGenerationFailed: boolean) => void;
+  setCashuPaymentSent: (cashuPaymentSent: boolean) => void;
+  setCashuPaymentFailed: (cashuPaymentFailed: boolean) => void;
 }) {
   const { mints, tokens } = getLocalStorageData();
   const {
@@ -1317,12 +1317,7 @@ export default function CartInvoiceCard({
         cartQuote.mintUrl
       );
     } catch {
-      if (setInvoiceGenerationFailed) {
-        setInvoiceGenerationFailed(true);
-      } else {
-        setFailureText("Lightning payment failed. Please try again.");
-        setShowFailureModal(true);
-      }
+      setInvoiceGenerationFailed(true);
       setShowInvoiceCard(false);
       setInvoice("");
       setQrCodeUrl(null);
@@ -1439,9 +1434,7 @@ export default function CartInvoiceCard({
                 markMintQuoteClaimed(hash);
                 localStorage.setItem("cart", JSON.stringify([]));
                 setPaymentConfirmed(true);
-                if (setInvoiceIsPaid) {
-                  setInvoiceIsPaid(true);
-                }
+                setInvoiceIsPaid(true);
                 setQrCodeUrl(null);
                 break;
               } catch (handoffError) {
@@ -1522,14 +1515,7 @@ export default function CartInvoiceCard({
           setShowInvoiceCard(false);
           setInvoice("");
           setQrCodeUrl(null);
-          if (setInvoiceGenerationFailed) {
-            setInvoiceGenerationFailed(true);
-          } else {
-            setFailureText(
-              "Failed to validate invoice! Change your mint in settings and/or please try again."
-            );
-            setShowFailureModal(true);
-          }
+          setInvoiceGenerationFailed(true);
           break;
         }
 
@@ -1538,14 +1524,7 @@ export default function CartInvoiceCard({
           setShowInvoiceCard(false);
           setInvoice("");
           setQrCodeUrl(null);
-          if (setInvoiceGenerationFailed) {
-            setInvoiceGenerationFailed(true);
-          } else {
-            setFailureText(
-              "Payment timed out! Please check your wallet balance or try again."
-            );
-            setShowFailureModal(true);
-          }
+          setInvoiceGenerationFailed(true);
           break;
         }
 
@@ -1621,29 +1600,6 @@ export default function CartInvoiceCard({
       const sellerAmount = tokenAmount - donationAmount;
       let sellerProofs: Proof[] = [];
 
-      let shippingData = data; // Assume data contains shipping info
-      if (formType === "shipping") {
-        shippingData = {
-          Name: data.Name,
-          Address: data.Address,
-          Unit: data.Unit,
-          City: data.City,
-          "State/Province": data["State/Province"],
-          "Postal Code": data["Postal Code"],
-          Country: data.Country,
-        };
-      } else if (formType === "combined") {
-        shippingData = {
-          Name: data.Name,
-          Address: data.Address,
-          Unit: data.Unit,
-          City: data.City,
-          "State/Province": data["State/Province"],
-          "Postal Code": data["Postal Code"],
-          Country: data.Country,
-        };
-      }
-
       // Generate keys once per order to ensure consistent sender pubkey
       const orderKeys = await generateNewKeys();
       if (!orderKeys) {
@@ -1652,46 +1608,6 @@ export default function CartInvoiceCard({
       const paymentPreference =
         sellerProfile?.content?.payment_preference || "ecash";
       const lnurl = sellerProfile?.content?.lud16 || "";
-
-      // Construct address string for order-info type
-      const addressString = shippingData.Name
-        ? `${shippingData.Name}, ${shippingData.Address}${
-            shippingData.Unit ? `, ${shippingData.Unit}` : ""
-          }, ${shippingData.City}, ${shippingData["State/Province"]}, ${
-            shippingData["Postal Code"]
-          }, ${shippingData.Country}`
-        : "";
-
-      // Construct order-info message with address tag
-      const orderInfoMessage = await constructMessageGiftWrap(
-        pubkey as any,
-        "", // Placeholder for seal
-        orderKeys.receiverNsec as any, // Placeholder for keypair
-        pubkey // Recipient pubkey
-      );
-      const orderInfoTags: string[][] = [
-        ["type", "1"],
-        ["subject", "order-info"],
-        ["order", orderId],
-        ["item", product.id],
-        ["shipping", shippingTypes[product.id] || ""], // Assuming shippingId can be derived from shippingTypes
-      ];
-      if (addressString) {
-        orderInfoTags.push(["address", addressString]);
-      }
-      orderInfoTags.push(["amount", tokenAmount.toString()]);
-      if (donationAmount > 0) {
-        orderInfoTags.push([
-          "donation_amount",
-          donationAmount.toString(),
-          donationPercentage.toString(),
-        ]);
-      }
-      orderInfoMessage.tags = orderInfoTags;
-
-      // Construct payment message with cashu token tag
-      let paymentMessageText;
-      let paymentTags;
 
       if (sellerAmount > 0) {
         const swapOutcome = await safeSwap(
@@ -1716,31 +1632,6 @@ export default function CartInvoiceCard({
           proofs: send,
         });
         remainingProofs = keep;
-
-        // Construct payment message with cashu token tag
-        paymentMessageText = await constructMessageGiftWrap(
-          pubkey as any,
-          "", // Placeholder for seal
-          orderKeys.receiverNsec as any, // Placeholder for keypair
-          pubkey // Recipient pubkey
-        );
-        paymentTags = [
-          ["type", "2"],
-          ["subject", "order-payment"],
-          ["order", orderId],
-          ["payment", "ecash", sellerToken],
-        ];
-        if (sellerAmount) {
-          paymentTags.push(["amount", sellerAmount.toString()]);
-        }
-        if (donationAmount > 0) {
-          paymentTags.push([
-            "donation_amount",
-            donationAmount.toString(),
-            donationPercentage.toString(),
-          ]);
-        }
-        paymentMessageText.tags = paymentTags;
       }
 
       // Handle donation if applicable
@@ -2660,16 +2551,9 @@ export default function CartInvoiceCard({
       localStorage.setItem("cart", JSON.stringify([]));
       setOrderConfirmed(true);
       setPaymentConfirmed(true);
-      if (setCashuPaymentSent) {
-        setCashuPaymentSent(true);
-      }
+      setCashuPaymentSent(true);
     } catch {
-      if (setCashuPaymentFailed) {
-        setCashuPaymentFailed(true);
-      } else {
-        setFailureText("Cashu payment failed. Please try again.");
-        setShowFailureModal(true);
-      }
+      setCashuPaymentFailed(true);
     }
   };
 
