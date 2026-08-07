@@ -63,6 +63,7 @@ export async function handleGetCategories(
     {
       hints: [
         "Categories are sampled observations from recent public products, not an authoritative or exhaustive Nostr category index.",
+        "count is the number of sampled products with this tag, not a total network count.",
         "Normal product-fetching tool calls continuously enrich the in-memory category variant registry as this MCP instance observes more events.",
       ],
     }
@@ -101,6 +102,7 @@ export async function handleGetCategories(
       ),
       hints: [
         "Categories are sampled observations from recent public products, not an authoritative or exhaustive Nostr category index.",
+        "count is the number of sampled products with this tag, not a total network count.",
         "Normal product-fetching tool calls continuously enrich the in-memory category variant registry as this MCP instance observes more events.",
       ],
     });

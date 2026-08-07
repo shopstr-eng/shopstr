@@ -73,15 +73,6 @@ export function getCategoryQueryVariants(category: string): string[] {
   );
 }
 
-export function getObservedCategorySummary(): Array<{
-  name: string;
-  variantCount: number;
-}> {
-  return Array.from(categoryVariantRegistry.entries())
-    .map(([name, variants]) => ({ name, variantCount: variants.size }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
 function toTitleCase(value: string): string {
   return value.replace(
     /\S+/g,

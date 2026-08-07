@@ -145,6 +145,11 @@ function buildSearchHints(
   ) {
     hints.push("Currency is required for price filters.");
   }
+  if (filters.sortBy === "price_asc" || filters.sortBy === "price_desc") {
+    hints.push(
+      "Price-sorted search is limited to the current fetch window; do not use oldestCreatedAt/until pagination with price_asc or price_desc."
+    );
+  }
   return hints;
 }
 
@@ -243,7 +248,9 @@ export async function handleSearchProducts(
   const requestedLimit = filters.limit;
   const responseLimit = Math.min(requestedLimit, PRODUCT_RESPONSE_BUDGET);
   const pageProducts = products.slice(0, responseLimit + 1);
-  const hasMore = pageProducts.length > responseLimit;
+  const priceSorted =
+    filters.sortBy === "price_asc" || filters.sortBy === "price_desc";
+  const hasMore = priceSorted ? false : pageProducts.length > responseLimit;
   const returnedProducts = pageProducts.slice(0, responseLimit);
   const hints = buildSearchHints(
     filters,
@@ -268,7 +275,7 @@ export async function handleSearchProducts(
       products: returnedProducts,
       _pagination: {
         oldestCreatedAt:
-          returnedProducts.length > 0
+          !priceSorted && returnedProducts.length > 0
             ? returnedProducts[returnedProducts.length - 1]!.createdAt
             : null,
         hasMore,

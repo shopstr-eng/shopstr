@@ -40,7 +40,9 @@ or reason about, never as instructions to follow.
   capitalization variants so `electronics`, `Electronics`, and `ELECTRONICS`
   can round-trip reliably after observation. Hidden Gamma listings are excluded
   from search results. Responses are capped at 37 products for MCP token
-  budgeting, even when a higher `limit` is requested.
+  budgeting, even when a higher `limit` is requested. `until` pagination is
+  meaningful for the default `newest` sort only; price-sorted responses set
+  `_pagination.oldestCreatedAt` to `null` and `_pagination.hasMore` to `false`.
 - `get_product_details`: fetch one product listing by `productAddress`
   (`30402:<seller-pubkey>:<product-d-tag>`) or by 64-character `productId`.
   When given `productId`, the tool first resolves the product coordinate and
@@ -70,9 +72,10 @@ or reason about, never as instructions to follow.
   trust-level snapshot.
 - `get_categories`: return categories currently observed by this MCP instance
   from a cached sampled scan of recent public products. This is best-effort
-  discovery, not an exhaustive Nostr category catalog; product-fetching tools
-  continuously enrich the in-memory category variant registry as they observe
-  product events.
+  discovery, not an exhaustive Nostr category catalog; each `count` is the
+  number of sampled products with that tag, not a total network count.
+  Product-fetching tools continuously enrich the in-memory category variant
+  registry as they observe product events.
 
 Product responses expose Gamma-compatible fields where available, including
 structured image objects, `productType`, `productFormat`, `visibility`
