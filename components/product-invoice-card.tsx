@@ -32,12 +32,22 @@ import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import {
-  isSellerP2pkEscrowActive,
   resolveP2pkCheckoutOutputConfig,
   resolveSellerCheckoutProfile,
 } from "@/utils/cashu/p2pk-checkout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
+import {
+  buildProductDetailsSuffix,
+  splitDonationAndSellerAmount,
+  isEligibleForLightningPayout,
+  buildLightningPaymentMessage,
+  buildEcashPaymentMessage,
+  buildShipProductMessage,
+  buildShippingAddressTag,
+  buildOrderProcessedReceiptMessage,
+  buildThankYouReceiptMessage,
+} from "@/utils/payments/checkout-messages";
 import {
   recordPendingMintQuote,
   markMintQuoteClaimed,
@@ -1417,8 +1427,10 @@ export default function ProductInvoiceCard({
     }
 
     const donationPercentage = sellerProfile?.content?.shopstr_donation ?? 2.1;
-    const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
-    const sellerAmount = totalPrice - donationAmount;
+    const { donationAmount, sellerAmount } = splitDonationAndSellerAmount(
+      totalPrice,
+      donationPercentage
+    );
     let sellerProofs: Proof[] = [];
 
     if (sellerAmount > 0) {
@@ -1490,11 +1502,11 @@ export default function ProductInvoiceCard({
 
     // Step 1: Send payment message
     if (
-      !isSellerP2pkEscrowActive(sellerProfile?.content?.p2pk) &&
-      paymentPreference === "lightning" &&
-      lnurl &&
-      lnurl !== "" &&
-      !lnurl.includes("@zeuspay.com") &&
+      isEligibleForLightningPayout({
+        sellerP2pk: sellerProfile?.content?.p2pk,
+        paymentPreference,
+        lnurl,
+      }) &&
       sellerProofs
     ) {
       const newAmount = Math.floor(sellerAmount * 0.98 - 2);
@@ -1536,49 +1548,19 @@ export default function ProductInvoiceCard({
             Array.isArray(changeProofs) && changeProofs.length > 0
               ? sumProofAmounts(changeProofs)
               : 0;
-          let productDetails = "";
-          if (selectedSize) {
-            productDetails += " in size " + selectedSize;
-          }
-          if (selectedVolume) {
-            if (productDetails) {
-              productDetails += " and a " + selectedVolume;
-            } else {
-              productDetails += " in a " + selectedVolume;
-            }
-          }
-          if (selectedWeight) {
-            if (productDetails) {
-              productDetails += " and " + selectedWeight;
-            } else {
-              productDetails += " in " + selectedWeight;
-            }
-          }
-          if (selectedBulkOption) {
-            if (productDetails) {
-              productDetails += " (bulk: " + selectedBulkOption + " units)";
-            } else {
-              productDetails += " (bulk: " + selectedBulkOption + " units)";
-            }
-          }
-          if (selectedPickupLocation) {
-            if (productDetails) {
-              productDetails += " (pickup at: " + selectedPickupLocation + ")";
-            } else {
-              productDetails += " (pickup at: " + selectedPickupLocation + ")";
-            }
-          }
-          let paymentMessage = "";
-          paymentMessage =
-            "You have received a payment from " +
-            (userNPub || "a guest buyer") +
-            " for your " +
-            productData.title +
-            " listing" +
-            productDetails +
-            " on Shopstr! Check your Lightning address (" +
-            lnurl +
-            ") for your sats.";
+          const productDetails = buildProductDetailsSuffix({
+            selectedSize,
+            selectedVolume,
+            selectedWeight,
+            selectedBulkOption,
+            pickupLocation: selectedPickupLocation,
+          });
+          const paymentMessage = buildLightningPaymentMessage({
+            buyerNpub: userNPub,
+            title: productData.title,
+            productDetails,
+            lnurl,
+          });
           await sendPaymentAndContactMessage(
             productData.pubkey,
             paymentMessage,
@@ -1632,49 +1614,20 @@ export default function ProductInvoiceCard({
             mint: tokenMintUrl,
             proofs: unusedProofs,
           });
-          let productDetails = "";
-          if (selectedSize) {
-            productDetails += " in size " + selectedSize;
-          }
-          if (selectedVolume) {
-            if (productDetails) {
-              productDetails += " and a " + selectedVolume;
-            } else {
-              productDetails += " in a " + selectedVolume;
-            }
-          }
-          if (selectedWeight) {
-            if (productDetails) {
-              productDetails += " and " + selectedWeight;
-            } else {
-              productDetails += " in " + selectedWeight;
-            }
-          }
-          if (selectedBulkOption) {
-            if (productDetails) {
-              productDetails += " (bulk: " + selectedBulkOption + " units)";
-            } else {
-              productDetails += " (bulk: " + selectedBulkOption + " units)";
-            }
-          }
-          if (selectedPickupLocation) {
-            if (productDetails) {
-              productDetails += " (pickup at: " + selectedPickupLocation + ")";
-            } else {
-              productDetails += " (pickup at: " + selectedPickupLocation + ")";
-            }
-          }
-          let paymentMessage = "";
+          const productDetails = buildProductDetailsSuffix({
+            selectedSize,
+            selectedVolume,
+            selectedWeight,
+            selectedBulkOption,
+            pickupLocation: selectedPickupLocation,
+          });
           if (unusedToken && unusedProofs) {
-            paymentMessage =
-              "This is a Cashu token payment from " +
-              (userNPub || "a guest buyer") +
-              " for your " +
-              productData.title +
-              " listing" +
-              productDetails +
-              " on Shopstr: " +
-              unusedToken;
+            const paymentMessage = buildEcashPaymentMessage({
+              buyerNpub: userNPub,
+              title: productData.title,
+              productDetails,
+              token: unusedToken,
+            });
             await sendPaymentAndContactMessage(
               productData.pubkey,
               paymentMessage,
@@ -1696,49 +1649,20 @@ export default function ProductInvoiceCard({
         }
       }
     } else {
-      let productDetails = "";
-      if (selectedSize) {
-        productDetails += " in size " + selectedSize;
-      }
-      if (selectedVolume) {
-        if (productDetails) {
-          productDetails += " and a " + selectedVolume;
-        } else {
-          productDetails += " in a " + selectedVolume;
-        }
-      }
-      if (selectedWeight) {
-        if (productDetails) {
-          productDetails += " and " + selectedWeight;
-        } else {
-          productDetails += " in " + selectedWeight;
-        }
-      }
-      if (selectedBulkOption) {
-        if (productDetails) {
-          productDetails += " (bulk: " + selectedBulkOption + " units)";
-        } else {
-          productDetails += " (bulk: " + selectedBulkOption + " units)";
-        }
-      }
-      if (selectedPickupLocation) {
-        if (productDetails) {
-          productDetails += " (pickup at: " + selectedPickupLocation + ")";
-        } else {
-          productDetails += " (pickup at: " + selectedPickupLocation + ")";
-        }
-      }
-      let paymentMessage = "";
+      const productDetails = buildProductDetailsSuffix({
+        selectedSize,
+        selectedVolume,
+        selectedWeight,
+        selectedBulkOption,
+        pickupLocation: selectedPickupLocation,
+      });
       if (sellerToken && sellerProofs) {
-        paymentMessage =
-          "This is a Cashu token payment from " +
-          (userNPub || "a guest buyer") +
-          " for your " +
-          productData.title +
-          " listing" +
-          productDetails +
-          " on Shopstr: " +
-          sellerToken;
+        const paymentMessage = buildEcashPaymentMessage({
+          buyerNpub: userNPub,
+          title: productData.title,
+          productDetails,
+          token: sellerToken,
+        });
         await sendPaymentAndContactMessage(
           productData.pubkey,
           paymentMessage,
@@ -1821,80 +1745,28 @@ export default function ProductInvoiceCard({
         productData.shippingType === "Free" ||
         productData.shippingType === "Free/Pickup"
       ) {
-        let productDetails = "";
-        if (selectedSize) {
-          productDetails += " in size " + selectedSize;
-        }
-        if (selectedVolume) {
-          if (productDetails) {
-            productDetails += " and a " + selectedVolume;
-          } else {
-            productDetails += " in a " + selectedVolume;
-          }
-        }
-        if (selectedWeight) {
-          if (productDetails) {
-            productDetails += " and " + selectedWeight;
-          } else {
-            productDetails += " in " + selectedWeight;
-          }
-        }
-        if (selectedBulkOption) {
-          if (productDetails) {
-            productDetails += " (bulk: " + selectedBulkOption + " units)";
-          } else {
-            productDetails += " (bulk: " + selectedBulkOption + " units)";
-          }
-        }
-        if (selectedPickupLocation) {
-          if (productDetails) {
-            productDetails += " (pickup at: " + selectedPickupLocation + ")";
-          } else {
-            productDetails += " (pickup at: " + selectedPickupLocation + ")";
-          }
-        }
+        const productDetails = buildProductDetailsSuffix({
+          selectedSize,
+          selectedVolume,
+          selectedWeight,
+          selectedBulkOption,
+          pickupLocation: selectedPickupLocation,
+        });
 
-        let contactMessage = "";
-        if (!shippingUnitNo) {
-          contactMessage =
-            "Please ship the product" +
-            productDetails +
-            " to " +
-            shippingName +
-            " at " +
-            shippingAddress +
-            ", " +
-            shippingCity +
-            ", " +
-            shippingPostalCode +
-            ", " +
-            shippingState +
-            ", " +
-            shippingCountry +
-            ".";
-        } else {
-          contactMessage =
-            "Please ship the product" +
-            productDetails +
-            " to " +
-            shippingName +
-            " at " +
-            shippingAddress +
-            " " +
-            shippingUnitNo +
-            ", " +
-            shippingCity +
-            ", " +
-            shippingPostalCode +
-            ", " +
-            shippingState +
-            ", " +
-            shippingCountry +
-            ".";
-        }
-        const addressTagForShipping = shippingUnitNo
-          ? `${shippingName}, ${shippingAddress}, ${shippingUnitNo}, ${shippingCity}, ${shippingState}, ${shippingPostalCode}, ${shippingCountry}`
-          : `${shippingName}, ${shippingAddress}, ${shippingCity}, ${shippingState}, ${shippingPostalCode}, ${shippingCountry}`;
+        const shippingAddr = {
+          name: shippingName,
+          address: shippingAddress,
+          unitNo: shippingUnitNo,
+          city: shippingCity,
+          postalCode: shippingPostalCode,
+          state: shippingState,
+          country: shippingCountry,
+        };
+        const contactMessage = buildShipProductMessage(
+          productDetails,
+          shippingAddr
+        );
+        const addressTagForShipping = buildShippingAddressTag(shippingAddr);
         await sendPaymentAndContactMessage(
           productData.pubkey,
           contactMessage,
@@ -1914,13 +1786,11 @@ export default function ProductInvoiceCard({
         );
 
         if (userPubkey) {
-          const receiptMessage =
-            "Your order for " +
-            productData.title +
-            productDetails +
-            " was processed successfully! If applicable, you should be receiving delivery information from " +
-            nip19.npubEncode(productData.pubkey) +
-            " as soon as they review your order.";
+          const receiptMessage = buildOrderProcessedReceiptMessage(
+            productData.title,
+            productDetails,
+            nip19.npubEncode(productData.pubkey)
+          );
 
           // Add delay between messages
           await new Promise((resolve) => setTimeout(resolve, 500));
@@ -1951,47 +1821,20 @@ export default function ProductInvoiceCard({
     ) {
       await sendInquiryDM(productData.pubkey, productData.title);
 
-      let productDetails = "";
-      if (selectedSize) {
-        productDetails += " in size " + selectedSize;
-      }
-      if (selectedVolume) {
-        if (productDetails) {
-          productDetails += " and a " + selectedVolume;
-        } else {
-          productDetails += " in a " + selectedVolume;
-        }
-      }
-      if (selectedWeight) {
-        if (productDetails) {
-          productDetails += " and " + selectedWeight;
-        } else {
-          productDetails += " in " + selectedWeight;
-        }
-      }
-      if (selectedBulkOption) {
-        if (productDetails) {
-          productDetails += " (bulk: " + selectedBulkOption + " units)";
-        } else {
-          productDetails += " (bulk: " + selectedBulkOption + " units)";
-        }
-      }
-      if (selectedPickupLocation) {
-        if (productDetails) {
-          productDetails += " (pickup at: " + selectedPickupLocation + ")";
-        } else {
-          productDetails += " (pickup at: " + selectedPickupLocation + ")";
-        }
-      }
+      const productDetails = buildProductDetailsSuffix({
+        selectedSize,
+        selectedVolume,
+        selectedWeight,
+        selectedBulkOption,
+        pickupLocation: selectedPickupLocation,
+      });
 
       if (userPubkey) {
-        const receiptMessage =
-          "Your order for " +
-          productData.title +
-          productDetails +
-          " was processed successfully! If applicable, you should be receiving delivery information from " +
-          nip19.npubEncode(productData.pubkey) +
-          " as soon as they review your order.";
+        const receiptMessage = buildOrderProcessedReceiptMessage(
+          productData.title,
+          productDetails,
+          nip19.npubEncode(productData.pubkey)
+        );
 
         // Add delay between messages
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -2015,46 +1858,19 @@ export default function ProductInvoiceCard({
         );
       }
     } else {
-      let productDetails = "";
-      if (selectedSize) {
-        productDetails += " in size " + selectedSize;
-      }
-      if (selectedVolume) {
-        if (productDetails) {
-          productDetails += " and a " + selectedVolume;
-        } else {
-          productDetails += " in a " + selectedVolume;
-        }
-      }
-      if (selectedWeight) {
-        if (productDetails) {
-          productDetails += " and " + selectedWeight;
-        } else {
-          productDetails += " in " + selectedWeight;
-        }
-      }
-      if (selectedBulkOption) {
-        if (productDetails) {
-          productDetails += " (bulk: " + selectedBulkOption + " units)";
-        } else {
-          productDetails += " (bulk: " + selectedBulkOption + " units)";
-        }
-      }
-      if (selectedPickupLocation) {
-        if (productDetails) {
-          productDetails += " (pickup at: " + selectedPickupLocation + ")";
-        } else {
-          productDetails += " (pickup at: " + selectedPickupLocation + ")";
-        }
-      }
+      const productDetails = buildProductDetailsSuffix({
+        selectedSize,
+        selectedVolume,
+        selectedWeight,
+        selectedBulkOption,
+        pickupLocation: selectedPickupLocation,
+      });
 
-      const receiptMessage =
-        "Thank you for your purchase of " +
-        productData.title +
-        productDetails +
-        " from " +
-        nip19.npubEncode(productData.pubkey) +
-        ".";
+      const receiptMessage = buildThankYouReceiptMessage(
+        productData.title,
+        productDetails,
+        nip19.npubEncode(productData.pubkey)
+      );
       await sendPaymentAndContactMessage(
         userPubkey!,
         receiptMessage,
