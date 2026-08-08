@@ -164,6 +164,7 @@ export default function DisplayProductModal({
             <div className="flex h-fit w-full flex-row flex-wrap items-center justify-between gap-2">
               <ProfileWithDropdown
                 pubkey={productData.pubkey}
+                hydrateMissingProfileFromRelays
                 dropDownKeys={
                   productData.pubkey === userPubkey
                     ? ["shop_profile"]

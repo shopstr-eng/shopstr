@@ -41,6 +41,7 @@ export default function ProductCard({
   onProductClick,
   href,
   reportSignal = EMPTY_REPORT_MODERATION_SIGNAL,
+  hydrateProfileFromRelays = false,
 }: {
   productData: ProductData;
   onProductClick?: (
@@ -49,6 +50,7 @@ export default function ProductCard({
   ) => void;
   href?: string | null;
   reportSignal?: ReportModerationSignal;
+  hydrateProfileFromRelays?: boolean;
 }) {
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
@@ -368,6 +370,7 @@ export default function ProductCard({
         >
           <ProfileWithDropdown
             pubkey={productData.pubkey}
+            hydrateMissingProfileFromRelays={hydrateProfileFromRelays}
             dropDownKeys={
               productData.pubkey === userPubkey
                 ? ["shop_profile"]
