@@ -87,7 +87,8 @@ export function registerCoreTools(
     "list_companies",
     {
       description:
-        "List public Shopstr seller/shop profiles, optionally paginated with until or filtered to sellers with at least one public product in a category. Use sellerPubkey from results with seller-specific tools.",
+        "List public Shopstr seller/shop profiles, optionally paginated with until or filtered to sellers with at least one public product in a category. Use sellerPubkey from results with seller-specific tools." +
+        UNTRUSTED_CONTENT_NOTE,
       inputSchema: listCompaniesInputSchema,
     },
     wrapWithRateLimit(

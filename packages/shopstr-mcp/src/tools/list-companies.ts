@@ -71,7 +71,7 @@ export async function handleListCompanies(
     [
       {
         kinds: [SHOP_PROFILE_KIND],
-        limit: parsed.data.category ? 500 : Math.min(500, responseLimit + 1),
+        limit: parsed.data.category ? 500 : Math.min(500, responseLimit * 5),
         ...(parsed.data.until !== undefined && { until: parsed.data.until }),
       },
     ],

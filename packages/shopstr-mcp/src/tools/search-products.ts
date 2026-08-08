@@ -158,7 +158,7 @@ function buildSearchFilters(filters: SearchProductsInput): {
   fallback: NostrFilter | undefined;
 } {
   const effectiveLimit = Math.min(filters.limit, PRODUCT_RESPONSE_BUDGET);
-  const relayLimit = Math.min(500, effectiveLimit + 1);
+  const relayLimit = Math.min(500, effectiveLimit * 5);
   const base: NostrFilter = {
     kinds: [PRODUCT_KIND],
     limit: relayLimit,
