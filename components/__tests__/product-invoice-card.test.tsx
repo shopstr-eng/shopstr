@@ -976,6 +976,44 @@ describe("sendTokens — seller payout branches", () => {
     expect(sentEcashToSeller).toBe(true);
   });
 
+  it("passes the complete ecash payment contract to the Nostr sending layer", async () => {
+    const { setCashuPaymentSent } = renderCashuReadyToPay();
+    mockFetchJsonOnce(makeMintQuoteResponse({ amount: 1000 }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(
+      () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+      { timeout: 5000 }
+    );
+    const paymentCall = mockConstructGiftWrappedEvent.mock.calls.find(
+      ([, recipient, , subject]) =>
+        recipient === SELLER_PUBKEY && subject === "order-payment"
+    );
+
+    expect(paymentCall).toBeDefined();
+    expect(paymentCall![2]).toBe(
+      "This is a Cashu token payment from npub1buyer for your Test Item listing on Shopstr: cashuAmocktoken"
+    );
+    expect(paymentCall![4]).toEqual(
+      expect.objectContaining({
+        isOrder: true,
+        type: 2,
+        orderAmount: 979,
+        productData: expect.objectContaining({
+          id: "prod1",
+          pubkey: SELLER_PUBKEY,
+          title: "Test Item",
+        }),
+        quantity: 1,
+        paymentType: "ecash",
+        paymentReference: "cashuAmocktoken",
+        donationAmount: 21,
+        donationPercentage: 2.1,
+      })
+    );
+  });
+
   it("includes shipping address details in the order event when formType is 'shipping'", async () => {
     mockGetLocalStorageData.mockReturnValue({
       ...DEFAULT_LOCAL_STORAGE_DATA,
@@ -1006,10 +1044,23 @@ describe("sendTokens — seller payout branches", () => {
         timeout: 5000,
       }
     );
-    const found = mockConstructGiftWrappedEvent.mock.calls.some(
-      ([, , , , options]) => options?.address?.includes("Ada Lovelace")
+    const shippingCall = mockConstructGiftWrappedEvent.mock.calls.find(
+      ([, recipient, , subject]) =>
+        recipient === SELLER_PUBKEY && subject === "order-info"
     );
-    expect(found).toBe(true);
+
+    expect(shippingCall).toBeDefined();
+    expect(shippingCall![2]).toBe(
+      "Please ship the product to Ada Lovelace at 123 Main St, Metropolis, NY, 12345, USA."
+    );
+    expect(shippingCall![4]).toEqual(
+      expect.objectContaining({
+        quantity: 1,
+        address: "Ada Lovelace, 123 Main St, Metropolis, NY, 12345, USA",
+        donationAmount: 11,
+        donationPercentage: 2.1,
+      })
+    );
   });
 
   it("includes pickup and excludes shipping address when formType is 'contact'", async () => {
@@ -1035,19 +1086,24 @@ describe("sendTokens — seller payout branches", () => {
         timeout: 5000,
       }
     );
-    const options = mockConstructGiftWrappedEvent.mock.calls.map(
-      ([, , , , eventOptions]) => eventOptions
+    const paymentCall = mockConstructGiftWrappedEvent.mock.calls.find(
+      ([, recipient, , subject]) =>
+        recipient === SELLER_PUBKEY && subject === "order-payment"
     );
-    expect(
-      options.some((eventOptions) => eventOptions?.pickup === "Downtown Store")
-    ).toBe(true);
-    const shippingAddresses = options
-      .map((eventOptions) => eventOptions?.address)
-      .filter(
-        (address): address is string =>
-          typeof address === "string" && address.trim().length > 0
-      );
-    expect(shippingAddresses).toEqual([]);
+
+    expect(paymentCall).toBeDefined();
+    expect(paymentCall![2]).toBe(
+      "This is a Cashu token payment from npub1buyer for your Test Item listing (pickup at: Downtown Store) on Shopstr: cashuAmocktoken"
+    );
+    expect(paymentCall![4]).toEqual(
+      expect.objectContaining({
+        quantity: 1,
+        pickup: "Downtown Store",
+        address: undefined,
+        donationAmount: 11,
+        donationPercentage: 2.1,
+      })
+    );
   });
 });
 

@@ -343,6 +343,25 @@ function makeDigitalCart() {
   ];
 }
 
+function fillShippingForm(
+  values: Partial<{
+    Name: string;
+    Address: string;
+    City: string;
+    "Postal Code": string;
+    "State/Province": string;
+    Country: string;
+  }>
+) {
+  Object.entries(values).forEach(([label, value]) => {
+    const accessibleName =
+      label === "Country" ? /^Select Country$/i : new RegExp(`^${label}`, "i");
+    fireEvent.change(screen.getByRole("textbox", { name: accessibleName }), {
+      target: { value },
+    });
+  });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   installFetchMock();
@@ -907,6 +926,91 @@ describe("sendTokens — per-product loop", () => {
     });
     expect(mockSafeSwap).toHaveBeenCalledTimes(2);
   }, 10000);
+
+  it("passes the complete cart payment contract to the Nostr sending layer", async () => {
+    const coffee = makeCartProduct({
+      id: "coffee",
+      pubkey: "seller_coffee",
+      title: "Coffee Beans",
+      price: 1000,
+      shippingType: "Free/Pickup",
+      pickupLocations: ["Warehouse Counter"],
+      selectedWeight: "1kg",
+      selectedBulkOption: 3,
+    });
+    const download = makeCartProduct({
+      id: "download",
+      pubkey: "seller_download",
+      title: "Digital Guide",
+      price: 500,
+      shippingType: "N/A",
+    });
+    const products = [coffee, download];
+    mockGetLocalStorageData.mockReturnValue({
+      ...DEFAULT_LOCAL_STORAGE_DATA,
+      tokens: [{ id: "ks1", amount: 3500, secret: "s1" }],
+    });
+    const { setCashuPaymentSent } = renderCartInvoiceCard(products, {
+      quantities: { coffee: 3, download: 1 },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Mixed delivery/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Pickup/ }));
+    fireEvent.change(screen.getByLabelText(/Coffee Beans - Pickup Location/i), {
+      target: { value: "Warehouse Counter" },
+    });
+    fillShippingForm({
+      Name: "Grace Hopper",
+      Address: "456 Oak Ave",
+      City: "Arlington",
+      "Postal Code": "22201",
+      "State/Province": "VA",
+      Country: "USA",
+    });
+    mockFetchJsonOnce(
+      makeCartQuoteResponse(products, {
+        amount: 3500,
+        breakdown: { coffee: 3000, download: 500 },
+      })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(
+      () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+      { timeout: 9000 }
+    );
+    const paymentCall = mockConstructGiftWrappedEvent.mock.calls.find(
+      ([, recipient, , subject, options]) =>
+        recipient === "seller_coffee" &&
+        subject === "order-payment" &&
+        options?.productData?.id === "coffee"
+    );
+
+    expect(paymentCall).toBeDefined();
+    expect(paymentCall![2]).toBe(
+      "This is a Cashu token payment from npub1buyer for 3 of your Coffee Beans listing in 1kg (bulk: 3 units) (pickup at: Warehouse Counter) on Shopstr: cashuAmocktoken"
+    );
+    expect(paymentCall![4]).toEqual(
+      expect.objectContaining({
+        isOrder: true,
+        type: 2,
+        orderAmount: 2937,
+        productData: expect.objectContaining({
+          id: "coffee",
+          pubkey: "seller_coffee",
+          title: "Coffee Beans",
+        }),
+        quantity: 3,
+        paymentType: "ecash",
+        paymentReference: "cashuAmocktoken",
+        address: "Grace Hopper, 456 Oak Ave, Arlington, VA, 22201, USA",
+        pickup: "Warehouse Counter",
+        donationAmount: 63,
+        donationPercentage: 2.1,
+      })
+    );
+  }, 12000);
 
   it("a failure partway through the per-product loop does not undo an already-completed product's payout, even though the overall checkout still fails", async () => {
     const { products, setInvoiceIsPaid } = renderDigitalReadyToPay();
