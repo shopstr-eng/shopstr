@@ -120,6 +120,8 @@ export const searchProductsSchema = z
     maxPrice: priceSchema.optional(),
     currency: currencySchema.optional(),
     limit: limitSchema.default(50),
+    until: z.coerce.number().int().min(0).optional(),
+    sortBy: z.enum(["newest", "price_asc", "price_desc"]).default("newest"),
   })
   .refine(
     (data) =>
@@ -152,15 +154,12 @@ export const productDetailsInputSchema = z
     { message: "Either productId or productAddress is required" }
   );
 
-export const pubkeyInputSchema = z.object({
-  pubkey: pubkeySchema,
-});
-
 export const reviewsInputSchema = z
   .object({
     productId: eventIdSchema.optional(),
     productAddress: productAddressSchema.optional(),
     sellerPubkey: pubkeySchema.optional(),
+    until: z.coerce.number().int().min(0).optional(),
   })
   .refine(
     (data) =>
@@ -175,16 +174,21 @@ export const reviewsInputSchema = z
 export const listCompaniesSchema = z.object({
   limit: limitSchema.default(50),
   until: z.coerce.number().int().min(0).optional(),
+  category: z.string().max(100).transform(canonicalizeSearch).optional(),
 });
 
 export const companyDetailsInputSchema = z.object({
-  pubkey: pubkeySchema,
-});
-
-export const storefrontInputSchema = z.object({
-  pubkey: pubkeySchema,
+  sellerPubkey: pubkeySchema,
+  include: z
+    .array(z.enum(["products", "reviews"]))
+    .optional()
+    .default(["products", "reviews"]),
 });
 
 export const sellerReputationInputSchema = z.object({
   sellerPubkey: pubkeySchema,
+});
+
+export const getCategoriesSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).default(100),
 });
