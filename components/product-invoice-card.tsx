@@ -47,6 +47,7 @@ import {
   buildShippingAddressTag,
   buildOrderProcessedReceiptMessage,
   buildThankYouReceiptMessage,
+  buildPaymentEventOptions,
 } from "@/utils/payments/checkout-messages";
 import {
   recordPendingMintQuote,
@@ -506,9 +507,7 @@ export default function ProductInvoiceCard({
     let messageOptions: any = {};
     if (isPayment) {
       messageSubject = "order-payment";
-      messageOptions = {
-        isOrder: true,
-        type: 2,
+      messageOptions = buildPaymentEventOptions({
         orderAmount: messageAmount
           ? messageAmount
           : formType === "shipping"
@@ -522,8 +521,10 @@ export default function ProductInvoiceCard({
           selectedWeight,
           selectedBulkOption,
         },
+        quantity: 1,
         paymentType,
         paymentReference,
+        paymentProof,
         contact,
         address,
         pickup,
@@ -534,7 +535,7 @@ export default function ProductInvoiceCard({
         buyerPubkey,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
-      };
+      });
     } else if (isReceipt) {
       messageSubject = "order-receipt";
       messageOptions = {
@@ -1574,7 +1575,9 @@ export default function ProductInvoiceCard({
             meltAmount,
             undefined,
             undefined,
-            selectedPickupLocation || undefined
+            selectedPickupLocation || undefined,
+            donationAmount,
+            donationPercentage
           );
 
           if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {

@@ -1,10 +1,11 @@
 import { isSellerP2pkEscrowActive } from "@/utils/cashu/p2pk-checkout";
 import type { P2pkProfileSettings } from "@/utils/cashu/p2pk-checkout";
+import type { ProductData } from "@/utils/parsers/product-parser-functions";
 
 /**
  * The cart flow pluralizes for quantity > 1 via the `quantity` parameter;
- * product-invoice-card always passes quantity undefined (singular phrasing)
- * since it only ever checks out one unit at a time.
+ * product-invoice-card always passes quantity 1 (singular phrasing) since it
+ * only ever checks out one unit at a time.
  */
 
 export interface ProductDetailsSuffixInput {
@@ -82,6 +83,34 @@ interface PaymentMessageInput {
   title: string;
   productDetails: string;
   quantity?: number;
+}
+
+export interface PaymentEventOptionsInput {
+  orderId?: string;
+  orderAmount: number;
+  productData: ProductData;
+  quantity: number;
+  paymentType?: string;
+  paymentReference?: string;
+  paymentProof?: string;
+  contact?: string;
+  address?: string;
+  pickup?: string;
+  buyerPubkey?: string;
+  donationAmount?: number;
+  donationPercentage?: number;
+  selectedSize?: string;
+  selectedVolume?: string;
+  selectedWeight?: string;
+  selectedBulkOption?: number;
+}
+
+export function buildPaymentEventOptions(input: PaymentEventOptionsInput) {
+  return {
+    isOrder: true,
+    type: 2,
+    ...input,
+  };
 }
 
 const forClause = (quantity: number | undefined) =>

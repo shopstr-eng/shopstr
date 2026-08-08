@@ -59,6 +59,7 @@ import {
   buildShippingAddressTag,
   buildOrderProcessedReceiptMessage,
   buildThankYouReceiptMessage,
+  buildPaymentEventOptions,
 } from "@/utils/payments/checkout-messages";
 import {
   recordPendingMintQuote,
@@ -741,14 +742,14 @@ export default function CartInvoiceCard({
     let messageOptions: any = {};
     if (isPayment) {
       messageSubject = "order-payment";
-      messageOptions = {
-        isOrder: true,
-        type: 2,
+      messageOptions = buildPaymentEventOptions({
         orderAmount: messageAmount ? messageAmount : totalCost,
         orderId,
         productData: product,
+        quantity: productQuantity ? productQuantity : 1,
         paymentType,
         paymentReference,
+        paymentProof,
         contact,
         address,
         buyerPubkey,
@@ -759,7 +760,7 @@ export default function CartInvoiceCard({
         selectedVolume: product.selectedVolume,
         selectedWeight: product.selectedWeight,
         selectedBulkOption: product.selectedBulkOption,
-      };
+      });
     } else if (isReceipt) {
       messageSubject = "order-receipt";
       messageOptions = {
@@ -1773,7 +1774,9 @@ export default function CartInvoiceCard({
               orderKeys,
               undefined,
               shippingAddressTag,
-              pickupLocationForLightning || undefined
+              pickupLocationForLightning || undefined,
+              donationAmount,
+              donationPercentage
             );
 
             if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
@@ -1858,7 +1861,9 @@ export default function CartInvoiceCard({
                 orderKeys,
                 undefined,
                 shippingAddressTag,
-                pickupLocation || undefined
+                pickupLocation || undefined,
+                donationAmount,
+                donationPercentage
               );
             }
           }
@@ -1902,7 +1907,9 @@ export default function CartInvoiceCard({
             orderKeys,
             undefined,
             shippingAddressTag,
-            pickupLocation || undefined
+            pickupLocation || undefined,
+            donationAmount,
+            donationPercentage
           );
         }
       }
