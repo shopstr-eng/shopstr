@@ -264,6 +264,7 @@ test("search_products disables until pagination cursor for price sorts", async (
   assert.equal(body.products[0].title, "Cheap Product");
   assert.equal(body._pagination.oldestCreatedAt, null);
   assert.equal(body._pagination.hasMore, false);
+  assert.equal(body._meta._truncated, true);
   assert.equal(
     body._meta._hints.some((hint) => hint.includes("Price-sorted search")),
     true

@@ -252,6 +252,7 @@ export async function handleSearchProducts(
     filters.sortBy === "price_asc" || filters.sortBy === "price_desc";
   const hasMore = priceSorted ? false : pageProducts.length > responseLimit;
   const returnedProducts = pageProducts.slice(0, responseLimit);
+  const truncated = products.length > returnedProducts.length;
   const hints = buildSearchHints(
     filters,
     products.length,
@@ -261,7 +262,7 @@ export async function handleSearchProducts(
     ...buildToolMeta(combineRelayMetas(relayMetas, Date.now() - startedAt), {
       resultCount: returnedProducts.length,
       totalMatches: products.length,
-      truncated: hasMore,
+      truncated,
       dataFreshness: getDataFreshness(returnedProducts),
       hints,
     }),

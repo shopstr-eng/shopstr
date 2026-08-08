@@ -3,6 +3,7 @@ import { z } from "zod";
 import { mergeAndDeduplicateProducts } from "../dedup.js";
 import { createSuccessResponse, type ToolTextResponse } from "../errors.js";
 import { fetchFromRelays } from "../relay-fetch.js";
+import type { RelayFetchMeta } from "../types.js";
 import { getCategoriesSchema } from "../validation.js";
 import {
   CACHE_KINDS,
@@ -50,24 +51,16 @@ export async function handleGetCategories(
   });
 
   let categories = cached?.value;
-  let meta = buildToolMeta(
-    {
-      relaysQueried: [],
-      relaysSucceeded: [],
-      relaysFailed: [],
-      degraded: false,
-      coverage: 1,
-      responseTimeMs: 0,
-      eventCount: 0,
-    },
-    {
-      hints: [
-        "Categories are sampled observations from recent public products, not an authoritative or exhaustive Nostr category index.",
-        "count is the number of sampled products with this tag, not a total network count.",
-        "Normal product-fetching tool calls continuously enrich the in-memory category variant registry as this MCP instance observes more events.",
-      ],
-    }
-  );
+  let relayMeta: RelayFetchMeta = {
+    relaysQueried: [],
+    relaysSucceeded: [],
+    relaysFailed: [],
+    degraded: false,
+    coverage: 1,
+    responseTimeMs: 0,
+    eventCount: 0,
+  };
+  let dataFreshness: string | null = null;
 
   if (!categories) {
     const relayResult = await fetchFromRelays(
@@ -89,26 +82,28 @@ export async function handleGetCategories(
     const events = mergeAndDeduplicateProducts(relayResult.events);
     observeProductEventsForCategories(events);
     categories = summarizeCategories(events);
+    dataFreshness = getDataFreshness(
+      events.map((event) => ({ createdAt: event.created_at }))
+    );
     context.categoryCache.set(
       { pubkey: CATEGORY_CACHE_KEY, kind: CACHE_KINDS.CATEGORY_SUMMARY },
       categories
     );
-    meta = buildToolMeta(relayResult.meta, {
-      resultCount: Math.min(categories.length, parsed.data.limit),
-      totalMatches: categories.length,
-      truncated: categories.length > parsed.data.limit,
-      dataFreshness: getDataFreshness(
-        events.map((event) => ({ createdAt: event.created_at }))
-      ),
-      hints: [
-        "Categories are sampled observations from recent public products, not an authoritative or exhaustive Nostr category index.",
-        "count is the number of sampled products with this tag, not a total network count.",
-        "Normal product-fetching tool calls continuously enrich the in-memory category variant registry as this MCP instance observes more events.",
-      ],
-    });
+    relayMeta = relayResult.meta;
   }
 
   const returnedCategories = categories.slice(0, parsed.data.limit);
+  const meta = buildToolMeta(relayMeta, {
+    resultCount: returnedCategories.length,
+    totalMatches: categories.length,
+    truncated: categories.length > returnedCategories.length,
+    dataFreshness,
+    hints: [
+      "Categories are sampled observations from recent public products, not an authoritative or exhaustive Nostr category index.",
+      "count is the number of sampled products with this tag, not a total network count.",
+      "Normal product-fetching tool calls continuously enrich the in-memory category variant registry as this MCP instance observes more events.",
+    ],
+  });
   return createSuccessResponse(
     {
       count: returnedCategories.length,

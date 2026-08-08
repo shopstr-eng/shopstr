@@ -46,7 +46,7 @@ export function calculateReputationStats(reviews: readonly ReviewResponse[]): {
     negativeReviewCount,
     trustLevel: determineTrustLevel(averageScore, reviews.length),
     formula:
-      "Scores use kind 31555 rating tags, deduplicated to one review per unique reviewer pubkey per target. Reviewer pubkeys are freely creatable and not linked to verified purchases, so review counts are not proof against coordinated or self-authored reviews. Reviews are also stored as replaceable events and may have been edited after initial publication; no edit history is exposed.",
+      "Scores use kind 31555 rating tags, deduplicated to one review per unique reviewer pubkey per target. Each rating value is clamped to the 0..1 range; when a thumb rating is present it contributes 50% of the overall score and the remaining ratings split the other 50% (or 100% when thumb is absent). Reviewer pubkeys are freely creatable and not linked to verified purchases, and reviews are replaceable events that may have been edited after initial publication; no edit history is exposed.",
   };
 }
 

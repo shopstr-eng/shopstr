@@ -70,5 +70,8 @@ test("get_categories scans sampled products, normalizes counts, and caches", asy
     true
   );
   assert.equal(secondBody._meta.cached.categories, true);
+  assert.equal(secondBody._meta.resultCount, 2);
+  assert.equal(secondBody._meta.totalMatches, 2);
+  assert.equal(secondBody._meta._truncated, false);
   assert.equal(fetchCount, 1);
 });
