@@ -1773,8 +1773,10 @@ export type HodlEscrowOrderRegistration = {
   /** sha256 of `preimage`, 32 bytes of hex. Primary key. */
   paymentHash: string;
   /**
-   * The settlement secret, stored so the arbiter can settle later. Write-only
-   * as far as this module is concerned: no read path selects this column.
+   * The settlement secret, stored so the arbiter can settle later. Read
+   * back by exactly one function, {@link getHodlEscrowSettlementSecret},
+   * which exists only to feed the provider's settleInvoice; no other query
+   * in this module selects this column.
    */
   preimage: string;
   /** From the NIP-98-authenticated request, never from a request body. */
@@ -1982,6 +1984,77 @@ export async function getHodlEscrowOrderParties(
       sellerNostrPubkey: row.seller_nostr_pubkey,
       arbiterNostrPubkey: row.arbiter_nostr_pubkey,
     };
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Reads the settlement secret for an order.
+ *
+ * This is the one read path in this module that selects `preimage`, and it
+ * exists solely so the settle endpoint can hand the secret straight to
+ * {@link HodlInvoiceProvider.settleInvoice}. The value it returns releases
+ * money: it must never be written to a response body, a log line, or an error
+ * message, and it must never be returned to a caller that has not first
+ * authorized the settlement against the order's committed buyer.
+ *
+ * Deliberately NOT folded into {@link getHodlEscrowOrderParties}. Authorizing
+ * an event needs the parties and never the secret, so the call that decides
+ * *whether* to settle cannot come back holding the means to do it.
+ *
+ * @returns the preimage, or null when no commitment row exists.
+ */
+export async function getHodlEscrowSettlementSecret(
+  paymentHash: string
+): Promise<string | null> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    const result = await client.query<{ preimage: string }>(
+      `SELECT preimage
+       FROM hodl_escrow_orders
+       WHERE payment_hash = $1`,
+      [paymentHash.toLowerCase()]
+    );
+
+    const row = result.rows[0];
+    if (!row || typeof row.preimage !== "string" || row.preimage.length === 0) {
+      return null;
+    }
+    return row.preimage;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Records that an order's hold invoice has been settled.
+ *
+ * Call this only *after* the provider's settle succeeded. The row is a record
+ * of what the Lightning node did, so the write is unconditional on the current
+ * status rather than guarded by a state machine: once the HTLC is settled the
+ * funds are gone, and a row still reading `accepted` would be a lie that a
+ * later cancel path might act on.
+ *
+ * @returns "not-found" when no row matched, so the caller can surface a
+ * settled invoice whose commitment has vanished instead of reporting success.
+ */
+export async function markHodlEscrowOrderSettled(
+  paymentHash: string
+): Promise<"settled" | "not-found"> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    const result = await client.query(
+      `UPDATE hodl_escrow_orders
+       SET status = 'settled'
+       WHERE payment_hash = $1`,
+      [paymentHash.toLowerCase()]
+    );
+    return (result.rowCount ?? 0) > 0 ? "settled" : "not-found";
   } finally {
     client.release();
   }

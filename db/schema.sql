@@ -219,7 +219,9 @@ CREATE TABLE IF NOT EXISTS hodl_escrow_orders (
     payment_hash TEXT PRIMARY KEY,
     -- Custodial by design: the arbiter holds the secret that settles the
     -- invoice, not the seller. Never leaves the server and never appears in
-    -- an API response; no read path in db-service selects this column.
+    -- an API response. Exactly one read path in db-service selects this
+    -- column -- getHodlEscrowSettlementSecret -- and its only caller passes
+    -- the value straight to the Lightning provider's settleInvoice.
     preimage TEXT NOT NULL,
     -- The NIP-98-authenticated caller, never a client-submitted field.
     buyer_nostr_pubkey TEXT NOT NULL,
