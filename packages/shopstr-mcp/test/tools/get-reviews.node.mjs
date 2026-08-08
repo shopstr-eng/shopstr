@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { handleGetReviews } from "../../dist/tools/get-reviews.js";
 import { MemoryCache } from "../../dist/cache.js";
+import { REVIEW_PRODUCT_FILTER_LIMIT } from "../../dist/tools/utils/common.js";
 
 const hex = (char) => char.repeat(64);
 const productId = hex("9");
@@ -46,6 +47,8 @@ function context(fetchImpl) {
     relays: ["wss://relay.example.com"],
     timeoutMs: 100,
     cache: new MemoryCache(0),
+    categoryCache: new MemoryCache(60_000),
+    maxConcurrentRequests: 10,
     nostr: {
       async fetch(filters) {
         calls.push(filters);
@@ -105,6 +108,9 @@ test("get_reviews queries Gamma #d and standard #a product review models", async
     [hex("2"), hex("3")]
   );
   assert.deepEqual(body.reviews[0].ratings, { quality: 4 });
+  assert.equal(body.reviews[0].matchConfidence, undefined);
+  assert.equal(body.reviews[1].matchConfidence, "legacy_fallback");
+  assert.equal(body.ratingsSummary.averageScore, 1);
   assert.equal(
     reviewFilters.some((filter) =>
       filter["#d"]?.includes(`a:${productAddress}`)
@@ -147,6 +153,7 @@ test("get_reviews accepts productAddress without a product lookup", async () => 
   assert.equal(ctx.calls.length, 1);
   assert.equal(body.count, 1);
   assert.equal(body.reviews[0].d, `a:${productAddress}`);
+  assert.equal(body.reviews[0].matchConfidence, "legacy_fallback");
 });
 
 test("get_reviews resolves seller products and queries product-address reviews", async () => {
@@ -206,6 +213,7 @@ test("get_reviews resolves seller products and queries product-address reviews",
     true
   );
   assert.equal(body.count, 2);
+  assert.equal(body.reviewCoverage, "complete");
 });
 
 test("get_reviews requires productId, productAddress, or sellerPubkey", async () => {
@@ -250,6 +258,8 @@ test("get_reviews skips seller product resolution on second call when cache is e
     relays: ["wss://relay.example.com"],
     timeoutMs: 100,
     cache,
+    categoryCache: new MemoryCache(60_000),
+    maxConcurrentRequests: 10,
     nostr: {
       async fetch(filters) {
         return fetchImpl(filters);
@@ -274,4 +284,67 @@ test("get_reviews skips seller product resolution on second call when cache is e
     1,
     "second call should skip seller product fetch via cache"
   );
+});
+
+test("get_reviews caps seller product-address filters and reports partial coverage", async () => {
+  const products = Array.from(
+    { length: REVIEW_PRODUCT_FILTER_LIMIT + 5 },
+    (_, index) =>
+      productEvent({
+        id: (index + 1).toString(16).padStart(64, "0"),
+        tags: [["d", `product-${index}`]],
+      })
+  );
+  const ctx = context((filters) => {
+    if (filters.some((filter) => filter.authors?.includes(sellerPubkey))) {
+      return products;
+    }
+    return [];
+  });
+
+  const response = await handleGetReviews({ sellerPubkey }, ctx);
+  const body = JSON.parse(response.content[0].text);
+  const reviewFilters = ctx.calls[1];
+
+  assert.equal(body.reviewCoverage, "partial");
+  assert.equal(
+    reviewFilters.filter((filter) => Array.isArray(filter["#d"])).length,
+    REVIEW_PRODUCT_FILTER_LIMIT
+  );
+  assert.equal(
+    reviewFilters.filter((filter) => Array.isArray(filter["#a"])).length,
+    REVIEW_PRODUCT_FILTER_LIMIT
+  );
+});
+
+test("get_reviews passes until and computes hasMore from extra review", async () => {
+  const ctx = context((filters) => {
+    assert.equal(
+      filters.every((filter) => filter.until === 500),
+      true
+    );
+    assert.equal(
+      filters.every((filter) => filter.limit === 51),
+      true
+    );
+    return Array.from({ length: 51 }, (_, index) =>
+      reviewEvent({
+        id: (index + 1).toString(16).padStart(64, "0"),
+        pubkey: (index + 20).toString(16).padStart(64, "0"),
+        created_at: 500 - index,
+        tags: [
+          ["d", `review-${index}`],
+          ["a", productAddress],
+          ["rating", "1", "thumb"],
+        ],
+      })
+    );
+  });
+
+  const response = await handleGetReviews({ productAddress, until: 500 }, ctx);
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.count, 50);
+  assert.equal(body._pagination.hasMore, true);
+  assert.equal(body._pagination.oldestCreatedAt, 451);
 });

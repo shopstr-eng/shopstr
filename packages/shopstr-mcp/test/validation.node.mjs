@@ -13,7 +13,6 @@ import {
   searchProductsSchema,
   searchSchema,
   sellerReputationInputSchema,
-  storefrontInputSchema,
 } from "../dist/validation.js";
 
 const pubkey = "a".repeat(64);
@@ -75,29 +74,25 @@ test("listCompaniesSchema rejects negative until", () => {
 
 test("companyDetailsInputSchema canonicalizes npub to hex", () => {
   const npub = nip19.npubEncode(pubkey);
-  const result = companyDetailsInputSchema.parse({ pubkey: npub });
-  assert.equal(result.pubkey, pubkey);
+  const result = companyDetailsInputSchema.parse({ sellerPubkey: npub });
+  assert.equal(result.sellerPubkey, pubkey);
+  assert.deepEqual(result.include, ["products", "reviews"]);
 });
 
 test("companyDetailsInputSchema rejects invalid pubkey", () => {
   assert.equal(
-    companyDetailsInputSchema.safeParse({ pubkey: "not-a-key" }).success,
+    companyDetailsInputSchema.safeParse({ sellerPubkey: "not-a-key" }).success,
     false
   );
 });
 
-test("storefrontInputSchema requires pubkey", () => {
-  assert.equal(storefrontInputSchema.safeParse({}).success, false);
-  assert.equal(
-    storefrontInputSchema.safeParse({ pubkey: pubkey }).success,
-    true
-  );
-});
+test("companyDetailsInputSchema supports include sections", () => {
+  const result = companyDetailsInputSchema.parse({
+    sellerPubkey: pubkey,
+    include: [],
+  });
 
-test("storefrontInputSchema canonicalizes npub pubkey", () => {
-  const npub = nip19.npubEncode(pubkey);
-  const result = storefrontInputSchema.parse({ pubkey: npub });
-  assert.equal(result.pubkey, pubkey);
+  assert.deepEqual(result.include, []);
 });
 
 test("sellerReputationInputSchema canonicalizes pubkey", () => {

@@ -71,10 +71,6 @@ export function parsePositiveInteger(
   return parsed.success ? parsed.data : fallback;
 }
 
-export function parseBooleanFlag(rawValue: string | undefined): boolean {
-  return rawValue === "true" || rawValue === "1";
-}
-
 export function loadConfig(
   env: NodeJS.ProcessEnv = process.env
 ): ShopstrMcpConfig {

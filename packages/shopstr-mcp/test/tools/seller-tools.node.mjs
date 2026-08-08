@@ -6,7 +6,6 @@ import { nip19 } from "nostr-tools";
 import { MemoryCache } from "../../dist/cache.js";
 import { handleGetCompanyDetails } from "../../dist/tools/get-company-details.js";
 import { handleGetSellerReputation } from "../../dist/tools/get-seller-reputation.js";
-import { handleGetStorefront } from "../../dist/tools/get-storefront.js";
 import { handleListCompanies } from "../../dist/tools/list-companies.js";
 import { REVIEW_PRODUCT_FILTER_LIMIT } from "../../dist/tools/utils/common.js";
 
@@ -99,6 +98,8 @@ function context(fetchImpl, cache = new MemoryCache(60_000)) {
     relays: ["wss://relay.example.com"],
     timeoutMs: 100,
     cache,
+    categoryCache: new MemoryCache(60_000),
+    maxConcurrentRequests: 10,
     nostr: {
       async fetch(filters) {
         calls.push(filters);
@@ -187,16 +188,64 @@ test("list_companies returns null oldestCreatedAt when empty", async () => {
   assert.equal(body._pagination.oldestCreatedAt, null);
 });
 
+test("list_companies filters sellers by a public product category with one batched query", async () => {
+  const otherSeller = hex("9");
+  const ctx = context((filters) => {
+    if (filters.some((filter) => filter.kinds?.includes(30019))) {
+      return [
+        shopEvent(),
+        shopEvent({
+          id: hex("9"),
+          pubkey: otherSeller,
+          content: JSON.stringify({ name: "Other Shop" }),
+        }),
+      ];
+    }
+    if (filters.some((filter) => filter.kinds?.includes(30402))) {
+      return [
+        productEvent({
+          tags: [
+            ["d", "coffee"],
+            ["title", "Coffee Beans"],
+            ["t", "Coffee"],
+          ],
+        }),
+        productEvent({
+          id: hex("9"),
+          pubkey: otherSeller,
+          tags: [
+            ["d", "tea"],
+            ["title", "Hidden Tea"],
+            ["t", "Coffee"],
+            ["visibility", "hidden"],
+          ],
+        }),
+      ];
+    }
+    return [];
+  });
+
+  const response = await handleListCompanies({ category: "coffee" }, ctx);
+  const body = JSON.parse(response.content[0].text);
+  const productFetchCount = ctx.calls.filter((filters) =>
+    filters.some((filter) => filter.kinds?.includes(30402))
+  ).length;
+
+  assert.equal(body.count, 1);
+  assert.equal(body.companies[0].pubkey, sellerPubkey);
+  assert.equal(productFetchCount, 1);
+});
+
 // ─── get_company_details ─────────────────────────────────────────────
 
 test("get_company_details merges profiles, products, reviews, and cache metadata", async () => {
   const cache = new MemoryCache(60_000);
   const ctx = context(sellerFetch, cache);
 
-  const first = await handleGetCompanyDetails({ pubkey: sellerPubkey }, ctx);
+  const first = await handleGetCompanyDetails({ sellerPubkey }, ctx);
   const firstBody = JSON.parse(first.content[0].text);
 
-  assert.equal(firstBody.pubkey, sellerPubkey);
+  assert.equal(firstBody.sellerPubkey, sellerPubkey);
   assert.equal(firstBody.shopProfile.name, "Fresh Shop");
   assert.equal(firstBody.shopProfile.storefrontUrl, "/shop/fresh-shop");
   assert.equal(firstBody.userProfile.name, "Fresh Seller");
@@ -212,6 +261,8 @@ test("get_company_details merges profiles, products, reviews, and cache metadata
   assert.deepEqual(firstBody._meta.cached, {
     userProfile: false,
     shopProfile: false,
+    products: false,
+    reviews: false,
   });
 
   const profileFetchesBefore = ctx.calls.filter((filters) =>
@@ -219,7 +270,7 @@ test("get_company_details merges profiles, products, reviews, and cache metadata
       filter.kinds?.some((kind) => kind === 0 || kind === 30019)
     )
   ).length;
-  const second = await handleGetCompanyDetails({ pubkey: sellerPubkey }, ctx);
+  const second = await handleGetCompanyDetails({ sellerPubkey }, ctx);
   const secondBody = JSON.parse(second.content[0].text);
   const profileFetchesAfter = ctx.calls.filter((filters) =>
     filters.some((filter) =>
@@ -231,7 +282,35 @@ test("get_company_details merges profiles, products, reviews, and cache metadata
   assert.deepEqual(secondBody._meta.cached, {
     userProfile: true,
     shopProfile: true,
+    products: true,
+    reviews: true,
   });
+});
+
+test("get_company_details always includes storefront and can skip product/review fetches", async () => {
+  const ctx = context((filters) => {
+    assert.equal(
+      filters.some((filter) => filter.kinds?.includes(30402)),
+      false
+    );
+    assert.equal(
+      filters.some((filter) => filter.kinds?.includes(31555)),
+      false
+    );
+    return [profileEvent(), shopEvent()];
+  });
+
+  const response = await handleGetCompanyDetails(
+    { sellerPubkey, include: [] },
+    ctx
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.storefront.shopSlug, "fresh-shop");
+  assert.equal(body.storefront.storefrontUrl, "/shop/fresh-shop");
+  assert.equal(body.products, undefined);
+  assert.equal(body.reviews, undefined);
+  assert.equal(body.paymentInfo, undefined);
 });
 
 test("get_company_details hints when review lookup is partial", async () => {
@@ -248,7 +327,7 @@ test("get_company_details hints when review lookup is partial", async () => {
     })
   );
   const response = await handleGetCompanyDetails(
-    { pubkey: sellerPubkey },
+    { sellerPubkey },
     context((filters) => {
       if (
         filters.some((filter) =>
@@ -270,14 +349,12 @@ test("get_company_details hints when review lookup is partial", async () => {
 
   assert.equal(response.isError, undefined);
   assert.equal(body.products.totalMatches, 21);
-  assert.ok(
-    body._meta._hints.some((hint) => hint.includes("Review lookup was partial"))
-  );
+  assert.equal(body.reviewCoverage, "partial");
 });
 
 test("get_company_details excludes hidden products and keeps mixed-currency price ranges explicit", async () => {
   const response = await handleGetCompanyDetails(
-    { pubkey: sellerPubkey },
+    { sellerPubkey },
     context((filters) => {
       if (
         filters.some((filter) =>
@@ -361,7 +438,7 @@ test("get_company_details can return cached profiles when product and review rel
   const cache = new MemoryCache(60_000);
   const warmContext = context(sellerFetch, cache);
   const warmResponse = await handleGetCompanyDetails(
-    { pubkey: sellerPubkey },
+    { sellerPubkey },
     warmContext
   );
   assert.equal(warmResponse.isError, undefined);
@@ -370,7 +447,7 @@ test("get_company_details can return cached profiles when product and review rel
     throw new Error("relay down");
   }, cache);
   const response = await handleGetCompanyDetails(
-    { pubkey: sellerPubkey },
+    { sellerPubkey },
     degradedContext
   );
   const body = JSON.parse(response.content[0].text);
@@ -378,30 +455,32 @@ test("get_company_details can return cached profiles when product and review rel
   assert.equal(response.isError, undefined);
   assert.equal(body.shopProfile.name, "Fresh Shop");
   assert.equal(body.userProfile.name, "Fresh Seller");
-  assert.equal(body.products.count, 0);
-  assert.equal(body.reviews.count, 0);
-  assert.equal(body._meta.degraded, true);
+  assert.equal(body.products.count, 1);
+  assert.equal(body.reviews.count, 1);
+  assert.equal(body._meta.degraded, false);
   assert.deepEqual(body._meta.cached, {
     userProfile: true,
     shopProfile: true,
+    products: true,
+    reviews: true,
   });
 });
 
 test("get_company_details accepts npub input via pubkeySchema", async () => {
   const npub = nip19.npubEncode(sellerPubkey);
   const response = await handleGetCompanyDetails(
-    { pubkey: npub },
+    { sellerPubkey: npub },
     context(sellerFetch)
   );
   const body = JSON.parse(response.content[0].text);
 
-  assert.equal(body.pubkey, sellerPubkey);
+  assert.equal(body.sellerPubkey, sellerPubkey);
   assert.equal(body.shopProfile.name, "Fresh Shop");
 });
 
 test("get_company_details returns NOT_FOUND for unknown pubkey", async () => {
   const response = await handleGetCompanyDetails(
-    { pubkey: hex("f") },
+    { sellerPubkey: hex("f") },
     context(() => [])
   );
   const body = JSON.parse(response.content[0].text);
@@ -412,48 +491,13 @@ test("get_company_details returns NOT_FOUND for unknown pubkey", async () => {
 
 test("get_company_details rejects invalid pubkey", async () => {
   const response = await handleGetCompanyDetails(
-    { pubkey: "not-a-valid-key" },
+    { sellerPubkey: "not-a-valid-key" },
     context(() => [])
   );
   const body = JSON.parse(response.content[0].text);
 
   assert.equal(response.isError, true);
   assert.equal(body.errorCode, "VALIDATION_ERROR");
-});
-
-// ─── get_storefront ──────────────────────────────────────────────────
-
-test("get_storefront requires pubkey and returns storefront data", async () => {
-  const response = await handleGetStorefront(
-    { pubkey: sellerPubkey },
-    context(sellerFetch)
-  );
-  const body = JSON.parse(response.content[0].text);
-
-  assert.equal(body.pubkey, sellerPubkey);
-  assert.equal(body.storefront.shopSlug, "fresh-shop");
-  assert.equal(body.storefront.storefrontUrl, "/shop/fresh-shop");
-  assert.equal(body.storefront.customDomain, null);
-  assert.equal(body.products.count, 1);
-});
-
-test("get_storefront rejects missing pubkey", async () => {
-  const response = await handleGetStorefront({}, context(sellerFetch));
-  const body = JSON.parse(response.content[0].text);
-
-  assert.equal(response.isError, true);
-  assert.equal(body.errorCode, "VALIDATION_ERROR");
-});
-
-test("get_storefront returns NOT_FOUND for unknown pubkey", async () => {
-  const response = await handleGetStorefront(
-    { pubkey: hex("f") },
-    context(() => [])
-  );
-  const body = JSON.parse(response.content[0].text);
-
-  assert.equal(response.isError, true);
-  assert.equal(body.errorCode, "NOT_FOUND");
 });
 
 // ─── get_seller_reputation ───────────────────────────────────────────
@@ -744,9 +788,7 @@ test("get_seller_reputation caps product-address review filters and reports part
     reviewFilters.some((filter) => filter["#p"]?.includes(sellerPubkey)),
     true
   );
-  assert.ok(
-    body._meta._hints.some((hint) => hint.includes("Review lookup was partial"))
-  );
+  assert.equal(body.reviewCoverage, "partial");
 });
 
 test("get_seller_reputation returns NOT_FOUND for unknown seller", async () => {

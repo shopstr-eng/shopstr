@@ -31,6 +31,8 @@ function context(eventsByRelay) {
     relays: Object.keys(eventsByRelay),
     timeoutMs: 100,
     cache: new MemoryCache(0),
+    categoryCache: new MemoryCache(60_000),
+    maxConcurrentRequests: 10,
     nostr: {
       async fetch(_filters, _params, relayUrls) {
         const relay = relayUrls[0];
@@ -120,6 +122,8 @@ test("search_products pushes category down to relay with #t filter", async () =>
     relays: ["wss://relay.example.com"],
     timeoutMs: 100,
     cache: new MemoryCache(0),
+    categoryCache: new MemoryCache(60_000),
+    maxConcurrentRequests: 10,
     nostr: {
       async fetch(filters) {
         capturedFilters = filters;
@@ -160,6 +164,8 @@ test("search_products falls back to broad query when #t category returns no matc
     relays: ["wss://relay.example.com"],
     timeoutMs: 100,
     cache: new MemoryCache(0),
+    categoryCache: new MemoryCache(60_000),
+    maxConcurrentRequests: 10,
     nostr: {
       async fetch(filters) {
         fetchCallCount++;
@@ -189,6 +195,8 @@ test("search_products falls back to broad query when #t category returns no matc
 
   assert.equal(fetchCallCount, 2, "should try targeted then fallback");
   assert.equal(body.count, 1);
+  assert.equal(body._meta.usedFallbackQuery, true);
+  assert.equal(body._meta.eventCount, 1);
 });
 
 test("search_products excludes hidden products", async () => {
@@ -222,4 +230,42 @@ test("search_products excludes hidden products", async () => {
 
   assert.equal(body.count, 1);
   assert.equal(body.products[0].title, "Visible Product");
+});
+
+test("search_products disables until pagination cursor for price sorts", async () => {
+  const response = await handleSearchProducts(
+    { sortBy: "price_asc", limit: 1 },
+    context({
+      "wss://relay.example.com": [
+        productEvent({
+          id: hex("1"),
+          created_at: 10,
+          tags: [
+            ["d", "expensive"],
+            ["title", "Expensive Product"],
+            ["price", "20", "USD"],
+          ],
+        }),
+        productEvent({
+          id: hex("2"),
+          created_at: 20,
+          tags: [
+            ["d", "cheap"],
+            ["title", "Cheap Product"],
+            ["price", "5", "USD"],
+          ],
+        }),
+      ],
+    })
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.count, 1);
+  assert.equal(body.products[0].title, "Cheap Product");
+  assert.equal(body._pagination.oldestCreatedAt, null);
+  assert.equal(body._pagination.hasMore, false);
+  assert.equal(
+    body._meta._hints.some((hint) => hint.includes("Price-sorted search")),
+    true
+  );
 });
