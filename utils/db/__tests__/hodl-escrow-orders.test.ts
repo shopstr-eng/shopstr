@@ -269,4 +269,361 @@ describe("hodl escrow order commitments", () => {
       expect(releaseMock).toHaveBeenCalled();
     });
   });
+
+  describe("getHodlEscrowOrderStatus", () => {
+    it("returns the stored status", async () => {
+      queryMock.mockResolvedValueOnce({
+        rowCount: 1,
+        rows: [{ status: "accepted" }],
+      });
+
+      await expect(
+        dbService.getHodlEscrowOrderStatus(PAYMENT_HASH)
+      ).resolves.toBe("accepted");
+    });
+
+    it("returns null for an unregistered payment hash", async () => {
+      queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+      await expect(
+        dbService.getHodlEscrowOrderStatus(PAYMENT_HASH)
+      ).resolves.toBeNull();
+    });
+
+    it("looks up the lowercased payment hash", async () => {
+      queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+      await dbService.getHodlEscrowOrderStatus(PAYMENT_HASH.toUpperCase());
+
+      const [, values] = queryMock.mock.calls[0];
+      expect(values).toEqual([PAYMENT_HASH]);
+    });
+  });
+
+  describe("updateHodlEscrowOrderStatusIfAdvancing", () => {
+    /**
+     * Stands in for the transaction: BEGIN, the row-locking SELECT, then
+     * either an UPDATE + COMMIT (if the caller's test also queues one) or
+     * just COMMIT.
+     */
+    function queueSelectedStatus(status: string) {
+      queryMock
+        .mockResolvedValueOnce({ rowCount: 0, rows: [] }) // BEGIN
+        .mockResolvedValueOnce({ rowCount: 1, rows: [{ status }] }); // SELECT ... FOR UPDATE
+    }
+
+    it.each([
+      ["open", "accepted"],
+      ["open", "cancelled"],
+      ["open", "settled"],
+      ["accepted", "settled"],
+      ["accepted", "cancelled"],
+    ] as const)(
+      "advances %s to %s and writes the new status",
+      async (from, to) => {
+        queueSelectedStatus(from);
+        queryMock.mockResolvedValueOnce({ rowCount: 1, rows: [] }); // UPDATE
+        queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] }); // COMMIT
+
+        const result = await dbService.updateHodlEscrowOrderStatusIfAdvancing(
+          PAYMENT_HASH,
+          to
+        );
+
+        expect(result).toBe(to);
+        const updateCall = queryMock.mock.calls.find(([sql]) =>
+          String(sql).includes("UPDATE hodl_escrow_orders")
+        );
+        expect(updateCall).toBeDefined();
+        expect(updateCall![1]).toEqual([PAYMENT_HASH, to]);
+      }
+    );
+
+    describe("accepted_at stamping", () => {
+      it("sets accepted_at in the same statement on open -> accepted", async () => {
+        queueSelectedStatus("open");
+        queryMock.mockResolvedValueOnce({ rowCount: 1, rows: [] }); // UPDATE
+        queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] }); // COMMIT
+
+        await dbService.updateHodlEscrowOrderStatusIfAdvancing(
+          PAYMENT_HASH,
+          "accepted"
+        );
+
+        const updateCall = queryMock.mock.calls.find(([sql]) =>
+          String(sql).includes("UPDATE hodl_escrow_orders")
+        );
+        expect(updateCall).toBeDefined();
+        const [updateSql, updateValues] = updateCall!;
+        expect(String(updateSql)).toContain("accepted_at = CURRENT_TIMESTAMP");
+        // Still a single UPDATE statement — accepted_at is not a bindable
+        // parameter, it comes from the same CURRENT_TIMESTAMP as the write.
+        expect(updateValues).toEqual([PAYMENT_HASH, "accepted"]);
+      });
+
+      it.each([
+        ["open", "cancelled"],
+        ["open", "settled"],
+        ["accepted", "settled"],
+        ["accepted", "cancelled"],
+      ] as const)("never touches accepted_at on %s -> %s", async (from, to) => {
+        queueSelectedStatus(from);
+        queryMock.mockResolvedValueOnce({ rowCount: 1, rows: [] }); // UPDATE
+        queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] }); // COMMIT
+
+        await dbService.updateHodlEscrowOrderStatusIfAdvancing(
+          PAYMENT_HASH,
+          to
+        );
+
+        const updateCall = queryMock.mock.calls.find(([sql]) =>
+          String(sql).includes("UPDATE hodl_escrow_orders")
+        );
+        expect(updateCall).toBeDefined();
+        expect(String(updateCall![0])).not.toContain("accepted_at");
+      });
+
+      it("does not write accepted_at when the row is already accepted (no-op)", async () => {
+        queueSelectedStatus("accepted");
+        queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] }); // COMMIT
+
+        await dbService.updateHodlEscrowOrderStatusIfAdvancing(
+          PAYMENT_HASH,
+          "accepted"
+        );
+
+        expect(
+          queryMock.mock.calls.some(([sql]) =>
+            String(sql).includes("UPDATE hodl_escrow_orders")
+          )
+        ).toBe(false);
+      });
+    });
+
+    it.each([
+      ["settled", "open"],
+      ["settled", "accepted"],
+      ["settled", "cancelled"],
+      ["cancelled", "open"],
+      ["cancelled", "accepted"],
+      ["cancelled", "settled"],
+      ["accepted", "open"],
+    ] as const)(
+      "refuses to move %s to %s and leaves the row untouched",
+      async (from, to) => {
+        queueSelectedStatus(from);
+        queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] }); // COMMIT
+
+        const result = await dbService.updateHodlEscrowOrderStatusIfAdvancing(
+          PAYMENT_HASH,
+          to
+        );
+
+        expect(result).toBe(from);
+        expect(
+          queryMock.mock.calls.some(([sql]) =>
+            String(sql).includes("UPDATE hodl_escrow_orders")
+          )
+        ).toBe(false);
+      }
+    );
+
+    it("is a no-op when the requested status is already current", async () => {
+      queueSelectedStatus("accepted");
+      queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] }); // COMMIT
+
+      const result = await dbService.updateHodlEscrowOrderStatusIfAdvancing(
+        PAYMENT_HASH,
+        "accepted"
+      );
+
+      expect(result).toBe("accepted");
+      expect(
+        queryMock.mock.calls.some(([sql]) =>
+          String(sql).includes("UPDATE hodl_escrow_orders")
+        )
+      ).toBe(false);
+    });
+
+    it("returns not-found when no row matches, without writing anything", async () => {
+      queryMock
+        .mockResolvedValueOnce({ rowCount: 0, rows: [] }) // BEGIN
+        .mockResolvedValueOnce({ rowCount: 0, rows: [] }) // SELECT ... FOR UPDATE, no row
+        .mockResolvedValueOnce({ rowCount: 0, rows: [] }); // COMMIT
+
+      const result = await dbService.updateHodlEscrowOrderStatusIfAdvancing(
+        PAYMENT_HASH,
+        "accepted"
+      );
+
+      expect(result).toBe("not-found");
+    });
+
+    it("locks the row with SELECT ... FOR UPDATE inside a transaction", async () => {
+      queueSelectedStatus("open");
+      queryMock.mockResolvedValueOnce({ rowCount: 1, rows: [] }); // UPDATE
+      queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] }); // COMMIT
+
+      await dbService.updateHodlEscrowOrderStatusIfAdvancing(
+        PAYMENT_HASH,
+        "accepted"
+      );
+
+      const calls = queryMock.mock.calls.map(([sql]) => String(sql));
+      expect(calls[0]).toBe("BEGIN");
+      expect(calls[1]).toContain("FOR UPDATE");
+      expect(calls[calls.length - 1]).toBe("COMMIT");
+    });
+
+    it("rolls back and rethrows when the transaction fails", async () => {
+      queryMock
+        .mockResolvedValueOnce({ rowCount: 0, rows: [] }) // BEGIN
+        .mockRejectedValueOnce(new Error("db down")); // SELECT ... FOR UPDATE
+      queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] }); // ROLLBACK
+
+      await expect(
+        dbService.updateHodlEscrowOrderStatusIfAdvancing(
+          PAYMENT_HASH,
+          "accepted"
+        )
+      ).rejects.toThrow("db down");
+
+      expect(
+        queryMock.mock.calls.some(([sql]) => String(sql) === "ROLLBACK")
+      ).toBe(true);
+      expect(releaseMock).toHaveBeenCalled();
+    });
+
+    it("normalizes a mixed-case payment hash", async () => {
+      queueSelectedStatus("open");
+      queryMock.mockResolvedValueOnce({ rowCount: 1, rows: [] }); // UPDATE
+      queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] }); // COMMIT
+
+      await dbService.updateHodlEscrowOrderStatusIfAdvancing(
+        PAYMENT_HASH.toUpperCase(),
+        "accepted"
+      );
+
+      const [, selectValues] = queryMock.mock.calls[1];
+      expect(selectValues).toEqual([PAYMENT_HASH]);
+    });
+  });
+
+  describe("listPendingHodlEscrowOrderPaymentHashes", () => {
+    it("queries only open and accepted rows", async () => {
+      queryMock.mockResolvedValueOnce({
+        rowCount: 2,
+        rows: [
+          { payment_hash: PAYMENT_HASH },
+          { payment_hash: "d".repeat(64) },
+        ],
+      });
+
+      const hashes = await dbService.listPendingHodlEscrowOrderPaymentHashes();
+
+      expect(hashes).toEqual([PAYMENT_HASH, "d".repeat(64)]);
+      const [sql] = queryMock.mock.calls[0];
+      expect(sql).toContain("WHERE status IN ('open', 'accepted')");
+    });
+
+    it("returns an empty list when nothing is pending", async () => {
+      queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+      await expect(
+        dbService.listPendingHodlEscrowOrderPaymentHashes()
+      ).resolves.toEqual([]);
+    });
+
+    it("releases the client when the query fails", async () => {
+      queryMock.mockRejectedValueOnce(new Error("db down"));
+
+      await expect(
+        dbService.listPendingHodlEscrowOrderPaymentHashes()
+      ).rejects.toThrow("db down");
+
+      expect(releaseMock).toHaveBeenCalled();
+    });
+  });
+
+  describe("getHodlEscrowOrderDisputeContext", () => {
+    it("returns the parties and accepted_at", async () => {
+      const acceptedAt = new Date("2026-08-05T12:00:00.000Z");
+      queryMock.mockResolvedValueOnce({
+        rowCount: 1,
+        rows: [
+          {
+            buyer_nostr_pubkey: registration.buyerNostrPubkey,
+            seller_nostr_pubkey: registration.sellerNostrPubkey,
+            accepted_at: acceptedAt,
+          },
+        ],
+      });
+
+      const context =
+        await dbService.getHodlEscrowOrderDisputeContext(PAYMENT_HASH);
+
+      expect(context).toEqual({
+        buyerNostrPubkey: registration.buyerNostrPubkey,
+        sellerNostrPubkey: registration.sellerNostrPubkey,
+        acceptedAt,
+      });
+    });
+
+    it("returns a null acceptedAt for an order never accepted", async () => {
+      queryMock.mockResolvedValueOnce({
+        rowCount: 1,
+        rows: [
+          {
+            buyer_nostr_pubkey: registration.buyerNostrPubkey,
+            seller_nostr_pubkey: registration.sellerNostrPubkey,
+            accepted_at: null,
+          },
+        ],
+      });
+
+      const context =
+        await dbService.getHodlEscrowOrderDisputeContext(PAYMENT_HASH);
+
+      expect(context?.acceptedAt).toBeNull();
+    });
+
+    it("never selects the preimage", async () => {
+      queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+      await dbService.getHodlEscrowOrderDisputeContext(PAYMENT_HASH);
+
+      const [sql] = queryMock.mock.calls[0];
+      expect(sql).not.toContain("preimage");
+      expect(sql).not.toContain("*");
+    });
+
+    it("looks up the lowercased payment hash", async () => {
+      queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+      await dbService.getHodlEscrowOrderDisputeContext(
+        PAYMENT_HASH.toUpperCase()
+      );
+
+      const [, values] = queryMock.mock.calls[0];
+      expect(values).toEqual([PAYMENT_HASH]);
+    });
+
+    it("returns null for an unregistered payment hash", async () => {
+      queryMock.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+      await expect(
+        dbService.getHodlEscrowOrderDisputeContext(PAYMENT_HASH)
+      ).resolves.toBeNull();
+    });
+
+    it("releases the client when the lookup fails", async () => {
+      queryMock.mockRejectedValueOnce(new Error("db down"));
+
+      await expect(
+        dbService.getHodlEscrowOrderDisputeContext(PAYMENT_HASH)
+      ).rejects.toThrow("db down");
+
+      expect(releaseMock).toHaveBeenCalled();
+    });
+  });
 });

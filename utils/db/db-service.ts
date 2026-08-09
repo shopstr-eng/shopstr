@@ -2090,6 +2090,214 @@ export async function markHodlEscrowOrderCancelled(
   }
 }
 
+/**
+ * The lifecycle states a hold-invoice escrow order's `status` column can
+ * hold. Kept local to this module rather than imported from
+ * utils/lightning/hodl-invoice-provider.ts, on the same reasoning as the rest
+ * of this file's hodl escrow section: nothing here reaches into the
+ * Lightning provider layer.
+ */
+export type HodlEscrowOrderStatus =
+  "open" | "accepted" | "settled" | "cancelled";
+
+/**
+ * Reads the current status of a hold-invoice escrow order.
+ *
+ * @returns null when no commitment row exists.
+ */
+export async function getHodlEscrowOrderStatus(
+  paymentHash: string
+): Promise<HodlEscrowOrderStatus | null> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    const result = await client.query<{ status: HodlEscrowOrderStatus }>(
+      `SELECT status
+       FROM hodl_escrow_orders
+       WHERE payment_hash = $1`,
+      [paymentHash.toLowerCase()]
+    );
+    return result.rows[0]?.status ?? null;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Every status transition {@link updateHodlEscrowOrderStatusIfAdvancing} will
+ * actually write. `settled` and `cancelled` map to an empty set: once a row
+ * reaches either, nothing — including a stale provider read claiming
+ * `open` — can move it anywhere else.
+ */
+const HODL_ADVANCING_TRANSITIONS: Record<
+  HodlEscrowOrderStatus,
+  ReadonlySet<HodlEscrowOrderStatus>
+> = {
+  open: new Set(["accepted", "settled", "cancelled"]),
+  accepted: new Set(["settled", "cancelled"]),
+  settled: new Set(),
+  cancelled: new Set(),
+};
+
+/**
+ * Moves a hold-invoice escrow order's status forward to `newStatus`, or
+ * leaves it untouched if that would not be a forward move.
+ *
+ * This is the one place that enforces the lifecycle's direction. Row-locked
+ * inside a transaction rather than a bare `UPDATE ... WHERE status = ...`, so
+ * that two concurrent syncs reading the same stale row cannot both decide a
+ * transition is legal and race to apply it — the second transaction blocks on
+ * the `FOR UPDATE` lock and re-checks the (by then updated) status before
+ * writing anything.
+ *
+ * @returns the row's status after this call — `newStatus` if the transition
+ * was applied, the unchanged current status if it was not a legal forward
+ * move (including "already `newStatus`"), or "not-found" if no row matched.
+ *
+ * `open` -> `accepted` also stamps `accepted_at` with the current time, in
+ * this same statement rather than a follow-up write: it is the one moment
+ * that transition happens, and folding it into the same UPDATE means there
+ * is never a window where `status = 'accepted'` is visible with
+ * `accepted_at` still null. No other transition touches the column.
+ */
+export async function updateHodlEscrowOrderStatusIfAdvancing(
+  paymentHash: string,
+  newStatus: HodlEscrowOrderStatus
+): Promise<HodlEscrowOrderStatus | "not-found"> {
+  const normalizedHash = paymentHash.toLowerCase();
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    await client.query("BEGIN");
+    const result = await client.query<{ status: HodlEscrowOrderStatus }>(
+      `SELECT status
+       FROM hodl_escrow_orders
+       WHERE payment_hash = $1
+       FOR UPDATE`,
+      [normalizedHash]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      await client.query("COMMIT");
+      return "not-found";
+    }
+
+    const currentStatus = row.status;
+    if (!HODL_ADVANCING_TRANSITIONS[currentStatus].has(newStatus)) {
+      await client.query("COMMIT");
+      return currentStatus;
+    }
+
+    if (currentStatus === "open" && newStatus === "accepted") {
+      await client.query(
+        `UPDATE hodl_escrow_orders
+         SET status = $2, accepted_at = CURRENT_TIMESTAMP
+         WHERE payment_hash = $1`,
+        [normalizedHash, newStatus]
+      );
+    } else {
+      await client.query(
+        `UPDATE hodl_escrow_orders
+         SET status = $2
+         WHERE payment_hash = $1`,
+        [normalizedHash, newStatus]
+      );
+    }
+    await client.query("COMMIT");
+    return newStatus;
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // Preserve the original database error.
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Payment hashes of every hold-invoice escrow order still in a non-terminal
+ * state (`open` or `accepted`).
+ *
+ * Feeds the batch sync sweep: a row that has already reached `settled` or
+ * `cancelled` never needs to be checked against the provider again, since
+ * {@link updateHodlEscrowOrderStatusIfAdvancing} would refuse to move it
+ * regardless.
+ */
+export async function listPendingHodlEscrowOrderPaymentHashes(): Promise<
+  string[]
+> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    const result = await client.query<{ payment_hash: string }>(
+      `SELECT payment_hash
+       FROM hodl_escrow_orders
+       WHERE status IN ('open', 'accepted')`
+    );
+    return result.rows.map((row) => row.payment_hash);
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * The fields {@link evaluateHodlDisputeActionability} in
+ * utils/nostr/hodl-dispute-actionability.ts needs to tell who filed a
+ * dispute and, if it was the seller, how long the buyer's payment has been
+ * held. No `arbiterNostrPubkey` and no `status` — this is a narrower cut than
+ * {@link HodlEscrowOrderParties} for exactly the one caller that needs
+ * `acceptedAt` alongside the parties.
+ */
+export type HodlEscrowOrderDisputeContext = {
+  buyerNostrPubkey: string;
+  sellerNostrPubkey: string;
+  /** Null until status first transitions open -> accepted; see the column comment in db/schema.sql. */
+  acceptedAt: Date | null;
+};
+
+/**
+ * Loads the parties and acceptance timing committed to a payment hash, or
+ * null when no commitment row exists.
+ */
+export async function getHodlEscrowOrderDisputeContext(
+  paymentHash: string
+): Promise<HodlEscrowOrderDisputeContext | null> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    const result = await client.query<{
+      buyer_nostr_pubkey: string;
+      seller_nostr_pubkey: string;
+      accepted_at: Date | null;
+    }>(
+      `SELECT buyer_nostr_pubkey,
+              seller_nostr_pubkey,
+              accepted_at
+       FROM hodl_escrow_orders
+       WHERE payment_hash = $1`,
+      [paymentHash.toLowerCase()]
+    );
+
+    const row = result.rows[0];
+    if (!row) return null;
+
+    return {
+      buyerNostrPubkey: row.buyer_nostr_pubkey,
+      sellerNostrPubkey: row.seller_nostr_pubkey,
+      acceptedAt: row.accepted_at,
+    };
+  } finally {
+    client.release();
+  }
+}
+
 export async function getOrderParticipants(orderId: string): Promise<{
   buyerPubkey: string | null;
   sellerPubkey: string | null;
