@@ -233,6 +233,12 @@ CREATE TABLE IF NOT EXISTS hodl_escrow_orders (
     amount_sats BIGINT NOT NULL CHECK (amount_sats > 0),
     -- Mirrors HodlInvoiceStatus in utils/lightning/hodl-invoice-provider.ts.
     status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'accepted', 'settled', 'cancelled')),
+    -- Set exactly once, the moment status first transitions open -> accepted
+    -- (see updateHodlEscrowOrderStatusIfAdvancing in db-service.ts). Null
+    -- means the buyer's payment has never been accepted, which is what lets
+    -- evaluateHodlDisputeActionability tell "seller dispute filed before any
+    -- funds were locked" apart from "seller dispute filed too soon after".
+    accepted_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP NOT NULL
 );
