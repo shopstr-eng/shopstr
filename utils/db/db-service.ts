@@ -2060,6 +2060,36 @@ export async function markHodlEscrowOrderSettled(
   }
 }
 
+/**
+ * Records that an order's hold invoice has been cancelled, returning funds to
+ * the buyer. Same "call only after the provider confirms" contract as
+ * {@link markHodlEscrowOrderSettled}, and the same unconditional write: the
+ * row records what the Lightning node did, not what state it thinks it was
+ * transitioning from.
+ *
+ * @returns "not-found" when no row matched, so the caller can surface a
+ * cancelled invoice whose commitment has vanished instead of reporting
+ * success.
+ */
+export async function markHodlEscrowOrderCancelled(
+  paymentHash: string
+): Promise<"cancelled" | "not-found"> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    const result = await client.query(
+      `UPDATE hodl_escrow_orders
+       SET status = 'cancelled'
+       WHERE payment_hash = $1`,
+      [paymentHash.toLowerCase()]
+    );
+    return (result.rowCount ?? 0) > 0 ? "cancelled" : "not-found";
+  } finally {
+    client.release();
+  }
+}
+
 export async function getOrderParticipants(orderId: string): Promise<{
   buyerPubkey: string | null;
   sellerPubkey: string | null;

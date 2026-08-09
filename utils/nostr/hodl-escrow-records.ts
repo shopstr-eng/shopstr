@@ -14,6 +14,10 @@ import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions"
 // mistaken for the other by a filter that forgot to check a tag.
 export const HODL_CONFIRM_EVENT_KIND = 30408;
 export const HODL_RELEASE_EVENT_KIND = 30409;
+// Next free slot after 30409, continuing the same run. One shared kind for
+// both buyer- and seller-raised disputes — see createHodlDisputeEventTemplate
+// for why there is no separate kind, or tag, per role.
+export const HODL_DISPUTE_EVENT_KIND = 30410;
 
 // The `d` tag on both kinds is the hold invoice's payment hash, which is
 // 32 bytes of hex. Shape is checked here rather than imported from
@@ -310,7 +314,177 @@ export function parseHodlReleaseEvent(
 }
 
 // ---------------------------------------------------------------------------
-// 3. Seller-side lookup
+// 3. Dispute raised (kind 30410)
+// ---------------------------------------------------------------------------
+
+export interface ParsedHodlDisputeEvent {
+  /** The `d` tag: the hold invoice's payment hash, lowercased. */
+  orderId: string;
+  /**
+   * The pubkey that signed this event, and nothing more. Same caveat as
+   * {@link ParsedHodlConfirmEvent.authorPubkey}: this says only who signed,
+   * never whether that key is the order's buyer or seller.
+   *
+   * There is deliberately no `raisedBy` / `role` field anywhere on this type.
+   * Whether the dispute was raised by the buyer or the seller is not encoded
+   * in the event at all — the event is one shared kind that either party may
+   * publish, with no role tag — and is only ever decided later, by a caller
+   * comparing this pubkey against the order's stored `buyer_nostr_pubkey` /
+   * `seller_nostr_pubkey`. Adding a role tag here would just hand a forger a
+   * free "I am the buyer" claim; do not add one.
+   */
+  authorPubkey: string;
+  /** Free-text description of the issue. May be empty. */
+  description: string;
+  createdAt: number;
+}
+
+/**
+ * Builds the "I am disputing this order" event, signed by whoever publishes
+ * it — buyer or seller, indistinguishably as far as this function is
+ * concerned.
+ *
+ * `arbiterPubkey` becomes a bare `p` tag purely so the arbiter can discover
+ * the dispute by filtering `#p` on their own key, exactly as
+ * {@link createHodlReleaseEventTemplate}'s `p` tags exist for discovery and
+ * not as evidence. There is no `d`-tag role suffix, no second `p` tag for
+ * "who this is against", and no field anywhere naming a buyer or a seller.
+ */
+export function createHodlDisputeEventTemplate(params: {
+  paymentHash: string;
+  arbiterPubkey: string;
+  description?: string;
+  createdAt?: number;
+}): EventTemplate {
+  const {
+    paymentHash,
+    arbiterPubkey,
+    description = "",
+    createdAt = Math.floor(Date.now() / 1000),
+  } = params;
+
+  const orderId = normalizeOrderId(paymentHash);
+  if (!orderId) {
+    throw new Error(
+      "paymentHash must be 32 bytes of hex (64 characters) to be used as a hodl escrow d tag"
+    );
+  }
+  if (typeof arbiterPubkey !== "string" || arbiterPubkey.length === 0) {
+    throw new Error("arbiterPubkey is required to publish a dispute event");
+  }
+
+  return {
+    kind: HODL_DISPUTE_EVENT_KIND,
+    tags: [
+      ["d", orderId],
+      ["p", arbiterPubkey],
+    ],
+    content: description,
+    created_at: createdAt,
+  };
+}
+
+// Publishes a dispute. Same relay-only storage tradeoff as
+// publishHodlConfirmEvent above: kind 30410 is not in CACHEABLE_EVENT_KINDS,
+// so this waits for the relay publish rather than firing and forgetting.
+export async function publishHodlDisputeEvent(params: {
+  paymentHash: string;
+  arbiterPubkey: string;
+  description?: string;
+  nostr: NostrManager;
+  signer: NostrSigner;
+}): Promise<void> {
+  const { paymentHash, arbiterPubkey, description, nostr, signer } = params;
+
+  const event = createHodlDisputeEventTemplate({
+    paymentHash,
+    arbiterPubkey,
+    ...(description === undefined ? {} : { description }),
+  });
+
+  await finalizeAndSendNostrEvent(signer, nostr, event, {
+    waitForRelayPublish: true,
+    requireDurableCache: false,
+  });
+}
+
+/**
+ * Parses a candidate dispute event, or returns null if it is not one.
+ *
+ * Returns `authorPubkey` and never a role-named field, for the same reason
+ * documented on {@link ParsedHodlDisputeEvent.authorPubkey}: this answers only
+ * "is this a well-formed dispute, and who signed it?", never "was this raised
+ * by the buyer or the seller?". Any `p` tags on the raw event — the arbiter
+ * tag this module writes, or a forged extra one — are not surfaced here.
+ */
+export function parseHodlDisputeEvent(
+  event: NostrEvent
+): ParsedHodlDisputeEvent | null {
+  if (!event || event.kind !== HODL_DISPUTE_EVENT_KIND) return null;
+  if (typeof event.pubkey !== "string" || event.pubkey.length === 0) {
+    return null;
+  }
+  if (typeof event.created_at !== "number") return null;
+
+  const orderId = normalizeOrderId(getDTag(event));
+  if (!orderId) return null;
+
+  return {
+    orderId,
+    authorPubkey: event.pubkey,
+    description: typeof event.content === "string" ? event.content : "",
+    createdAt: event.created_at,
+  };
+}
+
+/**
+ * Fetches every well-formed dispute event relays hold for an arbiter.
+ *
+ * This is read-only discovery for the arbiter's own dashboard, not
+ * authorization, and nothing here decides anything about money: the results
+ * may include garbage or forged entries — anyone can publish a kind 30410
+ * event tagging any arbiter pubkey they like — and it is entirely expected
+ * for this to return them without erroring. A caller that wants to act on a
+ * dispute must still authorize the party raising it against the order's
+ * committed buyer/seller, the same way {@link fetchHodlConfirmEvents}'
+ * results require {@link authorizeHodlConfirmEventForOrder} before anything
+ * downstream may trust them.
+ */
+export async function fetchHodlDisputeEvents(params: {
+  nostr: NostrManager;
+  arbiterPubkey: string;
+  timeoutMs?: number;
+}): Promise<ParsedHodlDisputeEvent[]> {
+  const { nostr, arbiterPubkey, timeoutMs } = params;
+
+  if (typeof arbiterPubkey !== "string" || arbiterPubkey.length === 0) {
+    return [];
+  }
+
+  const events = await nostr
+    .fetch(
+      [{ kinds: [HODL_DISPUTE_EVENT_KIND], "#p": [arbiterPubkey] }],
+      undefined,
+      undefined,
+      timeoutMs
+    )
+    .catch(() => [] as NostrEvent[]);
+
+  const disputes: ParsedHodlDisputeEvent[] = [];
+  for (const event of events) {
+    if (!verifyEvent(event)) continue;
+
+    const parsed = parseHodlDisputeEvent(event);
+    if (!parsed) continue;
+
+    disputes.push(parsed);
+  }
+
+  return disputes.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+// ---------------------------------------------------------------------------
+// 4. Seller-side lookup
 // ---------------------------------------------------------------------------
 
 /**
@@ -352,6 +526,59 @@ export async function fetchHodlConfirmEvents(params: {
     if (!verifyEvent(event)) continue;
 
     const parsed = parseHodlConfirmEvent(event);
+    // Relays are not obliged to honour the filter; re-check the d tag rather
+    // than trusting that everything returned belongs to this order.
+    if (!parsed || parsed.orderId !== orderId) continue;
+
+    const existing = newestByAuthor.get(parsed.authorPubkey);
+    if (!existing || parsed.createdAt > existing.createdAt) {
+      newestByAuthor.set(parsed.authorPubkey, parsed);
+    }
+  }
+
+  return Array.from(newestByAuthor.values()).sort(
+    (a, b) => b.createdAt - a.createdAt
+  );
+}
+
+/**
+ * Fetches every well-formed arbiter ruling relays hold for a payment hash.
+ *
+ * Same read-only, non-authoritative contract as {@link fetchHodlConfirmEvents}:
+ * a result here means "somebody published a kind 30409 ruling for this
+ * order", not "the arbiter ruled" — anyone can sign one. Callers must run
+ * each candidate through {@link authorizeHodlReleaseEventForOrder} before
+ * acting on it.
+ *
+ * Deduplicated per author, newest wins, for the same reason as
+ * {@link fetchHodlConfirmEvents}: collapsing to a single newest-overall event
+ * would let an unrelated pubkey's later timestamp hide the genuine arbiter's
+ * ruling from the caller entirely.
+ */
+export async function fetchHodlReleaseEvents(params: {
+  nostr: NostrManager;
+  paymentHash: string;
+  timeoutMs?: number;
+}): Promise<ParsedHodlReleaseEvent[]> {
+  const { nostr, paymentHash, timeoutMs } = params;
+
+  const orderId = normalizeOrderId(paymentHash);
+  if (!orderId) return [];
+
+  const events = await nostr
+    .fetch(
+      [{ kinds: [HODL_RELEASE_EVENT_KIND], "#d": [orderId] }],
+      undefined,
+      undefined,
+      timeoutMs
+    )
+    .catch(() => [] as NostrEvent[]);
+
+  const newestByAuthor = new Map<string, ParsedHodlReleaseEvent>();
+  for (const event of events) {
+    if (!verifyEvent(event)) continue;
+
+    const parsed = parseHodlReleaseEvent(event);
     // Relays are not obliged to honour the filter; re-check the d tag rather
     // than trusting that everything returned belongs to this order.
     if (!parsed || parsed.orderId !== orderId) continue;
