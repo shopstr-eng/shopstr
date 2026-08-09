@@ -41,7 +41,7 @@
   "license": "GPL-3.0-only",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "nostr-tools": "^2.23.3",
+    "nostr-tools": "2.23.3",
     "zod": "^4.0.0"
   },
   "devDependencies": {
