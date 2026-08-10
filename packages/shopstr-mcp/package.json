@@ -29,7 +29,7 @@
     "test": "npm run build && node --test test/*.node.mjs test/tools/*.node.mjs"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.4.0"
   },
   "keywords": [
     "shopstr",
@@ -41,7 +41,7 @@
   "license": "GPL-3.0-only",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "nostr-tools": "2.23.3",
+    "nostr-tools": "2.23.9",
     "zod": "^4.0.0"
   },
   "devDependencies": {

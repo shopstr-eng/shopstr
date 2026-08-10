@@ -34,6 +34,27 @@ jobs:
       - name: Run Jest with coverage thresholds
         run: npm run test:coverage
 
+  mcp:
+    name: MCP package tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22.x"
+          cache: npm
+          cache-dependency-path: packages/shopstr-mcp/package-lock.json
+
+      - name: Install MCP package dependencies
+        run: npm ci --prefix packages/shopstr-mcp
+
+      - name: Run MCP package tests
+        run: npm --prefix packages/shopstr-mcp test
+
   integration:
     name: Integration tests
     runs-on: ubuntu-latest
