@@ -12,8 +12,23 @@ function isBetterEvent(candidate: NostrEvent, existing: NostrEvent): boolean {
   if (candidateFuture && !existingFuture) return false;
   if (!candidateFuture && existingFuture) return true;
 
-  // Both same bucket - newest wins
-  return candidate.created_at > existing.created_at;
+  // Both same bucket - newest wins, then the lowest event ID for stable ties.
+  return (
+    candidate.created_at > existing.created_at ||
+    (candidate.created_at === existing.created_at && candidate.id < existing.id)
+  );
+}
+
+function compareNewestThenId(a: NostrEvent, b: NostrEvent): number {
+  return (
+    b.created_at - a.created_at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+  );
+}
+
+export function sortEventsNewestFirst(
+  events: readonly NostrEvent[]
+): NostrEvent[] {
+  return [...events].sort(compareNewestThenId);
 }
 
 export function getDTag(event: NostrEvent): string | undefined {
@@ -32,16 +47,30 @@ export function getParameterizedReplaceableCoordinate(
   return `${event.kind}:${event.pubkey}:${dTag}`;
 }
 
+export function getProductLogicalIdentity(event: NostrEvent): string {
+  return event.kind === 30402
+    ? (getParameterizedReplaceableCoordinate(event) ?? event.id)
+    : event.id;
+}
+
+export function getProfileLogicalIdentity(event: NostrEvent): string {
+  return `${event.kind}:${event.pubkey}`;
+}
+
+export function getReviewLogicalIdentity(event: NostrEvent): string {
+  const target = getReviewTarget(event);
+  return event.kind === 31555 && target
+    ? `${event.pubkey}:${target}`
+    : event.id;
+}
+
 export function mergeAndDeduplicateProducts(
   events: readonly NostrEvent[]
 ): NostrEvent[] {
   const byCoordinate = new Map<string, NostrEvent>();
 
   for (const event of events) {
-    const coordinate =
-      event.kind === 30402
-        ? (getParameterizedReplaceableCoordinate(event) ?? event.id)
-        : event.id;
+    const coordinate = getProductLogicalIdentity(event);
     const existing = byCoordinate.get(coordinate);
     if (!existing || isBetterEvent(event, existing)) {
       byCoordinate.set(coordinate, event);
@@ -55,7 +84,7 @@ export function mergeAndDeduplicateProducts(
     }
   }
 
-  return Array.from(byId.values()).sort((a, b) => b.created_at - a.created_at);
+  return Array.from(byId.values()).sort(compareNewestThenId);
 }
 
 export function mergeAndDeduplicateReviews(
@@ -64,9 +93,7 @@ export function mergeAndDeduplicateReviews(
   const latestByReviewerAndTarget = new Map<string, NostrEvent>();
 
   for (const event of events) {
-    const target = getReviewTarget(event);
-    const coordinate =
-      event.kind === 31555 && target ? `${event.pubkey}:${target}` : event.id;
+    const coordinate = getReviewLogicalIdentity(event);
     const existing = latestByReviewerAndTarget.get(coordinate);
     if (!existing || isBetterEvent(event, existing)) {
       latestByReviewerAndTarget.set(coordinate, event);
@@ -80,7 +107,7 @@ export function mergeAndDeduplicateReviews(
     }
   }
 
-  return Array.from(byId.values()).sort((a, b) => b.created_at - a.created_at);
+  return Array.from(byId.values()).sort(compareNewestThenId);
 }
 
 export function mergeAndDeduplicateProfiles(
@@ -89,16 +116,14 @@ export function mergeAndDeduplicateProfiles(
   const byKindAndAuthor = new Map<string, NostrEvent>();
 
   for (const event of events) {
-    const key = `${event.kind}:${event.pubkey}`;
+    const key = getProfileLogicalIdentity(event);
     const existing = byKindAndAuthor.get(key);
     if (!existing || isBetterEvent(event, existing)) {
       byKindAndAuthor.set(key, event);
     }
   }
 
-  return Array.from(byKindAndAuthor.values()).sort(
-    (a, b) => b.created_at - a.created_at
-  );
+  return Array.from(byKindAndAuthor.values()).sort(compareNewestThenId);
 }
 
 function getReviewTarget(event: NostrEvent): string | undefined {

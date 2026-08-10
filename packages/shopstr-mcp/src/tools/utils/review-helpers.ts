@@ -16,6 +16,30 @@ export function hasProductAddress(
   );
 }
 
+export function hasCanonicalProductAddress(
+  event: NostrEvent,
+  productAddress: string
+): boolean {
+  return hasTag(event, "a", productAddress);
+}
+
+export function reviewMatchConfidence(
+  event: NostrEvent,
+  productAddresses: readonly string[]
+): "exact" | "legacy_fallback" {
+  return productAddresses.some((address) =>
+    hasCanonicalProductAddress(event, address)
+  )
+    ? "exact"
+    : "legacy_fallback";
+}
+
+export function confidenceField(
+  confidence: "exact" | "legacy_fallback"
+): "legacy_fallback" | undefined {
+  return confidence === "legacy_fallback" ? confidence : undefined;
+}
+
 export function eventReferencesSeller(
   event: NostrEvent,
   sellerPubkey: string

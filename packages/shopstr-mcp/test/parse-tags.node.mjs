@@ -147,6 +147,25 @@ test("caps categories at 20", () => {
   assert.equal(product.categories.length, 20);
 });
 
+test("rejects hostile category tags before applying the 20-tag cap", () => {
+  const validCategories = Array.from(
+    { length: 21 },
+    (_, index) => `category-${index}`
+  );
+  const product = parseProductEvent(
+    event({
+      tags: [
+        ["t", "nul\0category"],
+        ["t", "control\u0001category"],
+        ["t", "x".repeat(101)],
+        ...validCategories.map((category) => ["t", category]),
+      ],
+    })
+  );
+
+  assert.deepEqual(product.categories, validCategories.slice(0, 20));
+});
+
 test("parses Gamma subscription frequency from price tag 4th element", () => {
   const product = parseProductEvent(
     event({

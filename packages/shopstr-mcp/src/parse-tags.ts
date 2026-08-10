@@ -9,6 +9,7 @@ import type {
   ShippingOptionRef,
   ShippingOptionsType,
 } from "./types.js";
+import { getAcceptedCategoryTags } from "./category-tags.js";
 
 const SHIPPING_OPTIONS = [
   "N/A",
@@ -26,7 +27,6 @@ type ParsedShippingTag = {
 //  Maximum number of repeated tags we will extract per field.
 const TAG_CAPS = {
   image: 10,
-  t: 20,
   size: 50,
   volume: 50,
   weight: 50,
@@ -311,7 +311,9 @@ export function parseProductEvent(event: NostrEvent): ProductResponse {
     "pickup_location",
     TAG_CAPS.pickup_location
   );
-  const categories = getCappedTagValues(tags, "t", TAG_CAPS.t);
+  const categories = getAcceptedCategoryTags(tags).map(
+    (category) => category.raw
+  );
 
   const publishedAt = getTagValue(tags, "published_at");
   const expiration = parseNumber(getTagValue(tags, "valid_until"));
@@ -439,7 +441,10 @@ export function parseProfileEvent(event: NostrEvent): ProfileResponse {
   return response;
 }
 
-export function parseReviewEvent(event: NostrEvent): ReviewResponse {
+export function parseReviewEvent(
+  event: NostrEvent,
+  matchConfidence?: ReviewResponse["matchConfidence"]
+): ReviewResponse {
   const tags = event.tags || [];
   const ratings: Record<string, number> = {};
 
@@ -458,5 +463,6 @@ export function parseReviewEvent(event: NostrEvent): ReviewResponse {
     content: event.content,
     ratings,
     createdAt: event.created_at,
+    ...(matchConfidence && { matchConfidence }),
   };
 }
