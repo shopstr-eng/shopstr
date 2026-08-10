@@ -166,6 +166,7 @@ function emptyProductsResult(): SellerProductsResult {
 
 function emptyReviewsResult(): SellerReviewsResult {
   return {
+    events: [],
     reviews: [],
     returnedReviews: [],
     truncated: false,

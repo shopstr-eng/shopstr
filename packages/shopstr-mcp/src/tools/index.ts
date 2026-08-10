@@ -55,13 +55,13 @@ export function registerCoreTools(
     "search_products",
     {
       description:
-        "Search public Shopstr product listings by keyword, category, location, currency, price range, cursor timestamp, or price/newest sort. Use get_categories first when an agent needs observed category names. Hidden listings are excluded." +
+        "Search public Shopstr product listings by keyword, category, location, currency, price range, cursor pagination, or price/newest sort. Use get_categories first when an agent needs observed category names. Hidden listings are excluded. currency is required for price_asc and price_desc. Cursors are only supported with newest sorting; price-sorted searches reject cursors." +
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: searchProductsInputSchema,
     },
-    wrapWithRateLimit(
-      rateLimiter,
-      wrapWithAudit("search_products", (args, _extra) =>
+    wrapWithAudit(
+      "search_products",
+      wrapWithRateLimit(rateLimiter, (args, _extra) =>
         handleSearchProducts(args, context)
       )
     )
@@ -75,9 +75,9 @@ export function registerCoreTools(
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: getProductDetailsInputSchema,
     },
-    wrapWithRateLimit(
-      rateLimiter,
-      wrapWithAudit("get_product_details", (args, _extra) =>
+    wrapWithAudit(
+      "get_product_details",
+      wrapWithRateLimit(rateLimiter, (args, _extra) =>
         handleGetProductDetails(args, context)
       )
     )
@@ -87,13 +87,13 @@ export function registerCoreTools(
     "list_companies",
     {
       description:
-        "List public Shopstr seller/shop profiles, optionally paginated with until or filtered to sellers with at least one public product in a category. Use sellerPubkey from results with seller-specific tools." +
+        "List public Shopstr seller/shop profiles, optionally paginated with cursor or filtered to sellers with at least one public product in a category. Use sellerPubkey from results with seller-specific tools." +
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: listCompaniesInputSchema,
     },
-    wrapWithRateLimit(
-      rateLimiter,
-      wrapWithAudit("list_companies", (args, _extra) =>
+    wrapWithAudit(
+      "list_companies",
+      wrapWithRateLimit(rateLimiter, (args, _extra) =>
         handleListCompanies(args, context)
       )
     )
@@ -107,9 +107,9 @@ export function registerCoreTools(
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: getCompanyDetailsInputSchema,
     },
-    wrapWithRateLimit(
-      rateLimiter,
-      wrapWithAudit("get_company_details", (args, _extra) =>
+    wrapWithAudit(
+      "get_company_details",
+      wrapWithRateLimit(rateLimiter, (args, _extra) =>
         handleGetCompanyDetails(args, context)
       )
     )
@@ -119,13 +119,13 @@ export function registerCoreTools(
     "get_reviews",
     {
       description:
-        "Get public reviews for a Shopstr product or seller. Provide productAddress for exact product review lookup, productId for legacy event-id lookup, sellerPubkey for seller-wide lookup, and until for pagination." +
+        "Get public reviews for a Shopstr product or seller. Provide productAddress for exact product review lookup, productId for legacy event-id lookup, sellerPubkey for seller-wide lookup, and cursor for pagination." +
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: getReviewsInputSchema,
     },
-    wrapWithRateLimit(
-      rateLimiter,
-      wrapWithAudit("get_reviews", (args, _extra) =>
+    wrapWithAudit(
+      "get_reviews",
+      wrapWithRateLimit(rateLimiter, (args, _extra) =>
         handleGetReviews(args, context)
       )
     )
@@ -139,9 +139,9 @@ export function registerCoreTools(
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: getSellerReputationInputSchema,
     },
-    wrapWithRateLimit(
-      rateLimiter,
-      wrapWithAudit("get_seller_reputation", (args, _extra) =>
+    wrapWithAudit(
+      "get_seller_reputation",
+      wrapWithRateLimit(rateLimiter, (args, _extra) =>
         handleGetSellerReputation(args, context)
       )
     )
@@ -151,12 +151,13 @@ export function registerCoreTools(
     "get_categories",
     {
       description:
-        "Return product categories currently observed by this MCP instance from a cached, sampled scan of recent public products. This is best-effort discovery, not an exhaustive Nostr category catalog; normal product-fetching calls keep enriching the in-memory category variant registry.",
+        "Return product categories currently observed by this MCP instance from a cached, sampled scan of recent public products. This is best-effort discovery, not an exhaustive Nostr category catalog; normal product-fetching calls keep enriching the in-memory category variant registry." +
+        UNTRUSTED_CONTENT_NOTE,
       inputSchema: getCategoriesInputSchema,
     },
-    wrapWithRateLimit(
-      rateLimiter,
-      wrapWithAudit("get_categories", (args, _extra) =>
+    wrapWithAudit(
+      "get_categories",
+      wrapWithRateLimit(rateLimiter, (args, _extra) =>
         handleGetCategories(args, context)
       )
     )

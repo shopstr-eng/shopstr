@@ -69,6 +69,7 @@ export type SellerProductsResult = {
 };
 
 export type SellerReviewsResult = {
+  events: NostrEvent[];
   reviews: ReviewResponse[];
   returnedReviews: ReviewResponse[];
   truncated: boolean;
@@ -250,22 +251,22 @@ export async function fetchSellerReviews(
     }
   }
 
-  const reviews = mergeAndDeduplicateReviews(events)
-    .filter((event) =>
-      reviewMatchesSeller(event, sellerPubkey, allProductAddresses)
+  const reviewEvents = mergeAndDeduplicateReviews(events).filter((event) =>
+    reviewMatchesSeller(event, sellerPubkey, allProductAddresses)
+  );
+  const reviews = reviewEvents.map((event) =>
+    parseReviewEvent(
+      event,
+      confidenceField(reviewMatchConfidence(event, allProductAddresses))
     )
-    .map((event) =>
-      parseReviewEvent(
-        event,
-        confidenceField(reviewMatchConfidence(event, allProductAddresses))
-      )
-    );
+  );
   const returnedReviews = reviews.slice(0, REVIEW_RESPONSE_BUDGET);
 
   const reviewLookupPartial =
     allProductAddresses.length > REVIEW_PRODUCT_FILTER_LIMIT;
 
   return {
+    events: reviewEvents,
     reviews,
     returnedReviews,
     truncated: returnedReviews.length < reviews.length,

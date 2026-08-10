@@ -3,7 +3,7 @@ import { z } from "zod";
 export const DEFAULT_RELAYS = [
   "wss://nos.lol",
   "wss://relay.damus.io",
-  "wss://purplepag.es",
+  "wss://relay.nostr.band",
 ] as const;
 
 export const DEFAULT_TOOL_TIMEOUT_MS = 10_000;

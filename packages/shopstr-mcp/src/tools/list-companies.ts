@@ -1,12 +1,22 @@
 import { z } from "zod";
 
 import {
+  getProfileLogicalIdentity,
   mergeAndDeduplicateProducts,
   mergeAndDeduplicateProfiles,
+  sortEventsNewestFirst,
 } from "../dedup.js";
-import { createSuccessResponse, type ToolTextResponse } from "../errors.js";
+import {
+  createErrorResponse,
+  createSuccessResponse,
+  type ToolTextResponse,
+} from "../errors.js";
 import { parseProductEvent, parseProfileEvent } from "../parse-tags.js";
-import { fetchFromRelays } from "../relay-fetch.js";
+import {
+  fetchFromRelays,
+  getNewestSaturatedFilterBoundary,
+} from "../relay-fetch.js";
+import type { NostrEvent } from "../types.js";
 import { listCompaniesSchema } from "../validation.js";
 import {
   PRODUCT_KIND,
@@ -24,6 +34,17 @@ import {
 } from "./utils/common.js";
 import type { CoreToolContext } from "./utils/context.js";
 import { isPublicProduct } from "./utils/seller.js";
+import {
+  PaginationCursorError,
+  accumulatePaginationSeen,
+  applyPaginationCursor,
+  assertPaginationProgress,
+  createPaginationCursor,
+  createQueryFingerprint,
+  decodePaginationCursor,
+  getPaginatedRelayLimit,
+  type PaginationCursorState,
+} from "./utils/pagination-cursor.js";
 
 export const listCompaniesInputSchema = {
   limit: z
@@ -35,13 +56,12 @@ export const listCompaniesInputSchema = {
     .describe(
       `Requested seller count. Responses are capped at ${SELLER_LIST_RESPONSE_BUDGET} sellers for MCP token budgeting.`
     ),
-  until: z
-    .number()
-    .int()
-    .min(0)
+  cursor: z
+    .string()
+    .max(16_384)
     .optional()
     .describe(
-      "Unix timestamp. Only return profiles created at or before this time. Use for pagination by passing the oldest createdAt from the previous response."
+      "Opaque pagination cursor returned by a previous request with the same category and effective result limit. It tracks consumed profile kind/pubkey identities so stale profile revisions cannot reappear."
     ),
   category: z
     .string()
@@ -51,6 +71,32 @@ export const listCompaniesInputSchema = {
       "Optional product category filter. Sellers are included only when they have at least one public product tagged with this category."
     ),
 };
+
+function createCursorErrorResponse(
+  error: PaginationCursorError
+): ToolTextResponse {
+  return createErrorResponse(error.message, error.errorCode, false);
+}
+
+function createNextCursor(
+  query: string,
+  cursorState: PaginationCursorState | undefined,
+  boundary: number,
+  consumed: readonly NostrEvent[]
+): string {
+  const seen = accumulatePaginationSeen(
+    cursorState,
+    consumed,
+    getProfileLogicalIdentity
+  );
+  assertPaginationProgress(cursorState, boundary, seen);
+  return createPaginationCursor({
+    tool: "list_companies",
+    query,
+    boundary,
+    seen,
+  });
+}
 
 export async function handleListCompanies(
   args: Record<string, unknown>,
@@ -65,14 +111,39 @@ export async function handleListCompanies(
     parsed.data.limit,
     SELLER_LIST_RESPONSE_BUDGET
   );
+  const category = parsed.data.category
+    ? normalizeCategoryTag(parsed.data.category)
+    : undefined;
+  const query = createQueryFingerprint("list_companies", [
+    category,
+    responseLimit,
+  ]);
+  let cursorState: PaginationCursorState | undefined;
+  if (parsed.data.cursor !== undefined) {
+    try {
+      cursorState = decodePaginationCursor(parsed.data.cursor, {
+        tool: "list_companies",
+        query,
+      });
+    } catch (error) {
+      if (error instanceof PaginationCursorError) {
+        return createCursorErrorResponse(error);
+      }
+      throw error;
+    }
+  }
+
+  const profileRelayLimit = parsed.data.category
+    ? 500
+    : getPaginatedRelayLimit(Math.min(500, responseLimit * 5), cursorState);
   const profileRelayResult = await fetchFromRelays(
     context.nostr,
     context.relays,
     [
       {
         kinds: [SHOP_PROFILE_KIND],
-        limit: parsed.data.category ? 500 : Math.min(500, responseLimit * 5),
-        ...(parsed.data.until !== undefined && { until: parsed.data.until }),
+        limit: profileRelayLimit,
+        ...(cursorState !== undefined && { until: cursorState.boundary }),
       },
     ],
     { timeoutMs: context.timeoutMs }
@@ -83,10 +154,31 @@ export async function handleListCompanies(
     return createRelayUnavailableResponse(profileRelayResult.meta);
   }
 
-  let companies = mergeAndDeduplicateProfiles(profileRelayResult.events).map(
-    parseProfileEvent
+  const sparseBoundary = getNewestSaturatedFilterBoundary(
+    profileRelayResult,
+    profileRelayLimit,
+    [0]
   );
-  for (const company of companies) {
+  const rawProfileWindow = sortEventsNewestFirst(
+    profileRelayResult.events
+  ).filter(
+    (event) =>
+      sparseBoundary === undefined || event.created_at >= sparseBoundary
+  );
+  let eligibleRawProfiles = rawProfileWindow;
+  if (cursorState) {
+    eligibleRawProfiles = applyPaginationCursor(
+      rawProfileWindow,
+      cursorState,
+      getProfileLogicalIdentity
+    );
+  }
+  const scannedProfiles = mergeAndDeduplicateProfiles(eligibleRawProfiles);
+  let companies = scannedProfiles.map((profile) => ({
+    profile,
+    company: parseProfileEvent(profile),
+  }));
+  for (const { company } of companies) {
     context.cache.set(
       { pubkey: company.pubkey, kind: SHOP_PROFILE_KIND },
       company
@@ -94,8 +186,7 @@ export async function handleListCompanies(
   }
 
   const hints: string[] = [];
-  if (parsed.data.category) {
-    const category = normalizeCategoryTag(parsed.data.category);
+  if (category) {
     const categoryRelayResult = await fetchFromRelays(
       context.nostr,
       context.relays,
@@ -129,7 +220,7 @@ export async function handleListCompanies(
         )
         .map((product) => product.pubkey)
     );
-    companies = companies.filter((company) =>
+    companies = companies.filter(({ company }) =>
       sellerPubkeys.has(company.pubkey)
     );
     if (sellerPubkeys.size === 0) {
@@ -140,9 +231,45 @@ export async function handleListCompanies(
   }
 
   const pageCompanies = companies.slice(0, responseLimit + 1);
-  const hasMore = pageCompanies.length > responseLimit;
-  const returnedCompanies = pageCompanies.slice(0, responseLimit);
+  const returnedCompanyEntries = pageCompanies.slice(0, responseLimit);
+  const returnedCompanies = returnedCompanyEntries.map(
+    ({ company }) => company
+  );
+  const hasMatchingCompaniesBeyondPage = pageCompanies.length > responseLimit;
+  const shouldAdvanceSparseWindow =
+    !hasMatchingCompaniesBeyondPage &&
+    sparseBoundary !== undefined &&
+    rawProfileWindow.length > 0;
+  const hasMore = hasMatchingCompaniesBeyondPage || shouldAdvanceSparseWindow;
+  let nextCursor: string | null = null;
   if (hasMore) {
+    try {
+      if (hasMatchingCompaniesBeyondPage) {
+        const boundary =
+          returnedCompanyEntries[returnedCompanyEntries.length - 1]!.profile
+            .created_at;
+        nextCursor = createNextCursor(
+          query,
+          cursorState,
+          boundary,
+          returnedCompanyEntries.map(({ profile }) => profile)
+        );
+      } else {
+        nextCursor = createNextCursor(
+          query,
+          cursorState,
+          sparseBoundary!,
+          rawProfileWindow
+        );
+      }
+    } catch (error) {
+      if (error instanceof PaginationCursorError) {
+        return createCursorErrorResponse(error);
+      }
+      throw error;
+    }
+  }
+  if (hasMatchingCompaniesBeyondPage) {
     hints.push(
       "Too many seller profiles matched; use get_company_details with a specific sellerPubkey to inspect one seller."
     );
@@ -152,7 +279,7 @@ export async function handleListCompanies(
     {
       resultCount: returnedCompanies.length,
       totalMatches: companies.length,
-      truncated: hasMore,
+      truncated: hasMatchingCompaniesBeyondPage,
       dataFreshness: getDataFreshness(returnedCompanies),
       hints,
     }
@@ -164,10 +291,7 @@ export async function handleListCompanies(
       totalMatches: companies.length,
       companies: returnedCompanies,
       _pagination: {
-        oldestCreatedAt:
-          returnedCompanies.length > 0
-            ? returnedCompanies[returnedCompanies.length - 1]!.createdAt
-            : null,
+        nextCursor,
         hasMore,
       },
     },

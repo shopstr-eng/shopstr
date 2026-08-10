@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+import {
+  CATEGORY_SUMMARY_MAX_ENTRIES,
+  getAcceptedCategoryTags,
+} from "../category-tags.js";
 import { mergeAndDeduplicateProducts } from "../dedup.js";
 import { createSuccessResponse, type ToolTextResponse } from "../errors.js";
 import { fetchFromRelays } from "../relay-fetch.js";
@@ -13,7 +17,6 @@ import {
   createRelayUnavailableResponse,
   createValidationErrorResponse,
   getDataFreshness,
-  normalizeCategoryTag,
   observeProductEventsForCategories,
 } from "./utils/common.js";
 import type { CoreToolContext } from "./utils/context.js";
@@ -126,11 +129,18 @@ function summarizeCategories(
   const counts = new Map<string, number>();
 
   for (const event of events) {
-    for (const tag of event.tags || []) {
-      if (tag[0] !== "t" || !tag[1]) continue;
-      const normalized = normalizeCategoryTag(tag[1]);
-      if (!normalized) continue;
-      counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+    const normalizedCategories = new Set(
+      getAcceptedCategoryTags(event.tags || []).map(
+        (category) => category.normalized
+      )
+    );
+    for (const normalized of normalizedCategories) {
+      const currentCount = counts.get(normalized);
+      if (currentCount !== undefined) {
+        counts.set(normalized, currentCount + 1);
+      } else if (counts.size < CATEGORY_SUMMARY_MAX_ENTRIES) {
+        counts.set(normalized, 1);
+      }
     }
   }
 

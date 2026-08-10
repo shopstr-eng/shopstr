@@ -3,6 +3,11 @@ import test from "node:test";
 
 import { handleSearchProducts } from "../../dist/tools/search-products.js";
 import { MemoryCache } from "../../dist/cache.js";
+import {
+  createPaginationCursor,
+  createQueryFingerprint,
+  hashPaginationLogicalIdentity,
+} from "../../dist/tools/utils/pagination-cursor.js";
 
 const hex = (char) => char.repeat(64);
 
@@ -232,9 +237,719 @@ test("search_products excludes hidden products", async () => {
   assert.equal(body.products[0].title, "Visible Product");
 });
 
-test("search_products disables until pagination cursor for price sorts", async () => {
+test("search_products traverses newest products with an opaque cursor", async () => {
+  const events = [
+    productEvent({
+      id: hex("1"),
+      created_at: 100,
+      tags: [
+        ["d", "one"],
+        ["title", "One"],
+      ],
+    }),
+    productEvent({
+      id: hex("2"),
+      created_at: 99,
+      tags: [
+        ["d", "two"],
+        ["title", "Two"],
+      ],
+    }),
+    productEvent({
+      id: hex("3"),
+      created_at: 98,
+      tags: [
+        ["d", "three"],
+        ["title", "Three"],
+      ],
+    }),
+  ];
+  const filters = [];
+  const ctx = {
+    ...context({ "wss://relay.example.com": events }),
+    nostr: {
+      async fetch(requestFilters) {
+        filters.push(requestFilters);
+        return events.filter(
+          (event) =>
+            requestFilters[0].until === undefined ||
+            event.created_at <= requestFilters[0].until
+        );
+      },
+    },
+  };
+
+  const first = JSON.parse(
+    (await handleSearchProducts({ limit: 2 }, ctx)).content[0].text
+  );
+  assert.deepEqual(
+    first.products.map((product) => product.id),
+    [hex("1"), hex("2")]
+  );
+  assert.equal(first._pagination.hasMore, true);
+  assert.equal(typeof first._pagination.nextCursor, "string");
+  assert.equal(first._pagination.oldestCreatedAt, undefined);
+
+  const second = JSON.parse(
+    (
+      await handleSearchProducts(
+        { limit: 2, cursor: first._pagination.nextCursor },
+        ctx
+      )
+    ).content[0].text
+  );
+  assert.deepEqual(
+    second.products.map((product) => product.id),
+    [hex("3")]
+  );
+  assert.equal(second._pagination.hasMore, false);
+  assert.equal(second._pagination.nextCursor, null);
+  assert.equal(filters[1][0].until, 99);
+});
+
+test("search_products preserves unconsumed same-timestamp products across cursors", async () => {
+  const events = [
+    productEvent({
+      id: hex("1"),
+      created_at: 100,
+      tags: [
+        ["d", "one"],
+        ["title", "One"],
+      ],
+    }),
+    productEvent({
+      id: hex("2"),
+      created_at: 100,
+      tags: [
+        ["d", "two"],
+        ["title", "Two"],
+      ],
+    }),
+    productEvent({
+      id: hex("3"),
+      created_at: 99,
+      tags: [
+        ["d", "three"],
+        ["title", "Three"],
+      ],
+    }),
+  ];
+  const ctx = context({ "wss://relay.example.com": events });
+
+  const first = JSON.parse(
+    (await handleSearchProducts({ limit: 1 }, ctx)).content[0].text
+  );
+  const second = JSON.parse(
+    (
+      await handleSearchProducts(
+        { limit: 1, cursor: first._pagination.nextCursor },
+        ctx
+      )
+    ).content[0].text
+  );
+  const third = JSON.parse(
+    (
+      await handleSearchProducts(
+        { limit: 1, cursor: second._pagination.nextCursor },
+        ctx
+      )
+    ).content[0].text
+  );
+
+  assert.deepEqual(
+    [first, second, third].flatMap((page) =>
+      page.products.map((product) => product.id)
+    ),
+    [hex("1"), hex("2"), hex("3")]
+  );
+  assert.equal(third._pagination.nextCursor, null);
+});
+
+test("search_products accepts equivalent case-insensitive filters across cursor pages", async () => {
+  const events = [
+    productEvent({
+      id: hex("1"),
+      created_at: 100,
+      tags: [
+        ["d", "one"],
+        ["title", "Widget One"],
+        ["location", "New York"],
+        ["price", "10", "USD"],
+        ["t", "Tools"],
+      ],
+    }),
+    productEvent({
+      id: hex("2"),
+      created_at: 99,
+      tags: [
+        ["d", "two"],
+        ["title", "Widget Two"],
+        ["location", "NEW YORK"],
+        ["price", "20", "usd"],
+        ["t", "TOOLS"],
+      ],
+    }),
+  ];
+  const ctx = context({ "wss://relay.example.com": events });
+
+  const first = JSON.parse(
+    (
+      await handleSearchProducts(
+        {
+          keyword: "Widget",
+          category: "Tools",
+          location: "New York",
+          currency: "USD",
+          limit: 1,
+        },
+        ctx
+      )
+    ).content[0].text
+  );
+  const secondResponse = await handleSearchProducts(
+    {
+      keyword: "widget",
+      category: "tools",
+      location: "new york",
+      currency: "usd",
+      limit: 1,
+      cursor: first._pagination.nextCursor,
+    },
+    ctx
+  );
+  const second = JSON.parse(secondResponse.content[0].text);
+
+  assert.equal(secondResponse.isError, undefined);
+  assert.equal(second.count, 1);
+  assert.equal(second.products[0].id, hex("2"));
+});
+
+test("search_products never resurfaces a stale revision of a consumed product", async () => {
+  const seller = hex("b");
+  const latest = productEvent({
+    id: hex("1"),
+    pubkey: seller,
+    created_at: 100,
+    tags: [
+      ["d", "replaceable"],
+      ["title", "Latest revision"],
+    ],
+  });
+  const other = productEvent({
+    id: hex("2"),
+    pubkey: seller,
+    created_at: 99,
+    tags: [
+      ["d", "other"],
+      ["title", "Other product"],
+    ],
+  });
+  const stale = productEvent({
+    id: hex("3"),
+    pubkey: seller,
+    created_at: 98,
+    tags: [
+      ["d", "replaceable"],
+      ["title", "Stale revision"],
+    ],
+  });
+  const thirdProduct = productEvent({
+    id: hex("4"),
+    pubkey: seller,
+    created_at: 97,
+    tags: [
+      ["d", "third"],
+      ["title", "Third product"],
+    ],
+  });
+  let fetchCount = 0;
+  const ctx = {
+    ...context({ "wss://relay.example.com": [] }),
+    nostr: {
+      async fetch() {
+        fetchCount += 1;
+        if (fetchCount === 1) return [latest, other];
+        if (fetchCount === 2) return [other, stale, thirdProduct];
+        return [stale];
+      },
+    },
+  };
+
+  const first = JSON.parse(
+    (await handleSearchProducts({ limit: 1 }, ctx)).content[0].text
+  );
+  const second = JSON.parse(
+    (
+      await handleSearchProducts(
+        { limit: 1, cursor: first._pagination.nextCursor },
+        ctx
+      )
+    ).content[0].text
+  );
+  const third = JSON.parse(
+    (
+      await handleSearchProducts(
+        { limit: 1, cursor: second._pagination.nextCursor },
+        ctx
+      )
+    ).content[0].text
+  );
+
+  assert.deepEqual(
+    [first, second, third].flatMap((page) =>
+      page.products.map((product) => product.d)
+    ),
+    ["replaceable", "other"]
+  );
+  assert.equal(third._pagination.nextCursor, null);
+});
+
+test("search_products advances a sparse search through a full relay window", async () => {
+  const initialWindow = [100, 99, 98, 97, 96].map((created_at, index) =>
+    productEvent({
+      id: hex(String(index + 1)),
+      created_at,
+      tags: [
+        ["d", `initial-${index}`],
+        ["title", index === 0 ? "Matching product" : "Other product"],
+      ],
+    })
+  );
+  const olderWindow = [
+    productEvent({
+      id: hex("6"),
+      created_at: 95,
+      tags: [
+        ["d", "older"],
+        ["title", "Matching older product"],
+      ],
+    }),
+  ];
+  const capturedFilters = [];
+  const ctx = {
+    ...context({ "wss://relay.example.com": [] }),
+    nostr: {
+      async fetch(requestFilters) {
+        capturedFilters.push(requestFilters);
+        return requestFilters[0].until === undefined
+          ? initialWindow
+          : olderWindow;
+      },
+    },
+  };
+
+  const first = JSON.parse(
+    (await handleSearchProducts({ keyword: "matching", limit: 1 }, ctx))
+      .content[0].text
+  );
+  assert.equal(first.products[0].id, hex("1"));
+  assert.equal(first._pagination.hasMore, true);
+  assert.equal(typeof first._pagination.nextCursor, "string");
+
+  const second = JSON.parse(
+    (
+      await handleSearchProducts(
+        { keyword: "matching", limit: 1, cursor: first._pagination.nextCursor },
+        ctx
+      )
+    ).content[0].text
+  );
+  assert.equal(second.products[0].id, hex("6"));
+  assert.equal(capturedFilters[1][0].until, 96);
+});
+
+test("search_products advances from the newest saturated relay boundary", async () => {
+  const saturatedRelay = "wss://saturated.example.com";
+  const olderUnsaturatedRelay = "wss://older.example.com";
+  const saturatedWindow = [100, 99, 98, 97, 96].map((created_at, index) =>
+    productEvent({
+      id: hex(String(index + 1)),
+      created_at,
+      tags: [
+        ["d", `saturated-${index}`],
+        ["title", "Other product"],
+      ],
+    })
+  );
+  const oldUnsaturatedEvent = productEvent({
+    id: hex("6"),
+    created_at: 50,
+    tags: [
+      ["d", "old-unsaturated"],
+      ["title", "Matching old unsaturated product"],
+    ],
+  });
+  const olderMatchingProduct = productEvent({
+    id: hex("f"),
+    created_at: 95,
+    tags: [
+      ["d", "older-match"],
+      ["title", "Matching older product"],
+    ],
+  });
+  const requests = [];
+  const ctx = {
+    ...context({}),
+    relays: [saturatedRelay, olderUnsaturatedRelay],
+    nostr: {
+      async fetch(filters, _params, relayUrls) {
+        const relay = relayUrls[0];
+        requests.push({ relay, until: filters[0].until });
+        if (relay === saturatedRelay) {
+          if (filters[0].until === undefined) return saturatedWindow;
+          return filters[0].until === 96 ? [olderMatchingProduct] : [];
+        }
+        return [oldUnsaturatedEvent];
+      },
+    },
+  };
+
+  const first = JSON.parse(
+    (await handleSearchProducts({ keyword: "matching", limit: 1 }, ctx))
+      .content[0].text
+  );
+  const second = JSON.parse(
+    (
+      await handleSearchProducts(
+        { keyword: "matching", limit: 1, cursor: first._pagination.nextCursor },
+        ctx
+      )
+    ).content[0].text
+  );
+  const third = JSON.parse(
+    (
+      await handleSearchProducts(
+        {
+          keyword: "matching",
+          limit: 1,
+          cursor: second._pagination.nextCursor,
+        },
+        ctx
+      )
+    ).content[0].text
+  );
+
+  assert.equal(first.count, 0);
+  assert.equal(first._pagination.hasMore, true);
+  assert.equal(
+    requests.find(
+      (request) =>
+        request.relay === saturatedRelay && request.until !== undefined
+    )?.until,
+    96
+  );
+  assert.equal(second.products[0].id, olderMatchingProduct.id);
+  assert.equal(third.products[0].id, oldUnsaturatedEvent.id);
+});
+
+test("search_products advances from a saturated continuation window containing only consumed revisions", async () => {
+  const seller = hex("b");
+  const consumedIdentity = `30402:${seller}:consumed`;
+  const cursor = createPaginationCursor({
+    tool: "search_products",
+    query: createQueryFingerprint("search_products", [
+      "matching",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      1,
+      "newest",
+    ]),
+    boundary: 100,
+    seen: [hashPaginationLogicalIdentity(consumedIdentity)],
+  });
+  const consumedRevisions = Array.from({ length: 6 }, (_, index) =>
+    productEvent({
+      id: (index + 1).toString(16).padStart(64, "0"),
+      pubkey: seller,
+      created_at: 99 - index,
+      tags: [
+        ["d", "consumed"],
+        ["title", "Already consumed"],
+      ],
+    })
+  );
+  const olderProduct = productEvent({
+    id: hex("f"),
+    pubkey: seller,
+    created_at: 93,
+    tags: [
+      ["d", "older"],
+      ["title", "Matching older product"],
+    ],
+  });
+  const capturedFilters = [];
+  const ctx = {
+    ...context({ "wss://relay.example.com": [] }),
+    nostr: {
+      async fetch(filters) {
+        capturedFilters.push(filters);
+        return filters[0].until === 100 ? consumedRevisions : [olderProduct];
+      },
+    },
+  };
+
+  const emptyPage = JSON.parse(
+    (await handleSearchProducts({ keyword: "matching", limit: 1, cursor }, ctx))
+      .content[0].text
+  );
+  const olderPage = JSON.parse(
+    (
+      await handleSearchProducts(
+        {
+          keyword: "matching",
+          limit: 1,
+          cursor: emptyPage._pagination.nextCursor,
+        },
+        ctx
+      )
+    ).content[0].text
+  );
+
+  assert.equal(emptyPage.count, 0);
+  assert.equal(emptyPage._pagination.hasMore, true);
+  assert.equal(typeof emptyPage._pagination.nextCursor, "string");
+  assert.equal(capturedFilters[1][0].until, 94);
+  assert.equal(olderPage.products[0].id, olderProduct.id);
+});
+
+test("search_products fails closed when a saturated all-seen window cannot advance its boundary", async () => {
+  const seller = hex("b");
+  const consumedIdentity = `30402:${seller}:consumed`;
+  const cursor = createPaginationCursor({
+    tool: "search_products",
+    query: createQueryFingerprint("search_products", [
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      1,
+      "newest",
+    ]),
+    boundary: 100,
+    seen: [hashPaginationLogicalIdentity(consumedIdentity)],
+  });
   const response = await handleSearchProducts(
-    { sortBy: "price_asc", limit: 1 },
+    { limit: 1, cursor },
+    context({
+      "wss://relay.example.com": Array.from({ length: 6 }, (_, index) =>
+        productEvent({
+          id: (index + 1).toString(16).padStart(64, "0"),
+          pubkey: seller,
+          created_at: 100,
+          tags: [["d", "consumed"]],
+        })
+      ),
+    })
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, true);
+  assert.equal(body.errorCode, "PAGINATION_LIMIT");
+  assert.equal(body.retryable, false);
+});
+
+test("search_products does not advance a sparse window from aggregate relay counts", async () => {
+  const eventsByRelay = {
+    "wss://first.example.com": ["1", "2", "3", "4"].map((id, index) =>
+      productEvent({
+        id: hex(id),
+        created_at: 100 - index,
+        tags: [
+          ["d", `first-${id}`],
+          ["title", "Other product"],
+        ],
+      })
+    ),
+    "wss://second.example.com": ["5", "6", "7", "8"].map((id, index) =>
+      productEvent({
+        id: hex(id),
+        created_at: 90 - index,
+        tags: [
+          ["d", `second-${id}`],
+          ["title", "Other product"],
+        ],
+      })
+    ),
+  };
+
+  const body = JSON.parse(
+    (
+      await handleSearchProducts(
+        { keyword: "matching", limit: 1 },
+        context(eventsByRelay)
+      )
+    ).content[0].text
+  );
+
+  assert.equal(body.count, 0);
+  assert.equal(body._pagination.hasMore, false);
+  assert.equal(body._pagination.nextCursor, null);
+});
+
+test("search_products applies the same cursor boundary and limit to category fallback", async () => {
+  const capturedFilters = [];
+  const cursor = createPaginationCursor({
+    tool: "search_products",
+    query: createQueryFingerprint("search_products", [
+      undefined,
+      "shoes",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      1,
+      "newest",
+    ]),
+    boundary: 100,
+    seen: [],
+  });
+  const ctx = {
+    ...context({ "wss://relay.example.com": [] }),
+    nostr: {
+      async fetch(filters) {
+        capturedFilters.push(filters);
+        return filters[0]["#t"]
+          ? []
+          : [
+              productEvent({
+                id: hex("1"),
+                created_at: 100,
+                tags: [
+                  ["d", "shoe"],
+                  ["title", "Running Shoe"],
+                  ["t", "shoes"],
+                ],
+              }),
+            ];
+      },
+    },
+  };
+
+  const body = JSON.parse(
+    (await handleSearchProducts({ category: "shoes", limit: 1, cursor }, ctx))
+      .content[0].text
+  );
+
+  assert.equal(body.count, 1);
+  assert.equal(capturedFilters.length, 2);
+  for (const [filter] of capturedFilters) {
+    assert.equal(filter.until, 100);
+    assert.equal(filter.limit, 5);
+  }
+});
+
+test("search_products rejects mismatched cursors before calling relays", async () => {
+  let fetchCalls = 0;
+  const cursor = createPaginationCursor({
+    tool: "search_products",
+    query: createQueryFingerprint("search_products", [
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      1,
+      "newest",
+    ]),
+    boundary: 100,
+    seen: [],
+  });
+  const ctx = {
+    ...context({ "wss://relay.example.com": [] }),
+    nostr: {
+      async fetch() {
+        fetchCalls++;
+        return [];
+      },
+    },
+  };
+
+  const response = await handleSearchProducts(
+    { keyword: "different", limit: 1, cursor },
+    ctx
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, true);
+  assert.equal(body.errorCode, "VALIDATION_ERROR");
+  assert.equal(body.retryable, false);
+  assert.equal(fetchCalls, 0);
+});
+
+test("search_products rejects an empty cursor before calling relays", async () => {
+  let fetchCalls = 0;
+  const ctx = {
+    ...context({ "wss://relay.example.com": [] }),
+    nostr: {
+      async fetch() {
+        fetchCalls++;
+        return [];
+      },
+    },
+  };
+
+  const response = await handleSearchProducts({ cursor: "" }, ctx);
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, true);
+  assert.equal(body.errorCode, "VALIDATION_ERROR");
+  assert.equal(body.retryable, false);
+  assert.equal(fetchCalls, 0);
+});
+
+test("search_products rejects cursors for price sorts before calling relays", async () => {
+  let fetchCalls = 0;
+  const ctx = {
+    ...context({ "wss://relay.example.com": [] }),
+    nostr: {
+      async fetch() {
+        fetchCalls++;
+        return [];
+      },
+    },
+  };
+
+  const response = await handleSearchProducts(
+    { sortBy: "price_asc", currency: "USD", cursor: "not-allowed" },
+    ctx
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, true);
+  assert.equal(body.errorCode, "VALIDATION_ERROR");
+  assert.equal(body.retryable, false);
+  assert.equal(fetchCalls, 0);
+});
+
+test("search_products rejects price sorting without currency before calling relays", async () => {
+  let fetchCalls = 0;
+  const ctx = {
+    ...context({ "wss://relay.example.com": [] }),
+    nostr: {
+      async fetch() {
+        fetchCalls += 1;
+        return [];
+      },
+    },
+  };
+
+  const response = await handleSearchProducts({ sortBy: "price_desc" }, ctx);
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, true);
+  assert.equal(body.errorCode, "VALIDATION_ERROR");
+  assert.equal(fetchCalls, 0);
+});
+
+test("search_products returns no cursor for price sorts", async () => {
+  const response = await handleSearchProducts(
+    { sortBy: "price_asc", currency: "USD", limit: 1 },
     context({
       "wss://relay.example.com": [
         productEvent({
@@ -262,7 +977,7 @@ test("search_products disables until pagination cursor for price sorts", async (
 
   assert.equal(body.count, 1);
   assert.equal(body.products[0].title, "Cheap Product");
-  assert.equal(body._pagination.oldestCreatedAt, null);
+  assert.equal(body._pagination.nextCursor, null);
   assert.equal(body._pagination.hasMore, false);
   assert.equal(body._meta._truncated, true);
   assert.equal(

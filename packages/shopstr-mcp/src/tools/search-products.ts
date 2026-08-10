@@ -1,10 +1,21 @@
 import { z } from "zod";
 
-import { mergeAndDeduplicateProducts } from "../dedup.js";
-import { createSuccessResponse, type ToolTextResponse } from "../errors.js";
+import {
+  getProductLogicalIdentity,
+  mergeAndDeduplicateProducts,
+  sortEventsNewestFirst,
+} from "../dedup.js";
+import {
+  createErrorResponse,
+  createSuccessResponse,
+  type ToolTextResponse,
+} from "../errors.js";
 import { parseProductEvent } from "../parse-tags.js";
-import { fetchFromRelays } from "../relay-fetch.js";
-import type { NostrFilter, ProductResponse } from "../types.js";
+import {
+  fetchFromRelays,
+  getNewestSaturatedFilterBoundary,
+} from "../relay-fetch.js";
+import type { NostrEvent, NostrFilter, ProductResponse } from "../types.js";
 import { searchProductsSchema } from "../validation.js";
 import {
   PRODUCT_KIND,
@@ -20,6 +31,17 @@ import {
   observeProductEventsForCategories,
 } from "./utils/common.js";
 import type { CoreToolContext } from "./utils/context.js";
+import {
+  PaginationCursorError,
+  accumulatePaginationSeen,
+  applyPaginationCursor,
+  assertPaginationProgress,
+  createPaginationCursor,
+  createQueryFingerprint,
+  decodePaginationCursor,
+  getPaginatedRelayLimit,
+  type PaginationCursorState,
+} from "./utils/pagination-cursor.js";
 
 export const searchProductsInputSchema = {
   keyword: z
@@ -35,7 +57,7 @@ export const searchProductsInputSchema = {
     .string()
     .max(10)
     .optional()
-    .describe("Currency code required when using price filters"),
+    .describe("Currency code required when using price filters or price sort"),
   limit: z
     .number()
     .int()
@@ -45,19 +67,18 @@ export const searchProductsInputSchema = {
     .describe(
       `Requested result count. Responses are capped at ${PRODUCT_RESPONSE_BUDGET} products for MCP token budgeting.`
     ),
-  until: z
-    .number()
-    .int()
-    .min(0)
+  cursor: z
+    .string()
+    .max(16_384)
     .optional()
     .describe(
-      "Unix timestamp. Only return products created at or before this time. Use for pagination by passing the oldest createdAt from the previous response."
+      "Opaque pagination cursor returned by a previous newest-first search with the same case-insensitive filters. It tracks consumed logical product coordinates so stale revisions cannot reappear. Cursors are not supported with price sorting."
     ),
   sortBy: z
     .enum(["newest", "price_asc", "price_desc"])
     .optional()
     .describe(
-      "Sort returned products by newest first, ascending known price, or descending known price. Unknown-price products are placed last for price sorts."
+      "Sort returned products by newest first, ascending known price, or descending known price. currency is required for price_asc and price_desc. Unknown-price products are placed last for price sorts."
     ),
 };
 
@@ -147,22 +168,25 @@ function buildSearchHints(
   }
   if (filters.sortBy === "price_asc" || filters.sortBy === "price_desc") {
     hints.push(
-      "Price-sorted search is limited to the current fetch window; do not use oldestCreatedAt/until pagination with price_asc or price_desc."
+      "Price-sorted search is limited to the current fetch window and does not support cursor pagination."
     );
   }
   return hints;
 }
 
-function buildSearchFilters(filters: SearchProductsInput): {
+function buildSearchFilters(
+  filters: SearchProductsInput,
+  cursorState: PaginationCursorState | undefined,
+  responseLimit: number
+): {
   primary: NostrFilter;
   fallback: NostrFilter | undefined;
 } {
-  const effectiveLimit = Math.min(filters.limit, PRODUCT_RESPONSE_BUDGET);
-  const relayLimit = Math.min(500, effectiveLimit * 5);
+  const relayLimit = getPaginatedRelayLimit(responseLimit * 5, cursorState);
   const base: NostrFilter = {
     kinds: [PRODUCT_KIND],
     limit: relayLimit,
-    ...(filters.until !== undefined && { until: filters.until }),
+    ...(cursorState !== undefined && { until: cursorState.boundary }),
   };
   if (filters.category) {
     return {
@@ -172,6 +196,32 @@ function buildSearchFilters(filters: SearchProductsInput): {
   }
 
   return { primary: base, fallback: undefined };
+}
+
+function createNextCursor(
+  query: string,
+  cursorState: PaginationCursorState | undefined,
+  boundary: number,
+  consumed: readonly NostrEvent[]
+): string {
+  const seen = accumulatePaginationSeen(
+    cursorState,
+    consumed,
+    getProductLogicalIdentity
+  );
+  assertPaginationProgress(cursorState, boundary, seen);
+  return createPaginationCursor({
+    tool: "search_products",
+    query,
+    boundary,
+    seen,
+  });
+}
+
+function createCursorErrorResponse(
+  error: PaginationCursorError
+): ToolTextResponse {
+  return createErrorResponse(error.message, error.errorCode, false);
 }
 
 function sortProducts(
@@ -201,7 +251,41 @@ export async function handleSearchProducts(
   if (!parsed.success) return createValidationErrorResponse(parsed.error);
 
   const filters = parsed.data;
-  const { primary, fallback } = buildSearchFilters(filters);
+  const responseLimit = Math.min(filters.limit, PRODUCT_RESPONSE_BUDGET);
+  const query = createQueryFingerprint("search_products", [
+    filters.keyword?.toLowerCase(),
+    filters.category ? normalizeCategoryTag(filters.category) : undefined,
+    filters.location?.toLowerCase(),
+    filters.minPrice,
+    filters.maxPrice,
+    filters.currency?.toLowerCase(),
+    responseLimit,
+    filters.sortBy,
+  ]);
+  let cursorState: PaginationCursorState | undefined;
+  if (filters.cursor !== undefined) {
+    try {
+      cursorState = decodePaginationCursor(filters.cursor, {
+        tool: "search_products",
+        query,
+      });
+    } catch (error) {
+      if (error instanceof PaginationCursorError) {
+        return createCursorErrorResponse(error);
+      }
+      throw error;
+    }
+  }
+
+  const { primary, fallback } = buildSearchFilters(
+    filters,
+    cursorState,
+    responseLimit
+  );
+  const requestedRelayLimit = getPaginatedRelayLimit(
+    responseLimit * 5,
+    cursorState
+  );
   const startedAt = Date.now();
   const relayMetas = [];
   let usedFallbackQuery = false;
@@ -219,7 +303,24 @@ export async function handleSearchProducts(
   }
 
   observeProductEventsForCategories(relayResult.events);
-  let products = mergeAndDeduplicateProducts(relayResult.events)
+  let sparseBoundary =
+    filters.sortBy === "newest"
+      ? getNewestSaturatedFilterBoundary(relayResult, requestedRelayLimit, [0])
+      : undefined;
+  let rawProductWindow = sortEventsNewestFirst(relayResult.events).filter(
+    (event) =>
+      sparseBoundary === undefined || event.created_at >= sparseBoundary
+  );
+  let eligibleRawProducts = rawProductWindow;
+  if (cursorState) {
+    eligibleRawProducts = applyPaginationCursor(
+      rawProductWindow,
+      cursorState,
+      getProductLogicalIdentity
+    );
+  }
+  let scannedProducts = mergeAndDeduplicateProducts(eligibleRawProducts);
+  let products = scannedProducts
     .map(parseProductEvent)
     .filter((product) => productMatchesFilters(product, filters));
 
@@ -238,20 +339,76 @@ export async function handleSearchProducts(
 
     if (!allRelaysFailed(relayResult.meta)) {
       observeProductEventsForCategories(relayResult.events);
-      products = mergeAndDeduplicateProducts(relayResult.events)
+      sparseBoundary =
+        filters.sortBy === "newest"
+          ? getNewestSaturatedFilterBoundary(
+              relayResult,
+              requestedRelayLimit,
+              [0]
+            )
+          : undefined;
+      rawProductWindow = sortEventsNewestFirst(relayResult.events).filter(
+        (event) =>
+          sparseBoundary === undefined || event.created_at >= sparseBoundary
+      );
+      eligibleRawProducts = rawProductWindow;
+      if (cursorState) {
+        eligibleRawProducts = applyPaginationCursor(
+          rawProductWindow,
+          cursorState,
+          getProductLogicalIdentity
+        );
+      }
+      scannedProducts = mergeAndDeduplicateProducts(eligibleRawProducts);
+      products = scannedProducts
         .map(parseProductEvent)
         .filter((product) => productMatchesFilters(product, filters));
     }
   }
 
   products = sortProducts(products, filters.sortBy);
-  const requestedLimit = filters.limit;
-  const responseLimit = Math.min(requestedLimit, PRODUCT_RESPONSE_BUDGET);
   const pageProducts = products.slice(0, responseLimit + 1);
   const priceSorted =
     filters.sortBy === "price_asc" || filters.sortBy === "price_desc";
-  const hasMore = priceSorted ? false : pageProducts.length > responseLimit;
   const returnedProducts = pageProducts.slice(0, responseLimit);
+  const hasMatchingProductsBeyondPage = pageProducts.length > responseLimit;
+  const shouldAdvanceSparseWindow =
+    !priceSorted &&
+    !hasMatchingProductsBeyondPage &&
+    sparseBoundary !== undefined &&
+    rawProductWindow.length > 0;
+  const hasMore =
+    !priceSorted &&
+    (hasMatchingProductsBeyondPage || shouldAdvanceSparseWindow);
+  let nextCursor: string | null = null;
+  if (hasMore) {
+    try {
+      if (hasMatchingProductsBeyondPage) {
+        const boundary =
+          returnedProducts[returnedProducts.length - 1]!.createdAt;
+        nextCursor = createNextCursor(
+          query,
+          cursorState,
+          boundary,
+          scannedProducts.filter((event) =>
+            returnedProducts.some((product) => product.id === event.id)
+          )
+        );
+      } else {
+        nextCursor = createNextCursor(
+          query,
+          cursorState,
+          sparseBoundary!,
+          rawProductWindow
+        );
+      }
+    } catch (error) {
+      if (error instanceof PaginationCursorError) {
+        return createCursorErrorResponse(error);
+      }
+      throw error;
+    }
+  }
   const truncated = products.length > returnedProducts.length;
   const hints = buildSearchHints(
     filters,
@@ -275,10 +432,7 @@ export async function handleSearchProducts(
       totalMatches: products.length,
       products: returnedProducts,
       _pagination: {
-        oldestCreatedAt:
-          !priceSorted && returnedProducts.length > 0
-            ? returnedProducts[returnedProducts.length - 1]!.createdAt
-            : null,
+        nextCursor,
         hasMore,
       },
     },

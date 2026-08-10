@@ -120,9 +120,10 @@ export const searchProductsSchema = z
     maxPrice: priceSchema.optional(),
     currency: currencySchema.optional(),
     limit: limitSchema.default(50),
-    until: z.coerce.number().int().min(0).optional(),
+    cursor: z.string().max(16_384).optional(),
     sortBy: z.enum(["newest", "price_asc", "price_desc"]).default("newest"),
   })
+  .strict()
   .refine(
     (data) =>
       data.minPrice === undefined ||
@@ -135,14 +136,21 @@ export const searchProductsSchema = z
   )
   .refine(
     (data) =>
-      (data.minPrice === undefined && data.maxPrice === undefined) ||
+      (data.minPrice === undefined &&
+        data.maxPrice === undefined &&
+        data.sortBy !== "price_asc" &&
+        data.sortBy !== "price_desc") ||
       data.currency !== undefined,
     {
       message:
-        "currency is required when using minPrice or maxPrice to avoid comparing mixed currencies",
+        "currency is required when using minPrice, maxPrice, or price sorting to avoid comparing mixed currencies",
       path: ["currency"],
     }
-  );
+  )
+  .refine((data) => data.cursor === undefined || data.sortBy === "newest", {
+    message: "cursor is only supported when sortBy is newest",
+    path: ["cursor"],
+  });
 
 export const productDetailsInputSchema = z
   .object({
@@ -159,8 +167,9 @@ export const reviewsInputSchema = z
     productId: eventIdSchema.optional(),
     productAddress: productAddressSchema.optional(),
     sellerPubkey: pubkeySchema.optional(),
-    until: z.coerce.number().int().min(0).optional(),
+    cursor: z.string().max(16_384).optional(),
   })
+  .strict()
   .refine(
     (data) =>
       data.productId !== undefined ||
@@ -171,11 +180,13 @@ export const reviewsInputSchema = z
     }
   );
 
-export const listCompaniesSchema = z.object({
-  limit: limitSchema.default(50),
-  until: z.coerce.number().int().min(0).optional(),
-  category: z.string().max(100).transform(canonicalizeSearch).optional(),
-});
+export const listCompaniesSchema = z
+  .object({
+    limit: limitSchema.default(50),
+    cursor: z.string().max(16_384).optional(),
+    category: z.string().max(100).transform(canonicalizeSearch).optional(),
+  })
+  .strict();
 
 export const companyDetailsInputSchema = z.object({
   sellerPubkey: pubkeySchema,

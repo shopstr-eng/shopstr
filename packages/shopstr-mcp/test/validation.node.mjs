@@ -33,9 +33,17 @@ test("normalizes search strings", () => {
   assert.equal(searchSchema.parse("  hardware   wallet  "), "hardware wallet");
 });
 
-test("requires currency when price filters are used", () => {
+test("requires currency when price filters or price sorting are used", () => {
   assert.equal(
     searchProductsSchema.safeParse({ maxPrice: 50, limit: 10 }).success,
+    false
+  );
+  assert.equal(
+    searchProductsSchema.safeParse({ sortBy: "price_asc" }).success,
+    false
+  );
+  assert.equal(
+    searchProductsSchema.safeParse({ sortBy: "price_desc" }).success,
     false
   );
   const parsed = searchProductsSchema.parse({
@@ -45,6 +53,23 @@ test("requires currency when price filters are used", () => {
   });
   assert.equal(parsed.currency, "USD");
   assert.equal(parsed.limit, 10);
+  assert.equal(
+    searchProductsSchema.safeParse({
+      sortBy: "price_asc",
+      currency: "USD",
+    }).success,
+    true
+  );
+});
+
+test("search product pagination accepts a bounded cursor and rejects legacy until", () => {
+  const parsed = searchProductsSchema.parse({ cursor: "cursor-token" });
+  assert.equal(parsed.cursor, "cursor-token");
+  assert.equal(
+    searchProductsSchema.safeParse({ cursor: "a".repeat(16_385) }).success,
+    false
+  );
+  assert.equal(searchProductsSchema.safeParse({ until: 1 }).success, false);
 });
 
 test("requires at least one reviews lookup identifier", () => {
@@ -56,20 +81,36 @@ test("requires at least one reviews lookup identifier", () => {
   );
 });
 
-// ─── PR4 schema tests ───────────────────────────────────────────────
-
-test("listCompaniesSchema defaults limit to 50 and accepts until", () => {
-  const result = listCompaniesSchema.parse({});
-  assert.equal(result.limit, 50);
-  assert.equal(result.until, undefined);
-
-  const withUntil = listCompaniesSchema.parse({ until: 1700000000 });
-  assert.equal(withUntil.until, 1700000000);
-  assert.equal(withUntil.limit, 50);
+test("reviews pagination accepts a cursor and rejects legacy until", () => {
+  const parsed = reviewsInputSchema.parse({
+    sellerPubkey: pubkey,
+    cursor: "cursor-token",
+  });
+  assert.equal(parsed.cursor, "cursor-token");
+  assert.equal(
+    reviewsInputSchema.safeParse({ sellerPubkey: pubkey, until: 1 }).success,
+    false
+  );
 });
 
-test("listCompaniesSchema rejects negative until", () => {
-  assert.equal(listCompaniesSchema.safeParse({ until: -1 }).success, false);
+// ─── PR4 schema tests ───────────────────────────────────────────────
+
+test("listCompaniesSchema defaults limit to 50, accepts a bounded cursor, and rejects legacy until", () => {
+  const result = listCompaniesSchema.parse({});
+  assert.equal(result.limit, 50);
+  assert.equal(result.cursor, undefined);
+
+  const withCursor = listCompaniesSchema.parse({ cursor: "cursor-token" });
+  assert.equal(withCursor.cursor, "cursor-token");
+  assert.equal(withCursor.limit, 50);
+  assert.equal(
+    listCompaniesSchema.safeParse({ until: 1700000000 }).success,
+    false
+  );
+  assert.equal(
+    listCompaniesSchema.safeParse({ cursor: "a".repeat(16_385) }).success,
+    false
+  );
 });
 
 test("companyDetailsInputSchema canonicalizes npub to hex", () => {

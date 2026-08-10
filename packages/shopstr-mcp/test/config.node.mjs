@@ -24,14 +24,21 @@ test("validates relay URLs without credentials", () => {
 });
 
 test("parses relay lists with trimming, dedupe, and defaults", () => {
-  assert.deepEqual(parseRelayList(), [...DEFAULT_RELAYS]);
+  const expectedDefaultRelays = [
+    "wss://nos.lol",
+    "wss://relay.damus.io",
+    "wss://relay.nostr.band",
+  ];
+
+  assert.deepEqual(DEFAULT_RELAYS, expectedDefaultRelays);
+  assert.deepEqual(parseRelayList(), expectedDefaultRelays);
   assert.deepEqual(
     parseRelayList(
       " wss://relay.example.com,invalid,wss://relay.example.com,ws://localhost "
     ),
     ["wss://relay.example.com", "ws://localhost"]
   );
-  assert.deepEqual(parseRelayList("invalid"), [...DEFAULT_RELAYS]);
+  assert.deepEqual(parseRelayList("invalid"), expectedDefaultRelays);
 });
 
 test("parses log levels and positive integers with safe fallbacks", () => {

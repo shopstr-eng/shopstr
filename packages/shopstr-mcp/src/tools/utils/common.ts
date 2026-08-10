@@ -1,6 +1,11 @@
 import type { ZodError } from "zod";
 
 import {
+  acceptCategoryTag,
+  getAcceptedCategoryTags,
+  normalizeCategoryTag,
+} from "../../category-tags.js";
+import {
   MCP_ERROR_CODES,
   createErrorResponse,
   type ToolMeta,
@@ -25,23 +30,31 @@ export const REVIEW_PRODUCT_FILTER_LIMIT = 20;
 export const RELAY_RETRY_AFTER_MS = 2_000;
 export const CATEGORY_VARIANT_REGISTRY_MAX_ENTRIES = 5_000;
 
-const categoryVariantRegistry = new Map<string, Set<string>>();
-const categoryVariantInsertionOrder = new Map<string, true>();
+export { normalizeCategoryTag } from "../../category-tags.js";
 
-export function normalizeCategoryTag(raw: string): string {
-  return raw.trim().replace(/\s+/g, " ").toLowerCase();
-}
+const categoryVariantRegistry = new Map<string, Set<string>>();
+const categoryVariantInsertionOrder = new Map<
+  string,
+  { normalized: string; raw: string }
+>();
 
 export function observeCategoryTags(tags: readonly string[][]): void {
-  for (const tag of tags) {
-    if (tag[0] !== "t" || !tag[1]) continue;
-    observeCategoryTag(tag[1]);
+  for (const category of getAcceptedCategoryTags(tags)) {
+    observeAcceptedCategoryTag(category);
   }
 }
 
 export function observeCategoryTag(raw: string): void {
-  const normalized = normalizeCategoryTag(raw);
-  if (!normalized) return;
+  const category = acceptCategoryTag(raw);
+  if (!category) return;
+  observeAcceptedCategoryTag(category);
+}
+
+function observeAcceptedCategoryTag(category: {
+  normalized: string;
+  raw: string;
+}): void {
+  const { normalized, raw } = category;
   const variants = categoryVariantRegistry.get(normalized) ?? new Set<string>();
   if (variants.has(raw)) return;
 
@@ -53,10 +66,10 @@ export function observeCategoryTag(raw: string): void {
 
   variants.add(raw);
   categoryVariantRegistry.set(normalized, variants);
-  categoryVariantInsertionOrder.set(
-    toCategoryVariantKey(normalized, raw),
-    true
-  );
+  categoryVariantInsertionOrder.set(toCategoryVariantKey(normalized, raw), {
+    normalized,
+    raw,
+  });
 }
 
 export function observeProductEventsForCategories(
@@ -98,23 +111,21 @@ function evictOldestCategoryVariant(): void {
   const oldestKey = categoryVariantInsertionOrder.keys().next().value;
   if (oldestKey === undefined) return;
 
+  const oldest = categoryVariantInsertionOrder.get(oldestKey);
   categoryVariantInsertionOrder.delete(oldestKey);
-  const separatorIndex = oldestKey.indexOf("\0");
-  if (separatorIndex === -1) return;
+  if (!oldest) return;
 
-  const normalized = oldestKey.slice(0, separatorIndex);
-  const raw = oldestKey.slice(separatorIndex + 1);
-  const variants = categoryVariantRegistry.get(normalized);
+  const variants = categoryVariantRegistry.get(oldest.normalized);
   if (!variants) return;
 
-  variants.delete(raw);
+  variants.delete(oldest.raw);
   if (variants.size === 0) {
-    categoryVariantRegistry.delete(normalized);
+    categoryVariantRegistry.delete(oldest.normalized);
   }
 }
 
 function toCategoryVariantKey(normalized: string, raw: string): string {
-  return `${normalized}\0${raw}`;
+  return JSON.stringify([normalized, raw]);
 }
 
 export function formatValidationError(error: ZodError): string {

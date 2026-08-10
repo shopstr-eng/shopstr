@@ -67,6 +67,13 @@ test("registers and calls PR4 read tools", async () => {
       "list_companies",
       "search_products",
     ]);
+    for (const tool of tools.tools) {
+      assert.match(
+        tool.description,
+        /unverified user-generated content/,
+        `${tool.name} must identify relay text as unverified user-generated content`
+      );
+    }
     assert.deepEqual(await client.listResources(), { resources: [] });
     assert.deepEqual(await client.listPrompts(), { prompts: [] });
 
@@ -106,6 +113,14 @@ test("rate limits concurrent relay-backed tool calls", async () => {
     releaseFetch = resolve;
   });
   let fetchCount = 0;
+  let auditOutput = "";
+  const originalStderrWrite = process.stderr.write;
+  process.stderr.write = (chunk, ...args) => {
+    auditOutput += String(chunk);
+    const callback = args.find((arg) => typeof arg === "function");
+    callback?.();
+    return true;
+  };
   const server = createMcpServer(
     loadConfig({
       SHOPSTR_MCP_RELAYS: "wss://relay.example.com",
@@ -146,7 +161,24 @@ test("rate limits concurrent relay-backed tool calls", async () => {
     assert.equal(secondResult.isError, true);
     assert.equal(secondBody.errorCode, "RATE_LIMITED");
     assert.equal(fetchCount, 1);
+    const auditEntries = auditOutput
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+      .filter(
+        (entry) =>
+          entry.level === "audit" && entry.toolName === "search_products"
+      );
+    assert.equal(auditEntries.length, 2);
+    assert.equal(
+      auditEntries.some(
+        (entry) => entry.success === false && entry.errorCode === "RATE_LIMITED"
+      ),
+      true
+    );
   } finally {
+    process.stderr.write = originalStderrWrite;
     releaseFetch?.();
     await client.close();
     await server.close();
