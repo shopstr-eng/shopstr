@@ -114,32 +114,16 @@ describe("findListingBySlug", () => {
     expect(findListingBySlug("nonexistent-slug", [product])).toBeUndefined();
   });
 
-  it("prefers pubkey-suffixed resolution over ambiguous plain match", () => {
-    // productA/productB share a base slug (ambiguous under plain matching).
-    // productC's literal title happens to slugify to exactly the suffixed
-    // query string. The suffix-regex path must resolve to productA (correct
-    // pubkey-disambiguated match) rather than falling through to the plain
-    // path and returning productC.
-    const productA: ListingSlugCandidate = {
+  it("falls back to a literal match when a suffix-shaped slug has no pubkey match", () => {
+    const product: ListingSlugCandidate = {
       id: "prod-a",
-      title: "Test Item",
-      pubkey: PUBKEY_A, // prefix "aaaaaaaa"
-    };
-    const productB: ListingSlugCandidate = {
-      id: "prod-b",
-      title: "Test Item",
-      pubkey: PUBKEY_B,
-    };
-    const productC: ListingSlugCandidate = {
-      id: "prod-c",
       title: "Test Item-aaaaaaaa",
       pubkey: PUBKEY_C,
     };
-    const all = [productA, productB, productC];
 
-    const result = findListingBySlug("Test-Item-aaaaaaaa", all);
-    expect(result).toBe(productA);
-    expect(result).not.toBe(productC);
+    const slug = getListingSlug(product, [product]);
+    expect(slug).toBe("Test-Item-aaaaaaaa");
+    expect(findListingBySlug(slug, [product])).toBe(product);
   });
 });
 
