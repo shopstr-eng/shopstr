@@ -28,9 +28,7 @@ describe("titleToSlug", () => {
   });
 
   it("strips special characters: # ? & / % = + < > { } | ^ ~ [ ] ` @ ! $ * ( ) \" ' ; : ,", () => {
-    expect(
-      titleToSlug(`#?&/\\%=+<>{}|^~[]\`@!$*()"';:,Mug`)
-    ).toBe("Mug");
+    expect(titleToSlug(`#?&/\\%=+<>{}|^~[]\`@!$*()"';:,Mug`)).toBe("Mug");
   });
 
   it("collapses whitespace left behind after stripping special characters", () => {
@@ -38,9 +36,7 @@ describe("titleToSlug", () => {
   });
 
   it("trims leading and trailing hyphens", () => {
-    expect(titleToSlug("-Leading and Trailing-")).toBe(
-      "Leading-and-Trailing"
-    );
+    expect(titleToSlug("-Leading and Trailing-")).toBe("Leading-and-Trailing");
   });
 
   it("collapses consecutive hyphens", () => {
@@ -226,12 +222,8 @@ describe("getProfileSlug", () => {
       [PUBKEY_A, makeProfile(PUBKEY_A, { name: "Ada Lovelace" })],
       [PUBKEY_B, makeProfile(PUBKEY_B, { name: "Ada Lovelace" })],
     ]);
-    expect(getProfileSlug(PUBKEY_A, profileData)).toBe(
-      "Ada-Lovelace-aaaaaaaa"
-    );
-    expect(getProfileSlug(PUBKEY_B, profileData)).toBe(
-      "Ada-Lovelace-bbbbbbbb"
-    );
+    expect(getProfileSlug(PUBKEY_A, profileData)).toBe("Ada-Lovelace-aaaaaaaa");
+    expect(getProfileSlug(PUBKEY_B, profileData)).toBe("Ada-Lovelace-bbbbbbbb");
   });
 });
 
@@ -240,9 +232,7 @@ describe("findPubkeyByProfileSlug", () => {
     const profileData = new Map([
       [PUBKEY_A, makeProfile(PUBKEY_A, { name: "Ada Lovelace" })],
     ]);
-    expect(findPubkeyByProfileSlug("Ada-Lovelace", profileData)).toBe(
-      PUBKEY_A
-    );
+    expect(findPubkeyByProfileSlug("Ada-Lovelace", profileData)).toBe(PUBKEY_A);
   });
 
   it("returns undefined when multiple profiles share the slug and no suffix is present", () => {
@@ -260,9 +250,9 @@ describe("findPubkeyByProfileSlug", () => {
       [PUBKEY_A, makeProfile(PUBKEY_A, { name: "Ada Lovelace" })],
       [PUBKEY_B, makeProfile(PUBKEY_B, { name: "Ada Lovelace" })],
     ]);
-    expect(
-      findPubkeyByProfileSlug("Ada-Lovelace-bbbbbbbb", profileData)
-    ).toBe(PUBKEY_B);
+    expect(findPubkeyByProfileSlug("Ada-Lovelace-bbbbbbbb", profileData)).toBe(
+      PUBKEY_B
+    );
   });
 
   it("returns undefined when no profile matches", () => {
