@@ -245,4 +245,109 @@ describe("evaluateHodlDisputeActionability", () => {
     expect(result.role).toBe("seller");
     expect(result.actionable).toBe(false);
   });
+
+  /**
+   * The seller timeout is epoch arithmetic on both sides — acceptedAt.getTime()
+   * against a nowSeconds derived from Date.now() — so a correct absolute
+   * instant has to yield the same verdict in every process timezone. These pin
+   * that: no manual formatting, no wall-clock component, nothing that would
+   * make a non-UTC deployment behave differently from a UTC one.
+   *
+   * What they deliberately do not cover: whether the Date reaching this
+   * function is the right instant in the first place. That depends on
+   * accepted_at being TIMESTAMPTZ in the database, and is pinned separately in
+   * utils/db/__tests__/hodl-escrow-orders.test.ts ("accepted_at timezone
+   * round-tripping").
+   */
+  describe("timezone independence of the seller timeout", () => {
+    const ACCEPTED_AT_SECONDS = Math.floor(
+      Date.parse("2026-08-05T12:00:00.000Z") / 1000
+    );
+
+    // One instant, spelled four ways — UTC, a half-hour offset, a negative
+    // offset, and one past the dateline where even the calendar date differs.
+    // Every Date below is the same absolute moment, so the verdict must not
+    // move. Note this varies the *spelling of the input*, not process.env.TZ:
+    // assigning that under Jest does not invalidate V8's timezone cache, so
+    // zone-parameterised cases would pass vacuously in the runner's own zone.
+    const SPELLINGS: [string, string][] = [
+      ["Z", "2026-08-05T12:00:00.000Z"],
+      ["+05:30", "2026-08-05T17:30:00.000+05:30"],
+      ["-04:00", "2026-08-05T08:00:00.000-04:00"],
+      ["+14:00", "2026-08-06T02:00:00.000+14:00"],
+    ];
+
+    it.each(SPELLINGS)(
+      "holds a one-minute-early seller dispute for an acceptedAt spelled %s",
+      async (_, iso) => {
+        getHodlEscrowOrderDisputeContextMock.mockResolvedValue(
+          orderContext({ acceptedAt: new Date(iso) })
+        );
+
+        const result = await evaluateHodlDisputeActionability(
+          PAYMENT_HASH,
+          disputeEvent({ authorPubkey: SELLER_PUBKEY }),
+          ACCEPTED_AT_SECONDS + SELLER_DISPUTE_TIMEOUT_SECONDS - 60
+        );
+
+        expect(result).toEqual({
+          role: "seller",
+          actionable: false,
+          remainingSeconds: 60,
+        });
+      }
+    );
+
+    it.each(SPELLINGS)(
+      "releases the seller dispute on the boundary for an acceptedAt spelled %s",
+      async (_, iso) => {
+        getHodlEscrowOrderDisputeContextMock.mockResolvedValue(
+          orderContext({ acceptedAt: new Date(iso) })
+        );
+
+        const result = await evaluateHodlDisputeActionability(
+          PAYMENT_HASH,
+          disputeEvent({ authorPubkey: SELLER_PUBKEY }),
+          ACCEPTED_AT_SECONDS + SELLER_DISPUTE_TIMEOUT_SECONDS
+        );
+
+        expect(result).toEqual({ role: "seller", actionable: true });
+      }
+    );
+
+    it("flips the verdict outright when acceptedAt arrives skewed by a UTC offset", async () => {
+      // Why the column type is load-bearing rather than cosmetic. A plain
+      // TIMESTAMP read in Asia/Kolkata (+05:30) lands 5h30m early, and the
+      // seller timeout is 4h — so an order accepted moments ago reads as long
+      // past its window. Feed the function the Date such a read would hand it
+      // and the wait it exists to impose disappears.
+      const acceptedJustNow = new Date("2026-08-05T12:00:00.000Z");
+      const nowSeconds = ACCEPTED_AT_SECONDS + 60;
+
+      getHodlEscrowOrderDisputeContextMock.mockResolvedValue(
+        orderContext({ acceptedAt: acceptedJustNow })
+      );
+      await expect(
+        evaluateHodlDisputeActionability(
+          PAYMENT_HASH,
+          disputeEvent({ authorPubkey: SELLER_PUBKEY }),
+          nowSeconds
+        )
+      ).resolves.toMatchObject({ actionable: false });
+
+      const skewedByIstOffset = new Date(
+        acceptedJustNow.getTime() - 5.5 * 60 * 60 * 1000
+      );
+      getHodlEscrowOrderDisputeContextMock.mockResolvedValue(
+        orderContext({ acceptedAt: skewedByIstOffset })
+      );
+      await expect(
+        evaluateHodlDisputeActionability(
+          PAYMENT_HASH,
+          disputeEvent({ authorPubkey: SELLER_PUBKEY }),
+          nowSeconds
+        )
+      ).resolves.toMatchObject({ actionable: true });
+    });
+  });
 });
