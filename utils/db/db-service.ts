@@ -495,12 +495,18 @@ async function initializeTables(): Promise<void> {
           invoice TEXT NOT NULL,
           amount_sats BIGINT NOT NULL CHECK (amount_sats > 0),
           status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'accepted', 'settled', 'cancelled')),
+          -- TIMESTAMPTZ because this is timeout arithmetic input, not a
+          -- display value; see the column comment in db/schema.sql.
+          accepted_at TIMESTAMPTZ,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           expires_at TIMESTAMP NOT NULL
       );
 
       CREATE INDEX IF NOT EXISTS idx_hodl_escrow_orders_buyer ON hodl_escrow_orders(buyer_nostr_pubkey);
       CREATE INDEX IF NOT EXISTS idx_hodl_escrow_orders_seller ON hodl_escrow_orders(seller_nostr_pubkey);
+
+      -- Migration for tables created before accepted_at existed.
+      ALTER TABLE hodl_escrow_orders ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
 
       -- Shop slugs table (storefront URL slugs)
       CREATE TABLE IF NOT EXISTS shop_slugs (
@@ -559,6 +565,35 @@ async function initializeTables(): Promise<void> {
         ) THEN
           ALTER TABLE message_events ADD COLUMN order_id TEXT DEFAULT NULL;
           CREATE INDEX IF NOT EXISTS idx_message_events_order_id ON message_events(order_id);
+        END IF;
+      END $$;
+    `);
+
+    // Migration: hodl_escrow_orders.accepted_at was first shipped as a plain
+    // TIMESTAMP, which stores wall-clock digits with no zone. Left that way it
+    // skews evaluateHodlDisputeActionability's timeout by the reading process's
+    // UTC offset, so convert in place on any database that already has the old
+    // type. Guarded rather than unconditional: ALTER COLUMN ... TYPE rewrites
+    // the table under an ACCESS EXCLUSIVE lock, and this runs on every cold
+    // start.
+    //
+    // No USING clause on purpose. Existing values were written by
+    // CURRENT_TIMESTAMP, which Postgres coerced from timestamptz down to
+    // timestamp using the session TimeZone; the default conversion reads them
+    // back with that same session TimeZone, which is the only interpretation
+    // that reproduces the instant actually intended. An explicit
+    // `AT TIME ZONE 'UTC'` would be wrong wherever that zone is not UTC.
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'hodl_escrow_orders'
+            AND column_name = 'accepted_at'
+            AND data_type = 'timestamp without time zone'
+        ) THEN
+          ALTER TABLE hodl_escrow_orders
+            ALTER COLUMN accepted_at TYPE TIMESTAMPTZ;
         END IF;
       END $$;
     `);
@@ -2160,6 +2195,10 @@ const HODL_ADVANCING_TRANSITIONS: Record<
  * that transition happens, and folding it into the same UPDATE means there
  * is never a window where `status = 'accepted'` is visible with
  * `accepted_at` still null. No other transition touches the column.
+ *
+ * `CURRENT_TIMESTAMP` is itself a `timestamptz`, so against the TIMESTAMPTZ
+ * column it stores the current instant with no narrowing coercion — nothing
+ * here depends on the session's TimeZone setting.
  */
 export async function updateHodlEscrowOrderStatusIfAdvancing(
   paymentHash: string,
@@ -2257,7 +2296,12 @@ export async function listPendingHodlEscrowOrderPaymentHashes(): Promise<
 export type HodlEscrowOrderDisputeContext = {
   buyerNostrPubkey: string;
   sellerNostrPubkey: string;
-  /** Null until status first transitions open -> accepted; see the column comment in db/schema.sql. */
+  /**
+   * Null until status first transitions open -> accepted; see the column
+   * comment in db/schema.sql. An absolute instant, because the column is
+   * TIMESTAMPTZ — node-postgres parses the offset the server sends rather
+   * than reinterpreting bare digits in the local zone.
+   */
   acceptedAt: Date | null;
 };
 

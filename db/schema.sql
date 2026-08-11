@@ -238,7 +238,15 @@ CREATE TABLE IF NOT EXISTS hodl_escrow_orders (
     -- means the buyer's payment has never been accepted, which is what lets
     -- evaluateHodlDisputeActionability tell "seller dispute filed before any
     -- funds were locked" apart from "seller dispute filed too soon after".
-    accepted_at TIMESTAMP,
+    --
+    -- TIMESTAMPTZ, not TIMESTAMP: this column is arithmetic input, not a
+    -- display value. A plain TIMESTAMP stores wall-clock digits with no zone,
+    -- and node-postgres parses those digits in the Node process's local zone —
+    -- so a server running in a non-UTC zone reads back an instant shifted by
+    -- its own UTC offset, silently skewing the SELLER_DISPUTE_TIMEOUT_SECONDS
+    -- window by exactly that many hours. TIMESTAMPTZ round-trips one
+    -- unambiguous instant regardless of server or session zone.
+    accepted_at TIMESTAMPTZ,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expires_at TIMESTAMP NOT NULL
 );

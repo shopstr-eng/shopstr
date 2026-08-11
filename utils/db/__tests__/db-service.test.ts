@@ -129,7 +129,15 @@ async function withPostgresTestContainer<T>(
 }
 
 async function withPostgresDbService<T>(
-  callback: (db: DbServiceModule) => Promise<T>
+  callback: (db: DbServiceModule) => Promise<T>,
+  options: {
+    /**
+     * Runs against the fresh database before db-service is imported, so
+     * before its table initialization has had a chance to run. For tests that
+     * need to stand up a legacy schema shape and watch a migration convert it.
+     */
+    beforeInit?: (databaseUrl: string) => Promise<void>;
+  } = {}
 ): Promise<T> {
   return withPostgresTestContainer(async (databaseUrl) => {
     const prev = process.env.DATABASE_URL;
@@ -138,6 +146,10 @@ async function withPostgresDbService<T>(
     process.env.SHOPSTR_DB_AUTO_INIT_IN_TESTS = "1";
 
     try {
+      if (options.beforeInit) {
+        await options.beforeInit(databaseUrl);
+      }
+
       let result: T | undefined;
       await jest.isolateModulesAsync(async () => {
         jest.resetModules();
@@ -3583,6 +3595,253 @@ describe("db-service helpers", () => {
             db.recordP2pkEscrowRuling(registration.orderId, "seller")
           ).resolves.toBe("conflict");
         });
+      }
+    );
+
+    /**
+     * hodl_escrow_orders.accepted_at is the input to
+     * evaluateHodlDisputeActionability's SELLER_DISPUTE_TIMEOUT_SECONDS
+     * arithmetic, so it has to survive the trip to Postgres and back as one
+     * absolute instant. It shipped as a plain TIMESTAMP first, which does not:
+     * bare wall-clock digits get resolved against the reading process's local
+     * zone, shifting every read by that zone's UTC offset.
+     *
+     * This runs the whole real path against a real server: CURRENT_TIMESTAMP
+     * write through updateHodlEscrowOrderStatusIfAdvancing, read back through
+     * getHodlEscrowOrderDisputeContext.
+     *
+     * The decisive half is the second one, which writes from a session pinned
+     * to a non-UTC zone and asserts an exact instant — that fails under a plain
+     * TIMESTAMP column in any runner zone, UTC included. The bracket check
+     * before it only bites when the runner itself is off UTC; the process zone
+     * cannot be varied from inside Jest, since its sandboxed process.env never
+     * reaches the hook that invalidates V8's timezone cache.
+     */
+    maybeItTc(
+      "round-trips hodl accepted_at as an absolute instant across session zones",
+      async () => {
+        const prevArbiter = process.env.ARBITER_NOSTR_PUBKEY;
+        const prevPublicArbiter = process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY;
+
+        process.env.ARBITER_NOSTR_PUBKEY = "a".repeat(64);
+        delete process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY;
+
+        try {
+          await withPostgresDbService(async (db) => {
+            await waitForTables(db, ["hodl_escrow_orders"]);
+            await waitForColumns(db, "hodl_escrow_orders", ["accepted_at"]);
+
+            const pool = db.getDbPool();
+            const typeClient = await pool.connect();
+            try {
+              const declared = await typeClient.query<{ data_type: string }>(
+                `SELECT data_type
+                 FROM information_schema.columns
+                 WHERE table_schema = 'public'
+                   AND table_name = 'hodl_escrow_orders'
+                   AND column_name = 'accepted_at'`
+              );
+              expect(declared.rows[0]?.data_type).toBe(
+                "timestamp with time zone"
+              );
+            } finally {
+              typeClient.release();
+            }
+
+            const paymentHash = "b".repeat(64);
+            await expect(
+              db.registerHodlEscrowOrder({
+                paymentHash,
+                preimage: "c".repeat(64),
+                buyerNostrPubkey: "1".repeat(64),
+                sellerNostrPubkey: "2".repeat(64),
+                invoice: "lnbc420n1pjexample",
+                amountSats: 42,
+                expiresAt: new Date(Date.now() + 3_600_000),
+              })
+            ).resolves.toBe("created");
+
+            const unaccepted =
+              await db.getHodlEscrowOrderDisputeContext(paymentHash);
+            expect(unaccepted?.acceptedAt).toBeNull();
+
+            // Bracket the CURRENT_TIMESTAMP write with the process clock.
+            // Both bounds are absolute instants, so a value that came back
+            // reinterpreted in some local zone falls outside them.
+            const before = Date.now();
+            await expect(
+              db.updateHodlEscrowOrderStatusIfAdvancing(paymentHash, "accepted")
+            ).resolves.toBe("accepted");
+            const after = Date.now();
+
+            const accepted =
+              await db.getHodlEscrowOrderDisputeContext(paymentHash);
+            expect(accepted?.acceptedAt).toBeInstanceOf(Date);
+            const acceptedAtMs = accepted!.acceptedAt!.getTime();
+
+            // Generous slack: the container clock can drift from the host's by
+            // a little, while the failure this guards against is a whole UTC
+            // offset — at minimum 15 minutes, and hours for most zones.
+            expect(acceptedAtMs).toBeGreaterThanOrEqual(before - 60_000);
+            expect(acceptedAtMs).toBeLessThanOrEqual(after + 60_000);
+
+            // Stamp a known instant from a session pinned to a non-UTC zone,
+            // then read it back through the public helper on a connection that
+            // never saw that setting. Under TIMESTAMPTZ the instant survives
+            // whichever pooled connection serves the read and whatever zone it
+            // is on. Under TIMESTAMP the write would truncate to this session's
+            // wall clock (08:00 rather than 12:00) and the read-back would miss
+            // by four hours — in any runner zone, so this assertion is the one
+            // that pins the column type unconditionally.
+            const knownInstant = new Date("2026-08-05T12:00:00.000Z");
+            const writeClient = await pool.connect();
+            try {
+              await writeClient.query("SET TIME ZONE 'America/New_York'");
+              await writeClient.query(
+                `UPDATE hodl_escrow_orders
+                 SET accepted_at = $2
+                 WHERE payment_hash = $1`,
+                [paymentHash, knownInstant]
+              );
+            } finally {
+              await writeClient.query("RESET TIME ZONE");
+              writeClient.release();
+            }
+
+            const reread =
+              await db.getHodlEscrowOrderDisputeContext(paymentHash);
+            expect(reread?.acceptedAt?.toISOString()).toBe(
+              knownInstant.toISOString()
+            );
+
+            // No later transition may disturb it.
+            await expect(
+              db.updateHodlEscrowOrderStatusIfAdvancing(paymentHash, "settled")
+            ).resolves.toBe("settled");
+            const afterSettle =
+              await db.getHodlEscrowOrderDisputeContext(paymentHash);
+            expect(afterSettle?.acceptedAt?.toISOString()).toBe(
+              knownInstant.toISOString()
+            );
+          });
+        } finally {
+          restoreEnv("ARBITER_NOSTR_PUBKEY", prevArbiter);
+          restoreEnv("NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY", prevPublicArbiter);
+        }
+      }
+    );
+
+    /**
+     * Operators already running the first cut of this schema have accepted_at
+     * as a plain TIMESTAMP, and rows already stamped through it. Table
+     * initialization has to convert the column in place rather than leave the
+     * old type sitting there, and has to carry the existing values over
+     * without moving them.
+     */
+    maybeItTc(
+      "migrates a pre-existing TIMESTAMP accepted_at column to TIMESTAMPTZ",
+      async () => {
+        // Wall-clock digits as the legacy column holds them, with no zone
+        // attached — which is the whole problem with the old type.
+        const LEGACY_WALL_CLOCK = "2026-08-05 12:00:00";
+        const paymentHash = "d".repeat(64);
+
+        // Filled in by beforeInit. The in-place ALTER COLUMN deliberately
+        // carries no USING clause, so it reinterprets those digits through the
+        // server's session zone — correct precisely because that is the same
+        // zone CURRENT_TIMESTAMP was coerced through on the way in. Rather than
+        // hardcode an instant and assume the container runs on UTC, ask the
+        // server what those digits mean in its own zone and expect exactly that.
+        let expectedInstantIso = "";
+
+        await withPostgresDbService(
+          async (db) => {
+            await waitForTables(db, ["hodl_escrow_orders"]);
+            await waitForColumns(db, "hodl_escrow_orders", ["accepted_at"]);
+
+            const pool = db.getDbPool();
+            const client = await pool.connect();
+            try {
+              const migrated = await client.query<{ data_type: string }>(
+                `SELECT data_type
+                   FROM information_schema.columns
+                   WHERE table_schema = 'public'
+                     AND table_name = 'hodl_escrow_orders'
+                     AND column_name = 'accepted_at'`
+              );
+              expect(migrated.rows[0]?.data_type).toBe(
+                "timestamp with time zone"
+              );
+            } finally {
+              client.release();
+            }
+
+            // The legacy row's stamp still denotes the instant it always
+            // did, now readable without depending on the reader's zone.
+            expect(expectedInstantIso).not.toBe("");
+            const context =
+              await db.getHodlEscrowOrderDisputeContext(paymentHash);
+            expect(context?.acceptedAt?.toISOString()).toBe(expectedInstantIso);
+          },
+          {
+            beforeInit: async (databaseUrl) => {
+              const { Pool } = await import("pg");
+              const legacyPool = new Pool({ connectionString: databaseUrl });
+              const legacyClient = await legacyPool.connect();
+              try {
+                // The session zone is left exactly as the server defaults it,
+                // so this connection and the migration's agree on it without
+                // either being pinned. Nothing here presumes that default is
+                // UTC.
+                const interpreted = await legacyClient.query<{
+                  instant: Date;
+                }>(
+                  `SELECT ($1::timestamp AT TIME ZONE current_setting('TimeZone')) AS instant`,
+                  [LEGACY_WALL_CLOCK]
+                );
+                expectedInstantIso = interpreted.rows[0]!.instant.toISOString();
+
+                // The first cut of the table, accepted_at included.
+                await legacyClient.query(`
+                    CREATE TABLE hodl_escrow_orders (
+                        payment_hash TEXT PRIMARY KEY,
+                        preimage TEXT NOT NULL,
+                        buyer_nostr_pubkey TEXT NOT NULL,
+                        seller_nostr_pubkey TEXT NOT NULL,
+                        arbiter_nostr_pubkey TEXT NOT NULL,
+                        invoice TEXT NOT NULL,
+                        amount_sats BIGINT NOT NULL CHECK (amount_sats > 0),
+                        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'accepted', 'settled', 'cancelled')),
+                        accepted_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expires_at TIMESTAMP NOT NULL
+                    )
+                  `);
+                await legacyClient.query(
+                  `INSERT INTO hodl_escrow_orders (
+                       payment_hash, preimage, buyer_nostr_pubkey,
+                       seller_nostr_pubkey, arbiter_nostr_pubkey, invoice,
+                       amount_sats, status, accepted_at, expires_at
+                     )
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, 'accepted', $8::timestamp, CURRENT_TIMESTAMP + interval '1 hour')`,
+                  [
+                    paymentHash,
+                    "c".repeat(64),
+                    "1".repeat(64),
+                    "2".repeat(64),
+                    "a".repeat(64),
+                    "lnbc420n1pjexample",
+                    42,
+                    LEGACY_WALL_CLOCK,
+                  ]
+                );
+              } finally {
+                legacyClient.release();
+                await legacyPool.end();
+              }
+            },
+          }
+        );
       }
     );
 

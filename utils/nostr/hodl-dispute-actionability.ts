@@ -145,6 +145,11 @@ export async function evaluateHodlDisputeActionability(
     });
   }
 
+  // Epoch-vs-epoch on both sides: getTime() is UTC milliseconds and
+  // nowSeconds derives from Date.now(), so no zone enters the subtraction.
+  // That holds only while accepted_at is TIMESTAMPTZ — as a plain TIMESTAMP
+  // the Date arriving here is already shifted by the reading process's UTC
+  // offset, and this arithmetic would faithfully compare a wrong instant.
   const acceptedAtSeconds = Math.floor(order.acceptedAt.getTime() / 1000);
   const elapsedSeconds = nowSeconds - acceptedAtSeconds;
 
