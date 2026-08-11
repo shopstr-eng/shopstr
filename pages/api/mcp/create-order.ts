@@ -262,6 +262,9 @@ async function handleCreateOrder(
         bundles: quantity,
       };
     } else {
+      if (unitPrice === undefined) {
+        return res.status(400).json({ error: "Listing price is missing" });
+      }
       subtotal = unitPrice * quantity;
     }
 
@@ -304,11 +307,11 @@ async function handleCreateOrder(
     const orderId = generateOrderId();
 
     const pricingBlock: Record<string, any> = {
-      unitPrice,
+      unitPrice: unitPrice ?? 0,
       quantity: effectiveQuantity,
       subtotal: selectedBulkUnits
         ? product.bulkPrices!.get(selectedBulkUnits)! * quantity
-        : unitPrice * quantity,
+        : (unitPrice ?? 0) * quantity,
       discountPercentage: discountPercentage || undefined,
       discountedSubtotal: discountPercentage ? subtotal : undefined,
       shippingCost,

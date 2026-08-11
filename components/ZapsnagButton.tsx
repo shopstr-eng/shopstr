@@ -151,10 +151,15 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
         return;
       }
 
-      if (!product.quantity || product.quantity <= 0) {
+      if (
+        !product.quantity ||
+        product.quantity <= 0 ||
+        product.price === undefined
+      ) {
         setIsCheckingInventory(false);
         return;
       }
+      const productPrice = product.price;
 
       try {
         const { zapRecipientPubkey } = await getSellerZapContext(
@@ -173,7 +178,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
             // the LNURL provider's signing key — accept both so zaps made
             // outside Shopstr still count toward inventory.
             alternateRecipientPubkeys: [product.pubkey],
-            expectedAmountSats: product.price,
+            expectedAmountSats: productPrice,
             // Buyers may tip above the listed price; require at least the
             // product price so a forged "sale" still costs a real full-price
             // zap (prevents cheap sold-out griefing). Note: sales made
@@ -213,10 +218,11 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       return;
     }
 
-    if (product.price <= 0) {
+    if (product.price === undefined || product.price <= 0) {
       alert("Could not determine a valid price. Cannot Zap.");
       return;
     }
+    const productPrice = product.price;
 
     setLoading(true);
     setStatus("Finding seller address...");
@@ -288,7 +294,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
           : ["wss://relay.damus.io", "wss://nos.lol"];
 
       const zapArgs = {
-        satoshi: product.price,
+        satoshi: productPrice,
         comment: `Order #${orderId}`,
         e: product.id,
         relays: targetRelays,
@@ -308,7 +314,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
           productId: product.id,
           expectedRecipientPubkey: zapRecipientPubkey,
           expectedReceiptSignerPubkey: zapRecipientPubkey,
-          expectedAmountSats: product.price,
+          expectedAmountSats: productPrice,
           minTimestamp: startTime,
           expectedPreimage: response.preimage,
         });

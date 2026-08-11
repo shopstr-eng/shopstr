@@ -11,6 +11,10 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { lookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
 import handler from "@/pages/api/nostr/verify-nip05";
+import {
+  isPrivateOrLocalIp,
+  verifyNip05Claim,
+} from "@/utils/nostr/canonical-nip05";
 
 describe("/api/nostr/verify-nip05", () => {
   const mockedLookup = lookup as unknown as jest.Mock;
@@ -63,6 +67,8 @@ describe("/api/nostr/verify-nip05", () => {
     ({
       method,
       query,
+      headers: {},
+      socket: { remoteAddress: "127.0.0.1" },
     }) as Partial<NextApiRequest> as NextApiRequest;
 
   const mockPublicDns = () => {
@@ -368,6 +374,49 @@ describe("/api/nostr/verify-nip05", () => {
     expect(res.statusCode).toBe(405);
     expect(res.body).toEqual({
       error: "Method not allowed",
+    });
+  });
+});
+
+describe("canonical NIP-05 verifier", () => {
+  it("classifies IPv4-mapped IPv6 private addresses as blocked", () => {
+    expect(isPrivateOrLocalIp("::ffff:127.0.0.1")).toBe(true);
+    expect(isPrivateOrLocalIp("::ffff:10.0.0.1")).toBe(true);
+  });
+
+  it("pins a single resolved public address for the actual request", async () => {
+    const resolveHostname = jest.fn().mockResolvedValue([
+      {
+        address: "93.184.216.34",
+        family: 4,
+      },
+    ]);
+    const fetchJson = jest.fn().mockResolvedValue({
+      names: {
+        alice: "f".repeat(64),
+      },
+    });
+
+    const result = await verifyNip05Claim("alice@example.com", "f".repeat(64), {
+      resolveHostname,
+      fetchJson,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+    });
+
+    expect(resolveHostname).toHaveBeenCalledTimes(1);
+    expect(resolveHostname).toHaveBeenCalledWith("example.com");
+    expect(fetchJson).toHaveBeenCalledWith(
+      "https://example.com/.well-known/nostr.json?name=alice",
+      "example.com",
+      { address: "93.184.216.34", family: 4 },
+      expect.any(AbortSignal),
+      64 * 1024
+    );
+    expect(result).toMatchObject({
+      attempted: true,
+      verified: true,
+      claimed: "alice@example.com",
+      checkedAt: "2024-01-01T00:00:00.000Z",
     });
   });
 });

@@ -185,7 +185,7 @@ export default function Component() {
             ? product.volumePrice
             : product.weightPrice !== undefined
               ? product.weightPrice
-              : product.price;
+              : (product.price ?? 0);
       const qty = quantities[product.id] || 1;
       const discount = appliedDiscounts[product.pubkey] || 0;
       const discountedPrice =
@@ -556,7 +556,7 @@ export default function Component() {
           ? product.volumePrice
           : product.weightPrice !== undefined
             ? product.weightPrice
-            : product.price;
+            : (product.price ?? 0);
 
     if (
       product.currency.toLowerCase() === "sats" ||

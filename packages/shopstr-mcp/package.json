@@ -24,6 +24,7 @@
     "README.md"
   ],
   "scripts": {
+    "prebuild": "node scripts/sync-canonical-parser.mjs",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "test": "npm run build && node --test test/*.node.mjs test/tools/*.node.mjs"
