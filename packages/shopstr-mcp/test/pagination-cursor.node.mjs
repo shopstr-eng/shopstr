@@ -42,6 +42,78 @@ test("round-trips a versioned cursor and fingerprints fixed-order query values",
   );
 });
 
+test("emits compact version 2 cursors", () => {
+  const cursor = createPaginationCursor({
+    ...expected,
+    boundary: 42,
+    seen: [hex("a"), hex("b")],
+  });
+  const bytes = Buffer.from(cursor, "base64url");
+
+  assert.equal(bytes.subarray(0, 2).toString("ascii"), "SC");
+  assert.equal(bytes[2], 2);
+  assert.deepEqual(decodePaginationCursor(cursor, expected), {
+    boundary: 42,
+    seen: [hex("a"), hex("b")],
+  });
+});
+
+test("decodes legacy version 1 JSON cursors", () => {
+  const cursor = encodeCursor({
+    v: 1,
+    ...expected,
+    boundary: 42,
+    seen: [hex("a"), hex("b")],
+  });
+
+  assert.deepEqual(decodePaginationCursor(cursor, expected), {
+    boundary: 42,
+    seen: [hex("a"), hex("b")],
+  });
+});
+
+test("keeps compact cursors within the planned size ceilings", () => {
+  const makeSeen = (count) =>
+    Array.from({ length: count }, (_, index) =>
+      index.toString(16).padStart(64, "0")
+    );
+
+  assert.ok(
+    createPaginationCursor({
+      ...expected,
+      boundary: 42,
+      seen: makeSeen(37),
+    }).length <= 1_640
+  );
+  assert.ok(
+    createPaginationCursor({
+      ...expected,
+      boundary: 42,
+      seen: makeSeen(128),
+    }).length <= 5_522
+  );
+});
+
+test("rejects malformed version 2 binary cursors", () => {
+  const valid = Buffer.from(
+    createPaginationCursor({ ...expected, boundary: 42, seen: [hex("a")] }),
+    "base64url"
+  );
+  const badVersion = Buffer.from(valid);
+  badVersion[2] = 3;
+  const badTool = Buffer.from(valid);
+  badTool[3] = 255;
+  const badCount = Buffer.from(valid);
+  badCount[44] = 2;
+
+  for (const bytes of [valid.subarray(0, 44), badVersion, badTool, badCount]) {
+    assertCursorError(
+      () => decodePaginationCursor(bytes.toString("base64url"), expected),
+      MCP_ERROR_CODES.VALIDATION_ERROR
+    );
+  }
+});
+
 test("rejects malformed and strictly invalid cursor payloads", () => {
   const invalidPayloads = [
     "not a base64url cursor",
