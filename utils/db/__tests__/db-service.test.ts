@@ -3631,6 +3631,24 @@ describe("db-service helpers", () => {
             await waitForTables(db, ["hodl_escrow_orders"]);
             await waitForColumns(db, "hodl_escrow_orders", ["accepted_at"]);
 
+            // registerHodlEscrowOrder routes through getInitializedDbPool, so
+            // awaiting it is what guarantees initialization has finished — the
+            // waits above only prove the table and column exist, which says
+            // nothing about the later migration statements. Schema inspection
+            // therefore comes after this call, not before it.
+            const paymentHash = "b".repeat(64);
+            await expect(
+              db.registerHodlEscrowOrder({
+                paymentHash,
+                preimage: "c".repeat(64),
+                buyerNostrPubkey: "1".repeat(64),
+                sellerNostrPubkey: "2".repeat(64),
+                invoice: "lnbc420n1pjexample",
+                amountSats: 42,
+                expiresAt: new Date(Date.now() + 3_600_000),
+              })
+            ).resolves.toBe("created");
+
             const pool = db.getDbPool();
             const typeClient = await pool.connect();
             try {
@@ -3647,19 +3665,6 @@ describe("db-service helpers", () => {
             } finally {
               typeClient.release();
             }
-
-            const paymentHash = "b".repeat(64);
-            await expect(
-              db.registerHodlEscrowOrder({
-                paymentHash,
-                preimage: "c".repeat(64),
-                buyerNostrPubkey: "1".repeat(64),
-                sellerNostrPubkey: "2".repeat(64),
-                invoice: "lnbc420n1pjexample",
-                amountSats: 42,
-                expiresAt: new Date(Date.now() + 3_600_000),
-              })
-            ).resolves.toBe("created");
 
             const unaccepted =
               await db.getHodlEscrowOrderDisputeContext(paymentHash);
@@ -3756,8 +3761,20 @@ describe("db-service helpers", () => {
 
         await withPostgresDbService(
           async (db) => {
-            await waitForTables(db, ["hodl_escrow_orders"]);
-            await waitForColumns(db, "hodl_escrow_orders", ["accepted_at"]);
+            // Deliberately not waitForTables/waitForColumns: both the table and
+            // the column already exist here, beforeInit having created them, so
+            // both would return before initializeTables — fired and forgotten
+            // from getDbPool — had run the migration. Any db-service call that
+            // routes through getInitializedDbPool awaits initialization in full,
+            // migrations included, so read the row first and use that as the
+            // barrier before inspecting the schema.
+            expect(expectedInstantIso).not.toBe("");
+            const context =
+              await db.getHodlEscrowOrderDisputeContext(paymentHash);
+
+            // The legacy row's stamp still denotes the instant it always did,
+            // now readable without depending on the reader's zone.
+            expect(context?.acceptedAt?.toISOString()).toBe(expectedInstantIso);
 
             const pool = db.getDbPool();
             const client = await pool.connect();
@@ -3775,13 +3792,6 @@ describe("db-service helpers", () => {
             } finally {
               client.release();
             }
-
-            // The legacy row's stamp still denotes the instant it always
-            // did, now readable without depending on the reader's zone.
-            expect(expectedInstantIso).not.toBe("");
-            const context =
-              await db.getHodlEscrowOrderDisputeContext(paymentHash);
-            expect(context?.acceptedAt?.toISOString()).toBe(expectedInstantIso);
           },
           {
             beforeInit: async (databaseUrl) => {
