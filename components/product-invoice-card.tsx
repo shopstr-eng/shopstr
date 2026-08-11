@@ -28,13 +28,12 @@ import {
   Keyset as MintKeyset,
   Proof,
 } from "@cashu/cashu-ts";
-import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
-import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import {
   resolveP2pkCheckoutOutputConfig,
   resolveSellerCheckoutProfile,
 } from "@/utils/cashu/p2pk-checkout";
+import { executeSellerLightningPayout } from "@/utils/payments/lightning-payout";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
 import {
@@ -77,7 +76,6 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
 } from "@/utils/nostr/gift-wrap";
-import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { nip19 } from "nostr-tools";
@@ -1510,144 +1508,70 @@ export default function ProductInvoiceCard({
       }) &&
       sellerProofs
     ) {
-      const newAmount = Math.floor(sellerAmount * 0.98 - 2);
-      const ln = new LightningAddress(lnurl);
-      await wallet.loadMint();
-      await ln.fetch();
-      const invoice = await ln.requestInvoice({ satoshi: newAmount });
-      const invoicePaymentRequest = invoice.paymentRequest;
-      const meltQuote = await wallet.createMeltQuoteBolt11(
-        invoicePaymentRequest
+      const payoutOutcome = await executeSellerLightningPayout(
+        wallet,
+        lnurl,
+        sellerAmount,
+        sellerProofs
       );
-      if (meltQuote) {
-        const meltQuoteTotal =
-          meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
-        const swapOutcome = await safeSwap(
-          wallet,
-          meltQuoteTotal,
-          sellerProofs,
-          { sendConfig: { includeFees: true } }
+      if (payoutOutcome.status === "completed") {
+        const { meltAmount, changeProofs, changeAmount } = payoutOutcome;
+        const productDetails = buildProductDetailsSuffix({
+          selectedSize,
+          selectedVolume,
+          selectedWeight,
+          selectedBulkOption,
+          pickupLocation: selectedPickupLocation,
+        });
+        const paymentMessage = buildLightningPaymentMessage({
+          buyerNpub: userNPub,
+          title: productData.title,
+          productDetails,
+          lnurl,
+        });
+        await sendPaymentAndContactMessage(
+          productData.pubkey,
+          paymentMessage,
+          true,
+          false,
+          false,
+          orderId,
+          "lightning",
+          lnurl,
+          undefined,
+          meltAmount,
+          undefined,
+          undefined,
+          selectedPickupLocation || undefined,
+          donationAmount,
+          donationPercentage
         );
-        if (swapOutcome.status !== "swapped") {
-          throw new Error(
-            swapOutcome.errorMessage ??
-              `Pre-melt swap did not complete (${swapOutcome.status})`
-          );
-        }
-        const { keep, send } = swapOutcome;
-        const meltOutcome = await safeMeltProofs(wallet, meltQuote, send);
-        if (meltOutcome.status !== "paid") {
-          throw new Error(
-            meltOutcome.errorMessage ??
-              `Melt did not complete (${meltOutcome.status})`
-          );
-        }
-        if (meltOutcome.meltQuote) {
-          const meltAmount = meltOutcome.meltQuote.amount.toNumber();
-          const changeProofs = [...keep, ...meltOutcome.changeProofs];
-          const changeAmount =
-            Array.isArray(changeProofs) && changeProofs.length > 0
-              ? sumProofAmounts(changeProofs)
-              : 0;
-          const productDetails = buildProductDetailsSuffix({
-            selectedSize,
-            selectedVolume,
-            selectedWeight,
-            selectedBulkOption,
-            pickupLocation: selectedPickupLocation,
-          });
-          const paymentMessage = buildLightningPaymentMessage({
-            buyerNpub: userNPub,
-            title: productData.title,
-            productDetails,
-            lnurl,
-          });
-          await sendPaymentAndContactMessage(
-            productData.pubkey,
-            paymentMessage,
-            true,
-            false,
-            false,
-            orderId,
-            "lightning",
-            lnurl,
-            undefined,
-            meltAmount,
-            undefined,
-            undefined,
-            selectedPickupLocation || undefined,
-            donationAmount,
-            donationPercentage
-          );
 
-          if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
-            // Add delay between messages to prevent browser throttling
-            await new Promise((resolve) => setTimeout(resolve, 500));
+        if (changeAmount >= 1 && changeProofs.length > 0) {
+          // Add delay between messages to prevent browser throttling
+          await new Promise((resolve) => setTimeout(resolve, 500));
 
-            const encodedChange = getEncodedToken({
-              mint: tokenMintUrl,
-              proofs: changeProofs,
-            });
-            const changeMessage = "Overpaid fee change: " + encodedChange;
-            try {
-              await sendPaymentAndContactMessage(
-                productData.pubkey,
-                changeMessage,
-                true,
-                false,
-                false,
-                orderId,
-                "ecash",
-                encodedChange,
-                undefined,
-                changeAmount
-              );
-              await new Promise((resolve) => setTimeout(resolve, 500));
-            } catch (error) {
-              console.error("Failed to send change message:", error);
-            }
-          }
-        } else {
-          const unusedProofs = [...keep, ...send, ...meltOutcome.changeProofs];
-          const unusedAmount =
-            Array.isArray(unusedProofs) && unusedProofs.length > 0
-              ? sumProofAmounts(unusedProofs)
-              : 0;
-          const unusedToken = getEncodedToken({
+          const encodedChange = getEncodedToken({
             mint: tokenMintUrl,
-            proofs: unusedProofs,
+            proofs: changeProofs,
           });
-          const productDetails = buildProductDetailsSuffix({
-            selectedSize,
-            selectedVolume,
-            selectedWeight,
-            selectedBulkOption,
-            pickupLocation: selectedPickupLocation,
-          });
-          if (unusedToken && unusedProofs) {
-            const paymentMessage = buildEcashPaymentMessage({
-              buyerNpub: userNPub,
-              title: productData.title,
-              productDetails,
-              token: unusedToken,
-            });
+          const changeMessage = "Overpaid fee change: " + encodedChange;
+          try {
             await sendPaymentAndContactMessage(
               productData.pubkey,
-              paymentMessage,
+              changeMessage,
               true,
               false,
               false,
               orderId,
               "ecash",
-              unusedToken,
+              encodedChange,
               undefined,
-              unusedAmount,
-              undefined,
-              undefined,
-              selectedPickupLocation || undefined,
-              donationAmount,
-              donationPercentage
+              changeAmount
             );
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          } catch (error) {
+            console.error("Failed to send change message:", error);
           }
         }
       }
