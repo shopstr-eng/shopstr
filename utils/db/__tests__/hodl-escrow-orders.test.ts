@@ -626,4 +626,76 @@ describe("hodl escrow order commitments", () => {
       expect(releaseMock).toHaveBeenCalled();
     });
   });
+
+  /**
+   * Why accepted_at must be TIMESTAMPTZ rather than TIMESTAMP.
+   *
+   * getHodlEscrowOrderDisputeContext hands node-postgres' parsed Date straight
+   * to evaluateHodlDisputeActionability, which does epoch arithmetic on it.
+   * That arithmetic is only as correct as the Date, and the Date comes from
+   * node-postgres' per-OID text parsers — so these assert the library
+   * behaviour the column type depends on, without needing a live server.
+   *
+   * OID 1114 is `timestamp without time zone`, 1184 is `with time zone`.
+   */
+  describe("accepted_at timezone round-tripping", () => {
+    // The real pg, not the Pool stub this file mocks in.
+    const pgTypes = (jest.requireActual("pg") as typeof import("pg")).types;
+    const parseTimestamp = pgTypes.getTypeParser(1114);
+    const parseTimestamptz = pgTypes.getTypeParser(1184);
+
+    // Note for anyone extending this: do not try to vary the zone by assigning
+    // process.env.TZ. Jest's sandboxed process.env does not reach the hook that
+    // invalidates V8's timezone cache, so Date keeps using the runner's zone
+    // and every such case passes vacuously. These assertions are phrased to
+    // hold in whatever zone the runner is actually on instead.
+    const INSTANT_ISO = "2026-08-05T12:00:00.000Z";
+    const BARE = "2026-08-05 12:00:00";
+
+    // The same instant as a TIMESTAMPTZ column renders it under three
+    // different server session zones. Whatever offset Postgres sends, the
+    // instant it denotes is the same one.
+    it.each([
+      ["+00", "2026-08-05 12:00:00+00"],
+      ["+05:30", "2026-08-05 17:30:00+05:30"],
+      ["-04", "2026-08-05 08:00:00-04"],
+      ["+14", "2026-08-06 02:00:00+14"],
+    ])(
+      "parses a TIMESTAMPTZ value sent as %s to the one instant",
+      (_, wire) => {
+        expect(parseTimestamptz(wire).toISOString()).toBe(INSTANT_ISO);
+      }
+    );
+
+    it("resolves a bare TIMESTAMP value against the reading process's zone", () => {
+      // This is the defect the column type change fixes. Bare digits carry no
+      // zone, so node-postgres resolves them locally: the instant that comes
+      // back is displaced by exactly the reading process's UTC offset, which
+      // shifts the SELLER_DISPUTE_TIMEOUT_SECONDS window by that much on every
+      // non-UTC deployment.
+      const localOffsetMinutes = new Date(INSTANT_ISO).getTimezoneOffset();
+      const skewMinutes =
+        (parseTimestamp(BARE).getTime() - Date.parse(INSTANT_ISO)) / 60_000;
+
+      expect(skewMinutes).toBe(localOffsetMinutes);
+
+      // Identical digits, and the declared type is the only difference: the
+      // TIMESTAMPTZ reading carries no skew at all, in any runner zone.
+      expect(parseTimestamptz(`${BARE}+00`).toISOString()).toBe(INSTANT_ISO);
+    });
+
+    // The equality above degenerates to 0 === 0 on a UTC runner, so state the
+    // mechanism in a form that bites everywhere: two identical wire values,
+    // and only the OID differs.
+    it("disagrees between the two OIDs exactly when the runner is off UTC", () => {
+      const localOffsetMinutes = new Date(INSTANT_ISO).getTimezoneOffset();
+      const asTimestamp = parseTimestamp(BARE).getTime();
+      const asTimestamptz = parseTimestamptz(`${BARE}+00`).getTime();
+
+      expect((asTimestamp - asTimestamptz) / 60_000).toBe(localOffsetMinutes);
+      // The end-to-end guard that does not depend on the runner's zone at all
+      // lives in db-service.test.ts ("round-trips hodl accepted_at as an
+      // absolute instant off UTC on both sides").
+    });
+  });
 });
