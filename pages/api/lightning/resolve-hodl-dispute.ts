@@ -2,7 +2,10 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { applyRateLimit } from "@/utils/rate-limit";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
-import { fetchHodlReleaseEvents } from "@/utils/nostr/hodl-escrow-records";
+import {
+  fetchHodlReleaseEvents,
+  HodlRelayUnavailableError,
+} from "@/utils/nostr/hodl-escrow-records";
 import type { ParsedHodlReleaseEvent } from "@/utils/nostr/hodl-escrow-records";
 import {
   authorizeHodlReleaseEventForOrder,
@@ -16,6 +19,7 @@ import {
 } from "@/utils/lightning/hodl-invoice-provider-registry";
 import type { HodlInvoiceProvider } from "@/utils/lightning/hodl-invoice-provider";
 import {
+  DatabaseUnavailableError,
   getHodlEscrowOrderParties,
   getHodlEscrowSettlementSecret,
   markHodlEscrowOrderCancelled,
@@ -150,6 +154,29 @@ const REJECTION_RESPONSES: Record<
   },
 };
 
+/**
+ * The "we could not check" answers, kept separate from
+ * {@link REJECTION_RESPONSES} for the same reason as in
+ * settle-hodl-invoice.ts: every entry above is a verdict reached after relays
+ * and the commitment row were consulted, and these two are the absence of a
+ * verdict. A relay outage that collapsed into an empty candidate list used to
+ * come back as `no_release_event` — telling an arbiter who had already
+ * published a ruling that no ruling existed.
+ */
+const UNAVAILABLE_RESPONSES = {
+  database: {
+    status: 503 as const,
+    error: "Service temporarily unavailable. Please try again.",
+    reason: "database_unavailable" as const,
+  },
+  relay: {
+    status: 503 as const,
+    error:
+      "Could not reach relays to check for an arbiter ruling. Please try again.",
+    reason: "relay_unavailable" as const,
+  },
+};
+
 // Any 64-character hex run that is not this order's payment hash. In a file
 // whose one secret is exactly that shape, an unrecognized 64-hex blob in an
 // error message has no business being written to a log.
@@ -177,7 +204,13 @@ function describeFailure(error: unknown, paymentHash: string): string {
 
 type ResolutionOutcome =
   | { ok: true; status: "settled" | "cancelled" }
-  | { ok: false; status: 500 | 502; error: string };
+  | {
+      ok: false;
+      status: 500 | 502 | 503;
+      error: string;
+      /** Only set on the 503 paths; see {@link UNAVAILABLE_RESPONSES}. */
+      reason?: string;
+    };
 
 /**
  * Releases funds to the seller on the strength of an authorized
@@ -204,6 +237,11 @@ async function settleForSeller(
     console.error(
       `Failed to load the settlement secret for order ${paymentHash}: ${describeFailure(error, paymentHash)}`
     );
+    // Nothing has moved yet — the provider has not been called — so a database
+    // outage here is safely retryable, unlike the write further down.
+    if (error instanceof DatabaseUnavailableError) {
+      return { ok: false, ...UNAVAILABLE_RESPONSES.database };
+    }
     return { ok: false, status: 500, error: "Failed to settle escrow order" };
   }
   if (!preimage) {
@@ -372,6 +410,13 @@ export default async function handler(
     console.error(
       `Failed to look up hodl escrow order ${paymentHash}: ${describeFailure(error, paymentHash)}`
     );
+    // A failed lookup is not an absent order. Falling through to the
+    // `no_such_order` 404 below would tell an arbiter their escrow does not
+    // exist on the strength of a question that was never answered.
+    if (error instanceof DatabaseUnavailableError) {
+      const { status, ...body } = UNAVAILABLE_RESPONSES.database;
+      return res.status(status).json(body);
+    }
     return res.status(500).json({ error: "Failed to look up escrow order" });
   }
   if (!orderExists) {
@@ -395,6 +440,13 @@ export default async function handler(
     console.error(
       `Failed to fetch hodl release events for order ${paymentHash}: ${describeFailure(error, paymentHash)}`
     );
+    // The relays could not be reached, so the candidate list was never
+    // populated. Authorizing against it would find nothing and answer 403 —
+    // "no arbiter ruling exists" — about events nobody ever looked for.
+    if (error instanceof HodlRelayUnavailableError) {
+      const { status, ...body } = UNAVAILABLE_RESPONSES.relay;
+      return res.status(status).json(body);
+    }
     return res.status(502).json({ error: "Failed to look up arbiter rulings" });
   } finally {
     nostr.close();
@@ -408,6 +460,13 @@ export default async function handler(
     console.error(
       `Failed to authorize hodl release events for order ${paymentHash}: ${describeFailure(error, paymentHash)}`
     );
+    // The commitment row could not be read, so no candidate was compared
+    // against anything. That is the same "we could not check" as the lookup
+    // above, arriving one step later.
+    if (error instanceof DatabaseUnavailableError) {
+      const { status, ...body } = UNAVAILABLE_RESPONSES.database;
+      return res.status(status).json(body);
+    }
     return res
       .status(500)
       .json({ error: "Failed to authorize arbiter ruling" });
@@ -425,7 +484,15 @@ export default async function handler(
       : await cancelForBuyer(outcome.release, provider);
 
   if (!resolution.ok) {
-    return res.status(resolution.status).json({ error: resolution.error });
+    // `reason` is omitted rather than sent as undefined, so the 500 and 502
+    // bodies stay exactly the single-key shape they have always been.
+    return res
+      .status(resolution.status)
+      .json(
+        resolution.reason === undefined
+          ? { error: resolution.error }
+          : { error: resolution.error, reason: resolution.reason }
+      );
   }
 
   // The whole response. No preimage, no event, no row contents — a caller

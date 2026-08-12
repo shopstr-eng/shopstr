@@ -13,24 +13,47 @@ jest.mock("@/utils/rate-limit", () => ({
   applyRateLimit: (...args: unknown[]) => applyRateLimitMock(...args),
 }));
 
-jest.mock("@/utils/nostr/hodl-escrow-records", () => ({
-  fetchHodlReleaseEvents: (...args: unknown[]) =>
-    fetchHodlReleaseEventsMock(...args),
-}));
+// The error classes are redeclared rather than imported from the real modules
+// (which drag in pg and the relay pool). The handler narrows on `instanceof`,
+// so these stand-ins are what make the 503 paths reachable under test.
+jest.mock("@/utils/nostr/hodl-escrow-records", () => {
+  class HodlRelayUnavailableError extends Error {
+    reason: string;
+    constructor(params: { reason: string; message: string }) {
+      super(params.message);
+      this.name = "HodlRelayUnavailableError";
+      this.reason = params.reason;
+    }
+  }
+  return {
+    HodlRelayUnavailableError,
+    fetchHodlReleaseEvents: (...args: unknown[]) =>
+      fetchHodlReleaseEventsMock(...args),
+  };
+});
 
 // Only the database is faked. The authorization module underneath runs for
 // real against these rows, so "an authorized release" in these tests means
 // the genuine pubkey comparison passed — not that a mock said yes.
-jest.mock("@/utils/db/db-service", () => ({
-  getHodlEscrowOrderParties: (...args: unknown[]) =>
-    getHodlEscrowOrderPartiesMock(...args),
-  getHodlEscrowSettlementSecret: (...args: unknown[]) =>
-    getHodlEscrowSettlementSecretMock(...args),
-  markHodlEscrowOrderSettled: (...args: unknown[]) =>
-    markHodlEscrowOrderSettledMock(...args),
-  markHodlEscrowOrderCancelled: (...args: unknown[]) =>
-    markHodlEscrowOrderCancelledMock(...args),
-}));
+jest.mock("@/utils/db/db-service", () => {
+  class DatabaseUnavailableError extends Error {
+    constructor(message = "Database unavailable") {
+      super(message);
+      this.name = "DatabaseUnavailableError";
+    }
+  }
+  return {
+    DatabaseUnavailableError,
+    getHodlEscrowOrderParties: (...args: unknown[]) =>
+      getHodlEscrowOrderPartiesMock(...args),
+    getHodlEscrowSettlementSecret: (...args: unknown[]) =>
+      getHodlEscrowSettlementSecretMock(...args),
+    markHodlEscrowOrderSettled: (...args: unknown[]) =>
+      markHodlEscrowOrderSettledMock(...args),
+    markHodlEscrowOrderCancelled: (...args: unknown[]) =>
+      markHodlEscrowOrderCancelledMock(...args),
+  };
+});
 
 jest.mock("@/utils/lightning/hodl-invoice-provider-registry", () => ({
   ...jest.requireActual("@/utils/lightning/hodl-invoice-provider-registry"),
@@ -53,8 +76,17 @@ jest.mock("@/utils/nostr/relay-config", () => ({
 
 import handler from "@/pages/api/lightning/resolve-hodl-dispute";
 import type { ParsedHodlReleaseEvent } from "@/utils/nostr/hodl-escrow-records";
+import { HodlRelayUnavailableError } from "@/utils/nostr/hodl-escrow-records";
+import { DatabaseUnavailableError } from "@/utils/db/db-service";
 import { HodlInvoiceError } from "@/utils/lightning/hodl-invoice-provider";
 import { HodlInvoiceProviderUnavailableError } from "@/utils/lightning/hodl-invoice-provider-registry";
+
+/** What a relay outage looks like coming out of fetchHodlReleaseEvents. */
+const relayOutage = () =>
+  new HodlRelayUnavailableError({
+    reason: "relay_connection_failure",
+    message: "Could not reach relays to look up arbiter rulings",
+  });
 
 const PAYMENT_HASH = "b".repeat(64);
 const OTHER_PAYMENT_HASH = "c".repeat(64);
@@ -561,7 +593,10 @@ describe("/api/lightning/resolve-hodl-dispute", () => {
       expect(cancelInvoiceMock).not.toHaveBeenCalled();
     });
 
-    it("reports a database outage as a server error, not as an unauthorized resolution", async () => {
+    // An unrecognized failure stays a 500 — see the "infrastructure failures
+    // are not verdicts" block below for the typed DatabaseUnavailableError
+    // case, which is a 503. Either way it is never an authorization verdict.
+    it("reports an unrecognized database failure as a server error, not as an unauthorized resolution", async () => {
       getHodlEscrowOrderPartiesMock
         .mockResolvedValueOnce(ORDER_PARTIES)
         .mockRejectedValue(new Error("db down"));
@@ -749,7 +784,7 @@ describe("/api/lightning/resolve-hodl-dispute", () => {
       expect(fetchHodlReleaseEventsMock).not.toHaveBeenCalled();
     });
 
-    it("returns 502 when the ruling lookup fails", async () => {
+    it("returns 502 when the ruling lookup fails for an unrecognized reason", async () => {
       fetchHodlReleaseEventsMock.mockRejectedValue(new Error("relays down"));
       const res = createResponse();
 
@@ -761,6 +796,167 @@ describe("/api/lightning/resolve-hodl-dispute", () => {
       });
       expect(nostrCloseMock).toHaveBeenCalledTimes(1);
       expect(settleInvoiceMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // The point of this whole block: "we could not check" must never reach the
+  // caller wearing the clothes of "we checked, and no."
+  describe("infrastructure failures are not verdicts", () => {
+    it("returns 503, not 403, when relays could not be reached", async () => {
+      fetchHodlReleaseEventsMock.mockRejectedValue(relayOutage());
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(503);
+      expect(res.jsonBody).toEqual({
+        error:
+          "Could not reach relays to check for an arbiter ruling. Please try again.",
+        reason: "relay_unavailable",
+      });
+      expect(settleInvoiceMock).not.toHaveBeenCalled();
+      expect(cancelInvoiceMock).not.toHaveBeenCalled();
+      expect(getHodlEscrowSettlementSecretMock).not.toHaveBeenCalled();
+      expect(nostrCloseMock).toHaveBeenCalledTimes(1);
+    });
+
+    // The regression this was written for: a relay outage used to surface as
+    // an empty candidate list, which authorizes to `no_release_event` — the
+    // same 403 an arbiter gets when no ruling was ever published.
+    it("does not report an unreachable relay as a missing ruling", async () => {
+      fetchHodlReleaseEventsMock.mockRejectedValue(relayOutage());
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).not.toBe(403);
+      expect(JSON.stringify(res.jsonBody)).not.toContain("no_release_event");
+    });
+
+    it("returns 503, not 500, when the order lookup hits a database outage", async () => {
+      getHodlEscrowOrderPartiesMock.mockRejectedValue(
+        new DatabaseUnavailableError("Failed to load hodl escrow order parties")
+      );
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(503);
+      expect(res.jsonBody).toEqual({
+        error: "Service temporarily unavailable. Please try again.",
+        reason: "database_unavailable",
+      });
+      // Not the 404 an absent row would have produced.
+      expect(fetchHodlReleaseEventsMock).not.toHaveBeenCalled();
+      expect(settleInvoiceMock).not.toHaveBeenCalled();
+      expect(cancelInvoiceMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 503 when the database fails during authorization", async () => {
+      getHodlEscrowOrderPartiesMock
+        .mockResolvedValueOnce(ORDER_PARTIES)
+        .mockRejectedValue(
+          new DatabaseUnavailableError(
+            "Failed to load hodl escrow order parties"
+          )
+        );
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(503);
+      expect(res.jsonBody).toEqual({
+        error: "Service temporarily unavailable. Please try again.",
+        reason: "database_unavailable",
+      });
+      expect(settleInvoiceMock).not.toHaveBeenCalled();
+      expect(cancelInvoiceMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 503 when the pre-settle secret read hits a database outage", async () => {
+      getHodlEscrowSettlementSecretMock.mockRejectedValue(
+        new DatabaseUnavailableError(
+          "Failed to load the hodl escrow settlement secret"
+        )
+      );
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(503);
+      expect(res.jsonBody).toEqual({
+        error: "Service temporarily unavailable. Please try again.",
+        reason: "database_unavailable",
+      });
+      // Safe to advertise a retry precisely because no money moved.
+      expect(settleInvoiceMock).not.toHaveBeenCalled();
+      expect(markHodlEscrowOrderSettledMock).not.toHaveBeenCalled();
+      expectNoPreimageLeak(res);
+    });
+
+    // The two DB failures that must NOT invite a retry: the HTLC has already
+    // resolved, so a row disagreeing with the Lightning node needs a human.
+    it("still returns 500 when the post-settle status write fails", async () => {
+      markHodlEscrowOrderSettledMock.mockRejectedValue(
+        new DatabaseUnavailableError("Failed to mark settled")
+      );
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(settleInvoiceMock).toHaveBeenCalledTimes(1);
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonBody).toEqual({
+        error: "Invoice settled but the order could not be updated",
+      });
+      expect(JSON.stringify(res.jsonBody)).not.toContain("try again");
+    });
+
+    it("still returns 500 when the post-cancel status write fails", async () => {
+      fetchHodlReleaseEventsMock.mockResolvedValue(
+        candidatesWithGenuineArbiterEvent("release:buyer")
+      );
+      markHodlEscrowOrderCancelledMock.mockRejectedValue(
+        new DatabaseUnavailableError("Failed to mark cancelled")
+      );
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(cancelInvoiceMock).toHaveBeenCalledTimes(1);
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonBody).toEqual({
+        error: "Invoice cancelled but the order could not be updated",
+      });
+      expect(JSON.stringify(res.jsonBody)).not.toContain("try again");
+    });
+
+    it("still returns 403 when no ruling was signed by the order's arbiter", async () => {
+      fetchHodlReleaseEventsMock.mockResolvedValue([
+        releaseEvent({ authorPubkey: IMPOSTOR_PUBKEY }),
+      ]);
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(403);
+      expect(res.jsonBody).toEqual({
+        error: "No ruling for this order was signed by its arbiter",
+        reason: "pubkey_mismatch",
+      });
+    });
+
+    it("still returns 404 when the order genuinely does not exist", async () => {
+      getHodlEscrowOrderPartiesMock.mockResolvedValue(null);
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(404);
+      expect(res.jsonBody).toEqual({
+        error: "No escrow order exists for this payment hash",
+        reason: "no_such_order",
+      });
     });
   });
 });
