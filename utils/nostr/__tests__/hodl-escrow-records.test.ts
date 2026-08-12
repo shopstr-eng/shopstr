@@ -27,6 +27,7 @@ import {
   fetchHodlConfirmEvents,
   fetchHodlReleaseEvents,
   fetchHodlDisputeEvents,
+  HodlRelayUnavailableError,
 } from "../hodl-escrow-records";
 
 const PAYMENT_HASH = "ab".repeat(32);
@@ -847,8 +848,55 @@ describe("fetchHodlConfirmEvents", () => {
     expect(nostr.fetch).not.toHaveBeenCalled();
   });
 
-  it("returns an empty list when the relay query fails", async () => {
+  // The empty list is a claim about what relays hold. A read that never
+  // happened cannot make it, or the settle endpoint downstream turns an
+  // outage into "the buyer never confirmed" and refuses a valid settlement.
+  it("throws relay_connection_failure when the relay query fails", async () => {
     const nostr = { fetch: jest.fn().mockRejectedValue(new Error("offline")) };
+
+    await expect(
+      fetchHodlConfirmEvents({
+        nostr: nostr as any,
+        paymentHash: PAYMENT_HASH,
+      })
+    ).rejects.toMatchObject({
+      name: "HodlRelayUnavailableError",
+      reason: "relay_connection_failure",
+    });
+  });
+
+  it("throws an error callers can distinguish by instance, not by message", async () => {
+    const nostr = { fetch: jest.fn().mockRejectedValue(new Error("offline")) };
+
+    await expect(
+      fetchHodlConfirmEvents({
+        nostr: nostr as any,
+        paymentHash: PAYMENT_HASH,
+      })
+    ).rejects.toBeInstanceOf(HodlRelayUnavailableError);
+  });
+
+  it("does not quote the underlying transport error", async () => {
+    // Relay transport errors have no contract about their contents, and this
+    // message reaches server logs.
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockRejectedValue(new Error(`socket died mid-frame ${PAYMENT_HASH}`)),
+    };
+
+    const error = await fetchHodlConfirmEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    }).catch((e) => e);
+
+    expect(error).toBeInstanceOf(HodlRelayUnavailableError);
+    expect(error.message).not.toContain("socket died");
+    expect(error.cause).toBeUndefined();
+  });
+
+  it("still returns an empty list when relays answer with no events", async () => {
+    const nostr = mkNostr([]);
 
     await expect(
       fetchHodlConfirmEvents({
@@ -1271,8 +1319,22 @@ describe("fetchHodlReleaseEvents", () => {
     expect(nostr.fetch).not.toHaveBeenCalled();
   });
 
-  it("returns an empty list when the relay query fails", async () => {
+  it("throws relay_connection_failure when the relay query fails", async () => {
     const nostr = { fetch: jest.fn().mockRejectedValue(new Error("offline")) };
+
+    await expect(
+      fetchHodlReleaseEvents({
+        nostr: nostr as any,
+        paymentHash: PAYMENT_HASH,
+      })
+    ).rejects.toMatchObject({
+      name: "HodlRelayUnavailableError",
+      reason: "relay_connection_failure",
+    });
+  });
+
+  it("still returns an empty list when relays answer with no events", async () => {
+    const nostr = mkNostr([]);
 
     await expect(
       fetchHodlReleaseEvents({
@@ -1390,8 +1452,22 @@ describe("fetchHodlDisputeEvents", () => {
     expect(nostr.fetch).not.toHaveBeenCalled();
   });
 
-  it("returns an empty list when the relay query fails", async () => {
+  it("throws relay_connection_failure when the relay query fails", async () => {
     const nostr = { fetch: jest.fn().mockRejectedValue(new Error("offline")) };
+
+    await expect(
+      fetchHodlDisputeEvents({
+        nostr: nostr as any,
+        arbiterPubkey: "arbiter-pubkey",
+      })
+    ).rejects.toMatchObject({
+      name: "HodlRelayUnavailableError",
+      reason: "relay_connection_failure",
+    });
+  });
+
+  it("still returns an empty list when relays answer with no events", async () => {
+    const nostr = mkNostr([]);
 
     await expect(
       fetchHodlDisputeEvents({

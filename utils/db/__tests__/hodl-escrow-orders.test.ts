@@ -259,14 +259,38 @@ describe("hodl escrow order commitments", () => {
       ).resolves.toBeNull();
     });
 
-    it("releases the client when the lookup fails", async () => {
+    // Callers turn null into a 404/403 verdict, so a failed read must not be
+    // able to arrive looking like one. It throws a typed error instead, which
+    // the escrow endpoints map to a 503.
+    it("throws DatabaseUnavailableError and releases the client when the lookup fails", async () => {
       queryMock.mockRejectedValueOnce(new Error("db down"));
 
       await expect(
         dbService.getHodlEscrowOrderParties(PAYMENT_HASH)
-      ).rejects.toThrow("db down");
+      ).rejects.toBeInstanceOf(dbService.DatabaseUnavailableError);
 
       expect(releaseMock).toHaveBeenCalled();
+    });
+
+    it("throws DatabaseUnavailableError when the connection itself fails", async () => {
+      connectMock.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+
+      await expect(
+        dbService.getHodlEscrowOrderParties(PAYMENT_HASH)
+      ).rejects.toBeInstanceOf(dbService.DatabaseUnavailableError);
+    });
+
+    it("never returns null for a failed read", async () => {
+      queryMock.mockRejectedValueOnce(new Error("db down"));
+
+      const outcome = await dbService
+        .getHodlEscrowOrderParties(PAYMENT_HASH)
+        .then(
+          (value) => ({ resolved: true, value }),
+          () => ({ resolved: false, value: undefined })
+        );
+
+      expect(outcome.resolved).toBe(false);
     });
   });
 
@@ -297,6 +321,85 @@ describe("hodl escrow order commitments", () => {
 
       const [, values] = queryMock.mock.calls[0];
       expect(values).toEqual([PAYMENT_HASH]);
+    });
+
+    it("throws DatabaseUnavailableError and releases the client when the lookup fails", async () => {
+      queryMock.mockRejectedValueOnce(new Error("db down"));
+
+      await expect(
+        dbService.getHodlEscrowOrderStatus(PAYMENT_HASH)
+      ).rejects.toBeInstanceOf(dbService.DatabaseUnavailableError);
+
+      expect(releaseMock).toHaveBeenCalled();
+    });
+  });
+
+  describe("getHodlEscrowSettlementSecret", () => {
+    it("returns the stored preimage", async () => {
+      queryMock.mockResolvedValueOnce({
+        rowCount: 1,
+        rows: [{ preimage: PREIMAGE }],
+      });
+
+      await expect(
+        dbService.getHodlEscrowSettlementSecret(PAYMENT_HASH)
+      ).resolves.toBe(PREIMAGE);
+    });
+
+    // This read runs before the provider is asked to settle, so nothing has
+    // moved when it fails and the caller may safely advertise a retry.
+    it("throws DatabaseUnavailableError and releases the client when the read fails", async () => {
+      queryMock.mockRejectedValueOnce(new Error("db down"));
+
+      await expect(
+        dbService.getHodlEscrowSettlementSecret(PAYMENT_HASH)
+      ).rejects.toBeInstanceOf(dbService.DatabaseUnavailableError);
+
+      expect(releaseMock).toHaveBeenCalled();
+    });
+
+    // The only read that selects `preimage`, so the only one whose driver
+    // error can quote the secret back. Nothing about the caught error may
+    // survive onto the thrown one.
+    it("does not carry the driver's message or the secret onto the thrown error", async () => {
+      queryMock.mockRejectedValueOnce(
+        new Error(`could not read row {"preimage":"${PREIMAGE}"}`)
+      );
+
+      const error = await dbService
+        .getHodlEscrowSettlementSecret(PAYMENT_HASH)
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(dbService.DatabaseUnavailableError);
+      expect(error.message).not.toContain(PREIMAGE);
+      expect(error.message).not.toContain("could not read row");
+      expect(JSON.stringify(error.cause ?? null)).not.toContain(PREIMAGE);
+    });
+  });
+
+  // The counterpart to every wrapped read above. These run *after* the
+  // provider has already settled or cancelled, so their failure is a row that
+  // disagrees with the Lightning node — something to investigate, never
+  // something to retry through. They must keep propagating the raw error so
+  // the endpoints keep answering 500.
+  describe("post-resolution status writes stay unwrapped", () => {
+    it.each([
+      [
+        "markHodlEscrowOrderSettled",
+        () => dbService.markHodlEscrowOrderSettled(PAYMENT_HASH),
+      ],
+      [
+        "markHodlEscrowOrderCancelled",
+        () => dbService.markHodlEscrowOrderCancelled(PAYMENT_HASH),
+      ],
+    ])("%s propagates the raw failure", async (_label, call) => {
+      queryMock.mockRejectedValueOnce(new Error("db down"));
+
+      const error = await call().catch((e: unknown) => e);
+
+      expect(error).not.toBeInstanceOf(dbService.DatabaseUnavailableError);
+      expect((error as Error).message).toBe("db down");
+      expect(releaseMock).toHaveBeenCalled();
     });
   });
 
@@ -616,12 +719,12 @@ describe("hodl escrow order commitments", () => {
       ).resolves.toBeNull();
     });
 
-    it("releases the client when the lookup fails", async () => {
+    it("throws DatabaseUnavailableError and releases the client when the lookup fails", async () => {
       queryMock.mockRejectedValueOnce(new Error("db down"));
 
       await expect(
         dbService.getHodlEscrowOrderDisputeContext(PAYMENT_HASH)
-      ).rejects.toThrow("db down");
+      ).rejects.toBeInstanceOf(dbService.DatabaseUnavailableError);
 
       expect(releaseMock).toHaveBeenCalled();
     });

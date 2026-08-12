@@ -13,12 +13,24 @@ jest.mock("@/utils/nostr/nip98-auth", () => ({
   verifyNip98Request: (...args: unknown[]) => verifyNip98RequestMock(...args),
 }));
 
-jest.mock("@/utils/db/db-service", () => ({
-  registerHodlEscrowOrder: (...args: unknown[]) =>
-    registerHodlEscrowOrderMock(...args),
-  fetchProductByIdFromDb: (...args: unknown[]) =>
-    fetchProductByIdFromDbMock(...args),
-}));
+// DatabaseUnavailableError is redeclared rather than imported from the real
+// module (which drags in pg). The handler narrows on `instanceof`, so this
+// stand-in is what makes the 503 path reachable under test.
+jest.mock("@/utils/db/db-service", () => {
+  class DatabaseUnavailableError extends Error {
+    constructor(message = "Database unavailable") {
+      super(message);
+      this.name = "DatabaseUnavailableError";
+    }
+  }
+  return {
+    DatabaseUnavailableError,
+    registerHodlEscrowOrder: (...args: unknown[]) =>
+      registerHodlEscrowOrderMock(...args),
+    fetchProductByIdFromDb: (...args: unknown[]) =>
+      fetchProductByIdFromDbMock(...args),
+  };
+});
 
 jest.mock("@/utils/lightning/hodl-invoice-provider-registry", () => ({
   ...jest.requireActual("@/utils/lightning/hodl-invoice-provider-registry"),
@@ -28,6 +40,7 @@ jest.mock("@/utils/lightning/hodl-invoice-provider-registry", () => ({
 
 import handler from "@/pages/api/db/register-hodl-order";
 import { paymentHashFromPreimage } from "@/utils/lightning/payment-hash";
+import { DatabaseUnavailableError } from "@/utils/db/db-service";
 import { HodlInvoiceProviderUnavailableError } from "@/utils/lightning/hodl-invoice-provider-registry";
 
 const BUYER_PUBKEY = "1".repeat(64);
@@ -244,6 +257,38 @@ describe("/api/db/register-hodl-order", () => {
     await handler(createRequest(), res as any);
 
     expect(res.statusCode).toBe(404);
+    expect(createHoldInvoiceMock).not.toHaveBeenCalled();
+  });
+
+  it("503s, not 404s, when the listing lookup hits a database outage", async () => {
+    fetchProductByIdFromDbMock.mockRejectedValue(
+      new DatabaseUnavailableError("Failed to fetch product by id")
+    );
+    const res = createResponse();
+
+    await handler(createRequest(), res as any);
+
+    // The listing was never read, so "not found" would be a claim about a
+    // question nobody answered — and would send the buyer off to fix a
+    // listing that is perfectly fine.
+    expect(res.statusCode).toBe(503);
+    expect(res.jsonBody).toEqual({
+      error: "Service temporarily unavailable. Please try again.",
+      reason: "database_unavailable",
+    });
+    // No invoice is created for an order that cannot be registered.
+    expect(createHoldInvoiceMock).not.toHaveBeenCalled();
+    expect(registerHodlEscrowOrderMock).not.toHaveBeenCalled();
+  });
+
+  it("500s when the listing lookup fails for an unrecognized reason", async () => {
+    fetchProductByIdFromDbMock.mockRejectedValue(new Error("something else"));
+    const res = createResponse();
+
+    await handler(createRequest(), res as any);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.jsonBody).toEqual({ error: "Failed to look up listing" });
     expect(createHoldInvoiceMock).not.toHaveBeenCalled();
   });
 

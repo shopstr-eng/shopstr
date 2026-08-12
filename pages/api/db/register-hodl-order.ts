@@ -9,6 +9,7 @@ import {
   HodlInvoiceProviderUnavailableError,
 } from "@/utils/lightning/hodl-invoice-provider-registry";
 import {
+  DatabaseUnavailableError,
   fetchProductByIdFromDb,
   registerHodlEscrowOrder,
 } from "@/utils/db/db-service";
@@ -70,9 +71,26 @@ function parseRequestBody(body: unknown): HodlOrderRequestBody | null {
   };
 }
 
+/**
+ * The retryable answer, matching the wording the mint-quote routes already
+ * return for {@link DatabaseUnavailableError} via
+ * utils/payments/listing-resolution.ts.
+ */
+const DATABASE_UNAVAILABLE_RESPONSE = {
+  status: 503 as const,
+  error: "Service temporarily unavailable. Please try again.",
+  reason: "database_unavailable" as const,
+};
+
 type SellerResolution =
   | { ok: true; sellerNostrPubkey: string }
-  | { ok: false; status: 404 | 500; error: string };
+  | {
+      ok: false;
+      status: 404 | 500 | 503;
+      error: string;
+      /** Only set on the 503 path. */
+      reason?: string;
+    };
 
 // The seller is taken from the listing event's own pubkey — an event whose
 // signature was verified before it was cached — rather than from a body
@@ -83,11 +101,17 @@ async function resolveSellerFromListing(
 ): Promise<SellerResolution> {
   let listing;
   try {
-    // rethrow so a database outage is a 500, not a "listing not found" that
-    // would send the buyer off to fix a listing that is perfectly fine.
+    // rethrow so a database outage is never a "listing not found" that would
+    // send the buyer off to fix a listing that is perfectly fine.
     listing = await fetchProductByIdFromDb(productId, { rethrow: true });
   } catch (error) {
     console.error("Failed to look up listing for hodl escrow order:", error);
+    // 503 rather than 500: the listing was never read, so the buyer's next
+    // attempt is the one that works. Only a genuinely unknown failure — which
+    // this route has no account of — stays a 500.
+    if (error instanceof DatabaseUnavailableError) {
+      return { ok: false, ...DATABASE_UNAVAILABLE_RESPONSE };
+    }
     return { ok: false, status: 500, error: "Failed to look up listing" };
   }
 
@@ -144,7 +168,15 @@ export default async function handler(
 
   const seller = await resolveSellerFromListing(body.productId);
   if (!seller.ok) {
-    return res.status(seller.status).json({ error: seller.error });
+    // `reason` is omitted rather than sent as undefined, so the 404 and 500
+    // bodies stay exactly the single-key shape they have always been.
+    return res
+      .status(seller.status)
+      .json(
+        seller.reason === undefined
+          ? { error: seller.error }
+          : { error: seller.error, reason: seller.reason }
+      );
   }
 
   const buyerNostrPubkey = auth.pubkey;
