@@ -1,6 +1,10 @@
 import type { EventTemplate } from "nostr-tools";
 import { verifyEvent } from "nostr-tools";
-import { NostrManager, type NostrEvent } from "@/utils/nostr/nostr-manager";
+import {
+  NostrManager,
+  type NostrEvent,
+  type NostrFilter,
+} from "@/utils/nostr/nostr-manager";
 import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions";
 
@@ -86,6 +90,87 @@ function normalizeOrderId(paymentHash: unknown): string | null {
 function getDTag(event: NostrEvent): string | undefined {
   if (!Array.isArray(event.tags)) return undefined;
   return event.tags.find((tag) => tag[0] === "d")?.[1];
+}
+
+// ---------------------------------------------------------------------------
+// Relay read failures
+// ---------------------------------------------------------------------------
+
+/**
+ * Why a relay read could not be completed.
+ *
+ * A single-member union rather than a bare string, mirroring
+ * `HodlAuthorizationFailureReason` in
+ * utils/nostr/server-hodl-escrow-authorization.ts: a caller branching on
+ * `reason` keeps compiling — and keeps failing exhaustiveness checks in the
+ * right places — when a second failure mode is added here later.
+ */
+export type HodlRelayFailureReason = "relay_connection_failure";
+
+/**
+ * Raised when relays could not be reached at all, as distinct from relays
+ * answering with no matching events.
+ *
+ * The distinction is the whole point of this class. "Nobody published a
+ * confirmation for this order" and "we could not ask" are indistinguishable
+ * once both collapse to an empty array, and the endpoints downstream turn the
+ * former into a 403: a caller that could not be checked would be told it was
+ * checked and refused. Fetches therefore throw this rather than returning
+ * `[]`, so the endpoint can answer "retry" instead of "denied".
+ *
+ * Thrown, not returned, for the same reason
+ * {@link HodlAuthorizationError} throws: a caller that forgets to inspect a
+ * returned value still proceeds to authorize against a list it never
+ * populated, whereas a caller that forgets to catch does not.
+ */
+export class HodlRelayUnavailableError extends Error {
+  readonly reason: HodlRelayFailureReason;
+
+  constructor(params: { reason: HodlRelayFailureReason; message: string }) {
+    super(params.message);
+    this.name = "HodlRelayUnavailableError";
+    this.reason = params.reason;
+  }
+}
+
+/**
+ * Runs one relay query, converting a failed read into
+ * {@link HodlRelayUnavailableError}.
+ *
+ * `description` names the lookup and nothing else. No pubkey, payment hash, or
+ * filter contents go into the message: these strings reach server logs, and
+ * the escrow endpoints' `describeFailure` treats any 64-hex run that is not
+ * the request's own payment hash as a secret to redact — so an interpolated
+ * identifier would arrive as `[redacted]` and buy nothing anyway.
+ *
+ * Note what this does *not* catch. `NostrManager.fetch` resolves with whatever
+ * events arrived when its aggregate timeout fires (see the abort listener in
+ * utils/nostr/nostr-manager.ts), so a slow relay that never answers is
+ * reported here as a successful empty read, not as a failure. What rejects is
+ * a read that could not be started or run at all — the connection-refused and
+ * subscription-setup cases. Narrowing that gap means teaching `fetch` to
+ * distinguish "every relay timed out" from "every relay answered nothing",
+ * which is a change to the shared manager and not to this module.
+ */
+async function fetchHodlEvents(params: {
+  nostr: NostrManager;
+  filter: NostrFilter;
+  timeoutMs?: number;
+  description: string;
+}): Promise<NostrEvent[]> {
+  const { nostr, filter, timeoutMs, description } = params;
+
+  try {
+    return await nostr.fetch([filter], undefined, undefined, timeoutMs);
+  } catch {
+    // The underlying error is deliberately not chained on: it comes from relay
+    // transport code that has no contract about what it puts in a message, and
+    // this one travels into logs.
+    throw new HodlRelayUnavailableError({
+      reason: "relay_connection_failure",
+      message: `Could not reach relays to ${description}`,
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -449,6 +534,9 @@ export function parseHodlDisputeEvent(
  * committed buyer/seller, the same way {@link fetchHodlConfirmEvents}'
  * results require {@link authorizeHodlConfirmEventForOrder} before anything
  * downstream may trust them.
+ *
+ * @throws {HodlRelayUnavailableError} when relays could not be reached. An
+ * empty array means relays answered and held nothing.
  */
 export async function fetchHodlDisputeEvents(params: {
   nostr: NostrManager;
@@ -461,14 +549,12 @@ export async function fetchHodlDisputeEvents(params: {
     return [];
   }
 
-  const events = await nostr
-    .fetch(
-      [{ kinds: [HODL_DISPUTE_EVENT_KIND], "#p": [arbiterPubkey] }],
-      undefined,
-      undefined,
-      timeoutMs
-    )
-    .catch(() => [] as NostrEvent[]);
+  const events = await fetchHodlEvents({
+    nostr,
+    filter: { kinds: [HODL_DISPUTE_EVENT_KIND], "#p": [arbiterPubkey] },
+    timeoutMs,
+    description: "look up disputes for this arbiter",
+  });
 
   const disputes: ParsedHodlDisputeEvent[] = [];
   for (const event of events) {
@@ -501,6 +587,10 @@ export async function fetchHodlDisputeEvents(params: {
  * to a single newest-overall event: an unrelated pubkey publishing with a
  * later timestamp would otherwise hide the genuine buyer's event from the
  * caller entirely.
+ *
+ * @throws {HodlRelayUnavailableError} when relays could not be reached. An
+ * empty array therefore means relays answered and held no confirmation — the
+ * one reading on which a caller may go on to refuse a settlement.
  */
 export async function fetchHodlConfirmEvents(params: {
   nostr: NostrManager;
@@ -512,14 +602,12 @@ export async function fetchHodlConfirmEvents(params: {
   const orderId = normalizeOrderId(paymentHash);
   if (!orderId) return [];
 
-  const events = await nostr
-    .fetch(
-      [{ kinds: [HODL_CONFIRM_EVENT_KIND], "#d": [orderId] }],
-      undefined,
-      undefined,
-      timeoutMs
-    )
-    .catch(() => [] as NostrEvent[]);
+  const events = await fetchHodlEvents({
+    nostr,
+    filter: { kinds: [HODL_CONFIRM_EVENT_KIND], "#d": [orderId] },
+    timeoutMs,
+    description: "look up buyer confirmations for this order",
+  });
 
   const newestByAuthor = new Map<string, ParsedHodlConfirmEvent>();
   for (const event of events) {
@@ -554,6 +642,10 @@ export async function fetchHodlConfirmEvents(params: {
  * {@link fetchHodlConfirmEvents}: collapsing to a single newest-overall event
  * would let an unrelated pubkey's later timestamp hide the genuine arbiter's
  * ruling from the caller entirely.
+ *
+ * @throws {HodlRelayUnavailableError} when relays could not be reached. An
+ * empty array therefore means relays answered and held no ruling — the one
+ * reading on which a caller may go on to refuse a resolution.
  */
 export async function fetchHodlReleaseEvents(params: {
   nostr: NostrManager;
@@ -565,14 +657,12 @@ export async function fetchHodlReleaseEvents(params: {
   const orderId = normalizeOrderId(paymentHash);
   if (!orderId) return [];
 
-  const events = await nostr
-    .fetch(
-      [{ kinds: [HODL_RELEASE_EVENT_KIND], "#d": [orderId] }],
-      undefined,
-      undefined,
-      timeoutMs
-    )
-    .catch(() => [] as NostrEvent[]);
+  const events = await fetchHodlEvents({
+    nostr,
+    filter: { kinds: [HODL_RELEASE_EVENT_KIND], "#d": [orderId] },
+    timeoutMs,
+    description: "look up arbiter rulings for this order",
+  });
 
   const newestByAuthor = new Map<string, ParsedHodlReleaseEvent>();
   for (const event of events) {
