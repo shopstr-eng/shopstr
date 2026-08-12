@@ -1990,14 +1990,20 @@ type HodlEscrowOrderPartiesRow = Pick<
  * Null means "no order was ever registered under this payment hash". That is a
  * refusal, not an absent constraint: an unregistered payment hash has no
  * buyer and no arbiter, so nothing can be authorized against it.
+ *
+ * @throws {DatabaseUnavailableError} when the read could not be performed, so
+ * that "we asked and there is no such order" (null, a 404/403 downstream) can
+ * never be confused with "we could not ask" (a 503, retry).
  */
 export async function getHodlEscrowOrderParties(
   paymentHash: string
 ): Promise<HodlEscrowOrderParties | null> {
-  const dbPool = await getInitializedDbPool();
-  const client = await dbPool.connect();
+  const normalizedHash = paymentHash.toLowerCase();
+  let client;
 
   try {
+    const dbPool = await getInitializedDbPool();
+    client = await dbPool.connect();
     // Column list is exhaustive on purpose — no SELECT * anywhere near a table
     // that holds a settlement secret.
     const result = await client.query<HodlEscrowOrderPartiesRow>(
@@ -2007,7 +2013,7 @@ export async function getHodlEscrowOrderParties(
               arbiter_nostr_pubkey
        FROM hodl_escrow_orders
        WHERE payment_hash = $1`,
-      [paymentHash.toLowerCase()]
+      [normalizedHash]
     );
 
     const row = result.rows[0];
@@ -2019,8 +2025,13 @@ export async function getHodlEscrowOrderParties(
       sellerNostrPubkey: row.seller_nostr_pubkey,
       arbiterNostrPubkey: row.arbiter_nostr_pubkey,
     };
+  } catch (error) {
+    console.error("Failed to load hodl escrow order parties:", error);
+    throw new DatabaseUnavailableError(
+      "Failed to load hodl escrow order parties"
+    );
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 
@@ -2039,19 +2050,27 @@ export async function getHodlEscrowOrderParties(
  * *whether* to settle cannot come back holding the means to do it.
  *
  * @returns the preimage, or null when no commitment row exists.
+ *
+ * @throws {DatabaseUnavailableError} when the read could not be performed.
+ * This read happens *before* the provider is asked to settle, so nothing has
+ * moved when it fails and a retry is the correct advice — unlike the status
+ * write that follows a successful settle, which must never be reported as
+ * retryable.
  */
 export async function getHodlEscrowSettlementSecret(
   paymentHash: string
 ): Promise<string | null> {
-  const dbPool = await getInitializedDbPool();
-  const client = await dbPool.connect();
+  const normalizedHash = paymentHash.toLowerCase();
+  let client;
 
   try {
+    const dbPool = await getInitializedDbPool();
+    client = await dbPool.connect();
     const result = await client.query<{ preimage: string }>(
       `SELECT preimage
        FROM hodl_escrow_orders
        WHERE payment_hash = $1`,
-      [paymentHash.toLowerCase()]
+      [normalizedHash]
     );
 
     const row = result.rows[0];
@@ -2059,8 +2078,18 @@ export async function getHodlEscrowSettlementSecret(
       return null;
     }
     return row.preimage;
+  } catch {
+    // The only read in this module that selects `preimage`, and so the only
+    // one whose driver error can quote the secret back — a failed query is
+    // exactly the case where the row it could not read ends up in the message.
+    // Nothing about the caught error is logged or chained onto the throw; the
+    // thrown message below is a constant. Callers that want a diagnosable log
+    // line have one, via the redacting `describeFailure` in the escrow routes.
+    throw new DatabaseUnavailableError(
+      "Failed to load the hodl escrow settlement secret"
+    );
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 
@@ -2075,6 +2104,12 @@ export async function getHodlEscrowSettlementSecret(
  *
  * @returns "not-found" when no row matched, so the caller can surface a
  * settled invoice whose commitment has vanished instead of reporting success.
+ *
+ * Deliberately NOT wrapped in {@link DatabaseUnavailableError}, unlike the
+ * reads above. By the time this runs the HTLC has settled and the money is
+ * gone; a failure here is a row that disagrees with the Lightning node, which
+ * needs a human, not the "temporarily unavailable, please try again" that a
+ * 503 promises. The raw error propagates and the caller reports a 500.
  */
 export async function markHodlEscrowOrderSettled(
   paymentHash: string
@@ -2105,6 +2140,11 @@ export async function markHodlEscrowOrderSettled(
  * @returns "not-found" when no row matched, so the caller can surface a
  * cancelled invoice whose commitment has vanished instead of reporting
  * success.
+ *
+ * Deliberately NOT wrapped in {@link DatabaseUnavailableError}, for the same
+ * reason as {@link markHodlEscrowOrderSettled}: the HTLC has already been
+ * cancelled when this runs, so a failure is an inconsistency to investigate
+ * rather than an outage to retry through.
  */
 export async function markHodlEscrowOrderCancelled(
   paymentHash: string
@@ -2139,23 +2179,33 @@ export type HodlEscrowOrderStatus =
  * Reads the current status of a hold-invoice escrow order.
  *
  * @returns null when no commitment row exists.
+ *
+ * @throws {DatabaseUnavailableError} when the read could not be performed, so
+ * an outage cannot pass for "this order has no status".
  */
 export async function getHodlEscrowOrderStatus(
   paymentHash: string
 ): Promise<HodlEscrowOrderStatus | null> {
-  const dbPool = await getInitializedDbPool();
-  const client = await dbPool.connect();
+  const normalizedHash = paymentHash.toLowerCase();
+  let client;
 
   try {
+    const dbPool = await getInitializedDbPool();
+    client = await dbPool.connect();
     const result = await client.query<{ status: HodlEscrowOrderStatus }>(
       `SELECT status
        FROM hodl_escrow_orders
        WHERE payment_hash = $1`,
-      [paymentHash.toLowerCase()]
+      [normalizedHash]
     );
     return result.rows[0]?.status ?? null;
+  } catch (error) {
+    console.error("Failed to load hodl escrow order status:", error);
+    throw new DatabaseUnavailableError(
+      "Failed to load hodl escrow order status"
+    );
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 
@@ -2308,14 +2358,20 @@ export type HodlEscrowOrderDisputeContext = {
 /**
  * Loads the parties and acceptance timing committed to a payment hash, or
  * null when no commitment row exists.
+ *
+ * @throws {DatabaseUnavailableError} when the read could not be performed.
+ * The caller decides whether a dispute is actionable; an outage returning
+ * null here would read as "no such order" and answer that question wrongly.
  */
 export async function getHodlEscrowOrderDisputeContext(
   paymentHash: string
 ): Promise<HodlEscrowOrderDisputeContext | null> {
-  const dbPool = await getInitializedDbPool();
-  const client = await dbPool.connect();
+  const normalizedHash = paymentHash.toLowerCase();
+  let client;
 
   try {
+    const dbPool = await getInitializedDbPool();
+    client = await dbPool.connect();
     const result = await client.query<{
       buyer_nostr_pubkey: string;
       seller_nostr_pubkey: string;
@@ -2326,7 +2382,7 @@ export async function getHodlEscrowOrderDisputeContext(
               accepted_at
        FROM hodl_escrow_orders
        WHERE payment_hash = $1`,
-      [paymentHash.toLowerCase()]
+      [normalizedHash]
     );
 
     const row = result.rows[0];
@@ -2337,8 +2393,13 @@ export async function getHodlEscrowOrderDisputeContext(
       sellerNostrPubkey: row.seller_nostr_pubkey,
       acceptedAt: row.accepted_at,
     };
+  } catch (error) {
+    console.error("Failed to load hodl escrow dispute context:", error);
+    throw new DatabaseUnavailableError(
+      "Failed to load hodl escrow dispute context"
+    );
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 

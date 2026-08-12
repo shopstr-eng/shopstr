@@ -2,7 +2,10 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { applyRateLimit } from "@/utils/rate-limit";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
-import { fetchHodlConfirmEvents } from "@/utils/nostr/hodl-escrow-records";
+import {
+  fetchHodlConfirmEvents,
+  HodlRelayUnavailableError,
+} from "@/utils/nostr/hodl-escrow-records";
 import type { ParsedHodlConfirmEvent } from "@/utils/nostr/hodl-escrow-records";
 import {
   authorizeHodlConfirmEventForOrder,
@@ -16,6 +19,7 @@ import {
 } from "@/utils/lightning/hodl-invoice-provider-registry";
 import type { HodlInvoiceProvider } from "@/utils/lightning/hodl-invoice-provider";
 import {
+  DatabaseUnavailableError,
   getHodlEscrowOrderParties,
   getHodlEscrowSettlementSecret,
   markHodlEscrowOrderSettled,
@@ -150,6 +154,36 @@ const REJECTION_RESPONSES: Record<
   },
 };
 
+/**
+ * The "we could not check" answers, kept separate from
+ * {@link REJECTION_RESPONSES} because they are the opposite kind of answer.
+ *
+ * Every entry above is a verdict: relays and the commitment row were both
+ * consulted, and the settlement is refused. These two are the absence of a
+ * verdict. Collapsing them into a 403 — which is what an infrastructure
+ * failure used to do, once a relay outage became an empty candidate list —
+ * tells a seller who did ship that their buyer never confirmed, and the retry
+ * that would have succeeded is the one thing that message argues against.
+ *
+ * 503 rather than 500 for the same reason: a caller that reads status codes
+ * should see "come back", not "we are broken and your request will never
+ * work". `reason` mirrors the field the 403/404 bodies already carry, so a
+ * client can branch without matching on prose.
+ */
+const UNAVAILABLE_RESPONSES = {
+  database: {
+    status: 503 as const,
+    error: "Service temporarily unavailable. Please try again.",
+    reason: "database_unavailable" as const,
+  },
+  relay: {
+    status: 503 as const,
+    error:
+      "Could not reach relays to check for a buyer confirmation. Please try again.",
+    reason: "relay_unavailable" as const,
+  },
+};
+
 // Any 64-character hex run that is not this order's payment hash. In a file
 // whose one secret is exactly that shape, an unrecognized 64-hex blob in an
 // error message has no business being written to a log.
@@ -187,7 +221,14 @@ function describeFailure(error: unknown, paymentHash: string): string {
 }
 
 type SettlementOutcome =
-  { ok: true } | { ok: false; status: 500 | 502; error: string };
+  | { ok: true }
+  | {
+      ok: false;
+      status: 500 | 502 | 503;
+      error: string;
+      /** Only set on the 503 paths; see {@link UNAVAILABLE_RESPONSES}. */
+      reason?: string;
+    };
 
 /**
  * Reads the settlement secret and releases the funds.
@@ -219,6 +260,11 @@ async function settleAuthorizedOrder(
     console.error(
       `Failed to load the settlement secret for order ${paymentHash}: ${describeFailure(error, paymentHash)}`
     );
+    // Nothing has moved yet — the provider has not been called — so a database
+    // outage here is safely retryable, unlike the write further down.
+    if (error instanceof DatabaseUnavailableError) {
+      return { ok: false, ...UNAVAILABLE_RESPONSES.database };
+    }
     return { ok: false, status: 500, error: "Failed to settle escrow order" };
   }
   if (!preimage) {
@@ -325,6 +371,13 @@ export default async function handler(
     console.error(
       `Failed to look up hodl escrow order ${paymentHash}: ${describeFailure(error, paymentHash)}`
     );
+    // A failed lookup is not an absent order. Falling through to the
+    // `no_such_order` 404 below would tell a seller their escrow does not
+    // exist on the strength of a question that was never answered.
+    if (error instanceof DatabaseUnavailableError) {
+      const { status, ...body } = UNAVAILABLE_RESPONSES.database;
+      return res.status(status).json(body);
+    }
     return res.status(500).json({ error: "Failed to look up escrow order" });
   }
   if (!orderExists) {
@@ -348,6 +401,13 @@ export default async function handler(
     console.error(
       `Failed to fetch hodl confirm events for order ${paymentHash}: ${describeFailure(error, paymentHash)}`
     );
+    // The relays could not be reached, so the candidate list was never
+    // populated. Authorizing against it would find nothing and answer 403 —
+    // "no buyer confirmation exists" — about events nobody ever looked for.
+    if (error instanceof HodlRelayUnavailableError) {
+      const { status, ...body } = UNAVAILABLE_RESPONSES.relay;
+      return res.status(status).json(body);
+    }
     return res
       .status(502)
       .json({ error: "Failed to look up buyer confirmations" });
@@ -363,6 +423,13 @@ export default async function handler(
     console.error(
       `Failed to authorize hodl confirm events for order ${paymentHash}: ${describeFailure(error, paymentHash)}`
     );
+    // The commitment row could not be read, so no candidate was compared
+    // against anything. That is the same "we could not check" as the lookup
+    // above, arriving one step later.
+    if (error instanceof DatabaseUnavailableError) {
+      const { status, ...body } = UNAVAILABLE_RESPONSES.database;
+      return res.status(status).json(body);
+    }
     return res
       .status(500)
       .json({ error: "Failed to authorize buyer confirmation" });
@@ -379,7 +446,15 @@ export default async function handler(
     provider
   );
   if (!settlement.ok) {
-    return res.status(settlement.status).json({ error: settlement.error });
+    // `reason` is omitted rather than sent as undefined, so the 500 and 502
+    // bodies stay exactly the single-key shape they have always been.
+    return res
+      .status(settlement.status)
+      .json(
+        settlement.reason === undefined
+          ? { error: settlement.error }
+          : { error: settlement.error, reason: settlement.reason }
+      );
   }
 
   // The whole response. No preimage, no event, no row contents — a seller
