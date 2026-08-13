@@ -1102,7 +1102,7 @@ describe("handleLightningPayment", () => {
   );
 
   it("returns the generic 500 'Failed to create order' (not an unhandled rejection) when the computed amount is invalid — handleCreateOrder awaits handleLightningPayment, so a synchronous throw from toCashuMintAmountSats is caught by handleCreateOrder's own try/catch", async () => {
-    withPricedProduct([]);
+    withPricedProduct([["price", "0", "sats"]]);
 
     const req = createMockRequest({
       method: "POST",

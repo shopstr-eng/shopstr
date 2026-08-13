@@ -208,7 +208,7 @@ describe("parseTags", () => {
     expect(result.priceStatus).toBe("missing");
   });
 
-  it("should parse the modern 3-value shipping tag", () => {
+  it("should parse the modern 4-element shipping tag", () => {
     const event = {
       ...baseEvent,
       tags: [["shipping", "Added Cost", "10", "USD"]],
@@ -217,6 +217,24 @@ describe("parseTags", () => {
 
     expect(result.shippingType).toBe("Added Cost");
     expect(result.shippingCost).toBe(10);
+  });
+
+  it("should ignore legacy shipping tags when a modern shipping tag is also present", () => {
+    mockedCalculateTotalCost.mockImplementation(totalCostWithoutShipping);
+
+    const event = {
+      ...baseEvent,
+      tags: [
+        ["price", "50", "USD"],
+        ["shipping", "5", "USD"],
+        ["shipping", "Free", "0", "USD"],
+      ],
+    };
+    const result = parseTags(event)!;
+
+    expect(result.shippingType).toBe("Free");
+    expect(result.shippingCost).toBe(0);
+    expect(result.totalCost).toBe(50);
   });
 
   it("should ignore legacy 2-value shipping tags", () => {

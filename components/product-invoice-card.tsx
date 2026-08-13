@@ -512,7 +512,7 @@ export default function ProductInvoiceCard({
           ? messageAmount
           : formType === "shipping"
             ? productData.totalCost
-            : productData.price ?? 0,
+            : (productData.price ?? 0),
         orderId,
         productData: {
           ...productData,

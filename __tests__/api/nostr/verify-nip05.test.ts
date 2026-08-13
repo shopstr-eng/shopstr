@@ -179,6 +179,53 @@ describe("/api/nostr/verify-nip05", () => {
     expect(res.body).toEqual({ verified: true });
   });
 
+  it("pins the first DNS result and does not perform a second DNS lookup during request", async () => {
+    mockedLookup
+      .mockResolvedValueOnce([
+        {
+          address: "1.2.3.4",
+          family: 4,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          address: "127.0.0.1",
+          family: 4,
+        },
+      ]);
+    mockNip05Response({
+      body: JSON.stringify({
+        names: {
+          alice: "f".repeat(64),
+        },
+      }),
+    });
+
+    const res = createResponse();
+    await handler(
+      makeRequest({
+        nip05: "alice@example.com",
+        pubkey: "f".repeat(64),
+      }),
+      res
+    );
+
+    const requestOptions = mockedRequest.mock.calls[0]?.[0] as {
+      lookup: (
+        hostname: string,
+        options: unknown,
+        callback: (error: Error | null, address: string, family: number) => void
+      ) => void;
+    };
+    const lookupCallback = jest.fn();
+    requestOptions.lookup("example.com", {}, lookupCallback);
+
+    expect(mockedLookup).toHaveBeenCalledTimes(1);
+    expect(lookupCallback).toHaveBeenCalledWith(null, "1.2.3.4", 4);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ verified: true });
+  });
+
   it("returns verified false when the external NIP-05 endpoint fails", async () => {
     mockPublicDns();
     mockNip05Response({ error: new Error("network error") });
@@ -307,6 +354,31 @@ describe("/api/nostr/verify-nip05", () => {
     expect(res.body).toEqual({ verified: false });
   });
 
+  it.each([
+    "alice@example.local",
+    "alice@service.internal",
+    "alice@example.localhost",
+    "alice@example.localdomain",
+    "alice@example.home.arpa",
+  ])("rejects blocked hostname suffix %s before DNS lookup", async (nip05) => {
+    const res = createResponse();
+
+    await handler(
+      makeRequest({
+        nip05,
+        pubkey: "f".repeat(64),
+      }),
+      res
+    );
+
+    expect(mockedLookup).not.toHaveBeenCalled();
+    expect(mockedRequest).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({
+      error: "Invalid NIP-05 identifier",
+    });
+  });
+
   it("returns verified false when content-length exceeds the NIP-05 limit", async () => {
     mockPublicDns();
     mockNip05Response({
@@ -382,6 +454,20 @@ describe("canonical NIP-05 verifier", () => {
   it("classifies IPv4-mapped IPv6 private addresses as blocked", () => {
     expect(isPrivateOrLocalIp("::ffff:127.0.0.1")).toBe(true);
     expect(isPrivateOrLocalIp("::ffff:10.0.0.1")).toBe(true);
+  });
+
+  it.each([
+    "0.0.0.0",
+    "10.0.0.1",
+    "100.64.0.1",
+    "127.0.0.1",
+    "169.254.0.1",
+    "172.16.0.1",
+    "192.168.1.1",
+    "198.18.0.1",
+    "224.0.0.1",
+  ])("classifies private/local IPv4 range %s as blocked", (address) => {
+    expect(isPrivateOrLocalIp(address)).toBe(true);
   });
 
   it("pins a single resolved public address for the actual request", async () => {

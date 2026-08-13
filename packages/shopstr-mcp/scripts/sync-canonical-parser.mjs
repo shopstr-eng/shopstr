@@ -23,7 +23,6 @@ const files = [
   {
     from: "utils/nostr/canonical-nip05.ts",
     to: "canonical-nip05.ts",
-    optional: true,
   },
 ];
 
@@ -36,7 +35,6 @@ for (const file of files) {
   try {
     await stat(source);
   } catch (error) {
-    if (file.optional) continue;
     throw new Error(`Canonical source file missing: ${source}`, {
       cause: error,
     });

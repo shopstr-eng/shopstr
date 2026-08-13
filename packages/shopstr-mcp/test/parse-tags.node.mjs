@@ -277,6 +277,24 @@ test("extracts structured shipping_option with extra cost", () => {
   assert.equal(product.shippingOptions[2].extraCost, undefined);
 });
 
+test("uses modern shipping tag when legacy and modern shipping tags are both present", () => {
+  const product = parseProductEvent(
+    event({
+      tags: [
+        ["price", "50", "USD"],
+        ["shipping", "5", "USD"],
+        ["shipping", "Free", "0", "USD"],
+      ],
+    })
+  );
+
+  assert.equal(product.shippingType, "Free");
+  assert.equal(product.shippingCost, 0);
+  assert.equal(product.pricing.shippingType, "Free");
+  assert.equal(product.pricing.shippingCost, 0);
+  assert.equal(product.pricing.totalEstimate, 50);
+});
+
 test("ignores non-numeric shipping_option extra cost", () => {
   const product = parseProductEvent(
     event({
