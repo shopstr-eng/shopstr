@@ -5,7 +5,20 @@ import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 
 export type LightningPayoutOutcome =
-  | { status: "no-quote" }
+  | {
+      status: "fallback";
+      reason: "no-quote" | "swap-unswapped" | "melt-unpaid";
+      fallbackProofs: Proof[];
+      fallbackAmount: number;
+      errorMessage?: string;
+    }
+  | {
+      status: "pending" | "unknown";
+      meltQuoteId: string;
+      recoverableProofs: Proof[];
+      quarantinedProofs: Proof[];
+      errorMessage: string;
+    }
   | {
       status: "completed";
       meltAmount: number;
@@ -26,7 +39,12 @@ export async function executeSellerLightningPayout(
   const invoice = await ln.requestInvoice({ satoshi: newAmount });
   const meltQuote = await wallet.createMeltQuoteBolt11(invoice.paymentRequest);
   if (!meltQuote) {
-    return { status: "no-quote" };
+    return {
+      status: "fallback",
+      reason: "no-quote",
+      fallbackProofs: sellerProofs,
+      fallbackAmount: sumProofAmounts(sellerProofs),
+    };
   }
 
   const meltQuoteTotal =
@@ -34,20 +52,49 @@ export async function executeSellerLightningPayout(
   const swapOutcome = await safeSwap(wallet, meltQuoteTotal, sellerProofs, {
     sendConfig: { includeFees: true },
   });
-  if (swapOutcome.status !== "swapped") {
-    throw new Error(
-      swapOutcome.errorMessage ??
-        `Pre-melt swap did not complete (${swapOutcome.status})`
-    );
+  if (swapOutcome.status === "unswapped") {
+    return {
+      status: "fallback",
+      reason: "swap-unswapped",
+      fallbackProofs: sellerProofs,
+      fallbackAmount: sumProofAmounts(sellerProofs),
+      errorMessage: swapOutcome.errorMessage,
+    };
+  }
+  if (swapOutcome.status === "unknown") {
+    return {
+      status: "unknown",
+      meltQuoteId: meltQuote.quote,
+      recoverableProofs: [],
+      quarantinedProofs: sellerProofs,
+      errorMessage:
+        swapOutcome.errorMessage ??
+        `Pre-melt swap did not complete (${swapOutcome.status})`,
+    };
   }
 
   const { keep, send } = swapOutcome;
   const meltOutcome = await safeMeltProofs(wallet, meltQuote, send);
-  if (meltOutcome.status !== "paid") {
-    throw new Error(
-      meltOutcome.errorMessage ??
-        `Melt did not complete (${meltOutcome.status})`
-    );
+  if (meltOutcome.status === "unpaid") {
+    const fallbackProofs = [...keep, ...send];
+    return {
+      status: "fallback",
+      reason: "melt-unpaid",
+      fallbackProofs,
+      fallbackAmount: sumProofAmounts(fallbackProofs),
+      errorMessage: meltOutcome.errorMessage,
+    };
+  }
+  if (meltOutcome.status === "pending" || meltOutcome.status === "unknown") {
+    return {
+      status: meltOutcome.status,
+      meltQuoteId: meltOutcome.meltQuote.quote,
+      recoverableProofs: keep,
+      quarantinedProofs: send,
+      errorMessage:
+        meltOutcome.errorMessage ??
+        `Melt did not complete (${meltOutcome.status})`,
+    };
   }
 
   const meltAmount = meltOutcome.meltQuote.amount.toNumber();

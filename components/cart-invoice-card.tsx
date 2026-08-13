@@ -61,6 +61,12 @@ import {
 } from "@/utils/payments/checkout-messages";
 import { executeSellerLightningPayout } from "@/utils/payments/lightning-payout";
 import {
+  isUnresolvedSellerLightningPayoutError,
+  recordPendingSellerLightningPayout,
+  UnresolvedSellerLightningPayoutError,
+} from "@/utils/payments/pending-lightning-payouts";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
+import {
   recordPendingMintQuote,
   markMintQuoteClaimed,
   updatePendingMintQuote,
@@ -1448,21 +1454,30 @@ export default function CartInvoiceCard({
                 setQrCodeUrl(null);
                 break;
               } catch (handoffError) {
-                await recoverProofsToBuyerWallet(
-                  nostr!,
-                  signer!,
-                  paymentMintUrl,
-                  proofs,
-                  convertedPrice
-                );
+                const unresolvedPayout =
+                  isUnresolvedSellerLightningPayoutError(handoffError);
+                const proofsToRecover = unresolvedPayout
+                  ? handoffError.recoverableProofs
+                  : proofs;
+                if (proofsToRecover.length > 0) {
+                  await recoverProofsToBuyerWallet(
+                    nostr!,
+                    signer!,
+                    paymentMintUrl,
+                    proofsToRecover,
+                    sumProofAmounts(proofsToRecover)
+                  );
+                }
                 markMintQuoteClaimed(hash);
                 setShowInvoiceCard(false);
                 setInvoice("");
                 setQrCodeUrl(null);
                 setFailureText(
-                  isTimeoutError(handoffError)
-                    ? "Your payment was received but delivery to the seller timed out. Your sats have been credited to your wallet — please try the order again."
-                    : "Your payment was received but couldn't be delivered to the seller. Your sats have been credited to your wallet — please try the order again."
+                  unresolvedPayout
+                    ? handoffError.message
+                    : isTimeoutError(handoffError)
+                      ? "Your payment was received but delivery to the seller timed out. Your sats have been credited to your wallet — please try the order again."
+                      : "Your payment was received but couldn't be delivered to the seller. Your sats have been credited to your wallet — please try the order again."
                 );
                 setShowFailureModal(true);
                 console.warn(
@@ -1579,6 +1594,7 @@ export default function CartInvoiceCard({
       }
       let sellerToken;
       let donationToken;
+      let donationProofs: Proof[] = [];
       const orderId = uuidv4();
 
       if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
@@ -1667,6 +1683,7 @@ export default function CartInvoiceCard({
           mint: paymentMintUrl,
           proofs: send,
         });
+        donationProofs = send;
         remainingProofs = keep;
       }
 
@@ -1687,14 +1704,15 @@ export default function CartInvoiceCard({
       }
 
       // Step 1: Send payment message (if applicable)
-      if (
-        isEligibleForLightningPayout({
-          sellerP2pk: sellerProfile?.content?.p2pk,
-          paymentPreference,
-          lnurl,
-        }) &&
-        sellerProofs
-      ) {
+      const isLightningPayout = isEligibleForLightningPayout({
+        sellerP2pk: sellerProfile?.content?.p2pk,
+        paymentPreference,
+        lnurl,
+      });
+      let shouldSendEcashPayout = !isLightningPayout;
+      let ecashPayoutAmount = sellerAmount;
+
+      if (isLightningPayout && sellerProofs) {
         const payoutOutcome = await executeSellerLightningPayout(
           wallet,
           lnurl,
@@ -1776,8 +1794,36 @@ export default function CartInvoiceCard({
               console.error("Failed to send change message:", error);
             }
           }
+        } else if (payoutOutcome.status === "fallback") {
+          sellerProofs = payoutOutcome.fallbackProofs;
+          ecashPayoutAmount = payoutOutcome.fallbackAmount;
+          sellerToken = getEncodedToken({
+            mint: paymentMintUrl,
+            proofs: sellerProofs,
+          });
+          shouldSendEcashPayout = true;
+        } else {
+          const payout = recordPendingSellerLightningPayout({
+            orderId,
+            mintUrl: paymentMintUrl,
+            sellerPubkey: pubkey,
+            lnurl,
+            sellerAmount,
+            status: payoutOutcome.status,
+            meltQuoteId: payoutOutcome.meltQuoteId,
+            recoverableProofs: [
+              ...remainingProofs,
+              ...donationProofs,
+              ...payoutOutcome.recoverableProofs,
+            ],
+            quarantinedProofs: payoutOutcome.quarantinedProofs,
+            errorMessage: payoutOutcome.errorMessage,
+          });
+          throw new UnresolvedSellerLightningPayoutError(payout);
         }
-      } else {
+      }
+
+      if (shouldSendEcashPayout) {
         // Add pickup location if available for this specific product
         const pickupLocation =
           selectedPickupLocations[product.id] ||
@@ -1809,7 +1855,7 @@ export default function CartInvoiceCard({
             "ecash",
             sellerToken,
             undefined,
-            sellerAmount,
+            ecashPayoutAmount,
             quantities[product.id] && quantities[product.id]! > 1
               ? quantities[product.id]
               : 1,
@@ -2144,6 +2190,12 @@ export default function CartInvoiceCard({
   const formattedTotalCost = formatWithCommas(totalCost, "sats");
 
   const handleCashuPayment = async (price: number, data: any) => {
+    let cashuPaymentContext:
+      | {
+          currentTokens: Proof[];
+          filteredProofs: Proof[];
+        }
+      | undefined;
     try {
       if (!mints || mints.length === 0) {
         throw new Error("No Cashu mint available");
@@ -2172,6 +2224,10 @@ export default function CartInvoiceCard({
       const filteredProofs = (currentTokens as Proof[]).filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
+      cashuPaymentContext = {
+        currentTokens: currentTokens as Proof[],
+        filteredProofs,
+      };
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
@@ -2227,7 +2283,31 @@ export default function CartInvoiceCard({
       setOrderConfirmed(true);
       setPaymentConfirmed(true);
       setCashuPaymentSent(true);
-    } catch {
+    } catch (error) {
+      if (
+        isUnresolvedSellerLightningPayoutError(error) &&
+        cashuPaymentContext
+      ) {
+        const consumedSecrets = new Set(
+          cashuPaymentContext.filteredProofs.map((proof) => proof.secret)
+        );
+        const unaffectedProofs = cashuPaymentContext.currentTokens.filter(
+          (proof) => !consumedSecrets.has(proof.secret)
+        );
+        try {
+          localStorage.setItem(
+            "tokens",
+            JSON.stringify([...unaffectedProofs, ...error.recoverableProofs])
+          );
+        } catch (storageError) {
+          console.warn(
+            "[cart-invoice-card] failed to restore confirmed-unspent proofs to the local wallet:",
+            storageError
+          );
+        }
+        setFailureText(error.message);
+        setShowFailureModal(true);
+      }
       setCashuPaymentFailed(true);
     }
   };

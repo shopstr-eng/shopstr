@@ -58,18 +58,24 @@ describe("executeSellerLightningPayout", () => {
     expect(mockRequestInvoice).toHaveBeenCalledWith({ satoshi: 978 });
   });
 
-  it("returns { status: 'no-quote' } without touching swap/melt when the mint can't produce a melt quote", async () => {
+  it("returns the original seller proofs for ecash fallback when the mint can't produce a melt quote", async () => {
     const createMeltQuoteBolt11 = jest.fn().mockResolvedValue(null);
     const wallet = makeWallet(createMeltQuoteBolt11);
+    const sellerProofs = [makeProof(1000)];
 
     const result = await executeSellerLightningPayout(
       wallet,
       "seller@getalby.com",
       1000,
-      [makeProof(1000)]
+      sellerProofs
     );
 
-    expect(result).toEqual({ status: "no-quote" });
+    expect(result).toEqual({
+      status: "fallback",
+      reason: "no-quote",
+      fallbackProofs: sellerProofs,
+      fallbackAmount: 1000,
+    });
     expect(safeSwap).not.toHaveBeenCalled();
     expect(safeMeltProofs).not.toHaveBeenCalled();
   });
@@ -98,7 +104,7 @@ describe("executeSellerLightningPayout", () => {
     });
   });
 
-  it("throws when the pre-melt swap doesn't complete, surfacing the swap's errorMessage", async () => {
+  it("falls back to the original seller proofs when the pre-melt swap is confirmed unswapped", async () => {
     const meltQuote = makeMeltQuote(978, 5);
     const createMeltQuoteBolt11 = jest.fn().mockResolvedValue(meltQuote);
     const wallet = makeWallet(createMeltQuoteBolt11);
@@ -109,15 +115,25 @@ describe("executeSellerLightningPayout", () => {
       errorMessage: "mint unreachable",
     });
 
+    const sellerProofs = [makeProof(1000)];
     await expect(
-      executeSellerLightningPayout(wallet, "seller@getalby.com", 1000, [
-        makeProof(1000),
-      ])
-    ).rejects.toThrow("mint unreachable");
+      executeSellerLightningPayout(
+        wallet,
+        "seller@getalby.com",
+        1000,
+        sellerProofs
+      )
+    ).resolves.toEqual({
+      status: "fallback",
+      reason: "swap-unswapped",
+      fallbackProofs: sellerProofs,
+      fallbackAmount: 1000,
+      errorMessage: "mint unreachable",
+    });
     expect(safeMeltProofs).not.toHaveBeenCalled();
   });
 
-  it("falls back to a status-derived message when the swap failure has no errorMessage", async () => {
+  it("quarantines the original seller proofs when the pre-melt swap outcome is unknown", async () => {
     const meltQuote = makeMeltQuote(978, 5);
     const createMeltQuoteBolt11 = jest.fn().mockResolvedValue(meltQuote);
     const wallet = makeWallet(createMeltQuoteBolt11);
@@ -127,11 +143,22 @@ describe("executeSellerLightningPayout", () => {
       send: [],
     });
 
+    const sellerProofs = [makeProof(1000)];
     await expect(
-      executeSellerLightningPayout(wallet, "seller@getalby.com", 1000, [
-        makeProof(1000),
-      ])
-    ).rejects.toThrow("Pre-melt swap did not complete (unknown)");
+      executeSellerLightningPayout(
+        wallet,
+        "seller@getalby.com",
+        1000,
+        sellerProofs
+      )
+    ).resolves.toEqual({
+      status: "unknown",
+      meltQuoteId: "quote-id",
+      recoverableProofs: [],
+      quarantinedProofs: sellerProofs,
+      errorMessage: "Pre-melt swap did not complete (unknown)",
+    });
+    expect(safeMeltProofs).not.toHaveBeenCalled();
   });
 
   it("melts the swap's `send` output, not the original sellerProofs", async () => {
@@ -157,14 +184,16 @@ describe("executeSellerLightningPayout", () => {
     expect(safeMeltProofs).toHaveBeenCalledWith(wallet, meltQuote, swappedSend);
   });
 
-  it("throws when the melt doesn't complete, surfacing the melt's errorMessage", async () => {
+  it("keeps swap change recoverable and quarantines melt proofs while the melt is pending", async () => {
     const meltQuote = makeMeltQuote(978, 5);
     const createMeltQuoteBolt11 = jest.fn().mockResolvedValue(meltQuote);
     const wallet = makeWallet(createMeltQuoteBolt11);
+    const keepProof = makeProof(17);
+    const sendProof = makeProof(983);
     jest.mocked(safeSwap).mockResolvedValue({
       status: "swapped",
-      keep: [],
-      send: [makeProof(983)],
+      keep: [keepProof],
+      send: [sendProof],
     });
     jest.mocked(safeMeltProofs).mockResolvedValue({
       status: "pending",
@@ -177,17 +206,25 @@ describe("executeSellerLightningPayout", () => {
       executeSellerLightningPayout(wallet, "seller@getalby.com", 1000, [
         makeProof(1000),
       ])
-    ).rejects.toThrow("mint still processing");
+    ).resolves.toEqual({
+      status: "pending",
+      meltQuoteId: "quote-id",
+      recoverableProofs: [keepProof],
+      quarantinedProofs: [sendProof],
+      errorMessage: "mint still processing",
+    });
   });
 
-  it("falls back to a status-derived message when the melt failure has no errorMessage", async () => {
+  it("preserves proof ownership when the melt outcome is unknown", async () => {
     const meltQuote = makeMeltQuote(978, 5);
     const createMeltQuoteBolt11 = jest.fn().mockResolvedValue(meltQuote);
     const wallet = makeWallet(createMeltQuoteBolt11);
+    const keepProof = makeProof(17);
+    const sendProof = makeProof(983);
     jest.mocked(safeSwap).mockResolvedValue({
       status: "swapped",
-      keep: [],
-      send: [makeProof(983)],
+      keep: [keepProof],
+      send: [sendProof],
     });
     jest.mocked(safeMeltProofs).mockResolvedValue({
       status: "unknown",
@@ -199,7 +236,44 @@ describe("executeSellerLightningPayout", () => {
       executeSellerLightningPayout(wallet, "seller@getalby.com", 1000, [
         makeProof(1000),
       ])
-    ).rejects.toThrow("Melt did not complete (unknown)");
+    ).resolves.toEqual({
+      status: "unknown",
+      meltQuoteId: "quote-id",
+      recoverableProofs: [keepProof],
+      quarantinedProofs: [sendProof],
+      errorMessage: "Melt did not complete (unknown)",
+    });
+  });
+
+  it("falls back to all unspent swap outputs when the mint confirms the melt is unpaid", async () => {
+    const meltQuote = makeMeltQuote(978, 5);
+    const createMeltQuoteBolt11 = jest.fn().mockResolvedValue(meltQuote);
+    const wallet = makeWallet(createMeltQuoteBolt11);
+    const keepProof = makeProof(17);
+    const sendProof = makeProof(983);
+    jest.mocked(safeSwap).mockResolvedValue({
+      status: "swapped",
+      keep: [keepProof],
+      send: [sendProof],
+    });
+    jest.mocked(safeMeltProofs).mockResolvedValue({
+      status: "unpaid",
+      meltQuote,
+      changeProofs: [],
+      errorMessage: "invoice expired",
+    });
+
+    await expect(
+      executeSellerLightningPayout(wallet, "seller@getalby.com", 1000, [
+        makeProof(1000),
+      ])
+    ).resolves.toEqual({
+      status: "fallback",
+      reason: "melt-unpaid",
+      fallbackProofs: [keepProof, sendProof],
+      fallbackAmount: 1000,
+      errorMessage: "invoice expired",
+    });
   });
 
   it("on success, returns meltAmount from the outcome's meltQuote and combines swap-keep with melt change into changeProofs/changeAmount", async () => {
