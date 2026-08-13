@@ -3,16 +3,25 @@ import { applyRateLimit } from "@/utils/rate-limit";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
 import {
+  fetchHodlDisputeEvents,
   fetchHodlReleaseEvents,
   HodlRelayUnavailableError,
 } from "@/utils/nostr/hodl-escrow-records";
-import type { ParsedHodlReleaseEvent } from "@/utils/nostr/hodl-escrow-records";
+import type {
+  ParsedHodlDisputeEvent,
+  ParsedHodlReleaseEvent,
+} from "@/utils/nostr/hodl-escrow-records";
 import {
   authorizeHodlReleaseEventForOrder,
   HodlAuthorizationError,
   type AuthorizedHodlRelease,
   type HodlAuthorizationFailureReason,
 } from "@/utils/nostr/server-hodl-escrow-authorization";
+import {
+  evaluateHodlDisputeActionability,
+  HodlDisputeActionabilityError,
+  type HodlDisputeActionability,
+} from "@/utils/nostr/hodl-dispute-actionability";
 import {
   getHodlInvoiceProvider,
   HodlInvoiceProviderUnavailableError,
@@ -83,6 +92,21 @@ function createServerNostrManager(): NostrManager {
 type ResolveRejectionReason =
   HodlAuthorizationFailureReason | "no_release_event";
 
+/**
+ * Why an authorized ruling was still refused: there was nothing for the
+ * arbiter to rule on yet.
+ *
+ * Both are verdicts in the same sense as {@link ResolveRejectionReason} —
+ * reached after relays and the commitment row were consulted — and both are
+ * about the dispute rather than about the ruling, which is why they are a
+ * separate type from the reasons {@link authorizeAnyRelease} can produce.
+ */
+type DisputeGateRejectionReason =
+  /** No dispute signed by this order's buyer or seller exists at all. */
+  | "no_actionable_dispute"
+  /** A seller's dispute exists but is still inside its waiting period. */
+  | "dispute_not_yet_actionable";
+
 type AuthorizationOutcome =
   | { ok: true; release: AuthorizedHodlRelease }
   | { ok: false; reason: ResolveRejectionReason };
@@ -133,7 +157,7 @@ async function authorizeAnyRelease(
 }
 
 const REJECTION_RESPONSES: Record<
-  ResolveRejectionReason,
+  ResolveRejectionReason | DisputeGateRejectionReason,
   { status: 403 | 404; error: string }
 > = {
   no_such_order: {
@@ -151,6 +175,18 @@ const REJECTION_RESPONSES: Record<
   order_mismatch: {
     status: 403,
     error: "Ruling events do not belong to this order",
+  },
+  // Deliberately the same 403 as the two above: an arbiter ruling on an order
+  // nobody disputed is refused on the same grounds as a stranger's ruling —
+  // the event does not carry the authority to move this money right now.
+  no_actionable_dispute: {
+    status: 403,
+    error: "No party to this order has raised a dispute to resolve",
+  },
+  dispute_not_yet_actionable: {
+    status: 403,
+    error:
+      "The seller's dispute cannot be resolved until its waiting period has elapsed",
   },
 };
 
@@ -173,6 +209,15 @@ const UNAVAILABLE_RESPONSES = {
     status: 503 as const,
     error:
       "Could not reach relays to check for an arbiter ruling. Please try again.",
+    reason: "relay_unavailable" as const,
+  },
+  // Same outage, a different question left unanswered. The `reason` is
+  // deliberately identical, so a client branching on it sees one relay
+  // failure; only the human-readable text says which lookup died.
+  disputeRelay: {
+    status: 503 as const,
+    error:
+      "Could not reach relays to check for a dispute on this order. Please try again.",
     reason: "relay_unavailable" as const,
   },
 };
@@ -200,6 +245,115 @@ function describeFailure(error: unknown, paymentHash: string): string {
   return rendered.replace(HEX_32_BYTE_RUN, (match) =>
     match.toLowerCase() === paymentHash.toLowerCase() ? match : "[redacted]"
   );
+}
+
+type DisputeGateOutcome =
+  | { ok: true }
+  | { ok: false; reason: "no_actionable_dispute" }
+  | {
+      ok: false;
+      reason: "dispute_not_yet_actionable";
+      /** How much longer the arbiter must wait, for the response body. */
+      remainingSeconds: number;
+    };
+
+/**
+ * Requires that a legitimate, actionable dispute exists before an authorized
+ * ruling is allowed to move money.
+ *
+ * An authorized ruling proves the order's committed arbiter signed it. It
+ * does not prove there was anything to rule on. Without this gate an arbiter
+ * key — compromised, or simply firing early — could settle an order nobody
+ * disputed, or resolve a seller's dispute the instant it was raised, before
+ * the buyer had any window in which to confirm receipt. That window is the
+ * whole point of hodl-dispute-actionability.ts's
+ * SELLER_DISPUTE_TIMEOUT_SECONDS, which until this gate existed was computed
+ * by a function no server path called.
+ *
+ * Candidates are treated exactly like release candidates: relays hand back
+ * whatever anyone published, so forgeries are expected and filtered rather
+ * than errored on. `unknown_disputer` — signed by neither the committed buyer
+ * nor the committed seller — is the ordinary case for a stranger's event, and
+ * `no_accepted_at` is a seller disputing an order whose funds were never
+ * held; neither is grounds for refusing to look at the rest of the list.
+ *
+ * @throws {HodlRelayUnavailableError} relays could not be reached.
+ * @throws {DatabaseUnavailableError} the commitment row could not be read.
+ * @throws {HodlDisputeActionabilityError} with reason `no_such_order` only.
+ */
+async function requireActionableDispute(
+  release: AuthorizedHodlRelease
+): Promise<DisputeGateOutcome> {
+  const { paymentHash, arbiterNostrPubkey } = release;
+
+  // The arbiter comes from the commitment row by way of the authorized
+  // release, never from the request — the same anchor the ruling itself was
+  // just checked against.
+  let candidates: ParsedHodlDisputeEvent[];
+  const nostr = createServerNostrManager();
+  try {
+    candidates = await fetchHodlDisputeEvents({
+      nostr,
+      arbiterPubkey: arbiterNostrPubkey,
+      timeoutMs: RELAY_TIMEOUT_MS,
+    });
+  } finally {
+    nostr.close();
+  }
+
+  // Set only by seller disputes still inside the window, and kept at the
+  // smallest such value: with several pending, the soonest is the one that
+  // answers "how much longer until I can act?".
+  let soonestRemainingSeconds: number | null = null;
+
+  for (const candidate of candidates) {
+    // fetchHodlDisputeEvents filters on the arbiter's `p` tag, not on `d`, so
+    // its results span every order this arbiter handles. Unlike the release
+    // fetch, narrowing to this order is the caller's job — and skipping it
+    // would let a dispute on some unrelated order unlock this one.
+    if (candidate.orderId !== paymentHash) continue;
+
+    let actionability: HodlDisputeActionability;
+    try {
+      actionability = await evaluateHodlDisputeActionability(
+        paymentHash,
+        candidate
+      );
+    } catch (error) {
+      if (!(error instanceof HodlDisputeActionabilityError)) throw error;
+      // `no_such_order` is about the order rather than about this one author,
+      // same reasoning as in authorizeAnyRelease: the row that authorized the
+      // ruling moments ago has since gone, every remaining candidate would
+      // fail identically, and answering "nobody disputed this" on the
+      // strength of a row nobody could read would be a verdict about an
+      // unanswered question.
+      if (error.reason === "no_such_order") throw error;
+      continue;
+    }
+
+    // Buyer disputes report actionable immediately; seller disputes only once
+    // their window has elapsed. Either way this is the one result that lets
+    // money move.
+    if (actionability.actionable) return { ok: true };
+
+    const remaining = actionability.remainingSeconds ?? 0;
+    if (
+      soonestRemainingSeconds === null ||
+      remaining < soonestRemainingSeconds
+    ) {
+      soonestRemainingSeconds = remaining;
+    }
+  }
+
+  if (soonestRemainingSeconds === null) {
+    return { ok: false, reason: "no_actionable_dispute" };
+  }
+
+  return {
+    ok: false,
+    reason: "dispute_not_yet_actionable",
+    remainingSeconds: soonestRemainingSeconds,
+  };
 }
 
 type ResolutionOutcome =
@@ -364,6 +518,11 @@ async function cancelForBuyer(
  * signed, fetched independently from relays and run through
  * {@link authorizeHodlReleaseEventForOrder}. Anyone can call this endpoint;
  * only an authorized ruling can move money.
+ *
+ * An authorized ruling is necessary but not sufficient: it must also answer
+ * a dispute that a party to this order actually raised and that is actionable
+ * now, which {@link requireActionableDispute} checks against dispute events
+ * (kind 30410) and the order's `accepted_at`.
  */
 export default async function handler(
   req: NextApiRequest,
@@ -476,6 +635,59 @@ export default async function handler(
     return res
       .status(rejection.status)
       .json({ error: rejection.error, reason: outcome.reason });
+  }
+
+  // The ruling is the arbiter's. Whether there is anything to rule on is a
+  // separate question, and it is asked here — after authorization, because
+  // the arbiter to look disputes up for comes from the authorized release,
+  // and before any provider call, because this is the last point at which
+  // nothing has moved.
+  let gate: DisputeGateOutcome;
+  try {
+    gate = await requireActionableDispute(outcome.release);
+  } catch (error) {
+    console.error(
+      `Failed to check for an actionable dispute on order ${paymentHash}: ${describeFailure(error, paymentHash)}`
+    );
+    // Same "we could not check" discipline as the lookups above: an
+    // unanswered question must never reach the caller dressed as a 403
+    // saying no dispute exists.
+    if (error instanceof HodlRelayUnavailableError) {
+      const { status, ...body } = UNAVAILABLE_RESPONSES.disputeRelay;
+      return res.status(status).json(body);
+    }
+    if (error instanceof DatabaseUnavailableError) {
+      const { status, ...body } = UNAVAILABLE_RESPONSES.database;
+      return res.status(status).json(body);
+    }
+    // The commitment row vanished between authorizing the ruling and reading
+    // the dispute context.
+    if (
+      error instanceof HodlDisputeActionabilityError &&
+      error.reason === "no_such_order"
+    ) {
+      const rejection = REJECTION_RESPONSES.no_such_order;
+      return res
+        .status(rejection.status)
+        .json({ error: rejection.error, reason: "no_such_order" });
+    }
+    return res
+      .status(500)
+      .json({ error: "Failed to check for an actionable dispute" });
+  }
+  if (!gate.ok) {
+    const rejection = REJECTION_RESPONSES[gate.reason];
+    // `remainingSeconds` rides along only where it means something, so the
+    // other rejection bodies keep the exact shape they have always had.
+    return res.status(rejection.status).json(
+      gate.reason === "dispute_not_yet_actionable"
+        ? {
+            error: rejection.error,
+            reason: gate.reason,
+            remainingSeconds: gate.remainingSeconds,
+          }
+        : { error: rejection.error, reason: gate.reason }
+    );
   }
 
   const resolution =

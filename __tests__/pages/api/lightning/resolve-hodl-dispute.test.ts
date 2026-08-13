@@ -1,6 +1,8 @@
 const applyRateLimitMock = jest.fn();
 const fetchHodlReleaseEventsMock = jest.fn();
+const fetchHodlDisputeEventsMock = jest.fn();
 const getHodlEscrowOrderPartiesMock = jest.fn();
+const getHodlEscrowOrderDisputeContextMock = jest.fn();
 const getHodlEscrowSettlementSecretMock = jest.fn();
 const markHodlEscrowOrderSettledMock = jest.fn();
 const markHodlEscrowOrderCancelledMock = jest.fn();
@@ -29,12 +31,17 @@ jest.mock("@/utils/nostr/hodl-escrow-records", () => {
     HodlRelayUnavailableError,
     fetchHodlReleaseEvents: (...args: unknown[]) =>
       fetchHodlReleaseEventsMock(...args),
+    fetchHodlDisputeEvents: (...args: unknown[]) =>
+      fetchHodlDisputeEventsMock(...args),
   };
 });
 
 // Only the database is faked. The authorization module underneath runs for
 // real against these rows, so "an authorized release" in these tests means
-// the genuine pubkey comparison passed — not that a mock said yes.
+// the genuine pubkey comparison passed — not that a mock said yes. The same
+// goes for the dispute gate: evaluateHodlDisputeActionability runs for real,
+// so "the seller's window has not elapsed" is that module's own arithmetic
+// over the accepted_at below, not a mocked verdict.
 jest.mock("@/utils/db/db-service", () => {
   class DatabaseUnavailableError extends Error {
     constructor(message = "Database unavailable") {
@@ -46,6 +53,8 @@ jest.mock("@/utils/db/db-service", () => {
     DatabaseUnavailableError,
     getHodlEscrowOrderParties: (...args: unknown[]) =>
       getHodlEscrowOrderPartiesMock(...args),
+    getHodlEscrowOrderDisputeContext: (...args: unknown[]) =>
+      getHodlEscrowOrderDisputeContextMock(...args),
     getHodlEscrowSettlementSecret: (...args: unknown[]) =>
       getHodlEscrowSettlementSecretMock(...args),
     markHodlEscrowOrderSettled: (...args: unknown[]) =>
@@ -75,9 +84,13 @@ jest.mock("@/utils/nostr/relay-config", () => ({
 }));
 
 import handler from "@/pages/api/lightning/resolve-hodl-dispute";
-import type { ParsedHodlReleaseEvent } from "@/utils/nostr/hodl-escrow-records";
+import type {
+  ParsedHodlDisputeEvent,
+  ParsedHodlReleaseEvent,
+} from "@/utils/nostr/hodl-escrow-records";
 import { HodlRelayUnavailableError } from "@/utils/nostr/hodl-escrow-records";
 import { DatabaseUnavailableError } from "@/utils/db/db-service";
+import { SELLER_DISPUTE_TIMEOUT_SECONDS } from "@/utils/nostr/hodl-dispute-actionability";
 import { HodlInvoiceError } from "@/utils/lightning/hodl-invoice-provider";
 import { HodlInvoiceProviderUnavailableError } from "@/utils/lightning/hodl-invoice-provider-registry";
 
@@ -86,6 +99,13 @@ const relayOutage = () =>
   new HodlRelayUnavailableError({
     reason: "relay_connection_failure",
     message: "Could not reach relays to look up arbiter rulings",
+  });
+
+/** The same outage on the dispute lookup instead. */
+const disputeRelayOutage = () =>
+  new HodlRelayUnavailableError({
+    reason: "relay_connection_failure",
+    message: "Could not reach relays to look up disputes for this arbiter",
   });
 
 const PAYMENT_HASH = "b".repeat(64);
@@ -104,6 +124,30 @@ const ORDER_PARTIES = {
   sellerNostrPubkey: SELLER_PUBKEY,
   arbiterNostrPubkey: ARBITER_PUBKEY,
 };
+
+/** An `accepted_at` that puts a seller dispute `seconds` into its window. */
+function acceptedSecondsAgo(seconds: number): Date {
+  return new Date(Date.now() - seconds * 1000);
+}
+
+/** Default: the seller's window elapsed an hour ago. */
+const ORDER_DISPUTE_CONTEXT = {
+  buyerNostrPubkey: BUYER_PUBKEY,
+  sellerNostrPubkey: SELLER_PUBKEY,
+  acceptedAt: acceptedSecondsAgo(SELLER_DISPUTE_TIMEOUT_SECONDS + 3600),
+};
+
+function disputeEvent(
+  overrides: Partial<ParsedHodlDisputeEvent> = {}
+): ParsedHodlDisputeEvent {
+  return {
+    orderId: PAYMENT_HASH,
+    authorPubkey: BUYER_PUBKEY,
+    description: "the item never arrived",
+    createdAt: 1_700_000_000,
+    ...overrides,
+  };
+}
 
 function releaseEvent(
   overrides: Partial<ParsedHodlReleaseEvent> = {}
@@ -186,6 +230,13 @@ describe("/api/lightning/resolve-hodl-dispute", () => {
 
     applyRateLimitMock.mockReturnValue(true);
     getHodlEscrowOrderPartiesMock.mockResolvedValue(ORDER_PARTIES);
+    getHodlEscrowOrderDisputeContextMock.mockResolvedValue(
+      ORDER_DISPUTE_CONTEXT
+    );
+    // The default order is one the buyer disputed, which is actionable the
+    // moment it is raised — so every test that is not about the gate reaches
+    // the settle/cancel path exactly as it did before the gate existed.
+    fetchHodlDisputeEventsMock.mockResolvedValue([disputeEvent()]);
     getHodlEscrowSettlementSecretMock.mockImplementation(async () => {
       callOrder.push("readSecret");
       return PREIMAGE;
@@ -255,7 +306,9 @@ describe("/api/lightning/resolve-hodl-dispute", () => {
         "paymentHash",
         "timeoutMs",
       ]);
-      expect(nostrCloseMock).toHaveBeenCalledTimes(1);
+      // Two lookups, two relay managers, both closed: the ruling fetch and
+      // the dispute fetch each open and dispose of their own.
+      expect(nostrCloseMock).toHaveBeenCalledTimes(2);
     });
 
     it("marks the order settled only after the provider call resolves", async () => {
@@ -607,6 +660,338 @@ describe("/api/lightning/resolve-hodl-dispute", () => {
       expect(res.statusCode).toBe(500);
       expect(settleInvoiceMock).not.toHaveBeenCalled();
       expect(cancelInvoiceMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // An authorized ruling says the arbiter signed it. It does not say there
+  // was anything to rule on — that is this gate's question, and before it
+  // existed an arbiter key could settle an undisputed order or resolve a
+  // seller's dispute the second it was raised.
+  describe("dispute gate", () => {
+    /** Every way this endpoint can move money, and neither did. */
+    function expectNothingMoved() {
+      expect(settleInvoiceMock).not.toHaveBeenCalled();
+      expect(cancelInvoiceMock).not.toHaveBeenCalled();
+      expect(markHodlEscrowOrderSettledMock).not.toHaveBeenCalled();
+      expect(markHodlEscrowOrderCancelledMock).not.toHaveBeenCalled();
+      // Not even read on a path that cannot settle.
+      expect(getHodlEscrowSettlementSecretMock).not.toHaveBeenCalled();
+    }
+
+    it("looks disputes up under the order's committed arbiter", async () => {
+      await handler(createRequest(), createResponse() as any);
+
+      expect(fetchHodlDisputeEventsMock).toHaveBeenCalledTimes(1);
+      const [args] = fetchHodlDisputeEventsMock.mock.calls[0];
+      expect(args.arbiterPubkey).toBe(ARBITER_PUBKEY);
+      // The arbiter comes from the commitment row, never from the request.
+      expect(Object.keys(args).sort()).toEqual([
+        "arbiterPubkey",
+        "nostr",
+        "timeoutMs",
+      ]);
+    });
+
+    it("resolves when the buyer raised the dispute, with no waiting period", async () => {
+      getHodlEscrowOrderDisputeContextMock.mockResolvedValue({
+        ...ORDER_DISPUTE_CONTEXT,
+        // Accepted seconds ago: a buyer dispute is actionable regardless.
+        acceptedAt: acceptedSecondsAgo(5),
+      });
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.jsonBody).toEqual({ status: "settled" });
+      expect(settleInvoiceMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects with 403 when nobody raised a dispute at all", async () => {
+      fetchHodlDisputeEventsMock.mockResolvedValue([]);
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(403);
+      expect(res.jsonBody).toEqual({
+        error: "No party to this order has raised a dispute to resolve",
+        reason: "no_actionable_dispute",
+      });
+      expectNothingMoved();
+      expectNoPreimageLeak(res);
+    });
+
+    // The gap this gate was built to close.
+    it("rejects a seller dispute raised inside its window, and says how long is left", async () => {
+      fetchHodlDisputeEventsMock.mockResolvedValue([
+        disputeEvent({ authorPubkey: SELLER_PUBKEY }),
+      ]);
+      getHodlEscrowOrderDisputeContextMock.mockResolvedValue({
+        ...ORDER_DISPUTE_CONTEXT,
+        acceptedAt: acceptedSecondsAgo(60),
+      });
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(403);
+      const body = res.jsonBody as {
+        error: string;
+        reason: string;
+        remainingSeconds: number;
+      };
+      expect(body.reason).toBe("dispute_not_yet_actionable");
+      expect(body.error).toBe(
+        "The seller's dispute cannot be resolved until its waiting period has elapsed"
+      );
+      // ~4h minus the minute already served, allowing for test runtime.
+      const expected = SELLER_DISPUTE_TIMEOUT_SECONDS - 60;
+      expect(body.remainingSeconds).toBeLessThanOrEqual(expected);
+      expect(body.remainingSeconds).toBeGreaterThan(expected - 30);
+      expectNothingMoved();
+    });
+
+    // The arbiter publishing a ruling the instant the seller escalates: valid
+    // signature, correct order, right arbiter key — and still refused.
+    it("refuses a correctly signed ruling published immediately after the dispute", async () => {
+      fetchHodlDisputeEventsMock.mockResolvedValue([
+        disputeEvent({ authorPubkey: SELLER_PUBKEY, createdAt: 1_700_000_100 }),
+      ]);
+      getHodlEscrowOrderDisputeContextMock.mockResolvedValue({
+        ...ORDER_DISPUTE_CONTEXT,
+        acceptedAt: acceptedSecondsAgo(1),
+      });
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(403);
+      expect((res.jsonBody as { reason: string }).reason).toBe(
+        "dispute_not_yet_actionable"
+      );
+      expectNothingMoved();
+    });
+
+    it("resolves a seller dispute once the window has elapsed", async () => {
+      fetchHodlDisputeEventsMock.mockResolvedValue([
+        disputeEvent({ authorPubkey: SELLER_PUBKEY }),
+      ]);
+      getHodlEscrowOrderDisputeContextMock.mockResolvedValue({
+        ...ORDER_DISPUTE_CONTEXT,
+        acceptedAt: acceptedSecondsAgo(SELLER_DISPUTE_TIMEOUT_SECONDS + 1),
+      });
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.jsonBody).toEqual({ status: "settled" });
+      expect(settleInvoiceMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports the soonest window when several seller disputes are pending", async () => {
+      fetchHodlDisputeEventsMock.mockResolvedValue([
+        disputeEvent({ authorPubkey: SELLER_PUBKEY, createdAt: 1_700_000_000 }),
+        disputeEvent({ authorPubkey: SELLER_PUBKEY, createdAt: 1_700_000_900 }),
+      ]);
+      getHodlEscrowOrderDisputeContextMock.mockResolvedValue({
+        ...ORDER_DISPUTE_CONTEXT,
+        acceptedAt: acceptedSecondsAgo(120),
+      });
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(403);
+      const { remainingSeconds } = res.jsonBody as { remainingSeconds: number };
+      expect(remainingSeconds).toBeLessThanOrEqual(
+        SELLER_DISPUTE_TIMEOUT_SECONDS - 120
+      );
+    });
+
+    it("skips forged disputes signed by neither party to the order", async () => {
+      fetchHodlDisputeEventsMock.mockResolvedValue([
+        disputeEvent({ authorPubkey: IMPOSTOR_PUBKEY }),
+        disputeEvent({ authorPubkey: "d".repeat(64) }),
+      ]);
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(403);
+      expect(res.jsonBody).toEqual({
+        error: "No party to this order has raised a dispute to resolve",
+        reason: "no_actionable_dispute",
+      });
+      expectNothingMoved();
+    });
+
+    it("finds the genuine dispute buried among forgeries", async () => {
+      fetchHodlDisputeEventsMock.mockResolvedValue([
+        disputeEvent({ authorPubkey: IMPOSTOR_PUBKEY }),
+        disputeEvent({ authorPubkey: "d".repeat(64) }),
+        disputeEvent({ authorPubkey: BUYER_PUBKEY }),
+      ]);
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(200);
+      expect(settleInvoiceMock).toHaveBeenCalledTimes(1);
+    });
+
+    // The dispute fetch filters on the arbiter's `p` tag, so it returns every
+    // order that arbiter handles. A dispute on someone else's order must not
+    // unlock this one.
+    it("ignores disputes that belong to a different order", async () => {
+      fetchHodlDisputeEventsMock.mockResolvedValue([
+        disputeEvent({ orderId: OTHER_PAYMENT_HASH }),
+      ]);
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(403);
+      expect(res.jsonBody).toEqual({
+        error: "No party to this order has raised a dispute to resolve",
+        reason: "no_actionable_dispute",
+      });
+      expectNothingMoved();
+    });
+
+    it("skips a seller dispute on an order whose payment was never accepted", async () => {
+      fetchHodlDisputeEventsMock.mockResolvedValue([
+        disputeEvent({ authorPubkey: SELLER_PUBKEY }),
+      ]);
+      getHodlEscrowOrderDisputeContextMock.mockResolvedValue({
+        ...ORDER_DISPUTE_CONTEXT,
+        acceptedAt: null,
+      });
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(403);
+      expect(res.jsonBody).toEqual({
+        error: "No party to this order has raised a dispute to resolve",
+        reason: "no_actionable_dispute",
+      });
+      expectNothingMoved();
+    });
+
+    it("checks the gate after authorization and before any provider call", async () => {
+      fetchHodlDisputeEventsMock.mockResolvedValue([]);
+
+      await handler(createRequest(), createResponse() as any);
+
+      // Authorization ran (the ruling was fetched and the row read), the
+      // dispute lookup ran, and nothing downstream did.
+      expect(fetchHodlReleaseEventsMock).toHaveBeenCalledTimes(1);
+      expect(fetchHodlDisputeEventsMock).toHaveBeenCalledTimes(1);
+      expect(callOrder).toEqual([]);
+    });
+
+    it("does not look for disputes when no ruling authorized", async () => {
+      fetchHodlReleaseEventsMock.mockResolvedValue([
+        releaseEvent({ authorPubkey: IMPOSTOR_PUBKEY }),
+      ]);
+
+      await handler(createRequest(), createResponse() as any);
+
+      expect(fetchHodlDisputeEventsMock).not.toHaveBeenCalled();
+    });
+
+    it("gates the cancel path too, not only settlement", async () => {
+      fetchHodlReleaseEventsMock.mockResolvedValue(
+        candidatesWithGenuineArbiterEvent("release:buyer")
+      );
+      fetchHodlDisputeEventsMock.mockResolvedValue([]);
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(403);
+      expect(res.jsonBody).toEqual({
+        error: "No party to this order has raised a dispute to resolve",
+        reason: "no_actionable_dispute",
+      });
+      expect(cancelInvoiceMock).not.toHaveBeenCalled();
+    });
+
+    // Same discipline as the ruling lookup: "we could not check" must never
+    // reach the caller wearing the clothes of "we checked, and nobody
+    // disputed this".
+    it("returns 503, not 403, when relays could not be reached for disputes", async () => {
+      fetchHodlDisputeEventsMock.mockRejectedValue(disputeRelayOutage());
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(503);
+      expect(res.jsonBody).toEqual({
+        error:
+          "Could not reach relays to check for a dispute on this order. Please try again.",
+        reason: "relay_unavailable",
+      });
+      expect(JSON.stringify(res.jsonBody)).not.toContain(
+        "no_actionable_dispute"
+      );
+      expectNothingMoved();
+      // Both managers closed even though the second fetch threw.
+      expect(nostrCloseMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("returns 503 when the dispute context read hits a database outage", async () => {
+      getHodlEscrowOrderDisputeContextMock.mockRejectedValue(
+        new DatabaseUnavailableError("Failed to load hodl escrow order")
+      );
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(503);
+      expect(res.jsonBody).toEqual({
+        error: "Service temporarily unavailable. Please try again.",
+        reason: "database_unavailable",
+      });
+      expectNothingMoved();
+    });
+
+    it("returns 404 when the order vanished before the dispute check", async () => {
+      getHodlEscrowOrderDisputeContextMock.mockResolvedValue(null);
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(404);
+      expect(res.jsonBody).toEqual({
+        error: "No escrow order exists for this payment hash",
+        reason: "no_such_order",
+      });
+      expectNothingMoved();
+    });
+
+    it("reports an unrecognized dispute-lookup failure as a server error", async () => {
+      fetchHodlDisputeEventsMock.mockRejectedValue(new Error("relays down"));
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonBody).toEqual({
+        error: "Failed to check for an actionable dispute",
+      });
+      expectNothingMoved();
+    });
+
+    it("never leaks the preimage when the gate refuses", async () => {
+      fetchHodlDisputeEventsMock.mockResolvedValue([]);
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expectNoPreimageLeak(res);
     });
   });
 
