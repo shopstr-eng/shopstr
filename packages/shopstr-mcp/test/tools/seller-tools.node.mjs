@@ -692,6 +692,8 @@ test("get_company_details merges profiles, products, reviews, and cache metadata
   assert.deepEqual(firstBody._meta.cached, {
     userProfile: false,
     shopProfile: false,
+    userNip05Verification: false,
+    shopNip05Verification: false,
     products: false,
     reviews: false,
   });
@@ -713,9 +715,72 @@ test("get_company_details merges profiles, products, reviews, and cache metadata
   assert.deepEqual(secondBody._meta.cached, {
     userProfile: true,
     shopProfile: true,
+    userNip05Verification: false,
+    shopNip05Verification: false,
     products: true,
     reviews: true,
   });
+});
+
+test("get_company_details verifies and caches NIP-05 claims from seller profiles", async () => {
+  const cache = new MemoryCache(60_000);
+  const verifierCalls = [];
+  const ctx = {
+    ...context((filters) => {
+      if (
+        filters.some((filter) =>
+          filter.kinds?.some((kind) => kind === 0 || kind === 30019)
+        )
+      ) {
+        return [
+          profileEvent({
+            content: JSON.stringify({
+              name: "Fresh Seller",
+              nip05: "seller@example.com",
+            }),
+          }),
+          shopEvent({
+            content: JSON.stringify({
+              name: "Fresh Shop",
+              nip05: "shop@example.com",
+            }),
+          }),
+        ];
+      }
+      return [];
+    }, cache),
+    nip05Verifier: async (claimed, pubkey) => {
+      verifierCalls.push([claimed, pubkey]);
+      return {
+        attempted: true,
+        verified: claimed === "seller@example.com",
+        claimed,
+        checkedAt: "2024-01-01T00:00:00.000Z",
+        ...(claimed === "seller@example.com"
+          ? {}
+          : { error: "pubkey_mismatch" }),
+      };
+    },
+  };
+
+  const first = JSON.parse(
+    (await handleGetCompanyDetails({ sellerPubkey, include: [] }, ctx))
+      .content[0].text
+  );
+  const second = JSON.parse(
+    (await handleGetCompanyDetails({ sellerPubkey, include: [] }, ctx))
+      .content[0].text
+  );
+
+  assert.deepEqual(verifierCalls, [
+    ["seller@example.com", sellerPubkey],
+    ["shop@example.com", sellerPubkey],
+  ]);
+  assert.equal(first.nip05Verification.userProfile.verified, true);
+  assert.equal(first.nip05Verification.shopProfile.verified, false);
+  assert.equal(second.nip05Verification.userProfile.verified, true);
+  assert.equal(second._meta.cached.userNip05Verification, true);
+  assert.equal(second._meta.cached.shopNip05Verification, true);
 });
 
 test("get_company_details always includes storefront and can skip product/review fetches", async () => {
@@ -892,6 +957,8 @@ test("get_company_details can return cached profiles when product and review rel
   assert.deepEqual(body._meta.cached, {
     userProfile: true,
     shopProfile: true,
+    userNip05Verification: false,
+    shopNip05Verification: false,
     products: true,
     reviews: true,
   });
@@ -970,6 +1037,10 @@ test("get_seller_reputation summarizes public review scores", async () => {
 
   assert.equal(body.reviewCount, 2);
   assert.equal(body.productCount, 1);
+  assert.deepEqual(body.seller.nip05Verification, {
+    userProfile: null,
+    shopProfile: null,
+  });
   assert.equal(body.reputation.averageScore, 0.5);
   assert.equal(body.reputation.averagePercent, 50);
   assert.equal(body.reputation.positiveReviewCount, 1);

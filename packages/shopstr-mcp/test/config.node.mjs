@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   DEFAULT_CATEGORY_CACHE_TTL_MS,
   DEFAULT_MAX_CONCURRENT_REQUESTS,
+  DEFAULT_NIP05_CACHE_TTL_MS,
   DEFAULT_RELAYS,
   DEFAULT_TOOL_TIMEOUT_MS,
   loadConfig,
@@ -27,7 +28,7 @@ test("parses relay lists with trimming, dedupe, and defaults", () => {
   const expectedDefaultRelays = [
     "wss://nos.lol",
     "wss://relay.damus.io",
-    "wss://relay.nostr.band",
+    "wss://purplepag.es",
   ];
 
   assert.deepEqual(DEFAULT_RELAYS, expectedDefaultRelays);
@@ -66,6 +67,7 @@ test("loads config from environment overrides", () => {
   assert.equal(config.resourceCacheTtlMs, 3000);
   assert.equal(config.profileCacheTtlMs, 3000);
   assert.equal(config.categoryCacheTtlMs, DEFAULT_CATEGORY_CACHE_TTL_MS);
+  assert.equal(config.nip05CacheTtlMs, DEFAULT_NIP05_CACHE_TTL_MS);
   assert.equal(config.cacheMaxEntries, 5000);
   assert.equal(config.maxConcurrentRequests, DEFAULT_MAX_CONCURRENT_REQUESTS);
 });
@@ -75,6 +77,7 @@ test("loads dedicated cache TTL when provided", () => {
     SHOPSTR_MCP_RESOURCE_CACHE_TTL_MS: "3000",
     SHOPSTR_MCP_PROFILE_CACHE_TTL_MS: "4500",
     SHOPSTR_MCP_CATEGORY_CACHE_TTL_MS: "86400000",
+    SHOPSTR_MCP_NIP05_CACHE_TTL_MS: "172800000",
     SHOPSTR_MCP_CACHE_MAX_ENTRIES: "42",
     SHOPSTR_MCP_MAX_CONCURRENT_REQUESTS: "3",
   });
@@ -82,6 +85,7 @@ test("loads dedicated cache TTL when provided", () => {
   assert.equal(config.resourceCacheTtlMs, 3000);
   assert.equal(config.profileCacheTtlMs, 4500);
   assert.equal(config.categoryCacheTtlMs, 86_400_000);
+  assert.equal(config.nip05CacheTtlMs, 172_800_000);
   assert.equal(config.cacheMaxEntries, 42);
   assert.equal(config.maxConcurrentRequests, 3);
 });

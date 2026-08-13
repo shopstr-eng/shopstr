@@ -7,6 +7,7 @@ import type { LookupFunction } from "node:net";
 
 export const NIP05_REQUEST_TIMEOUT_MS = 10000;
 export const MAX_NIP05_RESPONSE_BYTES = 64 * 1024;
+export const NIP05_USER_AGENT = "Shopstr-NIP05-Verifier/1.0";
 
 const NIP05_LOCAL_PART_PATTERN = /^[a-z0-9._-]+$/;
 const DOMAIN_PATTERN =
@@ -163,7 +164,11 @@ export function isNip05Match(
   if (!payload || typeof payload !== "object") return false;
 
   const names = payload.names ?? {};
-  return names[username] === pubkey || names[username.toLowerCase()] === pubkey;
+  const claimedPubkey = names[username];
+  return (
+    typeof claimedPubkey === "string" &&
+    claimedPubkey.toLowerCase() === pubkey.toLowerCase()
+  );
 }
 
 function getContentLength(response: IncomingMessage): number | null {
@@ -279,6 +284,7 @@ export async function fetchPinnedNostrJson(
         headers: {
           Accept: "application/json",
           Host: hostname,
+          "User-Agent": NIP05_USER_AGENT,
         },
         signal,
         lookup: pinnedLookup,
@@ -356,13 +362,25 @@ export async function verifyNip05Claim(
       options.maxResponseBytes ?? MAX_NIP05_RESPONSE_BYTES
     );
 
+    if (!data) {
+      return {
+        ...base,
+        attempted: true,
+        verified: false,
+        error: "nostr_json_unavailable",
+      };
+    }
+
+    const matched = isNip05Match(
+      data,
+      parsedIdentifier.username,
+      normalizedPubkey
+    );
     return {
       ...base,
       attempted: true,
-      verified: data
-        ? isNip05Match(data, parsedIdentifier.username, normalizedPubkey)
-        : false,
-      ...(data ? {} : { error: "no_match" }),
+      verified: matched,
+      ...(matched ? {} : { error: "pubkey_mismatch" }),
     };
   } catch (error) {
     return {

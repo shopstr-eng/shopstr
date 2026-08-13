@@ -154,6 +154,7 @@ describe("/api/nostr/verify-nip05", () => {
         headers: {
           Accept: "application/json",
           Host: "example.com",
+          "User-Agent": "Shopstr-NIP05-Verifier/1.0",
         },
         hostname: "example.com",
         method: "GET",
@@ -249,6 +250,31 @@ describe("/api/nostr/verify-nip05", () => {
       "NIP-05 verification fetch failed:",
       expect.any(Error)
     );
+  });
+
+  it("sends a User-Agent header on outbound NIP-05 requests", async () => {
+    mockPublicDns();
+    mockNip05Response({
+      body: JSON.stringify({
+        names: {
+          alice: "f".repeat(64),
+        },
+      }),
+    });
+
+    const res = createResponse();
+    await handler(
+      makeRequest({
+        nip05: "alice@example.com",
+        pubkey: "f".repeat(64),
+      }),
+      res
+    );
+
+    const requestOptions = mockedRequest.mock.calls[0]?.[0] as {
+      headers: Record<string, string>;
+    };
+    expect(requestOptions.headers["User-Agent"]).toBeTruthy();
   });
 
   it("rejects malformed NIP-05 identifiers before making an external request", async () => {
@@ -503,6 +529,70 @@ describe("canonical NIP-05 verifier", () => {
       verified: true,
       claimed: "alice@example.com",
       checkedAt: "2024-01-01T00:00:00.000Z",
+    });
+  });
+
+  it("reports pubkey_mismatch when nostr.json is fetched but does not match", async () => {
+    const result = await verifyNip05Claim("alice@example.com", "f".repeat(64), {
+      resolveHostname: jest.fn().mockResolvedValue([
+        {
+          address: "93.184.216.34",
+          family: 4,
+        },
+      ]),
+      fetchJson: jest.fn().mockResolvedValue({
+        names: {
+          alice: "e".repeat(64),
+        },
+      }),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      attempted: true,
+      verified: false,
+      error: "pubkey_mismatch",
+    });
+  });
+
+  it("reports nostr_json_unavailable when nostr.json cannot be fetched or parsed", async () => {
+    const result = await verifyNip05Claim("alice@example.com", "f".repeat(64), {
+      resolveHostname: jest.fn().mockResolvedValue([
+        {
+          address: "93.184.216.34",
+          family: 4,
+        },
+      ]),
+      fetchJson: jest.fn().mockResolvedValue(null),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      attempted: true,
+      verified: false,
+      error: "nostr_json_unavailable",
+    });
+  });
+
+  it("matches nostr.json pubkeys case-insensitively", async () => {
+    const result = await verifyNip05Claim("alice@example.com", "f".repeat(64), {
+      resolveHostname: jest.fn().mockResolvedValue([
+        {
+          address: "93.184.216.34",
+          family: 4,
+        },
+      ]),
+      fetchJson: jest.fn().mockResolvedValue({
+        names: {
+          alice: "F".repeat(64),
+        },
+      }),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      attempted: true,
+      verified: true,
     });
   });
 });

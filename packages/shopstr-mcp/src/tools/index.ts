@@ -103,7 +103,7 @@ export function registerCoreTools(
     "get_company_details",
     {
       description:
-        "Get a public Shopstr seller profile, shop metadata, storefront config, optional products, optional reviews, and payment summary. Use sellerPubkey as hex or npub1. Profile/shop/storefront are always returned; pass include: [] for a lean identity lookup or include products/reviews when needed." +
+        "Get a public Shopstr seller profile, shop metadata, NIP-05 verification status, storefront config, optional products, optional reviews, and payment summary. Use sellerPubkey as hex or npub1. Profile/shop/storefront/NIP-05 status are always returned; pass include: [] for a lean identity lookup or include products/reviews when needed." +
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: getCompanyDetailsInputSchema,
     },
@@ -135,7 +135,7 @@ export function registerCoreTools(
     "get_seller_reputation",
     {
       description:
-        "Summarize public Shopstr reviews into a seller reputation snapshot for a sellerPubkey. Review counts are public Nostr data and are not verified purchases." +
+        "Summarize public Shopstr reviews and NIP-05 verification status into a seller reputation snapshot for a sellerPubkey. Review counts are public Nostr data and are not verified purchases." +
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: getSellerReputationInputSchema,
     },

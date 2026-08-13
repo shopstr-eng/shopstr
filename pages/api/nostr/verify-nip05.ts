@@ -33,7 +33,10 @@ export default async function handler(
     return res.status(400).json({ error: "Invalid NIP-05 identifier" });
   }
 
-  if (verification.error === "fetch_failed") {
+  if (
+    verification.error === "fetch_failed" ||
+    verification.error === "nostr_json_unavailable"
+  ) {
     console.error(
       "NIP-05 verification fetch failed:",
       new Error(verification.error)

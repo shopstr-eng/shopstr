@@ -98,6 +98,7 @@ export async function handleGetSellerReputation(
       seller: {
         shopProfile: profiles.shopProfile,
         userProfile: profiles.userProfile,
+        nip05Verification: profiles.nip05Verification,
       },
       productCount: products.products.length,
       reviewCount: reviews.reviews.length,
