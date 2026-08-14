@@ -23,6 +23,17 @@ export type ShippingOptionRef = {
   extraCost?: number;
 };
 
+export type ProductParserLimits = {
+  images?: number;
+  categories?: number;
+  sizes?: number;
+  volumes?: number;
+  weights?: number;
+  bulk?: number;
+  pickupLocations?: number;
+  shippingOptions?: number;
+};
+
 export type ProductResponse = {
   id: string;
   pubkey: string;
@@ -110,17 +121,21 @@ function getTagValue(tags: string[][], key: string): string | undefined {
   return tags.find((tag) => tag[0] === key)?.[1];
 }
 
-function getTagValues(tags: string[][], key: string): string[] {
+function getTagValues(tags: string[][], key: string, limit?: number): string[] {
   const results: string[] = [];
   for (const tag of tags) {
-    if (tag[0] === key && tag[1]) results.push(tag[1]);
+    if (tag[0] !== key || !tag[1]) continue;
+    results.push(tag[1]);
+    if (limit !== undefined && results.length >= limit) break;
   }
   return results;
 }
 
-function parseCategoryTags(tags: string[][]): string[] {
+function parseCategoryTags(tags: string[][], limit?: number): string[] {
   const results: string[] = [];
-  for (const raw of getTagValues(tags, "t")) {
+  for (const tag of tags) {
+    if (tag[0] !== "t" || !tag[1]) continue;
+    const raw = tag[1];
     const normalized = raw.trim();
     if (
       normalized.length === 0 ||
@@ -130,6 +145,7 @@ function parseCategoryTags(tags: string[][]): string[] {
       continue;
     }
     results.push(normalized);
+    if (limit !== undefined && results.length >= limit) break;
   }
   return results;
 }
@@ -148,7 +164,7 @@ function parseNonNegativeInteger(
   return parsed;
 }
 
-function getImages(tags: string[][]): ProductImage[] {
+function getImages(tags: string[][], limit?: number): ProductImage[] {
   const images: ProductImage[] = [];
   for (const tag of tags) {
     if (tag[0] !== "image" || !tag[1]) continue;
@@ -157,6 +173,7 @@ function getImages(tags: string[][]): ProductImage[] {
     const order = parseNumber(tag[3]);
     if (order !== undefined) img.order = order;
     images.push(img);
+    if (limit !== undefined && images.length >= limit) break;
   }
   return images;
 }
@@ -223,6 +240,13 @@ function parseSubscription(
 }
 
 export function parseProductEvent(event: NostrEvent): ProductResponse {
+  return parseProductEventWithLimits(event);
+}
+
+export function parseProductEventWithLimits(
+  event: NostrEvent,
+  limits: ProductParserLimits = {}
+): ProductResponse {
   const tags = event.tags || [];
   const priceTag = tags.find((tag) => tag[0] === "price");
   const parsedPrice = parseNumber(priceTag?.[1]);
@@ -237,14 +261,20 @@ export function parseProductEvent(event: NostrEvent): ProductResponse {
   const legacyQuantity = parseNonNegativeInteger(getTagValue(tags, "quantity"));
   const stock = gammaStock ?? legacyQuantity;
 
-  const shippingOptions: ShippingOptionRef[] = tags
-    .filter((tag) => tag[0] === "shipping_option" && tag[1])
-    .map((tag) => {
-      const ref: ShippingOptionRef = { reference: tag[1] as string };
-      const extraCost = parseNumber(tag[2]);
-      if (extraCost !== undefined && extraCost >= 0) ref.extraCost = extraCost;
-      return ref;
-    });
+  const shippingOptions: ShippingOptionRef[] = [];
+  for (const tag of tags) {
+    if (tag[0] !== "shipping_option" || !tag[1]) continue;
+    const ref: ShippingOptionRef = { reference: tag[1] };
+    const extraCost = parseNumber(tag[2]);
+    if (extraCost !== undefined && extraCost >= 0) ref.extraCost = extraCost;
+    shippingOptions.push(ref);
+    if (
+      limits.shippingOptions !== undefined &&
+      shippingOptions.length >= limits.shippingOptions
+    ) {
+      break;
+    }
+  }
 
   const rawVisibility = getTagValue(tags, "visibility")?.toLowerCase();
   const visibility: "hidden" | "on-sale" | "pre-order" =
@@ -253,39 +283,55 @@ export function parseProductEvent(event: NostrEvent): ProductResponse {
       : "on-sale";
   const { productType, productFormat } = parseProductType(tags);
 
-  const sizes = tags
-    .filter((tag) => tag[0] === "size" && tag[1])
-    .map((tag) => ({
-      size: tag[1] as string,
-      ...(parseNumber(tag[2]) !== undefined && {
-        quantity: parseNumber(tag[2]),
-      }),
-    }));
+  const sizes: NonNullable<ProductResponse["sizes"]> = [];
+  const volumes: NonNullable<ProductResponse["volumes"]> = [];
+  const weights: NonNullable<ProductResponse["weights"]> = [];
+  const bulk: NonNullable<ProductResponse["bulk"]> = [];
 
-  const volumes = tags
-    .filter((tag) => tag[0] === "volume" && tag[1])
-    .map((tag) => ({
-      volume: tag[1] as string,
-      ...(parseNumber(tag[2]) !== undefined && { price: parseNumber(tag[2]) }),
-    }));
+  for (const tag of tags) {
+    if (tag[0] === "size" && tag[1]) {
+      const quantity = parseNumber(tag[2]);
+      if (limits.sizes === undefined || sizes.length < limits.sizes) {
+        sizes.push({
+          size: tag[1],
+          ...(quantity !== undefined && { quantity }),
+        });
+      }
+    } else if (tag[0] === "volume" && tag[1]) {
+      const price = parseNumber(tag[2]);
+      if (limits.volumes === undefined || volumes.length < limits.volumes) {
+        volumes.push({
+          volume: tag[1],
+          ...(price !== undefined && { price }),
+        });
+      }
+    } else if (tag[0] === "weight" && tag[1]) {
+      const price = parseNumber(tag[2]);
+      if (limits.weights === undefined || weights.length < limits.weights) {
+        weights.push({
+          weight: tag[1],
+          ...(price !== undefined && { price }),
+        });
+      }
+    } else if (tag[0] === "bulk" && tag[1] && tag[2]) {
+      const units = parseNumber(tag[1]) ?? 0;
+      const price = parseNumber(tag[2]) ?? 0;
+      if (
+        units > 0 &&
+        price >= 0 &&
+        (limits.bulk === undefined || bulk.length < limits.bulk)
+      ) {
+        bulk.push({ units, price });
+      }
+    }
+  }
 
-  const weights = tags
-    .filter((tag) => tag[0] === "weight" && tag[1])
-    .map((tag) => ({
-      weight: tag[1] as string,
-      ...(parseNumber(tag[2]) !== undefined && { price: parseNumber(tag[2]) }),
-    }));
-
-  const bulk = tags
-    .filter((tag) => tag[0] === "bulk" && tag[1] && tag[2])
-    .map((tag) => ({
-      units: parseNumber(tag[1]) ?? 0,
-      price: parseNumber(tag[2]) ?? 0,
-    }))
-    .filter((entry) => entry.units > 0 && entry.price >= 0);
-
-  const pickupLocations = getTagValues(tags, "pickup_location");
-  const categories = parseCategoryTags(tags);
+  const pickupLocations = getTagValues(
+    tags,
+    "pickup_location",
+    limits.pickupLocations
+  );
+  const categories = parseCategoryTags(tags, limits.categories);
   const publishedAt = getTagValue(tags, "published_at");
   const expiration = parseNumber(getTagValue(tags, "valid_until"));
   const contentWarning = tags.some((tag) => {
@@ -303,7 +349,7 @@ export function parseProductEvent(event: NostrEvent): ProductResponse {
     title: getTagValue(tags, "title") || "",
     summary: getTagValue(tags, "summary") || "",
     ...(publishedAt && { publishedAt }),
-    images: getImages(tags),
+    images: getImages(tags, limits.images),
     categories,
     location: getTagValue(tags, "location") || "",
     ...(hasValidPrice && { price: validPrice }),

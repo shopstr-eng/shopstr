@@ -32,6 +32,7 @@ import { nip19 } from "nostr-tools";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import parseTags from "@/utils/parsers/product-parser-functions";
+import { productSatisfiesPriceFilter } from "@/utils/parsers/product-filter-helpers";
 import Link from "next/link";
 import StorefrontHero from "./storefront-hero";
 import StorefrontProductGrid from "./storefront-product-grid";
@@ -184,7 +185,8 @@ export default function StorefrontLayout({
     return productContext.productEvents
       .filter((event: any) => event.pubkey === shopPubkey)
       .map((event: any) => parseTags(event))
-      .filter((p: ProductData | undefined) => p !== undefined) as ProductData[];
+      .filter((p: ProductData | undefined): p is ProductData => p !== undefined)
+      .filter(productSatisfiesPriceFilter);
   }, [shopPubkey, productContext.productEvents]);
 
   const profile = profileContext.profileData.get(shopPubkey);

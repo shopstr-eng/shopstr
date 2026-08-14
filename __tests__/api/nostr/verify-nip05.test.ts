@@ -532,6 +532,27 @@ describe("canonical NIP-05 verifier", () => {
     });
   });
 
+  it("times out when DNS resolution does not settle", async () => {
+    const verification = verifyNip05Claim("alice@example.com", "f".repeat(64), {
+      resolveHostname: () => new Promise(() => undefined),
+      timeoutMs: 5,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+    });
+
+    const result = await Promise.race([
+      verification,
+      new Promise<"still_pending">((resolve) =>
+        setTimeout(() => resolve("still_pending"), 50)
+      ),
+    ]);
+
+    expect(result).toMatchObject({
+      attempted: true,
+      verified: false,
+      error: "timeout",
+    });
+  });
+
   it("reports pubkey_mismatch when nostr.json is fetched but does not match", async () => {
     const result = await verifyNip05Claim("alice@example.com", "f".repeat(64), {
       resolveHostname: jest.fn().mockResolvedValue([

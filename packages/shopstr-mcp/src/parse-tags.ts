@@ -1,7 +1,7 @@
 import {
   buildPricingBlock,
   getEffectiveShippingCost,
-  parseProductEvent as parseCanonicalProductEvent,
+  parseProductEventWithLimits,
   parseProfileEvent,
   parseReviewEvent,
   parseShippingFromTags,
@@ -30,33 +30,16 @@ export const TAG_CAPS = {
 } as const;
 
 export function parseProductEvent(
-  event: Parameters<typeof parseCanonicalProductEvent>[0]
+  event: Parameters<typeof parseProductEventWithLimits>[0]
 ): ProductResponse {
-  const product = parseCanonicalProductEvent(event);
-
-  return {
-    ...product,
-    images: product.images.slice(0, TAG_CAPS.image),
-    categories: product.categories.slice(0, TAG_CAPS.t),
-    ...(product.sizes && { sizes: product.sizes.slice(0, TAG_CAPS.size) }),
-    ...(product.volumes && {
-      volumes: product.volumes.slice(0, TAG_CAPS.volume),
-    }),
-    ...(product.weights && {
-      weights: product.weights.slice(0, TAG_CAPS.weight),
-    }),
-    ...(product.bulk && { bulk: product.bulk.slice(0, TAG_CAPS.bulk) }),
-    ...(product.pickupLocations && {
-      pickupLocations: product.pickupLocations.slice(
-        0,
-        TAG_CAPS.pickup_location
-      ),
-    }),
-    ...(product.shippingOptions && {
-      shippingOptions: product.shippingOptions.slice(
-        0,
-        TAG_CAPS.shipping_option
-      ),
-    }),
-  };
+  return parseProductEventWithLimits(event, {
+    images: TAG_CAPS.image,
+    categories: TAG_CAPS.t,
+    sizes: TAG_CAPS.size,
+    volumes: TAG_CAPS.volume,
+    weights: TAG_CAPS.weight,
+    bulk: TAG_CAPS.bulk,
+    pickupLocations: TAG_CAPS.pickup_location,
+    shippingOptions: TAG_CAPS.shipping_option,
+  });
 }

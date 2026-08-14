@@ -335,32 +335,45 @@ export async function verifyNip05Claim(
     };
   }
 
-  const resolver = options.resolveHostname ?? resolvePublicAddresses;
-  const publicAddresses = await resolver(parsedIdentifier.hostname);
-  if (!publicAddresses.length) {
-    return {
-      ...base,
-      attempted: true,
-      verified: false,
-      error: "no_public_addresses",
-    };
-  }
-
   const controller = new AbortController();
-  const timeoutId = setTimeout(
-    () => controller.abort(),
-    options.timeoutMs ?? NIP05_REQUEST_TIMEOUT_MS
-  );
+  let didTimeout = false;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      didTimeout = true;
+      controller.abort();
+      const error = new Error("NIP-05 verification timed out");
+      error.name = "AbortError";
+      reject(error);
+    }, options.timeoutMs ?? NIP05_REQUEST_TIMEOUT_MS);
+  });
 
   try {
+    const resolver = options.resolveHostname ?? resolvePublicAddresses;
+    const publicAddresses = await Promise.race([
+      resolver(parsedIdentifier.hostname),
+      timeout,
+    ]);
+    if (!publicAddresses.length) {
+      return {
+        ...base,
+        attempted: true,
+        verified: false,
+        error: "no_public_addresses",
+      };
+    }
+
     const fetchJson = options.fetchJson ?? fetchPinnedNostrJson;
-    const data = await fetchJson(
-      parsedIdentifier.url,
-      parsedIdentifier.hostname,
-      publicAddresses[0]!,
-      controller.signal,
-      options.maxResponseBytes ?? MAX_NIP05_RESPONSE_BYTES
-    );
+    const data = await Promise.race([
+      fetchJson(
+        parsedIdentifier.url,
+        parsedIdentifier.hostname,
+        publicAddresses[0]!,
+        controller.signal,
+        options.maxResponseBytes ?? MAX_NIP05_RESPONSE_BYTES
+      ),
+      timeout,
+    ]);
 
     if (!data) {
       return {
@@ -388,9 +401,12 @@ export async function verifyNip05Claim(
       attempted: true,
       verified: false,
       error:
-        (error as Error).name === "AbortError" ? "timeout" : "fetch_failed",
+        didTimeout || (error as Error).name === "AbortError"
+          ? "timeout"
+          : "fetch_failed",
     };
   } finally {
-    clearTimeout(timeoutId);
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+    controller.abort();
   }
 }

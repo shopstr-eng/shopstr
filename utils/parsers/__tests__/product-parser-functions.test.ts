@@ -1,4 +1,5 @@
 import parseTags, { buildUiVariantMaps } from "../product-parser-functions";
+import { parseProductEventWithLimits } from "../canonical-product-parser";
 import { calculateTotalCost } from "@/utils/parsers/product-tag-helpers";
 import { NostrEvent } from "@/utils/types/types";
 
@@ -375,6 +376,28 @@ describe("parseTags", () => {
     expect(result.sizes).toHaveLength(500);
     expect(result.images[499]).toBe("image-499");
     expect(result.sizes![499]).toBe("size-499");
+  });
+
+  it("applies collection limits inside the canonical parser for bounded consumers", () => {
+    const tags: string[][] = [];
+    for (let i = 0; i < 500; i++) {
+      tags.push(["image", `image-${i}`]);
+      tags.push(["size", `size-${i}`, `${i}`]);
+      tags.push(["shipping_option", `shipping-${i}`, `${i}`]);
+    }
+
+    const result = parseProductEventWithLimits(
+      { ...baseEvent, tags },
+      {
+        images: 10,
+        sizes: 50,
+        shippingOptions: 10,
+      }
+    );
+
+    expect(result.images).toHaveLength(10);
+    expect(result.sizes).toHaveLength(50);
+    expect(result.shippingOptions).toHaveLength(10);
   });
 
   it("should parse volume tags into volumes array and prices map", () => {
