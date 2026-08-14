@@ -1,5 +1,8 @@
 import parseTags, { buildUiVariantMaps } from "../product-parser-functions";
-import { parseProductEventWithLimits } from "../canonical-product-parser";
+import {
+  parseProductEvent,
+  parseProductEventWithLimits,
+} from "../canonical-product-parser";
 import { calculateTotalCost } from "@/utils/parsers/product-tag-helpers";
 import { NostrEvent } from "@/utils/types/types";
 
@@ -442,6 +445,39 @@ describe("parseTags", () => {
     expect(result.restrictions).toBe("18+ only");
     expect(result.pickupLocations).toEqual(["Warehouse A", "Shop Front"]);
     expect(result.expiration).toBe(1710001234);
+  });
+
+  it("should expose required_customer_info through the legacy UI required field", () => {
+    const result = parseTags({
+      ...baseEvent,
+      tags: [["required_customer_info", "email"]],
+    })!;
+
+    expect(result.required).toBe("email");
+    expect(result.requiredCustomerInfo).toBe("email");
+  });
+
+  it("should expose the legacy required field through requiredCustomerInfo", () => {
+    const result = parseProductEvent({
+      ...baseEvent,
+      tags: [["required", "membership"]],
+    });
+
+    expect(result.required).toBe("membership");
+    expect(result.requiredCustomerInfo).toBe("membership");
+  });
+
+  it("should preserve both required fields when both are explicitly provided", () => {
+    const result = parseProductEvent({
+      ...baseEvent,
+      tags: [
+        ["required", "membership"],
+        ["required_customer_info", "email"],
+      ],
+    });
+
+    expect(result.required).toBe("membership");
+    expect(result.requiredCustomerInfo).toBe("email");
   });
 
   it("should return undefined if tags array is missing", () => {
