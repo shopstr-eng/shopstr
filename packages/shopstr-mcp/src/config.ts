@@ -3,7 +3,7 @@ import { z } from "zod";
 export const DEFAULT_RELAYS = [
   "wss://nos.lol",
   "wss://relay.damus.io",
-  "wss://relay.nostr.band",
+  "wss://purplepag.es",
 ] as const;
 
 export const DEFAULT_TOOL_TIMEOUT_MS = 10_000;
@@ -12,6 +12,7 @@ export const DEFAULT_RESOURCE_CACHE_TTL_MS = 60_000;
 export const DEFAULT_CACHE_MAX_ENTRIES = 5_000;
 export const DEFAULT_MAX_CONCURRENT_REQUESTS = 10;
 export const DEFAULT_CATEGORY_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
+export const DEFAULT_NIP05_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
 
 const LOG_LEVEL_VALUES = ["error", "warn", "info", "debug"] as const;
 const logLevelSchema = z.enum(LOG_LEVEL_VALUES);
@@ -28,6 +29,7 @@ export type ShopstrMcpConfig = {
   resourceCacheTtlMs: number;
   profileCacheTtlMs: number;
   categoryCacheTtlMs: number;
+  nip05CacheTtlMs: number;
   cacheMaxEntries: number;
   maxConcurrentRequests: number;
 };
@@ -99,6 +101,10 @@ export function loadConfig(
     categoryCacheTtlMs: parsePositiveInteger(
       env.SHOPSTR_MCP_CATEGORY_CACHE_TTL_MS,
       DEFAULT_CATEGORY_CACHE_TTL_MS
+    ),
+    nip05CacheTtlMs: parsePositiveInteger(
+      env.SHOPSTR_MCP_NIP05_CACHE_TTL_MS,
+      DEFAULT_NIP05_CACHE_TTL_MS
     ),
     cacheMaxEntries: parsePositiveInteger(
       env.SHOPSTR_MCP_CACHE_MAX_ENTRIES,

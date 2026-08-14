@@ -9,6 +9,7 @@ import {
   parseProfileEvent,
   parseReviewEvent,
 } from "../../parse-tags.js";
+import { verifyNip05Claim, type Nip05Verification } from "../../nip05.js";
 import { fetchFromRelays } from "../../relay-fetch.js";
 import type {
   NostrEvent,
@@ -50,10 +51,16 @@ import {
 export type SellerProfilesResult = {
   userProfile: ProfileResponse | null;
   shopProfile: ProfileResponse | null;
+  nip05Verification: {
+    userProfile: Nip05Verification | null;
+    shopProfile: Nip05Verification | null;
+  };
   meta: RelayFetchMeta;
   cache: {
     userProfile: boolean;
     shopProfile: boolean;
+    userNip05Verification: boolean;
+    shopNip05Verification: boolean;
   };
 };
 
@@ -104,13 +111,22 @@ export async function fetchSellerProfiles(
   if (!shopProfile) missingKinds.push(SHOP_PROFILE_KIND);
 
   if (missingKinds.length === 0) {
+    const nip05Verification = await verifySellerProfilesNip05(
+      pubkey,
+      userProfile,
+      shopProfile,
+      context
+    );
+
     return {
       userProfile,
       shopProfile,
+      nip05Verification: nip05Verification.results,
       meta: emptyRelayMeta(),
       cache: {
         userProfile: true,
         shopProfile: true,
+        ...nip05Verification.cache,
       },
     };
   }
@@ -143,15 +159,80 @@ export async function fetchSellerProfiles(
     }
   }
 
+  const nip05Verification = await verifySellerProfilesNip05(
+    pubkey,
+    userProfile,
+    shopProfile,
+    context
+  );
+
   return {
     userProfile,
     shopProfile,
+    nip05Verification: nip05Verification.results,
     meta: relayResult.meta,
     cache: {
       userProfile: cachedUserProfile?.cached ?? false,
       shopProfile: cachedShopProfile?.cached ?? false,
+      ...nip05Verification.cache,
     },
   };
+}
+
+async function verifySellerProfilesNip05(
+  pubkey: string,
+  userProfile: ProfileResponse | null,
+  shopProfile: ProfileResponse | null,
+  context: CoreToolContext
+): Promise<{
+  results: SellerProfilesResult["nip05Verification"];
+  cache: Pick<
+    SellerProfilesResult["cache"],
+    "userNip05Verification" | "shopNip05Verification"
+  >;
+}> {
+  const [userResult, shopResult] = await Promise.all([
+    verifyProfileNip05(pubkey, userProfile, context),
+    verifyProfileNip05(pubkey, shopProfile, context),
+  ]);
+
+  return {
+    results: {
+      userProfile: userResult.verification,
+      shopProfile: shopResult.verification,
+    },
+    cache: {
+      userNip05Verification: userResult.cached,
+      shopNip05Verification: shopResult.cached,
+    },
+  };
+}
+
+async function verifyProfileNip05(
+  pubkey: string,
+  profile: ProfileResponse | null,
+  context: CoreToolContext
+): Promise<{ verification: Nip05Verification | null; cached: boolean }> {
+  const claimed = profile?.nip05?.trim();
+  if (!claimed) return { verification: null, cached: false };
+
+  const cacheKey = {
+    pubkey: `${pubkey}:${claimed.toLowerCase()}`,
+    kind: CACHE_KINDS.NIP05_VERIFICATION,
+  };
+  const cache = context.nip05Cache ?? context.cache;
+  const cached = cache.get<Nip05Verification>(cacheKey);
+  if (cached) {
+    return { verification: cached.value, cached: cached.cached };
+  }
+
+  const verifier = context.nip05Verifier ?? verifyNip05Claim;
+  const verification = await verifier(claimed, pubkey, {
+    timeoutMs: context.timeoutMs,
+  });
+  cache.set(cacheKey, verification);
+
+  return { verification, cached: false };
 }
 
 export async function fetchSellerProducts(

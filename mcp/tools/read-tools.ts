@@ -1,14 +1,16 @@
 import { z } from "zod/v4";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getDbPool } from "@/utils/db/db-service";
+import { buildPricingBlock } from "@/utils/parsers/product-tag-helpers";
 import {
-  getEffectiveShippingCost,
-  parseShippingFromTags,
-} from "@/utils/parsers/product-tag-helpers";
+  parseProductEvent,
+  parseProfileEvent,
+  parseReviewEvent,
+} from "@/utils/parsers/canonical-product-parser";
 import { NostrEvent } from "@/utils/types/types";
 import { registerTool } from "./register-tool";
 import { ToolContext } from "../audit-log";
-import { getTagValue, getAllTagValues } from "@/utils/nostr/tag-utils";
+import { getTagValue } from "@/utils/nostr/tag-utils";
 
 const DB_TIMEOUT_MS = 15_000;
 
@@ -206,161 +208,6 @@ function determinePaymentMethods(
   return methods;
 }
 
-function buildPricingBlock(
-  price: number,
-  currency: string,
-  shippingType?: string,
-  shippingCost?: number,
-  quantity: number = 1,
-  paymentMethods?: string[]
-) {
-  const effectiveShippingCost = getEffectiveShippingCost(
-    shippingType,
-    shippingCost
-  );
-  const shippingCostForTotal = effectiveShippingCost ?? 0;
-  return {
-    amount: price,
-    currency: currency || "sats",
-    unit: "per item",
-    shippingCost: effectiveShippingCost,
-    shippingType: shippingType || "N/A",
-    totalEstimate: price * quantity + shippingCostForTotal,
-    paymentMethods: paymentMethods || ["lightning", "cashu"],
-  };
-}
-
-function parseProductEvent(event: NostrEvent) {
-  const tags = event.tags || [];
-  const priceTag = tags.find((t) => t[0] === "price");
-  const parsedShipping = parseShippingFromTags(tags);
-
-  const price = priceTag ? Number(priceTag[1]) : 0;
-  const currency = priceTag ? priceTag[2] || "" : "";
-  const shippingType = parsedShipping?.shippingType;
-  const shippingCost = parsedShipping?.shippingCost;
-
-  const sizes = tags
-    .filter((t) => t[0] === "size" && t[1])
-    .map((t) => ({ size: t[1]!, quantity: t[2] ? Number(t[2]) : undefined }));
-
-  const volumes = tags
-    .filter((t) => t[0] === "volume" && t[1])
-    .map((t) => ({ volume: t[1]!, price: t[2] ? Number(t[2]) : undefined }));
-
-  const weights = tags
-    .filter((t) => t[0] === "weight" && t[1])
-    .map((t) => ({ weight: t[1]!, price: t[2] ? Number(t[2]) : undefined }));
-
-  const bulk = tags
-    .filter((t) => t[0] === "bulk" && t[1] && t[2])
-    .map((t) => ({ units: Number(t[1]), price: Number(t[2]) }));
-
-  const pickupLocations = getAllTagValues(tags, "pickup_location");
-
-  return {
-    id: event.id,
-    pubkey: event.pubkey,
-    d: getTagValue(tags, "d"),
-    title: getTagValue(tags, "title") || "",
-    summary: getTagValue(tags, "summary") || "",
-    images: getAllTagValues(tags, "image"),
-    categories: getAllTagValues(tags, "t"),
-    location: getTagValue(tags, "location") || "",
-    price,
-    currency,
-    shippingType,
-    shippingCost,
-    quantity: getTagValue(tags, "quantity")
-      ? Number(getTagValue(tags, "quantity"))
-      : undefined,
-    condition: getTagValue(tags, "condition"),
-    status: getTagValue(tags, "status"),
-    sizes: sizes.length > 0 ? sizes : undefined,
-    volumes: volumes.length > 0 ? volumes : undefined,
-    weights: weights.length > 0 ? weights : undefined,
-    bulk: bulk.length > 0 ? bulk : undefined,
-    pickupLocations: pickupLocations.length > 0 ? pickupLocations : undefined,
-    requiredCustomerInfo: getTagValue(tags, "required_customer_info"),
-    createdAt: event.created_at,
-    pricing: buildPricingBlock(price, currency, shippingType, shippingCost),
-    subscription: {
-      enabled: getTagValue(tags, "subscription") === "true",
-      discount: getTagValue(tags, "subscription_discount")
-        ? Number(getTagValue(tags, "subscription_discount"))
-        : undefined,
-      frequencies: (() => {
-        const freqTag = tags.find((t) => t[0] === "subscription_frequency");
-        return freqTag ? freqTag.slice(1) : [];
-      })(),
-    },
-  };
-}
-
-function parseProfileEvent(event: NostrEvent) {
-  let content: Record<string, any> = {};
-  try {
-    content = JSON.parse(event.content);
-  } catch {
-    content = {};
-  }
-
-  const base: Record<string, any> = {
-    pubkey: event.pubkey,
-    kind: event.kind,
-    name: content.name || "",
-    about: content.about || "",
-    picture: content.picture || "",
-    banner: content.banner || "",
-    lud16: content.lud16 || "",
-    nip05: content.nip05 || "",
-    createdAt: event.created_at,
-  };
-
-  if (event.kind === 0) {
-    if (content.website) base.website = content.website;
-    if (content.fiat_options) base.fiat_options = content.fiat_options;
-    if (content.payment_preference)
-      base.payment_preference = content.payment_preference;
-  }
-
-  if (event.kind === 30019) {
-    if (content.paymentMethodDiscounts)
-      base.paymentMethodDiscounts = content.paymentMethodDiscounts;
-    if (content.freeShippingThreshold !== undefined)
-      base.freeShippingThreshold = content.freeShippingThreshold;
-    if (content.freeShippingCurrency)
-      base.freeShippingCurrency = content.freeShippingCurrency;
-    if (content.storefront) {
-      base.storefront = content.storefront;
-      if (content.storefront.shopSlug)
-        base.storefrontUrl = `/shop/${content.storefront.shopSlug}`;
-    }
-  }
-
-  return base;
-}
-
-function parseReviewEvent(event: NostrEvent) {
-  const tags = event.tags || [];
-  const ratingTags = tags.filter((t) => t[0] === "rating");
-  const ratings: Record<string, number> = {};
-  for (const rt of ratingTags) {
-    if (rt[2]) {
-      ratings[rt[2]] = parseFloat(rt[1]!);
-    }
-  }
-
-  return {
-    id: event.id,
-    pubkey: event.pubkey,
-    d: getTagValue(tags, "d"),
-    content: event.content,
-    ratings,
-    createdAt: event.created_at,
-  };
-}
-
 export function registerReadTools(server: McpServer, context?: ToolContext) {
   const reg = (
     name: string,
@@ -436,15 +283,19 @@ export function registerReadTools(server: McpServer, context?: ToolContext) {
 
         if (currency) {
           const cur = currency.toLowerCase();
-          products = products.filter((p) => p.currency.toLowerCase() === cur);
+          products = products.filter((p) => p.currency?.toLowerCase() === cur);
         }
 
         if (minPrice !== undefined) {
-          products = products.filter((p) => p.price >= minPrice);
+          products = products.filter(
+            (p) => p.price !== undefined && p.price >= minPrice
+          );
         }
 
         if (maxPrice !== undefined) {
-          products = products.filter((p) => p.price <= maxPrice);
+          products = products.filter(
+            (p) => p.price !== undefined && p.price <= maxPrice
+          );
         }
 
         if (limit) {
@@ -654,7 +505,7 @@ export function registerReadTools(server: McpServer, context?: ToolContext) {
           const dTag = getTagValue(e.tags, "d");
           return dTag && dTag.includes(pubkey);
         })
-        .map(parseReviewEvent);
+        .map((event) => parseReviewEvent(event));
 
       if (!shopProfile && !userProfile) {
         return {
@@ -678,17 +529,23 @@ export function registerReadTools(server: McpServer, context?: ToolContext) {
 
       const productsWithPricing = products.map((p) => ({
         ...p,
-        pricing: buildPricingBlock(
-          p.price,
-          p.currency,
-          p.shippingType,
-          p.shippingCost,
-          1,
-          acceptedPaymentMethods
-        ),
+        // Canonical parsing owns pricing defaults; root MCP only layers the
+        // DB-informed accepted payment methods when there is a valid price.
+        ...(p.price !== undefined && {
+          pricing: buildPricingBlock(
+            p.price,
+            p.currency ?? "sats",
+            p.shippingType,
+            p.shippingCost,
+            1,
+            acceptedPaymentMethods
+          ),
+        }),
       }));
 
-      const allPrices = products.map((p) => p.price).filter((p) => p > 0);
+      const allPrices = products
+        .map((p) => p.price)
+        .filter((p): p is number => p !== undefined && p > 0);
       const freeShippingProducts = products.filter(
         (p) => p.shippingType === "Free" || p.shippingType === "Free/Pickup"
       );
@@ -783,7 +640,7 @@ export function registerReadTools(server: McpServer, context?: ToolContext) {
           DB_TIMEOUT_MS,
           "fetchCachedEvents"
         );
-        let reviews = reviewEvents.map(parseReviewEvent);
+        let reviews = reviewEvents.map((event) => parseReviewEvent(event));
 
         if (productId) {
           reviews = reviews.filter((r) => r.d && r.d.includes(productId));
@@ -980,14 +837,16 @@ export function registerReadTools(server: McpServer, context?: ToolContext) {
 
         const productsWithPricing = products.map((p) => ({
           ...p,
-          pricing: buildPricingBlock(
-            p.price,
-            p.currency,
-            p.shippingType,
-            p.shippingCost,
-            1,
-            ["lightning", "cashu"]
-          ),
+          ...(p.price !== undefined && {
+            pricing: buildPricingBlock(
+              p.price,
+              p.currency ?? "sats",
+              p.shippingType,
+              p.shippingCost,
+              1,
+              ["lightning", "cashu"]
+            ),
+          }),
         }));
 
         const storefront = (shopProfile as any)?.storefront || {};

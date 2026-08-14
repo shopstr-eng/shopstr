@@ -123,6 +123,7 @@ export async function handleGetCompanyDetails(
       sellerPubkey,
       shopProfile: profiles.shopProfile,
       userProfile: profiles.userProfile,
+      nip05Verification: profiles.nip05Verification,
       storefront: {
         ...storefront,
         storefrontUrl: profiles.shopProfile?.storefrontUrl ?? null,

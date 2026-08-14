@@ -1,8 +1,10 @@
-import parseTags from "../product-parser-functions";
-import { calculateTotalCost } from "@/components/utility-components/display-monetary-info";
+import parseTags, { buildUiVariantMaps } from "../product-parser-functions";
+import { parseProductEventWithLimits } from "../canonical-product-parser";
+import { calculateTotalCost } from "@/utils/parsers/product-tag-helpers";
 import { NostrEvent } from "@/utils/types/types";
 
-jest.mock("@/components/utility-components/display-monetary-info", () => ({
+jest.mock("@/utils/parsers/product-tag-helpers", () => ({
+  ...jest.requireActual("@/utils/parsers/product-tag-helpers"),
   calculateTotalCost: jest.fn(),
 }));
 
@@ -157,9 +159,57 @@ describe("parseTags", () => {
 
     expect(result.price).toBe(19.99);
     expect(result.currency).toBe("USD");
+    expect(result.priceStatus).toBe("known");
   });
 
-  it("should parse the modern 3-value shipping tag", () => {
+  it("should preserve canonical product type, format, visibility, and subscription fields", () => {
+    const result = parseTags({
+      ...baseEvent,
+      tags: [
+        ["type", "variable", "physical"],
+        ["visibility", "pre-order"],
+        ["price", "19.99", "USD", "monthly"],
+        ["subscription_discount", "10"],
+      ],
+    })!;
+
+    expect(result.productType).toBe("variable");
+    expect(result.productFormat).toBe("physical");
+    expect(result.visibility).toBe("pre-order");
+    expect(result.subscription).toEqual({
+      enabled: true,
+      discount: 10,
+      frequencies: ["monthly"],
+    });
+  });
+
+  it("should not coerce malformed or negative prices to zero", () => {
+    const malformed = parseTags({
+      ...baseEvent,
+      tags: [["price", "not-a-number", "USD"]],
+    })!;
+    const negative = parseTags({
+      ...baseEvent,
+      tags: [["price", "-1", "USD"]],
+    })!;
+
+    expect(malformed.price).toBeUndefined();
+    expect(malformed.currency).toBe("USD");
+    expect(malformed.priceStatus).toBe("invalid");
+    expect(negative.price).toBeUndefined();
+    expect(negative.currency).toBe("USD");
+    expect(negative.priceStatus).toBe("invalid");
+  });
+
+  it("should mark missing prices without adding a zero price", () => {
+    const result = parseTags({ ...baseEvent, tags: [] })!;
+
+    expect(result.price).toBeUndefined();
+    expect(result.currency).toBe("");
+    expect(result.priceStatus).toBe("missing");
+  });
+
+  it("should parse the modern 4-element shipping tag", () => {
     const event = {
       ...baseEvent,
       tags: [["shipping", "Added Cost", "10", "USD"]],
@@ -168,6 +218,24 @@ describe("parseTags", () => {
 
     expect(result.shippingType).toBe("Added Cost");
     expect(result.shippingCost).toBe(10);
+  });
+
+  it("should ignore legacy shipping tags when a modern shipping tag is also present", () => {
+    mockedCalculateTotalCost.mockImplementation(totalCostWithoutShipping);
+
+    const event = {
+      ...baseEvent,
+      tags: [
+        ["price", "50", "USD"],
+        ["shipping", "5", "USD"],
+        ["shipping", "Free", "0", "USD"],
+      ],
+    };
+    const result = parseTags(event)!;
+
+    expect(result.shippingType).toBe("Free");
+    expect(result.shippingCost).toBe(0);
+    expect(result.totalCost).toBe(50);
   });
 
   it("should ignore legacy 2-value shipping tags", () => {
@@ -266,6 +334,70 @@ describe("parseTags", () => {
     expect(result.sizeQuantities).toBeInstanceOf(Map);
     expect(result.sizeQuantities!.get("S")).toBe(10);
     expect(result.sizeQuantities!.get("M")).toBe(5);
+  });
+
+  it("should convert canonical variant arrays into UI maps", () => {
+    const maps = buildUiVariantMaps({
+      id: "product",
+      pubkey: "seller",
+      title: "",
+      summary: "",
+      images: [],
+      categories: [],
+      location: "",
+      priceStatus: "missing",
+      createdAt: 1,
+      subscription: { enabled: false, frequencies: [] },
+      sizes: [{ size: "S", quantity: 2 }],
+      volumes: [{ volume: "100g", price: 10 }],
+      weights: [{ weight: "1lb", price: 20 }],
+      bulk: [{ units: 5, price: 45 }],
+    });
+
+    expect(maps.sizes).toEqual(["S"]);
+    expect(maps.sizeQuantities.get("S")).toBe(2);
+    expect(maps.volumes).toEqual(["100g"]);
+    expect(maps.volumePrices.get("100g")).toBe(10);
+    expect(maps.weights).toEqual(["1lb"]);
+    expect(maps.weightPrices.get("1lb")).toBe(20);
+    expect(maps.bulkPrices.get(5)).toBe(45);
+  });
+
+  it("does not cap UI images or variant tags", () => {
+    const tags: string[][] = [];
+    for (let i = 0; i < 500; i++) {
+      tags.push(["image", `image-${i}`]);
+      tags.push(["size", `size-${i}`, `${i}`]);
+    }
+
+    const result = parseTags({ ...baseEvent, tags })!;
+
+    expect(result.images).toHaveLength(500);
+    expect(result.sizes).toHaveLength(500);
+    expect(result.images[499]).toBe("image-499");
+    expect(result.sizes![499]).toBe("size-499");
+  });
+
+  it("applies collection limits inside the canonical parser for bounded consumers", () => {
+    const tags: string[][] = [];
+    for (let i = 0; i < 500; i++) {
+      tags.push(["image", `image-${i}`]);
+      tags.push(["size", `size-${i}`, `${i}`]);
+      tags.push(["shipping_option", `shipping-${i}`, `${i}`]);
+    }
+
+    const result = parseProductEventWithLimits(
+      { ...baseEvent, tags },
+      {
+        images: 10,
+        sizes: 50,
+        shippingOptions: 10,
+      }
+    );
+
+    expect(result.images).toHaveLength(10);
+    expect(result.sizes).toHaveLength(50);
+    expect(result.shippingOptions).toHaveLength(10);
   });
 
   it("should parse volume tags into volumes array and prices map", () => {

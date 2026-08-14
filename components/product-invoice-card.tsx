@@ -384,7 +384,7 @@ export default function ProductInvoiceCard({
   // Extract discount and current price from props
   const appliedDiscount = discountPercentage || 0;
   const currentPrice =
-    originalPrice !== undefined ? originalPrice : productData.price;
+    originalPrice !== undefined ? originalPrice : (productData.price ?? 0);
 
   useEffect(() => {
     const fetchKeys = async () => {
@@ -512,7 +512,7 @@ export default function ProductInvoiceCard({
           ? messageAmount
           : formType === "shipping"
             ? productData.totalCost
-            : productData.price,
+            : (productData.price ?? 0),
         orderId,
         productData: {
           ...productData,
@@ -541,7 +541,7 @@ export default function ProductInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 4,
-        orderAmount: messageAmount ? messageAmount : productData.totalCost,
+        orderAmount: messageAmount ?? productData.totalCost ?? 0,
         orderId,
         productData: {
           ...productData,
@@ -571,7 +571,7 @@ export default function ProductInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 1,
-        orderAmount: messageAmount ? messageAmount : productData.totalCost,
+        orderAmount: messageAmount ?? productData.totalCost ?? 0,
         orderId,
         productData: {
           ...productData,
@@ -1905,7 +1905,7 @@ export default function ProductInvoiceCard({
   };
 
   const formattedTotalCost = formatWithCommas(
-    formType === "shipping" ? productData.totalCost : productData.price,
+    formType === "shipping" ? productData.totalCost : (productData.price ?? 0),
     productData.currency
   );
 

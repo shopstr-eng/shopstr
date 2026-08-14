@@ -287,7 +287,7 @@ function renderCartInvoiceCard(
     options.shippingTypes ??
     Object.fromEntries(products.map((p) => [p.id, p.shippingType || "N/A"]));
   const productTotalsInSats: ProductTotalsInSats = Object.fromEntries(
-    products.map((p) => [p.id, p.price * (quantities[p.id] || 1)])
+    products.map((p) => [p.id, (p.price ?? 0) * (quantities[p.id] || 1)])
   );
   const subtotalCost = Object.values(productTotalsInSats).reduce(
     (a, b) => a + b,
@@ -630,9 +630,10 @@ function makeCartQuoteResponse(
 ) {
   const breakdown =
     overrides.breakdown ??
-    Object.fromEntries(products.map((p) => [p.id, p.price]));
+    Object.fromEntries(products.map((p) => [p.id, p.price ?? 0]));
   const amount =
-    overrides.amount ?? Object.values(breakdown).reduce((a, b) => a + b, 0);
+    overrides.amount ??
+    Object.values(breakdown).reduce((a, b) => (a ?? 0) + (b ?? 0), 0);
   return {
     request: overrides.request ?? "lnbc5000n1mockinvoice",
     quote: overrides.quote ?? "quote_id_123",

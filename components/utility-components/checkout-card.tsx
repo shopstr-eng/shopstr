@@ -120,7 +120,7 @@ export default function CheckoutCard({
   const [selectedVolume, setSelectedVolume] = useState<string>("");
   const [selectedWeight, setSelectedWeight] = useState<string>("");
   const [selectedBulkOption, setSelectedBulkOption] = useState<string>("1");
-  const [currentPrice, setCurrentPrice] = useState(productData.price);
+  const [currentPrice, setCurrentPrice] = useState(productData.price ?? 0);
   const [discountCode, setDiscountCode] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState<number>(0);
   const [discountError, setDiscountError] = useState("");
@@ -162,7 +162,7 @@ export default function CheckoutCard({
         setCurrentPrice(weightPrice);
       }
     } else {
-      setCurrentPrice(productData.price);
+      setCurrentPrice(productData.price ?? 0);
     }
   }, [
     selectedVolume,
@@ -792,7 +792,7 @@ export default function CheckoutCard({
                   {hasBulkPrices && (
                     <BulkSelector
                       bulkPrices={productData.bulkPrices!}
-                      basePrice={productData.price}
+                      basePrice={productData.price ?? 0}
                       currency={productData.currency}
                       selectedBulkOption={selectedBulkOption}
                       onBulkChange={setSelectedBulkOption}
