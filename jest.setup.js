@@ -10,6 +10,13 @@ global.TextDecoder = TextDecoder;
 process.env.NEXT_PUBLIC_DONATION_NOSTR_PUBKEY =
   "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33";
 
+// next/jest loads the developer's .env into the test run, so a machine set up
+// for the HODL escrow runbook would otherwise render the "Pay with Lightning
+// Escrow" checkout button and break tests that query for /Pay with Lightning/.
+// Pinned off here so the suite does not depend on whose .env is on disk; tests
+// that need the flag on set it themselves.
+process.env.NEXT_PUBLIC_HODL_ESCROW_ENABLED = "false";
+
 // cashu-ts v3+ uses Amount class with .toNumber(). Production code converts
 // at library boundaries (Choice B). Test mocks return raw numbers, so shim
 // Number.prototype.toNumber to keep mock data compatible.

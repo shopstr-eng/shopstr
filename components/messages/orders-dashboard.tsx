@@ -26,6 +26,7 @@ import ShopstrSpinner from "../utility-components/shopstr-spinner";
 import FailureModal from "../utility-components/failure-modal";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import ClaimButton from "@/components/utility-components/claim-button";
+import HodlOrderActions from "@/components/hodl/hodl-order-actions";
 import DisplayProductModal from "@/components/display-product-modal";
 import AddressChangeModal from "@/components/utility-components/address-change-modal";
 import { getStoredBuyerP2pkEscrowRecords } from "@/utils/cashu/p2pk-escrow-records";
@@ -108,6 +109,7 @@ interface OrderData {
   selectedWeight?: string;
   selectedBulkOption?: number;
   paymentToken?: string;
+  hodlPaymentHash?: string;
   paymentMethod?: string;
   productTitle?: string;
   quantity?: number;
@@ -498,6 +500,16 @@ const OrdersDashboard = ({
             if (paymentType === "ecash") {
               paymentToken = paymentProofValue || paymentReference;
             }
+            // Hold-invoice escrow carries no token — the sats sit in the
+            // invoice. The payment hash is the whole handle on the order, and
+            // it reaches both parties on this tag.
+            let hodlPaymentHash: string | undefined;
+            if (
+              paymentType === "hodl" &&
+              /^[0-9a-f]{64}$/i.test(paymentReference)
+            ) {
+              hodlPaymentHash = paymentReference.toLowerCase();
+            }
             const paymentTag = paymentType || "";
             const paymentProof = paymentProofValue;
 
@@ -551,6 +563,7 @@ const OrdersDashboard = ({
               selectedWeight,
               selectedBulkOption,
               paymentToken,
+              hodlPaymentHash,
               paymentMethod,
               productTitle,
               quantity,
@@ -645,6 +658,7 @@ const OrdersDashboard = ({
             selectedBulkOption:
               order.selectedBulkOption || existing.selectedBulkOption,
             paymentToken: order.paymentToken || existing.paymentToken,
+            hodlPaymentHash: order.hodlPaymentHash || existing.hodlPaymentHash,
             paymentMethod:
               order.paymentMethod !== "Not specified"
                 ? order.paymentMethod
@@ -1796,9 +1810,14 @@ const OrdersDashboard = ({
                           })()}
                         </td>
                         <td className="px-4 py-4 text-sm">
-                          {order.paymentToken &&
-                          (order.subject !== "order-receipt" ||
-                            order.hasP2pkEscrowRecord) ? (
+                          {order.hodlPaymentHash ? (
+                            <HodlOrderActions
+                              paymentHash={order.hodlPaymentHash}
+                              isSale={!!order.isSale}
+                            />
+                          ) : order.paymentToken &&
+                            (order.subject !== "order-receipt" ||
+                              order.hasP2pkEscrowRecord) ? (
                             <ClaimButton
                               token={order.paymentToken}
                               orderId={order.orderId}
