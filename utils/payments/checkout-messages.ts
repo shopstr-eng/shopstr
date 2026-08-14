@@ -132,6 +132,30 @@ export function buildLightningPaymentMessage({
   );
 }
 
+/**
+ * Notifies the seller that funds are locked in a Lightning hold invoice.
+ *
+ * Unlike the ecash and Lightning-payout messages, this one carries no money:
+ * the sats are held by the escrow's Lightning backend and are released only
+ * once the buyer confirms. So the message says "locked", not "received", and
+ * names the payment hash — that hash is how both parties, and the arbiter,
+ * identify the order from here on.
+ */
+export function buildHodlEscrowPaymentMessage({
+  buyerNpub,
+  title,
+  productDetails,
+  quantity,
+  paymentHash,
+}: PaymentMessageInput & { paymentHash: string }): string {
+  const buyer = buyerNpub || "a guest buyer";
+  return (
+    `${buyer} has locked payment in Lightning escrow ${forClause(quantity)} ${title} listing${productDetails}` +
+    ` on Shopstr. The sats are held until the buyer confirms receipt, then released to you.` +
+    ` Escrow order: ${paymentHash}`
+  );
+}
+
 /** Notifies the seller (or hands the buyer their change) via an embedded
  * Cashu token — used for the ecash payout branch, overpaid-fee change, and
  * unused-proofs fallback when a Lightning melt doesn't fully complete. */
