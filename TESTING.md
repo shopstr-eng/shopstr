@@ -92,6 +92,63 @@ proof secrets, proof `C` values, or wallet event plaintext.
    duplicate or spent token handling remains correct, and no private keys,
    tokens, or proofs appear in console, DB logs, screenshots, or artifacts.
 
+## HODL Escrow Dev Runbook
+
+Hold-invoice escrow is a second, independent escrow system: the buyer pays a
+Lightning hold invoice, the sats stay locked at the node, and the invoice is
+either settled (seller paid) or cancelled (buyer refunded). Unlike the P2PK
+runbook above, this one moves no real money — it runs entirely against the
+in-memory mock provider, which is installed automatically whenever
+`NODE_ENV !== "production"`.
+
+Environment (`.env.local`):
+
+- **`DATABASE_URL`** — escrow commitments live in Postgres.
+- **`NEXT_PUBLIC_HODL_ESCROW_ENABLED=true`** — shows the "Pay with Lightning
+  Escrow" checkout button. Everything else stays wired with it off.
+- **`NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY`** / **`ARBITER_NOSTR_PRIVKEY`** — the
+  dispute arbiter. Without these, registration fails with a 500.
+- **`CRON_SECRET`** — bearer token for `POST /api/lightning/sync-hodl-orders`.
+- Leave **`HODL_INVOICE_PROVIDER`** unset. Setting it to anything but `mock`
+  in dev requires a real Lightning backend.
+
+Three distinct keys are needed: the register route rejects any buyer / seller /
+arbiter overlap. The mock provider is a module-level in-memory singleton, so
+its invoices live only as long as the dev-server process — restarting
+`npm run dev` orphans any open order.
+
+1. **Checkout.** As the buyer, pay a listing with "Pay with Lightning Escrow".
+   An `lnmock1…` string and QR render. The invoice is deliberately unpayable by
+   any wallet; the DB row is `open` and the checkout begins polling.
+2. **Pay it.** `curl -X POST localhost:5000/api/lightning/dev-pay-hodl-invoice
+-H 'Content-Type: application/json' -d '{"paymentHash":"…"}'`. The row moves
+   to `accepted` with `accepted_at` stamped, the poll notices, and the order DMs
+   go out to both parties. This route 404s in a production build.
+3. **Collect too early.** As the seller, press **Collect** before the buyer has
+   confirmed. It must report that the buyer has not confirmed yet — settle
+   authorizes off the buyer's signed kind-30408 event on relays, never off the
+   requester, so an unconfirmed collect is refused with `no_confirmation`.
+4. **Happy path.** As the buyer, press **Confirm Receipt**. A kind 30408 is
+   published to relays, then settle returns `{"status":"settled"}`. The seller's
+   Collect now succeeds too (settle is idempotent).
+5. **Dispute path.** On a second order, the buyer presses **Raise Dispute** —
+   kind 30410, tagging the arbiter. Logged in as the arbiter, `/disputes` (an
+   unlisted URL, no nav link) lists it under "Lightning Escrow Disputes".
+   **Release to Buyer** publishes kind 30409 and cancels the invoice.
+6. **Seller dispute timeout.** A _seller_-raised dispute is not actionable until
+   four hours after `accepted_at`. Ruling on one shows a countdown rather than
+   an error. To exercise the actionable branch without waiting, backdate the
+   row's `accepted_at`.
+7. **Sweep.** `curl -X POST localhost:5000/api/lightning/sync-hodl-orders
+-H "Authorization: Bearer $CRON_SECRET"` returns counts only. This is the
+   path for orders nobody is watching; an order with an open checkout tab is
+   already synced inline by the status route.
+8. **Restart mid-flow once.** Orphaned in-memory invoices should fail visibly
+   rather than hang.
+
+Never record preimages. The preimage is what settles the invoice and it never
+leaves the server by design.
+
 ## Viewing Coverage Reports
 
 After running `npm run test:coverage`, open the HTML report:
