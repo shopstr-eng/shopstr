@@ -1292,6 +1292,107 @@ describe("sendTokens — per-product loop", () => {
   }, 10000);
 });
 
+describe("shouldUseShipping / shouldUseContact — combined-mode routing", () => {
+  function renderMixedShippingAndPickupCart() {
+    const shipped = makeCartProduct({
+      id: "shipped-item",
+      pubkey: "seller_shipped",
+      title: "Poster",
+      shippingType: "Added Cost",
+    });
+    const pickup = makeCartProduct({
+      id: "pickup-item",
+      pubkey: "seller_pickup",
+      title: "Bakery Box",
+      shippingType: "Added Cost/Pickup",
+    });
+    const products = [shipped, pickup];
+    mockGetLocalStorageData.mockReturnValue({
+      ...DEFAULT_LOCAL_STORAGE_DATA,
+      tokens: [{ id: "ks1", amount: 3000, secret: "s1" }],
+    });
+    const rendered = renderCartInvoiceCard(products, undefined, {
+      signer: {
+        pubkey: BUYER_PUBKEY,
+        isLoggedIn: true,
+        signer: { getPubKey: jest.fn().mockResolvedValue(BUYER_PUBKEY) },
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Mixed delivery/ }));
+
+    return rendered;
+  }
+
+  it("routes an Added Cost/Pickup item to the contact/pickup path (not shipping) when the buyer picks Pickup", async () => {
+    const { products, setCashuPaymentSent } =
+      renderMixedShippingAndPickupCart();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Pickup/ }));
+    fillShippingForm({
+      Name: "Grace Hopper",
+      Address: "456 Oak Ave",
+      City: "Arlington",
+      "Postal Code": "22201",
+      "State/Province": "VA",
+      Country: "USA",
+    });
+    mockFetchJsonOnce(makeCartQuoteResponse(products));
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(
+      () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+      { timeout: 9000 }
+    );
+
+    const inquiryCall = mockConstructGiftWrappedEvent.mock.calls.find(
+      ([, recipient, , subject]: any) =>
+        recipient === "seller_pickup" && subject === "listing-inquiry"
+    );
+    expect(inquiryCall).toBeDefined();
+
+    const shipCall = mockConstructGiftWrappedEvent.mock.calls.find(
+      ([, recipient, message]: any) =>
+        recipient === "seller_pickup" &&
+        typeof message === "string" &&
+        message.startsWith("Please ship the product")
+    );
+    expect(shipCall).toBeUndefined();
+  }, 12000);
+
+  it("still routes an Added Cost/Pickup item to the shipping path when the buyer picks Free shipping", async () => {
+    const { products, setCashuPaymentSent } =
+      renderMixedShippingAndPickupCart();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Free shipping/ }));
+    fillShippingForm({
+      Name: "Grace Hopper",
+      Address: "456 Oak Ave",
+      City: "Arlington",
+      "Postal Code": "22201",
+      "State/Province": "VA",
+      Country: "USA",
+    });
+    mockFetchJsonOnce(makeCartQuoteResponse(products));
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(
+      () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+      { timeout: 9000 }
+    );
+
+    const shipCall = mockConstructGiftWrappedEvent.mock.calls.find(
+      ([, recipient, message]: any) =>
+        recipient === "seller_pickup" &&
+        typeof message === "string" &&
+        message.startsWith("Please ship the product")
+    );
+    expect(shipCall).toBeDefined();
+  }, 12000);
+});
+
 describe("cart clearing on success (localStorage['cart'])", () => {
   function renderDigitalReadyToPay() {
     mockGetLocalStorageData.mockReturnValue({ ...DEFAULT_LOCAL_STORAGE_DATA });

@@ -1926,7 +1926,8 @@ export default function CartInvoiceCard({
       const shouldUseShipping =
         formType === "shipping" ||
         (formType === "combined" &&
-          (productShippingType !== "Free/Pickup" ||
+          ((productShippingType !== "Free/Pickup" &&
+            productShippingType !== "Added Cost/Pickup") ||
             ((productShippingType === "Free/Pickup" ||
               productShippingType === "Added Cost/Pickup") &&
               shippingPickupPreference === "shipping")));
