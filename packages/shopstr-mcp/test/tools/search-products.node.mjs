@@ -204,6 +204,235 @@ test("search_products falls back to broad query when #t category returns no matc
   assert.equal(body._meta.eventCount, 1);
 });
 
+test("search_products queries normal and NIP-50 relays concurrently for keyword searches", async () => {
+  const normalRelay = "wss://normal.example.com";
+  const nip50Relay = "wss://search.example.com";
+  const calls = [];
+  let resolveNormal;
+  const normalResult = new Promise((resolve) => {
+    resolveNormal = resolve;
+  });
+  const ctx = {
+    ...context({}),
+    relays: [normalRelay],
+    nip50SearchRelays: [nip50Relay],
+    nostr: {
+      async fetch(filters, _params, relayUrls) {
+        const relay = relayUrls[0];
+        calls.push({ relay, filters });
+        if (relay === normalRelay) return normalResult;
+        return [
+          productEvent({
+            id: hex("2"),
+            created_at: 20,
+            tags: [
+              ["d", "wallet"],
+              ["title", "Hardware Wallet"],
+              ["summary", "NIP-50 result"],
+              ["price", "35", "USD"],
+            ],
+          }),
+        ];
+      },
+    },
+  };
+
+  const responsePromise = handleSearchProducts({ keyword: "wallet" }, ctx);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(calls.length, 2, "normal and NIP-50 fetches should be started");
+  assert.equal(
+    calls.find((call) => call.relay === normalRelay).filters[0].search,
+    undefined
+  );
+  assert.equal(
+    calls.find((call) => call.relay === nip50Relay).filters[0].search,
+    "wallet"
+  );
+
+  resolveNormal([
+    productEvent({
+      id: hex("1"),
+      created_at: 10,
+      tags: [
+        ["d", "wallet"],
+        ["title", "Hardware Wallet"],
+        ["summary", "Normal relay result"],
+        ["price", "40", "USD"],
+      ],
+    }),
+  ]);
+
+  const body = JSON.parse((await responsePromise).content[0].text);
+
+  assert.equal(body.count, 1);
+  assert.equal(body.products[0].id, hex("2"));
+  assert.deepEqual(body._meta.nip50, {
+    attempted: true,
+    relaysQueried: [nip50Relay],
+    eventCount: 1,
+  });
+});
+
+test("search_products returns normal relay results when NIP-50 relays fail", async () => {
+  const normalRelay = "wss://normal.example.com";
+  const nip50Relay = "wss://search.example.com";
+  const response = await handleSearchProducts(
+    { keyword: "wallet" },
+    {
+      ...context({}),
+      relays: [normalRelay],
+      nip50SearchRelays: [nip50Relay],
+      nostr: {
+        async fetch(_filters, _params, relayUrls) {
+          if (relayUrls[0] === nip50Relay) throw new Error("search down");
+          return [productEvent()];
+        },
+      },
+    }
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, undefined);
+  assert.equal(body.count, 1);
+  assert.equal(body._meta.nip50.attempted, true);
+  assert.equal(body._meta.nip50.eventCount, 0);
+  assert.equal(body._meta.degraded, true);
+});
+
+test("search_products returns NIP-50 results when normal relays fail", async () => {
+  const normalRelay = "wss://normal.example.com";
+  const nip50Relay = "wss://search.example.com";
+  const response = await handleSearchProducts(
+    { keyword: "wallet" },
+    {
+      ...context({}),
+      relays: [normalRelay],
+      nip50SearchRelays: [nip50Relay],
+      nostr: {
+        async fetch(_filters, _params, relayUrls) {
+          if (relayUrls[0] === normalRelay) throw new Error("normal down");
+          return [productEvent()];
+        },
+      },
+    }
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, undefined);
+  assert.equal(body.count, 1);
+  assert.equal(body._meta.nip50.eventCount, 1);
+  assert.equal(body._meta.degraded, true);
+});
+
+test("search_products fails only when normal and NIP-50 relays both fail", async () => {
+  const response = await handleSearchProducts(
+    { keyword: "wallet" },
+    {
+      ...context({}),
+      relays: ["wss://normal.example.com"],
+      nip50SearchRelays: ["wss://search.example.com"],
+      nostr: {
+        async fetch() {
+          throw new Error("relay down");
+        },
+      },
+    }
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, true);
+  assert.equal(body.errorCode, "RELAY_UNAVAILABLE");
+  assert.deepEqual(
+    body._meta.relaysQueried.sort(),
+    ["wss://normal.example.com", "wss://search.example.com"].sort()
+  );
+});
+
+test("search_products does not query NIP-50 relays when a cursor is supplied", async () => {
+  const cursor = createPaginationCursor({
+    tool: "search_products",
+    query: createQueryFingerprint("search_products", [
+      "wallet",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      1,
+      "newest",
+    ]),
+    boundary: 100,
+    seen: [],
+  });
+  const calls = [];
+  const response = await handleSearchProducts(
+    { keyword: "wallet", limit: 1, cursor },
+    {
+      ...context({}),
+      relays: ["wss://normal.example.com"],
+      nip50SearchRelays: ["wss://search.example.com"],
+      nostr: {
+        async fetch(filters, _params, relayUrls) {
+          calls.push({ relay: relayUrls[0], filters });
+          return [];
+        },
+      },
+    }
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, undefined);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].relay, "wss://normal.example.com");
+  assert.equal(calls[0].filters[0].search, undefined);
+  assert.equal(body._meta.nip50.attempted, false);
+});
+
+test("search_products applies NIP-50 to category fallback keyword retries", async () => {
+  const calls = [];
+  const response = await handleSearchProducts(
+    { keyword: "running", category: "Shoes" },
+    {
+      ...context({}),
+      relays: ["wss://normal.example.com"],
+      nip50SearchRelays: ["wss://search.example.com"],
+      nostr: {
+        async fetch(filters, _params, relayUrls) {
+          calls.push({ relay: relayUrls[0], filters });
+          const filter = filters[0];
+          if (filter["#t"]) return [];
+          if (filter.search) {
+            return [
+              productEvent({
+                id: hex("1"),
+                tags: [
+                  ["d", "running-shoes"],
+                  ["title", "Running Shoes"],
+                  ["summary", "NIP-50 fallback result"],
+                  ["price", "100", "USD"],
+                  ["t", "shoes"],
+                ],
+              }),
+            ];
+          }
+          return [];
+        },
+      },
+    }
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, undefined);
+  assert.equal(body.count, 1);
+  assert.equal(body._meta.usedFallbackQuery, true);
+  assert.equal(calls.length, 4);
+  assert.equal(calls[0].filters[0].search, undefined);
+  assert.equal(calls[1].filters[0].search, "running");
+  assert.equal(calls[2].filters[0].search, undefined);
+  assert.equal(calls[3].filters[0].search, "running");
+});
+
 test("search_products excludes hidden products", async () => {
   const response = await handleSearchProducts(
     {},

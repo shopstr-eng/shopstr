@@ -5,6 +5,7 @@ import {
   DEFAULT_CATEGORY_CACHE_TTL_MS,
   DEFAULT_MAX_CONCURRENT_REQUESTS,
   DEFAULT_NIP05_CACHE_TTL_MS,
+  DEFAULT_NIP50_SEARCH_RELAYS,
   DEFAULT_RELAYS,
   DEFAULT_TOOL_TIMEOUT_MS,
   loadConfig,
@@ -40,6 +41,9 @@ test("parses relay lists with trimming, dedupe, and defaults", () => {
     ["wss://relay.example.com", "ws://localhost"]
   );
   assert.deepEqual(parseRelayList("invalid"), expectedDefaultRelays);
+  assert.deepEqual(parseRelayList("invalid", DEFAULT_NIP50_SEARCH_RELAYS), [
+    ...DEFAULT_NIP50_SEARCH_RELAYS,
+  ]);
 });
 
 test("parses log levels and positive integers with safe fallbacks", () => {
@@ -53,6 +57,7 @@ test("parses log levels and positive integers with safe fallbacks", () => {
 test("loads config from environment overrides", () => {
   const config = loadConfig({
     SHOPSTR_MCP_RELAYS: "wss://relay.example.com",
+    SHOPSTR_MCP_NIP50_SEARCH_RELAYS: "wss://search.example.com",
     SHOPSTR_MCP_LOG_LEVEL: "warn",
     SHOPSTR_MCP_TOOL_TIMEOUT_MS: "1500",
     SHOPSTR_MCP_RELAY_CONNECT_TIMEOUT_MS: "2500",
@@ -60,6 +65,7 @@ test("loads config from environment overrides", () => {
   });
 
   assert.deepEqual(config.relays, ["wss://relay.example.com"]);
+  assert.deepEqual(config.nip50SearchRelays, ["wss://search.example.com"]);
   assert.equal(config.version, packageVersion);
   assert.equal(config.logLevel, "warn");
   assert.equal(config.defaultToolTimeoutMs, 1500);

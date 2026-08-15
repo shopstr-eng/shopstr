@@ -14,8 +14,14 @@ import { parseProductEvent } from "../parse-tags.js";
 import {
   fetchFromRelays,
   getNewestSaturatedFilterBoundary,
+  type RelayFetchResult,
 } from "../relay-fetch.js";
-import type { NostrEvent, NostrFilter, ProductResponse } from "../types.js";
+import type {
+  NostrEvent,
+  NostrFilter,
+  ProductResponse,
+  RelayFetchMeta,
+} from "../types.js";
 import { searchProductsSchema } from "../validation.js";
 import {
   PRODUCT_KIND,
@@ -83,6 +89,20 @@ export const searchProductsInputSchema = {
 };
 
 type SearchProductsInput = z.infer<typeof searchProductsSchema>;
+
+type Nip50Meta = {
+  attempted: boolean;
+  relaysQueried: string[];
+  eventCount: number;
+};
+
+type SearchWindowFetch = {
+  events: NostrEvent[];
+  normalResult: RelayFetchResult;
+  relayMetas: RelayFetchMeta[];
+  nip50: Nip50Meta;
+  errorResponse?: ToolTextResponse;
+};
 
 function productMatchesFilters(
   product: ProductResponse,
@@ -243,6 +263,98 @@ function sortProducts(
   return [...knownPrice, ...unknownPrice];
 }
 
+function shouldAttemptNip50Search(
+  filters: SearchProductsInput,
+  cursorState: PaginationCursorState | undefined,
+  context: CoreToolContext
+): boolean {
+  return Boolean(
+    filters.keyword &&
+    cursorState === undefined &&
+    (context.nip50SearchRelays?.length ?? 0) > 0
+  );
+}
+
+function buildNip50Filter(filter: NostrFilter, keyword: string): NostrFilter {
+  return {
+    ...filter,
+    search: keyword,
+  };
+}
+
+function combineNip50Meta(metas: readonly Nip50Meta[]): Nip50Meta {
+  const relaysQueried = new Set<string>();
+  let eventCount = 0;
+  let attempted = false;
+
+  for (const meta of metas) {
+    attempted ||= meta.attempted;
+    eventCount += meta.eventCount;
+    meta.relaysQueried.forEach((relay) => relaysQueried.add(relay));
+  }
+
+  return {
+    attempted,
+    relaysQueried: Array.from(relaysQueried),
+    eventCount,
+  };
+}
+
+async function fetchSearchWindow(
+  context: CoreToolContext,
+  filters: SearchProductsInput,
+  cursorState: PaginationCursorState | undefined,
+  relayFilter: NostrFilter
+): Promise<SearchWindowFetch> {
+  const startedAt = Date.now();
+  const attemptNip50 = shouldAttemptNip50Search(filters, cursorState, context);
+  const nip50Relays = context.nip50SearchRelays ?? [];
+
+  const normalPromise = fetchFromRelays(
+    context.nostr,
+    context.relays,
+    [relayFilter],
+    { timeoutMs: context.timeoutMs }
+  );
+  const nip50Promise = attemptNip50
+    ? fetchFromRelays(
+        context.nostr,
+        nip50Relays,
+        [buildNip50Filter(relayFilter, filters.keyword!)],
+        { timeoutMs: context.timeoutMs }
+      )
+    : Promise.resolve(undefined);
+
+  const [normalResult, nip50Result] = await Promise.all([
+    normalPromise,
+    nip50Promise,
+  ]);
+  const relayMetas = [
+    normalResult.meta,
+    ...(nip50Result ? [nip50Result.meta] : []),
+  ];
+  const normalFailed = allRelaysFailed(normalResult.meta);
+  const nip50Failed = nip50Result ? allRelaysFailed(nip50Result.meta) : true;
+  const errorResponse =
+    normalFailed && (!attemptNip50 || nip50Failed)
+      ? createRelayUnavailableResponse(
+          combineRelayMetas(relayMetas, Date.now() - startedAt)
+        )
+      : undefined;
+
+  return {
+    events: [...normalResult.events, ...(nip50Result?.events ?? [])],
+    normalResult,
+    relayMetas,
+    nip50: {
+      attempted: attemptNip50,
+      relaysQueried: nip50Result?.meta.relaysQueried ?? [],
+      eventCount: nip50Result?.meta.eventCount ?? 0,
+    },
+    ...(errorResponse && { errorResponse }),
+  };
+}
+
 export async function handleSearchProducts(
   args: Record<string, unknown>,
   context: CoreToolContext
@@ -287,25 +399,29 @@ export async function handleSearchProducts(
     cursorState
   );
   const startedAt = Date.now();
-  const relayMetas = [];
+  const relayMetas: RelayFetchMeta[] = [];
+  const nip50Metas: Nip50Meta[] = [];
   let usedFallbackQuery = false;
 
-  let relayResult = await fetchFromRelays(
-    context.nostr,
-    context.relays,
-    [primary],
-    { timeoutMs: context.timeoutMs }
+  let relayResult = await fetchSearchWindow(
+    context,
+    filters,
+    cursorState,
+    primary
   );
-  relayMetas.push(relayResult.meta);
+  relayMetas.push(...relayResult.relayMetas);
+  nip50Metas.push(relayResult.nip50);
 
-  if (allRelaysFailed(relayResult.meta)) {
-    return createRelayUnavailableResponse(relayResult.meta);
-  }
+  if (relayResult.errorResponse) return relayResult.errorResponse;
 
   observeProductEventsForCategories(relayResult.events);
   let sparseBoundary =
     filters.sortBy === "newest"
-      ? getNewestSaturatedFilterBoundary(relayResult, requestedRelayLimit, [0])
+      ? getNewestSaturatedFilterBoundary(
+          relayResult.normalResult,
+          requestedRelayLimit,
+          [0]
+        )
       : undefined;
   let rawProductWindow = sortEventsNewestFirst(relayResult.events).filter(
     (event) =>
@@ -328,21 +444,22 @@ export async function handleSearchProducts(
   // retry with the broad filter (merchant may have written category in description
   // but forgotten the official #t tag).
   if (products.length === 0 && fallback) {
-    relayResult = await fetchFromRelays(
-      context.nostr,
-      context.relays,
-      [fallback],
-      { timeoutMs: context.timeoutMs }
+    relayResult = await fetchSearchWindow(
+      context,
+      filters,
+      cursorState,
+      fallback
     );
-    relayMetas.push(relayResult.meta);
+    relayMetas.push(...relayResult.relayMetas);
+    nip50Metas.push(relayResult.nip50);
     usedFallbackQuery = true;
 
-    if (!allRelaysFailed(relayResult.meta)) {
+    if (!relayResult.errorResponse) {
       observeProductEventsForCategories(relayResult.events);
       sparseBoundary =
         filters.sortBy === "newest"
           ? getNewestSaturatedFilterBoundary(
-              relayResult,
+              relayResult.normalResult,
               requestedRelayLimit,
               [0]
             )
@@ -423,6 +540,7 @@ export async function handleSearchProducts(
       dataFreshness: getDataFreshness(returnedProducts),
       hints,
     }),
+    nip50: combineNip50Meta(nip50Metas),
     ...(usedFallbackQuery && { usedFallbackQuery }),
   };
 
