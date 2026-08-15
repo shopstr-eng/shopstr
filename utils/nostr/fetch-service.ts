@@ -1169,17 +1169,13 @@ export const fetchGiftWrappedChatsAndMessages = async (
           ) {
             continue;
           }
-          const recipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
-          if (typeof recipientPubkey !== "string") {
-            console.error(
-              `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap",
-                ${tagsMap},
-                ${event}`
+          const recipientPubkey = tagsMap.get("p"); // pubkey you sent the message to
+          if (!recipientPubkey) {
+            console.warn(
+              "Skipping gift-wrapped chat message without recipient p tag",
+              { wrappedEventId: event.id }
             );
-            alert(
-              `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap`
-            );
-            return;
+            continue;
           }
           const cachedMessage = chatMessagesFromCache.get(event.id);
           let chatMessage: NostrMessageEvent;
