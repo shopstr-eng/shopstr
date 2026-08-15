@@ -46,6 +46,7 @@ import {
   createQueryFingerprint,
   decodePaginationCursor,
   getPaginatedRelayLimit,
+  hashPaginationLogicalIdentity,
   type PaginationCursorState,
 } from "./utils/pagination-cursor.js";
 
@@ -89,6 +90,7 @@ export const searchProductsInputSchema = {
 };
 
 type SearchProductsInput = z.infer<typeof searchProductsSchema>;
+type SearchProductResponse = ProductResponse & { matchedVia?: "nip50" };
 
 type Nip50Meta = {
   attempted: boolean;
@@ -97,12 +99,24 @@ type Nip50Meta = {
 };
 
 type SearchWindowFetch = {
-  events: NostrEvent[];
+  normalEvents: NostrEvent[];
+  nip50Events: NostrEvent[];
   normalResult: RelayFetchResult;
   relayMetas: RelayFetchMeta[];
   nip50: Nip50Meta;
   errorResponse?: ToolTextResponse;
 };
+
+type PageAssembly = {
+  products: ProductResponse[];
+  nip50Products: ProductResponse[];
+  rawProductWindow: NostrEvent[];
+  sparseBoundary: number | undefined;
+  scannedProducts: NostrEvent[];
+  nip50ScannedProducts: NostrEvent[];
+};
+
+const NIP50_RESERVED_SLOTS = 5;
 
 function productMatchesFilters(
   product: ProductResponse,
@@ -265,38 +279,18 @@ function sortProducts(
 
 function shouldAttemptNip50Search(
   filters: SearchProductsInput,
-  cursorState: PaginationCursorState | undefined,
   context: CoreToolContext
 ): boolean {
   return Boolean(
-    filters.keyword &&
-    cursorState === undefined &&
-    (context.nip50SearchRelays?.length ?? 0) > 0
+    filters.keyword && (context.nip50SearchRelays?.length ?? 0) > 0
   );
 }
 
 function buildNip50Filter(filter: NostrFilter, keyword: string): NostrFilter {
+  const { until: _until, ...rest } = filter;
   return {
-    ...filter,
+    ...rest,
     search: keyword,
-  };
-}
-
-function combineNip50Meta(metas: readonly Nip50Meta[]): Nip50Meta {
-  const relaysQueried = new Set<string>();
-  let eventCount = 0;
-  let attempted = false;
-
-  for (const meta of metas) {
-    attempted ||= meta.attempted;
-    eventCount += meta.eventCount;
-    meta.relaysQueried.forEach((relay) => relaysQueried.add(relay));
-  }
-
-  return {
-    attempted,
-    relaysQueried: Array.from(relaysQueried),
-    eventCount,
   };
 }
 
@@ -307,7 +301,7 @@ async function fetchSearchWindow(
   relayFilter: NostrFilter
 ): Promise<SearchWindowFetch> {
   const startedAt = Date.now();
-  const attemptNip50 = shouldAttemptNip50Search(filters, cursorState, context);
+  const attemptNip50 = shouldAttemptNip50Search(filters, context);
   const nip50Relays = context.nip50SearchRelays ?? [];
 
   const normalPromise = fetchFromRelays(
@@ -329,6 +323,13 @@ async function fetchSearchWindow(
     normalPromise,
     nip50Promise,
   ]);
+  const seenIds = new Set(cursorState?.seen ?? []);
+  const nip50Events = (nip50Result?.events ?? []).filter(
+    (event) =>
+      !seenIds.has(
+        hashPaginationLogicalIdentity(getProductLogicalIdentity(event))
+      )
+  );
   const relayMetas = [
     normalResult.meta,
     ...(nip50Result ? [nip50Result.meta] : []),
@@ -343,7 +344,8 @@ async function fetchSearchWindow(
       : undefined;
 
   return {
-    events: [...normalResult.events, ...(nip50Result?.events ?? [])],
+    normalEvents: normalResult.events,
+    nip50Events,
     normalResult,
     relayMetas,
     nip50: {
@@ -352,6 +354,57 @@ async function fetchSearchWindow(
       eventCount: nip50Result?.meta.eventCount ?? 0,
     },
     ...(errorResponse && { errorResponse }),
+  };
+}
+
+function assemblePage(
+  relayResult: SearchWindowFetch,
+  filters: SearchProductsInput,
+  cursorState: PaginationCursorState | undefined,
+  requestedRelayLimit: number
+): PageAssembly {
+  const sparseBoundary =
+    filters.sortBy === "newest"
+      ? getNewestSaturatedFilterBoundary(
+          relayResult.normalResult,
+          requestedRelayLimit,
+          [0]
+        )
+      : undefined;
+  const rawProductWindow = sortEventsNewestFirst(
+    relayResult.normalEvents
+  ).filter(
+    (event) =>
+      sparseBoundary === undefined || event.created_at >= sparseBoundary
+  );
+  const eligibleRawProducts = cursorState
+    ? applyPaginationCursor(
+        rawProductWindow,
+        cursorState,
+        getProductLogicalIdentity
+      )
+    : rawProductWindow;
+  const scannedProducts = mergeAndDeduplicateProducts(eligibleRawProducts);
+  const products = scannedProducts
+    .map(parseProductEvent)
+    .filter((product) => productMatchesFilters(product, filters));
+  const normalIdentities = new Set(
+    scannedProducts.map(getProductLogicalIdentity)
+  );
+  const nip50ScannedProducts = mergeAndDeduplicateProducts(
+    relayResult.nip50Events
+  ).filter((event) => !normalIdentities.has(getProductLogicalIdentity(event)));
+  const nip50Products = nip50ScannedProducts
+    .map(parseProductEvent)
+    .filter((product) => productMatchesFilters(product, filters));
+
+  return {
+    products,
+    nip50Products,
+    rawProductWindow,
+    sparseBoundary,
+    scannedProducts,
+    nip50ScannedProducts,
   };
 }
 
@@ -400,7 +453,7 @@ export async function handleSearchProducts(
   );
   const startedAt = Date.now();
   const relayMetas: RelayFetchMeta[] = [];
-  const nip50Metas: Nip50Meta[] = [];
+  let nip50Meta: Nip50Meta;
   let usedFallbackQuery = false;
 
   let relayResult = await fetchSearchWindow(
@@ -410,40 +463,29 @@ export async function handleSearchProducts(
     primary
   );
   relayMetas.push(...relayResult.relayMetas);
-  nip50Metas.push(relayResult.nip50);
+  nip50Meta = relayResult.nip50;
 
   if (relayResult.errorResponse) return relayResult.errorResponse;
 
-  observeProductEventsForCategories(relayResult.events);
-  let sparseBoundary =
-    filters.sortBy === "newest"
-      ? getNewestSaturatedFilterBoundary(
-          relayResult.normalResult,
-          requestedRelayLimit,
-          [0]
-        )
-      : undefined;
-  let rawProductWindow = sortEventsNewestFirst(relayResult.events).filter(
-    (event) =>
-      sparseBoundary === undefined || event.created_at >= sparseBoundary
+  observeProductEventsForCategories([
+    ...relayResult.normalEvents,
+    ...relayResult.nip50Events,
+  ]);
+  let assembly = assemblePage(
+    relayResult,
+    filters,
+    cursorState,
+    requestedRelayLimit
   );
-  let eligibleRawProducts = rawProductWindow;
-  if (cursorState) {
-    eligibleRawProducts = applyPaginationCursor(
-      rawProductWindow,
-      cursorState,
-      getProductLogicalIdentity
-    );
-  }
-  let scannedProducts = mergeAndDeduplicateProducts(eligibleRawProducts);
-  let products = scannedProducts
-    .map(parseProductEvent)
-    .filter((product) => productMatchesFilters(product, filters));
 
   // Fallback: if targeted #t query returned nothing and we have a broad fallback,
   // retry with the broad filter (merchant may have written category in description
   // but forgotten the official #t tag).
-  if (products.length === 0 && fallback) {
+  if (
+    assembly.products.length === 0 &&
+    assembly.nip50Products.length === 0 &&
+    fallback
+  ) {
     relayResult = await fetchSearchWindow(
       context,
       filters,
@@ -451,49 +493,50 @@ export async function handleSearchProducts(
       fallback
     );
     relayMetas.push(...relayResult.relayMetas);
-    nip50Metas.push(relayResult.nip50);
+    nip50Meta = relayResult.nip50;
     usedFallbackQuery = true;
 
     if (!relayResult.errorResponse) {
-      observeProductEventsForCategories(relayResult.events);
-      sparseBoundary =
-        filters.sortBy === "newest"
-          ? getNewestSaturatedFilterBoundary(
-              relayResult.normalResult,
-              requestedRelayLimit,
-              [0]
-            )
-          : undefined;
-      rawProductWindow = sortEventsNewestFirst(relayResult.events).filter(
-        (event) =>
-          sparseBoundary === undefined || event.created_at >= sparseBoundary
+      observeProductEventsForCategories([
+        ...relayResult.normalEvents,
+        ...relayResult.nip50Events,
+      ]);
+      assembly = assemblePage(
+        relayResult,
+        filters,
+        cursorState,
+        requestedRelayLimit
       );
-      eligibleRawProducts = rawProductWindow;
-      if (cursorState) {
-        eligibleRawProducts = applyPaginationCursor(
-          rawProductWindow,
-          cursorState,
-          getProductLogicalIdentity
-        );
-      }
-      scannedProducts = mergeAndDeduplicateProducts(eligibleRawProducts);
-      products = scannedProducts
-        .map(parseProductEvent)
-        .filter((product) => productMatchesFilters(product, filters));
     }
   }
 
-  products = sortProducts(products, filters.sortBy);
-  const pageProducts = products.slice(0, responseLimit + 1);
+  const products = sortProducts(assembly.products, filters.sortBy);
+  const reservedSlots = Math.min(
+    NIP50_RESERVED_SLOTS,
+    assembly.nip50Products.length,
+    Math.max(0, responseLimit - 1)
+  );
+  const normalBudget = responseLimit - reservedSlots;
+  const pageProducts = products.slice(0, normalBudget + 1);
   const priceSorted =
     filters.sortBy === "price_asc" || filters.sortBy === "price_desc";
-  const returnedProducts = pageProducts.slice(0, responseLimit);
-  const hasMatchingProductsBeyondPage = pageProducts.length > responseLimit;
+  const returnedNormal = pageProducts.slice(0, normalBudget);
+  const returnedNip50 = assembly.nip50Products
+    .slice(0, reservedSlots)
+    .map((product): SearchProductResponse => ({
+      ...product,
+      matchedVia: "nip50",
+    }));
+  const returnedProducts: SearchProductResponse[] = [
+    ...returnedNormal,
+    ...returnedNip50,
+  ];
+  const hasMatchingProductsBeyondPage = pageProducts.length > normalBudget;
   const shouldAdvanceSparseWindow =
     !priceSorted &&
     !hasMatchingProductsBeyondPage &&
-    sparseBoundary !== undefined &&
-    rawProductWindow.length > 0;
+    assembly.sparseBoundary !== undefined &&
+    assembly.rawProductWindow.length > 0;
   const hasMore =
     !priceSorted &&
     (hasMatchingProductsBeyondPage || shouldAdvanceSparseWindow);
@@ -501,22 +544,33 @@ export async function handleSearchProducts(
   if (hasMore) {
     try {
       if (hasMatchingProductsBeyondPage) {
-        const boundary =
-          returnedProducts[returnedProducts.length - 1]!.createdAt;
+        const boundary = returnedNormal[returnedNormal.length - 1]!.createdAt;
+        const consumedForCursor = [
+          ...assembly.scannedProducts.filter((event) =>
+            returnedNormal.some((product) => product.id === event.id)
+          ),
+          ...assembly.nip50ScannedProducts.filter((event) =>
+            returnedNip50.some((product) => product.id === event.id)
+          ),
+        ];
         nextCursor = createNextCursor(
           query,
           cursorState,
           boundary,
-          scannedProducts.filter((event) =>
-            returnedProducts.some((product) => product.id === event.id)
-          )
+          consumedForCursor
         );
       } else {
+        const consumedForCursor = [
+          ...assembly.rawProductWindow,
+          ...assembly.nip50ScannedProducts.filter((event) =>
+            returnedNip50.some((product) => product.id === event.id)
+          ),
+        ];
         nextCursor = createNextCursor(
           query,
           cursorState,
-          sparseBoundary!,
-          rawProductWindow
+          assembly.sparseBoundary!,
+          consumedForCursor
         );
       }
     } catch (error) {
@@ -526,28 +580,32 @@ export async function handleSearchProducts(
       throw error;
     }
   }
-  const truncated = products.length > returnedProducts.length;
+  const totalMatches = products.length + assembly.nip50Products.length;
+  const truncated = totalMatches > returnedProducts.length;
   const hints = buildSearchHints(
     filters,
-    products.length,
+    totalMatches,
     returnedProducts.length
   );
   const meta = {
     ...buildToolMeta(combineRelayMetas(relayMetas, Date.now() - startedAt), {
       resultCount: returnedProducts.length,
-      totalMatches: products.length,
+      totalMatches,
       truncated,
       dataFreshness: getDataFreshness(returnedProducts),
       hints,
     }),
-    nip50: combineNip50Meta(nip50Metas),
+    nip50: {
+      ...nip50Meta,
+      reservedSlotsUsed: returnedNip50.length,
+    },
     ...(usedFallbackQuery && { usedFallbackQuery }),
   };
 
   return createSuccessResponse(
     {
       count: returnedProducts.length,
-      totalMatches: products.length,
+      totalMatches,
       products: returnedProducts,
       _pagination: {
         nextCursor,

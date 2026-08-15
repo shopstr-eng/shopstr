@@ -226,7 +226,7 @@ test("search_products queries normal and NIP-50 relays concurrently for keyword 
             id: hex("2"),
             created_at: 20,
             tags: [
-              ["d", "wallet"],
+              ["d", "wallet-nip50"],
               ["title", "Hardware Wallet"],
               ["summary", "NIP-50 result"],
               ["price", "35", "USD"],
@@ -255,7 +255,7 @@ test("search_products queries normal and NIP-50 relays concurrently for keyword 
       id: hex("1"),
       created_at: 10,
       tags: [
-        ["d", "wallet"],
+        ["d", "wallet-normal"],
         ["title", "Hardware Wallet"],
         ["summary", "Normal relay result"],
         ["price", "40", "USD"],
@@ -265,12 +265,15 @@ test("search_products queries normal and NIP-50 relays concurrently for keyword 
 
   const body = JSON.parse((await responsePromise).content[0].text);
 
-  assert.equal(body.count, 1);
-  assert.equal(body.products[0].id, hex("2"));
+  assert.equal(body.count, 2);
+  assert.equal(body.products[0].id, hex("1"));
+  assert.equal(body.products[1].id, hex("2"));
+  assert.equal(body.products[1].matchedVia, "nip50");
   assert.deepEqual(body._meta.nip50, {
     attempted: true,
     relaysQueried: [nip50Relay],
     eventCount: 1,
+    reservedSlotsUsed: 1,
   });
 });
 
@@ -349,7 +352,8 @@ test("search_products fails only when normal and NIP-50 relays both fail", async
   );
 });
 
-test("search_products does not query NIP-50 relays when a cursor is supplied", async () => {
+test("search_products queries NIP-50 on cursor pages without sending until", async () => {
+  const seenIdentity = `30402:${hex("b")}:already-seen`;
   const cursor = createPaginationCursor({
     tool: "search_products",
     query: createQueryFingerprint("search_products", [
@@ -363,7 +367,7 @@ test("search_products does not query NIP-50 relays when a cursor is supplied", a
       "newest",
     ]),
     boundary: 100,
-    seen: [],
+    seen: [hashPaginationLogicalIdentity(seenIdentity)],
   });
   const calls = [];
   const response = await handleSearchProducts(
@@ -383,10 +387,205 @@ test("search_products does not query NIP-50 relays when a cursor is supplied", a
   const body = JSON.parse(response.content[0].text);
 
   assert.equal(response.isError, undefined);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
   assert.equal(calls[0].relay, "wss://normal.example.com");
   assert.equal(calls[0].filters[0].search, undefined);
-  assert.equal(body._meta.nip50.attempted, false);
+  assert.equal(calls[0].filters[0].until, 100);
+  assert.equal(calls[0].filters[0].limit, 6);
+  assert.equal(calls[1].relay, "wss://search.example.com");
+  assert.equal(calls[1].filters[0].search, "wallet");
+  assert.equal(calls[1].filters[0].until, undefined);
+  assert.equal(calls[1].filters[0].limit, 6);
+  assert.equal(body._meta.nip50.attempted, true);
+});
+
+test("search_products keeps older NIP-50 matches outside the normal sparse boundary", async () => {
+  const normalWindow = Array.from({ length: 10 }, (_, index) =>
+    productEvent({
+      id: (index + 1).toString(16).padStart(64, "0"),
+      created_at: 100 - index,
+      tags: [
+        ["d", `normal-${index}`],
+        ["title", "Unrelated Product"],
+      ],
+    })
+  );
+  const nip50Match = productEvent({
+    id: hex("f"),
+    created_at: 1,
+    tags: [
+      ["d", "rare-match"],
+      ["title", "Rare Search Match"],
+    ],
+  });
+
+  const response = await handleSearchProducts(
+    { keyword: "rare", limit: 2 },
+    {
+      ...context({}),
+      relays: ["wss://normal.example.com"],
+      nip50SearchRelays: ["wss://search.example.com"],
+      nostr: {
+        async fetch(_filters, _params, relayUrls) {
+          return relayUrls[0] === "wss://search.example.com"
+            ? [nip50Match]
+            : normalWindow;
+        },
+      },
+    }
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, undefined);
+  assert.equal(body.count, 1);
+  assert.equal(body.products[0].id, nip50Match.id);
+  assert.equal(body.products[0].matchedVia, "nip50");
+});
+
+test("search_products does not duplicate a product that appears in normal and NIP-50 streams", async () => {
+  const duplicateFromNip50 = productEvent({
+    id: hex("2"),
+    created_at: 120,
+    tags: [
+      ["d", "product"],
+      ["title", "Hardware Wallet"],
+    ],
+  });
+  const response = await handleSearchProducts(
+    { keyword: "wallet" },
+    {
+      ...context({}),
+      relays: ["wss://normal.example.com"],
+      nip50SearchRelays: ["wss://search.example.com"],
+      nostr: {
+        async fetch(_filters, _params, relayUrls) {
+          return relayUrls[0] === "wss://search.example.com"
+            ? [duplicateFromNip50]
+            : [productEvent()];
+        },
+      },
+    }
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.count, 1);
+  assert.equal(body.products[0].id, productEvent().id);
+  assert.equal(body.products[0].matchedVia, undefined);
+});
+
+test("search_products reserves NIP-50 slots without crowding out limit-1 normal results", async () => {
+  const response = await handleSearchProducts(
+    { keyword: "wallet", limit: 1 },
+    {
+      ...context({}),
+      relays: ["wss://normal.example.com"],
+      nip50SearchRelays: ["wss://search.example.com"],
+      nostr: {
+        async fetch(_filters, _params, relayUrls) {
+          if (relayUrls[0] === "wss://search.example.com") {
+            return [
+              productEvent({
+                id: hex("2"),
+                tags: [
+                  ["d", "nip50-wallet"],
+                  ["title", "Hardware Wallet"],
+                ],
+              }),
+            ];
+          }
+          return [productEvent()];
+        },
+      },
+    }
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.count, 1);
+  assert.equal(body.products[0].id, productEvent().id);
+  assert.equal(body.products[0].matchedVia, undefined);
+  assert.equal(body._meta.nip50.reservedSlotsUsed, 0);
+});
+
+test("search_products does not repeat a returned NIP-50 item on the next page", async () => {
+  const normalOne = productEvent({
+    id: hex("1"),
+    created_at: 100,
+    tags: [
+      ["d", "normal-one"],
+      ["title", "Hardware Wallet One"],
+    ],
+  });
+  const normalTwo = productEvent({
+    id: hex("2"),
+    created_at: 99,
+    tags: [
+      ["d", "normal-two"],
+      ["title", "Hardware Wallet Two"],
+    ],
+  });
+  const nip50One = productEvent({
+    id: hex("3"),
+    created_at: 50,
+    tags: [
+      ["d", "nip50-one"],
+      ["title", "Hardware Wallet Search One"],
+    ],
+  });
+  const nip50Two = productEvent({
+    id: hex("4"),
+    created_at: 49,
+    tags: [
+      ["d", "nip50-two"],
+      ["title", "Hardware Wallet Search Two"],
+    ],
+  });
+  const ctx = {
+    ...context({}),
+    relays: ["wss://normal.example.com"],
+    nip50SearchRelays: ["wss://search.example.com"],
+    nostr: {
+      async fetch(filters, _params, relayUrls) {
+        if (relayUrls[0] === "wss://search.example.com") {
+          return [nip50One, nip50Two];
+        }
+        return filters[0].until === undefined
+          ? [normalOne, normalTwo]
+          : [normalTwo];
+      },
+    },
+  };
+
+  const first = JSON.parse(
+    (await handleSearchProducts({ keyword: "wallet", limit: 2 }, ctx))
+      .content[0].text
+  );
+  const second = JSON.parse(
+    (
+      await handleSearchProducts(
+        {
+          keyword: "wallet",
+          limit: 2,
+          cursor: first._pagination.nextCursor,
+        },
+        ctx
+      )
+    ).content[0].text
+  );
+
+  assert.deepEqual(
+    first.products.map((product) => product.id),
+    [normalOne.id, nip50One.id]
+  );
+  assert.equal(first.products[1].matchedVia, "nip50");
+  assert.equal(
+    second.products.some((product) => product.id === nip50One.id),
+    false
+  );
+  assert.equal(
+    second.products.some((product) => product.id === nip50Two.id),
+    true
+  );
+  assert.ok(second.products.length <= 2);
 });
 
 test("search_products applies NIP-50 to category fallback keyword retries", async () => {
