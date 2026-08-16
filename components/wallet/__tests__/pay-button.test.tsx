@@ -13,8 +13,10 @@ import {
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
+  setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 
@@ -23,8 +25,10 @@ jest.mock("next-themes", () => ({
 }));
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+  getCachedCashuProofs: jest.fn(),
   getLocalStorageData: jest.fn(),
   publishProofEvent: jest.fn(),
+  setCachedCashuProofs: jest.fn(),
 }));
 
 jest.mock("../../utility-components/display-monetary-info", () => ({
@@ -119,12 +123,12 @@ describe("PayButton Component", () => {
     jest.clearAllMocks();
     localStorageMock.clear();
 
-    localStorageMock.setItem("tokens", JSON.stringify(initialTokens));
     localStorageMock.setItem("history", JSON.stringify([]));
+    (getCachedCashuProofs as jest.Mock).mockReturnValue(initialTokens);
 
     (getLocalStorageData as jest.Mock).mockImplementation(() => ({
       mints: ["https://legend.lnbits.com/cashu/api/v1/4gr9XkQ8ez543F4L6f5UqA"],
-      tokens: JSON.parse(localStorageMock.getItem("tokens") || "[]"),
+      tokens: [],
       history: JSON.parse(localStorageMock.getItem("history") || "[]"),
     }));
   });
@@ -286,7 +290,7 @@ describe("PayButton Component", () => {
       expect(mockMeltProofs).toHaveBeenCalled();
     });
 
-    expect(JSON.parse(localStorageMock.getItem("tokens") || "[]")).toEqual(
+    expect(setCachedCashuProofs).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ id: "different_keyset" }),
         expect.objectContaining({ amount: 10 }), // keep proof
@@ -321,7 +325,7 @@ describe("PayButton Component", () => {
       expect(mockMeltProofs).toHaveBeenCalled();
     });
 
-    expect(JSON.parse(localStorageMock.getItem("tokens") || "[]")).toEqual([
+    expect(setCachedCashuProofs).toHaveBeenCalledWith([
       { id: "different_keyset", amount: 50, secret: "other_secret" },
     ]);
   });
@@ -353,9 +357,7 @@ describe("PayButton Component", () => {
 
     expect(screen.getByText(/No routes could be found/)).toBeVisible();
     expect(publishProofEvent).not.toHaveBeenCalled();
-    expect(localStorageMock.getItem("tokens")).toBe(
-      JSON.stringify(initialTokens)
-    );
+    expect(setCachedCashuProofs).not.toHaveBeenCalled();
   });
 
   test("closes payment failed modal", async () => {

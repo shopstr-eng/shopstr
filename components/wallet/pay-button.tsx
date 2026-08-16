@@ -18,8 +18,10 @@ import {
   Spinner,
 } from "@heroui/react";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
+  setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
@@ -51,7 +53,8 @@ const PayButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, history } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
 
   const { theme } = useTheme();
 
@@ -170,7 +173,7 @@ const PayButton = () => {
             ) || !send.some((s) => s.secret === p.secret)
         ) as Proof[];
         const quarantineProofArray = [...remainingProofsAfterMelt, ...keep];
-        localStorage.setItem("tokens", JSON.stringify(quarantineProofArray));
+        setCachedCashuProofs(quarantineProofArray);
         throw new Error(meltOutcome.errorMessage ?? "Melt outcome ambiguous");
       }
       const changeProofs = [...keep, ...meltOutcome.changeProofs];
@@ -188,7 +191,6 @@ const PayButton = () => {
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
       const filteredTokenAmount = sumProofAmounts(filteredProofs);
       const transactionAmount = filteredTokenAmount - changeAmount;
       localStorage.setItem(
@@ -211,6 +213,7 @@ const PayButton = () => {
         transactionAmount.toString(),
         deletedEventIds
       );
+      setCachedCashuProofs(proofArray);
       setIsPaid(true);
       setIsRedeeming(false);
       handleTogglePayModal();

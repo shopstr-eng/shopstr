@@ -12,6 +12,7 @@ import {
 } from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
   getLatestLocalContactListEvent,
   deleteEvent,
@@ -1988,7 +1989,7 @@ export const fetchCashuWallet = async (
   cashuPrivkey?: string;
 }> => {
   return new Promise(async function (resolve, reject) {
-    const { tokens } = getLocalStorageData();
+    const tokens = getCachedCashuProofs();
     const userPubkey = await signer?.getPubKey?.();
     if (!userPubkey) {
       editCashuWalletContext([], [], [], false);

@@ -80,8 +80,10 @@ import {
 import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
   getSavedAddresses,
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
+  setCachedCashuProofs,
   saveAddress,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
@@ -155,7 +157,8 @@ export default function CartInvoiceCard({
   setCashuPaymentSent: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed: (cashuPaymentFailed: boolean) => void;
 }) {
-  const { mints, tokens } = getLocalStorageData();
+  const { mints } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
   const {
     isLoggedIn,
     pubkey: userPubkey,
@@ -2261,9 +2264,9 @@ export default function CartInvoiceCard({
       const wallet = new CashuWallet(mint);
       await wallet.loadMint();
       const mintKeySetIds = await wallet.keyChain.getKeysets();
-      const { tokens: currentTokens, history: currentHistory } =
-        getLocalStorageData();
-      const filteredProofs = (currentTokens as Proof[]).filter((p: Proof) =>
+      const { history: currentHistory } = getLocalStorageData();
+      const currentTokens = getCachedCashuProofs();
+      const filteredProofs = currentTokens.filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
       const deletedEventIds = [
@@ -2286,7 +2289,7 @@ export default function CartInvoiceCard({
         cartQuote.breakdown,
         mints[0]!
       );
-      const remainingProofs = (currentTokens as Proof[]).filter(
+      const remainingProofs = currentTokens.filter(
         (p: Proof) =>
           !mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
@@ -2296,7 +2299,6 @@ export default function CartInvoiceCard({
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
       localStorage.setItem(
         "history",
         JSON.stringify([
@@ -2317,6 +2319,7 @@ export default function CartInvoiceCard({
         serverAmount.toString(),
         deletedEventIds
       );
+      setCachedCashuProofs(proofArray);
       localStorage.setItem("cart", JSON.stringify([]));
       setOrderConfirmed(true);
       setPaymentConfirmed(true);
