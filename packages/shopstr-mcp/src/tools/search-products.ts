@@ -560,8 +560,15 @@ export async function handleSearchProducts(
           consumedForCursor
         );
       } else {
+        const returnedIds = new Set(
+          returnedProducts.map((product) => product.id)
+        );
         const consumedForCursor = [
-          ...assembly.rawProductWindow,
+          ...assembly.rawProductWindow.filter(
+            (event) =>
+              event.created_at === assembly.sparseBoundary ||
+              returnedIds.has(event.id)
+          ),
           ...assembly.nip50ScannedProducts.filter((event) =>
             returnedNip50.some((product) => product.id === event.id)
           ),

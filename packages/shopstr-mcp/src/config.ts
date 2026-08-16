@@ -7,12 +7,10 @@ export const DEFAULT_RELAYS = [
 ] as const;
 
 export const DEFAULT_NIP50_SEARCH_RELAYS = [
-  "wss://relay.nostr.band",
   "wss://nostr.wine",
   "wss://relay.noswhere.com",
   "wss://search.nos.today",
   "wss://antiprimal.net",
-  "wss://relay.ditto.pub",
 ] as const;
 
 export const DEFAULT_TOOL_TIMEOUT_MS = 10_000;
