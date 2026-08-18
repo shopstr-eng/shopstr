@@ -352,7 +352,7 @@ test("search_products fails only when normal and NIP-50 relays both fail", async
   );
 });
 
-test("search_products queries NIP-50 on cursor pages without sending until", async () => {
+test("search_products keeps cursor progress when NIP-50 reveals a newer revision", async () => {
   const seenIdentity = `30402:${hex("b")}:already-seen`;
   const cursor = createPaginationCursor({
     tool: "search_products",
@@ -363,15 +363,28 @@ test("search_products queries NIP-50 on cursor pages without sending until", asy
       undefined,
       undefined,
       undefined,
-      1,
+      2,
       "newest",
     ]),
     boundary: 100,
     seen: [hashPaginationLogicalIdentity(seenIdentity)],
   });
+  const listing = (id, dTag, createdAt) =>
+    productEvent({
+      id: hex(id),
+      created_at: createdAt,
+      tags: [
+        ["d", dTag],
+        ["title", "Hardware Wallet"],
+      ],
+    });
+  const staleNormal = listing("2", "updated-product", 99);
+  const nextNormal = listing("3", "next-product", 98);
+  const latestFromNip50 = listing("5", "updated-product", 200);
+  const rankedNip50Match = listing("6", "nip50-result", 50);
   const calls = [];
   const response = await handleSearchProducts(
-    { keyword: "wallet", limit: 1, cursor },
+    { keyword: "wallet", limit: 2, cursor },
     {
       ...context({}),
       relays: ["wss://normal.example.com"],
@@ -379,7 +392,9 @@ test("search_products queries NIP-50 on cursor pages without sending until", asy
       nostr: {
         async fetch(filters, _params, relayUrls) {
           calls.push({ relay: relayUrls[0], filters });
-          return [];
+          return relayUrls[0] === "wss://search.example.com"
+            ? [latestFromNip50, rankedNip50Match]
+            : [staleNormal, nextNormal];
         },
       },
     }
@@ -391,11 +406,17 @@ test("search_products queries NIP-50 on cursor pages without sending until", asy
   assert.equal(calls[0].relay, "wss://normal.example.com");
   assert.equal(calls[0].filters[0].search, undefined);
   assert.equal(calls[0].filters[0].until, 100);
-  assert.equal(calls[0].filters[0].limit, 6);
+  assert.equal(calls[0].filters[0].limit, 11);
   assert.equal(calls[1].relay, "wss://search.example.com");
   assert.equal(calls[1].filters[0].search, "wallet");
   assert.equal(calls[1].filters[0].until, undefined);
-  assert.equal(calls[1].filters[0].limit, 6);
+  assert.equal(calls[1].filters[0].limit, 11);
+  assert.deepEqual(
+    body.products.map((product) => product.id),
+    [latestFromNip50.id, rankedNip50Match.id]
+  );
+  assert.equal(body._pagination.hasMore, true);
+  assert.equal(typeof body._pagination.nextCursor, "string");
   assert.equal(body._meta.nip50.attempted, true);
 });
 

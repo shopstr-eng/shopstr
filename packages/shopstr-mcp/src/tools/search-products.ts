@@ -597,7 +597,11 @@ export async function handleSearchProducts(
   if (hasMore) {
     try {
       if (hasMatchingProductsBeyondPage) {
-        const boundary = returnedNormal[returnedNormal.length - 1]!.createdAt;
+        const returnedBoundary =
+          returnedNormal[returnedNormal.length - 1]!.createdAt;
+        const boundary = cursorState
+          ? Math.min(returnedBoundary, cursorState.boundary)
+          : returnedBoundary;
         const consumedForCursor = [
           ...assembly.scannedProducts.filter((event) =>
             returnedNormal.some((product) => product.id === event.id)
