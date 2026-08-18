@@ -95,10 +95,13 @@ export function loadConfig(
   return {
     version: env.npm_package_version ?? "0.1.0",
     relays: parseRelayList(env.SHOPSTR_MCP_RELAYS),
-    nip50SearchRelays: parseRelayList(
-      env.SHOPSTR_MCP_NIP50_SEARCH_RELAYS,
-      DEFAULT_NIP50_SEARCH_RELAYS
-    ),
+    nip50SearchRelays:
+      env.SHOPSTR_MCP_NIP50_SEARCH_RELAYS?.trim() === ""
+        ? []
+        : parseRelayList(
+            env.SHOPSTR_MCP_NIP50_SEARCH_RELAYS,
+            DEFAULT_NIP50_SEARCH_RELAYS
+          ),
     logLevel: parseLogLevel(env.SHOPSTR_MCP_LOG_LEVEL),
     defaultToolTimeoutMs: parsePositiveInteger(
       env.SHOPSTR_MCP_TOOL_TIMEOUT_MS,

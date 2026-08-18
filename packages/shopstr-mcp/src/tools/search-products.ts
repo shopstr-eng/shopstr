@@ -120,7 +120,8 @@ const NIP50_RESERVED_SLOTS = 5;
 
 function productMatchesFilters(
   product: ProductResponse,
-  filters: SearchProductsInput
+  filters: SearchProductsInput,
+  eventContent = ""
 ): boolean {
   // hidden products never returned in search results.
   if (product.visibility === "hidden") return false;
@@ -134,6 +135,7 @@ function productMatchesFilters(
       product.condition,
       product.productFormat,
       product.status,
+      eventContent,
       ...product.categories,
     ]
       .join(" ")
@@ -262,7 +264,11 @@ function sortProducts(
   products: ProductResponse[],
   sortBy: SearchProductsInput["sortBy"]
 ): ProductResponse[] {
-  if (sortBy === "newest") return products;
+  if (sortBy === "newest") {
+    return [...products].sort(
+      (a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id)
+    );
+  }
 
   const knownPrice = products.filter(
     (product) => product.priceStatus === "known" && product.price !== undefined
@@ -275,6 +281,28 @@ function sortProducts(
     return sortBy === "price_asc" ? difference : -difference;
   });
   return [...knownPrice, ...unknownPrice];
+}
+
+function preserveSourceOrderWithLatestRevisions(
+  sourceEvents: readonly NostrEvent[],
+  latestEvents: readonly NostrEvent[]
+): NostrEvent[] {
+  const latestByIdentity = new Map(
+    latestEvents.map((event) => [getProductLogicalIdentity(event), event])
+  );
+  const seen = new Set<string>();
+  const ordered: NostrEvent[] = [];
+
+  for (const event of sourceEvents) {
+    const identity = getProductLogicalIdentity(event);
+    if (seen.has(identity)) continue;
+    const latest = latestByIdentity.get(identity);
+    if (!latest) continue;
+    seen.add(identity);
+    ordered.push(latest);
+  }
+
+  return ordered;
 }
 
 function shouldAttemptNip50Search(
@@ -384,19 +412,37 @@ function assemblePage(
         getProductLogicalIdentity
       )
     : rawProductWindow;
-  const scannedProducts = mergeAndDeduplicateProducts(eligibleRawProducts);
-  const products = scannedProducts
-    .map(parseProductEvent)
-    .filter((product) => productMatchesFilters(product, filters));
-  const normalIdentities = new Set(
-    scannedProducts.map(getProductLogicalIdentity)
+  const normalScannedProducts =
+    mergeAndDeduplicateProducts(eligibleRawProducts);
+  const latestProducts = mergeAndDeduplicateProducts([
+    ...normalScannedProducts,
+    ...relayResult.nip50Events,
+  ]);
+  const latestByIdentity = new Map(
+    latestProducts.map((event) => [getProductLogicalIdentity(event), event])
   );
-  const nip50ScannedProducts = mergeAndDeduplicateProducts(
-    relayResult.nip50Events
+  const normalIdentities = new Set(
+    normalScannedProducts.map(getProductLogicalIdentity)
+  );
+  const scannedProducts = normalScannedProducts.map(
+    (event) => latestByIdentity.get(getProductLogicalIdentity(event)) ?? event
+  );
+  const products = scannedProducts
+    .map((event) => ({ event, product: parseProductEvent(event) }))
+    .filter(({ event, product }) =>
+      productMatchesFilters(product, filters, event.content)
+    )
+    .map(({ product }) => product);
+  const nip50ScannedProducts = preserveSourceOrderWithLatestRevisions(
+    relayResult.nip50Events,
+    latestProducts
   ).filter((event) => !normalIdentities.has(getProductLogicalIdentity(event)));
   const nip50Products = nip50ScannedProducts
-    .map(parseProductEvent)
-    .filter((product) => productMatchesFilters(product, filters));
+    .map((event) => ({ event, product: parseProductEvent(event) }))
+    .filter(({ event, product }) =>
+      productMatchesFilters(product, filters, event.content)
+    )
+    .map(({ product }) => product);
 
   return {
     products,
@@ -511,27 +557,32 @@ export async function handleSearchProducts(
   }
 
   const products = sortProducts(assembly.products, filters.sortBy);
+  const priceSorted =
+    filters.sortBy === "price_asc" || filters.sortBy === "price_desc";
+  const nip50Products = priceSorted
+    ? sortProducts(assembly.nip50Products, filters.sortBy)
+    : assembly.nip50Products;
   const reservedSlots = Math.min(
     NIP50_RESERVED_SLOTS,
-    assembly.nip50Products.length,
+    nip50Products.length,
     Math.max(0, responseLimit - 1)
   );
   const normalBudget = responseLimit - reservedSlots;
   const pageProducts = products.slice(0, normalBudget + 1);
-  const priceSorted =
-    filters.sortBy === "price_asc" || filters.sortBy === "price_desc";
   const returnedNormal = pageProducts.slice(0, normalBudget);
-  const returnedNip50 = assembly.nip50Products
+  const returnedNip50 = nip50Products
     .slice(0, reservedSlots)
     .map((product): SearchProductResponse => ({
       ...product,
       matchedVia: "nip50",
     }));
-  const returnedProducts: SearchProductResponse[] = [
-    ...returnedNormal,
-    ...returnedNip50,
-  ];
+  const returnedProducts = sortProducts(
+    [...returnedNormal, ...returnedNip50],
+    filters.sortBy
+  ) as SearchProductResponse[];
   const hasMatchingProductsBeyondPage = pageProducts.length > normalBudget;
+  const hasNip50ProductsBeyondPage =
+    reservedSlots > 0 && nip50Products.length > reservedSlots;
   const shouldAdvanceSparseWindow =
     !priceSorted &&
     !hasMatchingProductsBeyondPage &&
@@ -539,7 +590,9 @@ export async function handleSearchProducts(
     assembly.rawProductWindow.length > 0;
   const hasMore =
     !priceSorted &&
-    (hasMatchingProductsBeyondPage || shouldAdvanceSparseWindow);
+    (hasMatchingProductsBeyondPage ||
+      shouldAdvanceSparseWindow ||
+      hasNip50ProductsBeyondPage);
   let nextCursor: string | null = null;
   if (hasMore) {
     try {
@@ -559,7 +612,7 @@ export async function handleSearchProducts(
           boundary,
           consumedForCursor
         );
-      } else {
+      } else if (shouldAdvanceSparseWindow) {
         const returnedIds = new Set(
           returnedProducts.map((product) => product.id)
         );
@@ -577,6 +630,28 @@ export async function handleSearchProducts(
           query,
           cursorState,
           assembly.sparseBoundary!,
+          consumedForCursor
+        );
+      } else {
+        const newestNormalTimestamp = assembly.rawProductWindow[0]?.created_at;
+        const boundary =
+          cursorState?.boundary ??
+          Math.max(Math.floor(Date.now() / 1000), newestNormalTimestamp ?? 0);
+        const returnedIds = new Set(
+          returnedProducts.map((product) => product.id)
+        );
+        const consumedForCursor = [
+          ...assembly.scannedProducts.filter((event) =>
+            returnedIds.has(event.id)
+          ),
+          ...assembly.nip50ScannedProducts.filter((event) =>
+            returnedIds.has(event.id)
+          ),
+        ];
+        nextCursor = createNextCursor(
+          query,
+          cursorState,
+          boundary,
           consumedForCursor
         );
       }

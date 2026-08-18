@@ -44,6 +44,10 @@ test("parses relay lists with trimming, dedupe, and defaults", () => {
   assert.deepEqual(parseRelayList("invalid", DEFAULT_NIP50_SEARCH_RELAYS), [
     ...DEFAULT_NIP50_SEARCH_RELAYS,
   ]);
+  assert.deepEqual(
+    loadConfig({ SHOPSTR_MCP_NIP50_SEARCH_RELAYS: "" }).nip50SearchRelays,
+    []
+  );
 });
 
 test("parses log levels and positive integers with safe fallbacks", () => {
