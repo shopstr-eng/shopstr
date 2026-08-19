@@ -32,6 +32,7 @@ export function makeProductData(
     categories: [],
     location: "Online",
     price: 500,
+    priceStatus: "known",
     currency: "SATS",
     shippingType: "Free",
     totalCost: 500,

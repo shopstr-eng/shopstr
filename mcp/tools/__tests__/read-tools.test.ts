@@ -297,7 +297,7 @@ describe("search_products", () => {
   }
 
   describe("parseProductEvent", () => {
-    it("parses price/currency from the price tag, defaulting to 0/'' when absent", async () => {
+    it("parses price/currency from the price tag and leaves missing price undefined", async () => {
       mockDbPool(() => ({
         rows: [
           makeProductRow({ id: "priced", tags: [["price", "10", "USD"]] }),
@@ -311,8 +311,37 @@ describe("search_products", () => {
       const payload = textPayload(result);
       const priced = payload.products.find((p: any) => p.id === "priced");
       const unpriced = payload.products.find((p: any) => p.id === "unpriced");
-      expect(priced).toMatchObject({ price: 10, currency: "USD" });
-      expect(unpriced).toMatchObject({ price: 0, currency: "" });
+      expect(priced).toMatchObject({
+        price: 10,
+        currency: "USD",
+        priceStatus: "known",
+      });
+      expect(unpriced.price).toBeUndefined();
+      expect(unpriced.currency).toBeUndefined();
+      expect(unpriced.priceStatus).toBe("missing");
+    });
+
+    it("does not coerce malformed or negative prices to zero", async () => {
+      mockDbPool(() => ({
+        rows: [
+          makeProductRow({
+            id: "malformed",
+            tags: [["price", "not-a-number", "USD"]],
+          }),
+          makeProductRow({ id: "negative", tags: [["price", "-1", "USD"]] }),
+        ],
+      }));
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      const products = textPayload(result).products;
+      for (const product of products) {
+        expect(product.price).toBeUndefined();
+        expect(product.currency).toBe("USD");
+        expect(product.priceStatus).toBe("invalid");
+        expect(product.pricing).toBeUndefined();
+      }
     });
 
     it("defaults currency to '' when the price tag has no third (currency) element", async () => {
@@ -323,10 +352,8 @@ describe("search_products", () => {
 
       const result = await tool({});
 
-      expect(textPayload(result).products[0]).toMatchObject({
-        price: 10,
-        currency: "",
-      });
+      expect(textPayload(result).products[0].price).toBe(10);
+      expect(textPayload(result).products[0].currency).toBeUndefined();
     });
 
     it("leaves quantity/price undefined for size/volume/weight tags missing their second element", async () => {
@@ -421,9 +448,27 @@ describe("search_products", () => {
       expect(product.volumes).toEqual([{ volume: "1L", price: 5 }]);
       expect(product.weights).toEqual([{ weight: "1lb", price: 12 }]);
       expect(product.bulk).toEqual([{ units: 10, price: 40 }]);
-      expect(product.images).toEqual(["img1", "img2"]);
+      expect(product.images).toEqual([{ url: "img1" }, { url: "img2" }]);
       expect(product.categories).toEqual(["dairy", "farm"]);
       expect(product.pickupLocations).toEqual(["123 Farm Rd"]);
+    });
+
+    it("does not cap tag-bomb images or variants in root MCP", async () => {
+      const tags: string[][] = [];
+      for (let i = 0; i < 500; i++) {
+        tags.push(["image", `image-${i}`]);
+        tags.push(["size", `size-${i}`, `${i}`]);
+      }
+      mockDbPool(() => ({ rows: [makeProductRow({ tags })] }));
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      const product = textPayload(result).products[0];
+      expect(product.images).toHaveLength(500);
+      expect(product.sizes).toHaveLength(500);
+      expect(product.images[499]).toEqual({ url: "image-499" });
+      expect(product.sizes[499]).toEqual({ size: "size-499", quantity: 499 });
     });
 
     it("parses quantity as a number, and condition/status as-is", async () => {

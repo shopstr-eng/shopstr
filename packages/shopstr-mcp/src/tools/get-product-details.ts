@@ -15,6 +15,7 @@ import {
   productDetailsInputSchema,
 } from "../validation.js";
 import {
+  CACHE_KINDS,
   PRODUCT_KIND,
   allRelaysFailed,
   buildToolMeta,
@@ -98,8 +99,10 @@ export async function handleGetProductDetails(
 
   if (!coordinateFilter && productId) {
     // pre-flight check to resolve the coordinate (cached)
-    const PREFLIGHT_CACHE_KIND = 30402;
-    const cacheKey = { pubkey: productId, kind: PREFLIGHT_CACHE_KIND };
+    const cacheKey = {
+      pubkey: productId,
+      kind: CACHE_KINDS.PRODUCT_COORDINATE,
+    };
     const cached = context.cache.get<{ pubkey: string; dTag: string }>(
       cacheKey
     );

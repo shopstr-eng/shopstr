@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  DEFAULT_CATEGORY_CACHE_TTL_MS,
+  DEFAULT_MAX_CONCURRENT_REQUESTS,
+  DEFAULT_NIP05_CACHE_TTL_MS,
   DEFAULT_RELAYS,
   DEFAULT_TOOL_TIMEOUT_MS,
   loadConfig,
@@ -22,14 +25,21 @@ test("validates relay URLs without credentials", () => {
 });
 
 test("parses relay lists with trimming, dedupe, and defaults", () => {
-  assert.deepEqual(parseRelayList(), [...DEFAULT_RELAYS]);
+  const expectedDefaultRelays = [
+    "wss://nos.lol",
+    "wss://relay.damus.io",
+    "wss://purplepag.es",
+  ];
+
+  assert.deepEqual(DEFAULT_RELAYS, expectedDefaultRelays);
+  assert.deepEqual(parseRelayList(), expectedDefaultRelays);
   assert.deepEqual(
     parseRelayList(
       " wss://relay.example.com,invalid,wss://relay.example.com,ws://localhost "
     ),
     ["wss://relay.example.com", "ws://localhost"]
   );
-  assert.deepEqual(parseRelayList("invalid"), [...DEFAULT_RELAYS]);
+  assert.deepEqual(parseRelayList("invalid"), expectedDefaultRelays);
 });
 
 test("parses log levels and positive integers with safe fallbacks", () => {
@@ -56,14 +66,26 @@ test("loads config from environment overrides", () => {
   assert.equal(config.relayConnectTimeoutMs, 2500);
   assert.equal(config.resourceCacheTtlMs, 3000);
   assert.equal(config.profileCacheTtlMs, 3000);
+  assert.equal(config.categoryCacheTtlMs, DEFAULT_CATEGORY_CACHE_TTL_MS);
+  assert.equal(config.nip05CacheTtlMs, DEFAULT_NIP05_CACHE_TTL_MS);
+  assert.equal(config.cacheMaxEntries, 5000);
+  assert.equal(config.maxConcurrentRequests, DEFAULT_MAX_CONCURRENT_REQUESTS);
 });
 
 test("loads dedicated cache TTL when provided", () => {
   const config = loadConfig({
     SHOPSTR_MCP_RESOURCE_CACHE_TTL_MS: "3000",
     SHOPSTR_MCP_PROFILE_CACHE_TTL_MS: "4500",
+    SHOPSTR_MCP_CATEGORY_CACHE_TTL_MS: "86400000",
+    SHOPSTR_MCP_NIP05_CACHE_TTL_MS: "172800000",
+    SHOPSTR_MCP_CACHE_MAX_ENTRIES: "42",
+    SHOPSTR_MCP_MAX_CONCURRENT_REQUESTS: "3",
   });
 
   assert.equal(config.resourceCacheTtlMs, 3000);
   assert.equal(config.profileCacheTtlMs, 4500);
+  assert.equal(config.categoryCacheTtlMs, 86_400_000);
+  assert.equal(config.nip05CacheTtlMs, 172_800_000);
+  assert.equal(config.cacheMaxEntries, 42);
+  assert.equal(config.maxConcurrentRequests, 3);
 });

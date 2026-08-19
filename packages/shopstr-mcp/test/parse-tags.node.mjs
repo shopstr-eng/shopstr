@@ -75,6 +75,11 @@ test("does not coerce missing or invalid prices to free listings", () => {
       tags: [["price", "not-a-number", "USD"]],
     })
   );
+  const negativePrice = parseProductEvent(
+    event({
+      tags: [["price", "-1", "USD"]],
+    })
+  );
 
   assert.equal(missingPrice.price, undefined);
   assert.equal(missingPrice.currency, undefined);
@@ -85,6 +90,11 @@ test("does not coerce missing or invalid prices to free listings", () => {
   assert.equal(invalidPrice.currency, "USD");
   assert.equal(invalidPrice.priceStatus, "invalid");
   assert.equal(invalidPrice.pricing, undefined);
+
+  assert.equal(negativePrice.price, undefined);
+  assert.equal(negativePrice.currency, "USD");
+  assert.equal(negativePrice.priceStatus, "invalid");
+  assert.equal(negativePrice.pricing, undefined);
 });
 
 test("parses profile and shop metadata safely", () => {
@@ -137,6 +147,23 @@ test("caps images at 10 and parses dimensions and sorting order", () => {
   assert.equal(product.images[9].url, "https://example.com/9.png");
 });
 
+test("caps tag-bomb product variants only in the MCP adapter", () => {
+  const tags = [];
+  for (let i = 0; i < 500; i++) {
+    tags.push(["image", `https://example.com/${i}.png`]);
+    tags.push(["size", `size-${i}`, `${i}`]);
+    tags.push(["shipping_option", `30406:${hex("a")}:ship-${i}`, `${i}`]);
+  }
+
+  const product = parseProductEvent(event({ tags }));
+
+  assert.equal(product.images.length, 10);
+  assert.equal(product.sizes.length, 50);
+  assert.equal(product.shippingOptions.length, 10);
+  assert.equal(product.images.at(-1).url, "https://example.com/9.png");
+  assert.equal(product.sizes.at(-1).size, "size-49");
+});
+
 test("caps categories at 20", () => {
   const tags = [];
   for (let i = 0; i < 30; i++) {
@@ -145,6 +172,25 @@ test("caps categories at 20", () => {
   const product = parseProductEvent(event({ tags }));
 
   assert.equal(product.categories.length, 20);
+});
+
+test("rejects hostile category tags before applying the 20-tag cap", () => {
+  const validCategories = Array.from(
+    { length: 21 },
+    (_, index) => `category-${index}`
+  );
+  const product = parseProductEvent(
+    event({
+      tags: [
+        ["t", "nul\0category"],
+        ["t", "control\u0001category"],
+        ["t", "x".repeat(101)],
+        ...validCategories.map((category) => ["t", category]),
+      ],
+    })
+  );
+
+  assert.deepEqual(product.categories, validCategories.slice(0, 20));
 });
 
 test("parses Gamma subscription frequency from price tag 4th element", () => {
@@ -229,6 +275,41 @@ test("extracts structured shipping_option with extra cost", () => {
   assert.equal(product.shippingOptions[0].extraCost, 5);
   assert.equal(product.shippingOptions[1].extraCost, undefined);
   assert.equal(product.shippingOptions[2].extraCost, undefined);
+});
+
+test("uses modern shipping tag when legacy and modern shipping tags are both present", () => {
+  const product = parseProductEvent(
+    event({
+      tags: [
+        ["price", "50", "USD"],
+        ["shipping", "5", "USD"],
+        ["shipping", "Free", "0", "USD"],
+      ],
+    })
+  );
+
+  assert.equal(product.shippingType, "Free");
+  assert.equal(product.shippingCost, 0);
+  assert.equal(product.pricing.shippingType, "Free");
+  assert.equal(product.pricing.shippingCost, 0);
+  assert.equal(product.pricing.totalEstimate, 50);
+});
+
+test("ignores non-numeric shipping_option extra cost", () => {
+  const product = parseProductEvent(
+    event({
+      tags: [
+        ["shipping_option", `30406:${hex("a")}:standard-shipping`, "nope"],
+      ],
+    })
+  );
+
+  assert.equal(product.shippingOptions.length, 1);
+  assert.equal(
+    product.shippingOptions[0].reference,
+    `30406:${hex("a")}:standard-shipping`
+  );
+  assert.equal(product.shippingOptions[0].extraCost, undefined);
 });
 
 test("defaults visibility to on-sale when tag is absent", () => {

@@ -2,3 +2,4 @@ dist/
 coverage/
 *.tsbuildinfo
 /node_modules
+/src/generated/
