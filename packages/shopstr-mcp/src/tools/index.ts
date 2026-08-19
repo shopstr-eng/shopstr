@@ -55,7 +55,7 @@ export function registerCoreTools(
     "search_products",
     {
       description:
-        "Search public Shopstr product listings by keyword, category, location, currency, price range, cursor pagination, or price/newest sort. Keyword searches also query curated NIP-50 relays in parallel on every page (including cursor pages); a few slots per page may be NIP-50-sourced matches, tagged matchedVia: `nip50`, that the normal relay stream wouldn't otherwise surface. Use get_categories first when an agent needs observed category names. Hidden listings are excluded. currency is required for price_asc and price_desc. Cursors are only supported with newest sorting; price-sorted searches reject cursors." +
+        "Search public Shopstr product listings by keyword, category, location, currency, price range, cursor pagination, or price/newest sort. Keyword searches also query curated NIP-50 relays in parallel on every page (including cursor pages); NIP-50 matches are tagged matchedVia: `nip50` and get a small guaranteed result share, plus any response capacity unused by normal relay matches. Use get_categories first when an agent needs observed category names. Hidden listings are excluded. currency is required for price_asc and price_desc. Cursors are only supported with newest sorting; price-sorted searches reject cursors." +
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: searchProductsInputSchema,
     },
@@ -71,7 +71,7 @@ export function registerCoreTools(
     "get_product_details",
     {
       description:
-        "Get full details for one public Shopstr product listing by productAddress or productId. Prefer productAddress when available because it resolves replaceable listing coordinates directly." +
+        "Get full details for one public Shopstr product listing by productAddress or productId. Prefer productAddress when available because it resolves replaceable listing coordinates directly. May include a sibling description field from the event content, capped at 2,000 characters with a descriptionTruncated hint when shortened." +
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: getProductDetailsInputSchema,
     },

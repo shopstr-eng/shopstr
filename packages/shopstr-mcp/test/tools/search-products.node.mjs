@@ -573,6 +573,54 @@ test("search_products reserves NIP-50 slots without crowding out limit-1 normal 
   assert.equal(body._pagination.hasMore, false);
 });
 
+test("search_products reallocates unused normal capacity to NIP-50 matches", async () => {
+  const normalProducts = Array.from({ length: 5 }, (_, index) =>
+    productEvent({
+      id: (index + 1).toString(16).padStart(64, "0"),
+      created_at: 1_000 - index,
+      tags: [
+        ["d", `normal-wallet-${index}`],
+        ["title", `Normal Hardware Wallet ${index}`],
+      ],
+    })
+  );
+  const nip50Products = Array.from({ length: 60 }, (_, index) =>
+    productEvent({
+      id: (100 + index).toString(16).padStart(64, "0"),
+      created_at: 900 - index,
+      tags: [
+        ["d", `nip50-wallet-${index}`],
+        ["title", `NIP-50 Hardware Wallet ${index}`],
+      ],
+    })
+  );
+  const response = await handleSearchProducts(
+    { keyword: "wallet" },
+    {
+      ...context({}),
+      relays: ["wss://normal.example.com"],
+      nip50SearchRelays: ["wss://search.example.com"],
+      nostr: {
+        async fetch(_filters, _params, relayUrls) {
+          return relayUrls[0] === "wss://search.example.com"
+            ? nip50Products
+            : normalProducts;
+        },
+      },
+    }
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.resultCount, 37);
+  assert.equal(body.count, 37);
+  assert.equal(
+    body.products.filter((product) => product.matchedVia === "nip50").length,
+    32
+  );
+  assert.equal(body._meta.nip50.reservedSlotsUsed, 32);
+  assert.equal(body._pagination.hasMore, true);
+});
+
 test("search_products paginates NIP-50-only results without skipping relay-ranked candidates", async () => {
   const nip50Products = Array.from({ length: 6 }, (_, index) =>
     productEvent({
@@ -618,14 +666,14 @@ test("search_products paginates NIP-50-only results without skipping relay-ranke
   assert.deepEqual(
     first.products.map((product) => product.id).sort(),
     nip50Products
-      .slice(0, 2)
+      .slice(0, 3)
       .map((product) => product.id)
       .sort()
   );
   assert.deepEqual(
     second.products.map((product) => product.id).sort(),
     nip50Products
-      .slice(2, 4)
+      .slice(3, 6)
       .map((product) => product.id)
       .sort()
   );

@@ -562,11 +562,21 @@ export async function handleSearchProducts(
   const nip50Products = priceSorted
     ? sortProducts(assembly.nip50Products, filters.sortBy)
     : assembly.nip50Products;
-  const reservedSlots = Math.min(
+  // NIP50_RESERVED_SLOTS is a guaranteed minimum, not a hard cap — if normal
+  // matches don't use their full share of the budget, hand the leftover to NIP-50.
+  const reservedSlotsMin = Math.min(
     NIP50_RESERVED_SLOTS,
     nip50Products.length,
     Math.max(0, responseLimit - 1)
   );
+  const tentativeNormalBudget = responseLimit - reservedSlotsMin;
+  const normalDemand = Math.min(products.length, tentativeNormalBudget);
+  const unusedNormalBudget = tentativeNormalBudget - normalDemand;
+  const extraNip50Slots = Math.min(
+    unusedNormalBudget,
+    Math.max(0, nip50Products.length - reservedSlotsMin)
+  );
+  const reservedSlots = reservedSlotsMin + extraNip50Slots;
   const normalBudget = responseLimit - reservedSlots;
   const pageProducts = products.slice(0, normalBudget + 1);
   const returnedNormal = pageProducts.slice(0, normalBudget);
