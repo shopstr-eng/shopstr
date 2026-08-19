@@ -11,6 +11,7 @@ import {
   type LndCallOptions,
   type LndGrpcError,
   type LndInvoicesClient,
+  type LndInvoiceStream,
 } from "@/utils/lightning/lnd-hodl-invoice-provider";
 import { paymentHashFromPreimage } from "@/utils/lightning/payment-hash";
 
@@ -854,5 +855,243 @@ describe("describeGrpcFailure", () => {
   it("handles non-Error values", () => {
     expect(describeGrpcFailure(undefined)).toBe("unknown error");
     expect(describeGrpcFailure({})).toBe("unknown error");
+  });
+});
+
+/**
+ * Fake `ClientReadableStream`. Records listeners so a test can deliver the
+ * `data`/`error`/`end` events grpc-js would deliver, in whatever order it
+ * wants to prove the handler survives.
+ */
+class FakeInvoiceStream {
+  public cancelled = 0;
+  private readonly listeners = new Map<
+    string,
+    Array<(arg?: unknown) => void>
+  >();
+
+  on(event: string, listener: (arg?: unknown) => void): void {
+    const existing = this.listeners.get(event) ?? [];
+    existing.push(listener);
+    this.listeners.set(event, existing);
+  }
+
+  cancel(): void {
+    this.cancelled += 1;
+  }
+
+  emit(event: "data" | "error" | "end", arg?: unknown): void {
+    for (const listener of [...(this.listeners.get(event) ?? [])]) {
+      listener(arg);
+    }
+  }
+}
+
+class StreamingFakeClient extends FakeInvoicesClient {
+  public readonly subscribeRequests: unknown[] = [];
+  public readonly streams: FakeInvoiceStream[] = [];
+  public throwOnSubscribe: Error | null = null;
+
+  SubscribeSingleInvoice(request: unknown): LndInvoiceStream {
+    this.subscribeRequests.push(request);
+    if (this.throwOnSubscribe) throw this.throwOnSubscribe;
+    const stream = new FakeInvoiceStream();
+    this.streams.push(stream);
+    return stream as unknown as LndInvoiceStream;
+  }
+}
+
+/** Collects what a subscriber saw. */
+function recordingHandlers() {
+  const statuses: string[] = [];
+  const errors: unknown[] = [];
+  let closes = 0;
+  return {
+    statuses,
+    errors,
+    get closes() {
+      return closes;
+    },
+    handlers: {
+      onStatus: (status: string) => {
+        statuses.push(status);
+      },
+      onError: (error: unknown) => {
+        errors.push(error);
+      },
+      onClose: () => {
+        closes += 1;
+      },
+    },
+  };
+}
+
+describe("subscribeToInvoice", () => {
+  it("subscribes on r_hash and reports the stream's first state", async () => {
+    const client = new StreamingFakeClient();
+    const recorder = recordingHandlers();
+
+    const subscription = await providerWith(client).subscribeToInvoice(
+      PAYMENT_HASH,
+      recorder.handlers
+    );
+
+    // The proto field is r_hash here, unlike CancelInvoiceMsg's payment_hash.
+    expect(client.subscribeRequests).toEqual([{ r_hash: hex(PAYMENT_HASH) }]);
+
+    // LND replays the invoice's current state as the first message, which is
+    // how a subscriber that was offline learns what it missed.
+    client.streams[0]!.emit("data", invoiceResponse("ACCEPTED"));
+    expect(recorder.statuses).toEqual(["accepted"]);
+    expect(recorder.errors).toEqual([]);
+
+    client.streams[0]!.emit("data", invoiceResponse("SETTLED"));
+    expect(recorder.statuses).toEqual(["accepted", "settled"]);
+
+    subscription.close();
+  });
+
+  it("maps CANCELED to cancelled, like lookupInvoice does", async () => {
+    const client = new StreamingFakeClient();
+    const recorder = recordingHandlers();
+
+    await providerWith(client).subscribeToInvoice(
+      PAYMENT_HASH,
+      recorder.handlers
+    );
+    client.streams[0]!.emit("data", invoiceResponse("CANCELED"));
+
+    expect(recorder.statuses).toEqual(["cancelled"]);
+  });
+
+  it("reports a message for a different invoice as an error, not a status", async () => {
+    const client = new StreamingFakeClient();
+    const recorder = recordingHandlers();
+
+    await providerWith(client).subscribeToInvoice(
+      PAYMENT_HASH,
+      recorder.handlers
+    );
+    client.streams[0]!.emit(
+      "data",
+      invoiceResponse("SETTLED", { r_hash: hex("f".repeat(64)) })
+    );
+
+    expect(recorder.statuses).toEqual([]);
+    expect(recorder.errors[0]).toBeInstanceOf(LndProviderError);
+  });
+
+  it("reports an unrecognised state as an error rather than guessing", async () => {
+    const client = new StreamingFakeClient();
+    const recorder = recordingHandlers();
+
+    await providerWith(client).subscribeToInvoice(
+      PAYMENT_HASH,
+      recorder.handlers
+    );
+    client.streams[0]!.emit("data", invoiceResponse("WEDGED"));
+
+    expect(recorder.statuses).toEqual([]);
+    expect(recorder.errors[0]).toBeInstanceOf(LndProviderError);
+  });
+
+  it("routes a throwing subscriber back through onError", async () => {
+    const client = new StreamingFakeClient();
+    const errors: unknown[] = [];
+
+    await providerWith(client).subscribeToInvoice(PAYMENT_HASH, {
+      onStatus: () => {
+        throw new Error("subscriber blew up");
+      },
+      onError: (error) => {
+        errors.push(error);
+      },
+      onClose: () => {},
+    });
+
+    // Would otherwise escape into grpc-js's emitter as an uncaught exception.
+    expect(() =>
+      client.streams[0]!.emit("data", invoiceResponse("ACCEPTED"))
+    ).not.toThrow();
+    expect((errors[0] as Error).message).toBe("subscriber blew up");
+  });
+
+  it("translates and redacts a stream error", async () => {
+    const client = new StreamingFakeClient();
+    const recorder = recordingHandlers();
+
+    await providerWith(client).subscribeToInvoice(
+      PAYMENT_HASH,
+      recorder.handlers
+    );
+    client.streams[0]!.emit(
+      "error",
+      makeGrpcError(14, `stream broken for ${PREIMAGE}`)
+    );
+
+    const error = recorder.errors[0] as LndProviderError;
+    expect(error).toBeInstanceOf(LndProviderError);
+    expect(error.message).not.toContain(PREIMAGE);
+    expect(error.message).toContain("[redacted]");
+  });
+
+  it("reports a normal end through onClose", async () => {
+    const client = new StreamingFakeClient();
+    const recorder = recordingHandlers();
+
+    await providerWith(client).subscribeToInvoice(
+      PAYMENT_HASH,
+      recorder.handlers
+    );
+    client.streams[0]!.emit("end");
+
+    expect(recorder.closes).toBe(1);
+  });
+
+  it("cancels the stream on close and delivers nothing afterwards", async () => {
+    const client = new StreamingFakeClient();
+    const recorder = recordingHandlers();
+
+    const subscription = await providerWith(client).subscribeToInvoice(
+      PAYMENT_HASH,
+      recorder.handlers
+    );
+    subscription.close();
+    subscription.close();
+
+    expect(client.streams[0]!.cancelled).toBe(1);
+
+    // grpc-js raises CANCELLED in response to our own cancel(), and can
+    // deliver a queued message after it. Neither may reach the subscriber.
+    client.streams[0]!.emit("data", invoiceResponse("SETTLED"));
+    client.streams[0]!.emit("error", makeGrpcError(1, "Cancelled on client"));
+    client.streams[0]!.emit("end");
+
+    expect(recorder.statuses).toEqual([]);
+    expect(recorder.errors).toEqual([]);
+    expect(recorder.closes).toBe(0);
+  });
+
+  it("rejects when the loaded client has no SubscribeSingleInvoice", async () => {
+    // A client built from a proto set that omitted invoices.proto.
+    const client = new FakeInvoicesClient();
+    const recorder = recordingHandlers();
+
+    await expect(
+      providerWith(client).subscribeToInvoice(PAYMENT_HASH, recorder.handlers)
+    ).rejects.toBeInstanceOf(LndProviderError);
+  });
+
+  it("rejects when the stream cannot be opened at all", async () => {
+    const client = new StreamingFakeClient();
+    client.throwOnSubscribe = makeGrpcError(14, "no connection established");
+    const recorder = recordingHandlers();
+
+    await expect(
+      providerWith(client).subscribeToInvoice(PAYMENT_HASH, recorder.handlers)
+    ).rejects.toBeInstanceOf(LndProviderError);
+    // Nothing was subscribed, so the failure belongs to the caller's await,
+    // not to onError.
+    expect(recorder.errors).toEqual([]);
   });
 });
