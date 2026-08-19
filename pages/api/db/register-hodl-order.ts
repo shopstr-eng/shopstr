@@ -8,6 +8,7 @@ import {
   getHodlInvoiceProvider,
   HodlInvoiceProviderUnavailableError,
 } from "@/utils/lightning/hodl-invoice-provider-registry";
+import { addOrderToWatcher } from "@/utils/lightning/hodl-invoice-watcher";
 import {
   DatabaseUnavailableError,
   fetchProductByIdFromDb,
@@ -231,6 +232,22 @@ export default async function handler(
         error: "Hodl escrow order is already registered with different details",
       });
     }
+
+    // Hands the new order to the push-based watcher, so a buyer paying it is
+    // recorded the moment it happens rather than at the next sweep.
+    //
+    // Deliberately not awaited, and its result is deliberately ignored: this
+    // is a latency optimization on a row that is already committed, and the
+    // buyer's 201 must not wait on — or be failed by — a gRPC subscription.
+    // `addOrderToWatcher` never throws and reports every failure itself.
+    //
+    // In most deployments this is a no-op returning "watcher-not-running":
+    // the watcher only exists in a process started with
+    // `HODL_INVOICE_WATCHER=1` (see instrumentation.ts), and only that
+    // process's own registrations reach its pool. When the API server is that
+    // process, this saves the new order a full sweep interval; when it is
+    // not, the sweep picks the order up exactly as before.
+    void addOrderToWatcher(paymentHash);
 
     // Only ever these two fields. The preimage stays on the server: handing
     // it to the buyer would let them settle their own escrow, which is the
