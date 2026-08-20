@@ -6,12 +6,7 @@ export const DEFAULT_RELAYS = [
   "wss://purplepag.es",
 ] as const;
 
-export const DEFAULT_NIP50_SEARCH_RELAYS = [
-  "wss://nostr.wine",
-  "wss://relay.noswhere.com",
-  "wss://search.nos.today",
-  "wss://antiprimal.net",
-] as const;
+export const DEFAULT_NIP50_SEARCH_RELAYS = [] as const;
 
 export const DEFAULT_TOOL_TIMEOUT_MS = 10_000;
 export const DEFAULT_RELAY_CONNECT_TIMEOUT_MS = 5_000;

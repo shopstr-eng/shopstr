@@ -216,10 +216,11 @@ test("search_products queries normal and NIP-50 relays concurrently for keyword 
     ...context({}),
     relays: [normalRelay],
     nip50SearchRelays: [nip50Relay],
+    timeoutMs: 10_000,
     nostr: {
-      async fetch(filters, _params, relayUrls) {
+      async fetch(filters, _params, relayUrls, options) {
         const relay = relayUrls[0];
-        calls.push({ relay, filters });
+        calls.push({ relay, filters, options });
         if (relay === normalRelay) return normalResult;
         return [
           productEvent({
@@ -248,6 +249,18 @@ test("search_products queries normal and NIP-50 relays concurrently for keyword 
   assert.equal(
     calls.find((call) => call.relay === nip50Relay).filters[0].search,
     "wallet"
+  );
+  assert.equal(
+    calls.find((call) => call.relay === normalRelay).options.timeoutMs,
+    10_000
+  );
+  assert.equal(
+    calls.find((call) => call.relay === nip50Relay).options.timeoutMs,
+    3_000
+  );
+  assert.equal(
+    calls.find((call) => call.relay === nip50Relay).filters[0].limit,
+    100
   );
 
   resolveNormal([
@@ -539,38 +552,84 @@ test("search_products keeps the latest cross-stream revision and applies the req
   assert.equal(body.products[1].id, latestFromNip50.id);
 });
 
-test("search_products reserves NIP-50 slots without crowding out limit-1 normal results", async () => {
+test("search_products preserves limit-1 normal priority and paginates NIP-50 matches", async () => {
+  const ctx = {
+    ...context({}),
+    relays: ["wss://normal.example.com"],
+    nip50SearchRelays: ["wss://search.example.com"],
+    nostr: {
+      async fetch(_filters, _params, relayUrls) {
+        if (relayUrls[0] === "wss://search.example.com") {
+          return [
+            productEvent({
+              id: hex("2"),
+              tags: [
+                ["d", "nip50-wallet"],
+                ["title", "Hardware Wallet"],
+              ],
+            }),
+          ];
+        }
+        return [productEvent()];
+      },
+    },
+  };
+  const first = JSON.parse(
+    (await handleSearchProducts({ keyword: "wallet", limit: 1 }, ctx))
+      .content[0].text
+  );
+
+  assert.equal(first.count, 1);
+  assert.equal(first.products[0].id, productEvent().id);
+  assert.equal(first.products[0].matchedVia, undefined);
+  assert.equal(first._meta.nip50.reservedSlotsUsed, 0);
+  assert.equal(first._pagination.hasMore, true);
+  assert.equal(typeof first._pagination.nextCursor, "string");
+
+  const second = JSON.parse(
+    (
+      await handleSearchProducts(
+        {
+          keyword: "wallet",
+          limit: 1,
+          cursor: first._pagination.nextCursor,
+        },
+        ctx
+      )
+    ).content[0].text
+  );
+
+  assert.equal(second.count, 1);
+  assert.equal(second.products[0].id, hex("2"));
+  assert.equal(second.products[0].matchedVia, "nip50");
+  assert.equal(second._pagination.hasMore, false);
+});
+
+test("search_products bounds content scanned during keyword verification", async () => {
   const response = await handleSearchProducts(
-    { keyword: "wallet", limit: 1 },
+    { keyword: "needle" },
     {
       ...context({}),
       relays: ["wss://normal.example.com"],
       nip50SearchRelays: ["wss://search.example.com"],
       nostr: {
         async fetch(_filters, _params, relayUrls) {
-          if (relayUrls[0] === "wss://search.example.com") {
-            return [
-              productEvent({
-                id: hex("2"),
-                tags: [
-                  ["d", "nip50-wallet"],
-                  ["title", "Hardware Wallet"],
-                ],
-              }),
-            ];
-          }
-          return [productEvent()];
+          return relayUrls[0] === "wss://search.example.com"
+            ? [
+                productEvent({
+                  id: hex("2"),
+                  tags: [["d", "oversized-content"]],
+                  content: `${"x".repeat(20_000)}needle`,
+                }),
+              ]
+            : [];
         },
       },
     }
   );
   const body = JSON.parse(response.content[0].text);
 
-  assert.equal(body.count, 1);
-  assert.equal(body.products[0].id, productEvent().id);
-  assert.equal(body.products[0].matchedVia, undefined);
-  assert.equal(body._meta.nip50.reservedSlotsUsed, 0);
-  assert.equal(body._pagination.hasMore, false);
+  assert.equal(body.count, 0);
 });
 
 test("search_products reallocates unused normal capacity to NIP-50 matches", async () => {

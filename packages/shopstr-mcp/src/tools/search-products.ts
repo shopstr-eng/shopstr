@@ -117,6 +117,9 @@ type PageAssembly = {
 };
 
 const NIP50_RESERVED_SLOTS = 5;
+const NIP50_MAX_TIMEOUT_MS = 3_000;
+const NIP50_MAX_RELAY_LIMIT = 100;
+const SEARCH_EVENT_CONTENT_CHAR_LIMIT = 20_000;
 
 function productMatchesFilters(
   product: ProductResponse,
@@ -135,7 +138,7 @@ function productMatchesFilters(
       product.condition,
       product.productFormat,
       product.status,
-      eventContent,
+      eventContent.slice(0, SEARCH_EVENT_CONTENT_CHAR_LIMIT),
       ...product.categories,
     ]
       .join(" ")
@@ -318,6 +321,7 @@ function buildNip50Filter(filter: NostrFilter, keyword: string): NostrFilter {
   const { until: _until, ...rest } = filter;
   return {
     ...rest,
+    limit: Math.min(rest.limit ?? NIP50_MAX_RELAY_LIMIT, NIP50_MAX_RELAY_LIMIT),
     search: keyword,
   };
 }
@@ -343,7 +347,7 @@ async function fetchSearchWindow(
         context.nostr,
         nip50Relays,
         [buildNip50Filter(relayFilter, filters.keyword!)],
-        { timeoutMs: context.timeoutMs }
+        { timeoutMs: Math.min(context.timeoutMs, NIP50_MAX_TIMEOUT_MS) }
       )
     : Promise.resolve(undefined);
 
@@ -592,7 +596,7 @@ export async function handleSearchProducts(
   ) as SearchProductResponse[];
   const hasMatchingProductsBeyondPage = pageProducts.length > normalBudget;
   const hasNip50ProductsBeyondPage =
-    reservedSlots > 0 && nip50Products.length > reservedSlots;
+    nip50Products.length > returnedNip50.length;
   const shouldAdvanceSparseWindow =
     !priceSorted &&
     !hasMatchingProductsBeyondPage &&

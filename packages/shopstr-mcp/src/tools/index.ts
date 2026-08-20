@@ -55,7 +55,7 @@ export function registerCoreTools(
     "search_products",
     {
       description:
-        "Search public Shopstr product listings by keyword, category, location, currency, price range, cursor pagination, or price/newest sort. Keyword searches also query curated NIP-50 relays in parallel on every page (including cursor pages); NIP-50 matches are tagged matchedVia: `nip50` and get a small guaranteed result share, plus any response capacity unused by normal relay matches. Use get_categories first when an agent needs observed category names. Hidden listings are excluded. currency is required for price_asc and price_desc. Cursors are only supported with newest sorting; price-sorted searches reject cursors." +
+        "Search public Shopstr product listings by keyword, category, location, currency, price range, cursor pagination, or price/newest sort. When NIP-50 relays are configured, keyword searches query them in parallel on every page (including cursor pages); NIP-50 matches are tagged matchedVia: `nip50` and get a small guaranteed result share, plus any response capacity unused by normal relay matches. Use get_categories first when an agent needs observed category names. Hidden listings are excluded. currency is required for price_asc and price_desc. Cursors are only supported with newest sorting; price-sorted searches reject cursors." +
         UNTRUSTED_CONTENT_NOTE,
       inputSchema: searchProductsInputSchema,
     },
