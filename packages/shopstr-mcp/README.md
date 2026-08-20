@@ -124,6 +124,9 @@ or process manager should provide.
 ## Environment
 
 - `SHOPSTR_MCP_RELAYS`: comma-separated `ws://` or `wss://` relay URLs.
+- `SHOPSTR_MCP_NIP50_SEARCH_RELAYS`: optional comma-separated NIP-50 relay URLs
+  used for keyword searches. Disabled by default. When configured, keyword
+  queries are disclosed to those third-party relay operators.
 - `SHOPSTR_MCP_LOG_LEVEL`: `error`, `warn`, `info`, or `debug`.
 - `SHOPSTR_MCP_TOOL_TIMEOUT_MS`: default future per-tool timeout in
   milliseconds.

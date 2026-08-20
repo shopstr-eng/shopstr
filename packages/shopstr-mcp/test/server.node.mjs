@@ -147,11 +147,11 @@ test("rate limits concurrent relay-backed tool calls", async () => {
 
     const firstCall = client.callTool({
       name: "search_products",
-      arguments: { keyword: "shirt" },
+      arguments: {},
     });
     const secondResult = await client.callTool({
       name: "search_products",
-      arguments: { keyword: "shirt" },
+      arguments: {},
     });
     releaseFetch();
     const firstResult = await firstCall;
