@@ -42,6 +42,7 @@ export function createMcpServer(
   registerCoreTools(server, {
     nostr,
     relays: config.relays,
+    nip50SearchRelays: config.nip50SearchRelays,
     timeoutMs: config.defaultToolTimeoutMs,
     cache,
     categoryCache,

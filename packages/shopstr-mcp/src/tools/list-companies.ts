@@ -255,11 +255,18 @@ export async function handleListCompanies(
           returnedCompanyEntries.map(({ profile }) => profile)
         );
       } else {
+        const returnedPubkeys = new Set(
+          returnedCompanies.map((company) => company.pubkey)
+        );
         nextCursor = createNextCursor(
           query,
           cursorState,
           sparseBoundary!,
-          rawProfileWindow
+          rawProfileWindow.filter(
+            (event) =>
+              event.created_at === sparseBoundary ||
+              returnedPubkeys.has(event.pubkey)
+          )
         );
       }
     } catch (error) {

@@ -334,6 +334,9 @@ export function parseProductEventWithLimits(
   const categories = parseCategoryTags(tags, limits.categories);
   const publishedAt = getTagValue(tags, "published_at");
   const expiration = parseNumber(getTagValue(tags, "valid_until"));
+  const required = getTagValue(tags, "required") || undefined;
+  const requiredCustomerInfo =
+    getTagValue(tags, "required_customer_info") || undefined;
   const contentWarning = tags.some((tag) => {
     if (tag[0] === "content-warning") return true;
     if (tag[0] === "L" && tag[1] === "content-warning") return true;
@@ -372,11 +375,11 @@ export function parseProductEventWithLimits(
     ...(weights.length > 0 && { weights }),
     ...(bulk.length > 0 && { bulk }),
     ...(pickupLocations.length > 0 && { pickupLocations }),
-    ...(getTagValue(tags, "required_customer_info") && {
-      requiredCustomerInfo: getTagValue(tags, "required_customer_info"),
+    ...((requiredCustomerInfo || required) && {
+      requiredCustomerInfo: requiredCustomerInfo || required,
     }),
-    ...(getTagValue(tags, "required") && {
-      required: getTagValue(tags, "required"),
+    ...((required || requiredCustomerInfo) && {
+      required: required || requiredCustomerInfo,
     }),
     ...(getTagValue(tags, "restrictions") && {
       restrictions: getTagValue(tags, "restrictions"),

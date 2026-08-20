@@ -7,6 +7,7 @@ import { REVIEW_PRODUCT_FILTER_LIMIT } from "../../dist/tools/utils/common.js";
 import {
   createPaginationCursor,
   createQueryFingerprint,
+  decodePaginationCursor,
   hashPaginationLogicalIdentity,
 } from "../../dist/tools/utils/pagination-cursor.js";
 
@@ -536,6 +537,77 @@ test("get_reviews advances past a full raw window of revisions from one reviewer
   assert.equal(second.count, 1);
   assert.equal(second.reviews[0].pubkey, olderReviewer);
   assert.equal(capturedFilters[1][0].until, 950);
+});
+
+test("get_reviews does not overfill cursor seen ids for a large sparse relay window", async () => {
+  const reviewer = hex("1");
+  const matchingRevisions = Array.from({ length: 51 }, (_, index) =>
+    reviewEvent({
+      id: (index + 1).toString(16).padStart(64, "0"),
+      pubkey: reviewer,
+      created_at: 1_000 - index,
+      tags: [
+        ["d", `a:${productAddress}`],
+        ["a", productAddress],
+        ["rating", "1", "thumb"],
+      ],
+    })
+  );
+  const unrelatedReviews = Array.from({ length: 150 }, (_, index) =>
+    reviewEvent({
+      id: (1_000 + index).toString(16).padStart(64, "0"),
+      pubkey: (2_000 + index).toString(16).padStart(64, "0"),
+      created_at: 999 - index,
+      tags: [
+        ["d", `unrelated-${index}`],
+        ["rating", "1", "thumb"],
+      ],
+    })
+  );
+  const olderReview = reviewEvent({
+    id: hex("f"),
+    pubkey: hex("2"),
+    created_at: 949,
+    tags: [
+      ["d", `a:${productAddress}`],
+      ["a", productAddress],
+      ["rating", "0.8", "quality"],
+    ],
+  });
+  const saturatedWindow = [...matchingRevisions, ...unrelatedReviews];
+  const capturedFilters = [];
+  const ctx = context((filters) => {
+    capturedFilters.push(filters);
+    return filters[0].until === undefined ? saturatedWindow : [olderReview];
+  });
+
+  const first = JSON.parse(
+    (await handleGetReviews({ productAddress }, ctx)).content[0].text
+  );
+  const decodedCursor = decodePaginationCursor(first._pagination.nextCursor, {
+    tool: "get_reviews",
+    query: createQueryFingerprint("get_reviews", [
+      undefined,
+      productAddress,
+      undefined,
+      50,
+    ]),
+  });
+  const second = JSON.parse(
+    (
+      await handleGetReviews(
+        { productAddress, cursor: first._pagination.nextCursor },
+        ctx
+      )
+    ).content[0].text
+  );
+
+  assert.equal(first.count, 1);
+  assert.equal(first._pagination.hasMore, true);
+  assert.equal(decodedCursor.boundary, 950);
+  assert.ok(decodedCursor.seen.length <= 2);
+  assert.equal(capturedFilters[1][0].until, 950);
+  assert.equal(second.reviews[0].id, olderReview.id);
 });
 
 test("get_reviews advances from a saturated continuation window containing only consumed revisions", async () => {

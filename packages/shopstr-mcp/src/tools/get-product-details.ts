@@ -36,6 +36,27 @@ export const getProductDetailsInputSchema = {
     .describe("Product address as 30402:<seller-pubkey>:<product-d-tag>"),
 };
 
+const PRODUCT_DESCRIPTION_CHAR_LIMIT = 2_000;
+
+function truncateProductDescription(content: string): {
+  description?: string;
+  truncated: boolean;
+} {
+  const description = content.trim();
+  if (!description) return { truncated: false };
+  if (description.length <= PRODUCT_DESCRIPTION_CHAR_LIMIT) {
+    return { description, truncated: false };
+  }
+
+  const suffix = "...";
+  const maxBodyLength = PRODUCT_DESCRIPTION_CHAR_LIMIT - suffix.length;
+  const clipped = description.slice(0, maxBodyLength);
+  const lastWhitespace = clipped.search(/\s+\S*$/);
+  const body =
+    lastWhitespace > 0 ? clipped.slice(0, lastWhitespace).trimEnd() : clipped;
+  return { description: `${body}${suffix}`, truncated: true };
+}
+
 /**
  * Resolve a productId to a product coordinate by doing a pre-flight fetch.
  * Returns the pubkey and dTag so we can query by coordinate for the latest version.
@@ -170,6 +191,12 @@ export async function handleGetProductDetails(
   }
 
   const product = parseProductEvent(event);
+  const { description, truncated } = truncateProductDescription(event.content);
+  if (truncated) {
+    hints.push(
+      `descriptionTruncated: product description was shortened to ${PRODUCT_DESCRIPTION_CHAR_LIMIT} characters.`
+    );
+  }
   const successMeta = buildToolMeta(relayResult.meta, {
     resultCount: 1,
     totalMatches: 1,
@@ -178,5 +205,9 @@ export async function handleGetProductDetails(
     hints,
   });
 
-  return createSuccessResponse({ product }, successMeta, 1);
+  return createSuccessResponse(
+    { product, ...(description !== undefined && { description }) },
+    successMeta,
+    1
+  );
 }
