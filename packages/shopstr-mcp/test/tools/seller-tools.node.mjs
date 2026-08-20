@@ -11,6 +11,7 @@ import { REVIEW_PRODUCT_FILTER_LIMIT } from "../../dist/tools/utils/common.js";
 import {
   createPaginationCursor,
   createQueryFingerprint,
+  decodePaginationCursor,
   hashPaginationLogicalIdentity,
 } from "../../dist/tools/utils/pagination-cursor.js";
 
@@ -413,6 +414,62 @@ test("list_companies advances sparse category windows from the oldest raw profil
   );
   assert.equal(second.companies[0].pubkey, secondSeller);
   assert.equal(profileFilters[1][0].until, 501);
+});
+
+test("list_companies does not overfill cursor seen ids for a large sparse category window", async () => {
+  const firstSeller = hex("1");
+  const olderSeller = hex("2");
+  const initialWindow = Array.from({ length: 500 }, (_, index) =>
+    shopEvent({
+      id: (index + 1).toString(16).padStart(64, "0"),
+      pubkey: (index + 20).toString(16).padStart(64, "0"),
+      created_at: 1_000 - index,
+    })
+  );
+  initialWindow[0] = shopEvent({
+    id: hex("1"),
+    pubkey: firstSeller,
+    created_at: 1_000,
+  });
+  const olderWindow = [
+    shopEvent({ id: hex("f"), pubkey: olderSeller, created_at: 500 }),
+  ];
+  const profileFilters = [];
+  const ctx = context((filters) => {
+    if (filters.some((filter) => filter.kinds?.includes(30019))) {
+      profileFilters.push(filters);
+      return filters[0].until === undefined ? initialWindow : olderWindow;
+    }
+    return [
+      productEvent({ pubkey: firstSeller }),
+      productEvent({ id: hex("e"), pubkey: olderSeller }),
+    ];
+  });
+
+  const first = JSON.parse(
+    (await handleListCompanies({ category: "coffee", limit: 1 }, ctx))
+      .content[0].text
+  );
+  const decodedCursor = decodePaginationCursor(first._pagination.nextCursor, {
+    tool: "list_companies",
+    query: createQueryFingerprint("list_companies", ["coffee", 1]),
+  });
+  const second = JSON.parse(
+    (
+      await handleListCompanies(
+        { category: "coffee", limit: 1, cursor: first._pagination.nextCursor },
+        ctx
+      )
+    ).content[0].text
+  );
+
+  assert.equal(first.count, 1);
+  assert.equal(first.companies[0].pubkey, firstSeller);
+  assert.equal(first._pagination.hasMore, true);
+  assert.equal(decodedCursor.boundary, 501);
+  assert.ok(decodedCursor.seen.length <= 2);
+  assert.equal(profileFilters[1][0].until, 501);
+  assert.equal(second.companies[0].pubkey, olderSeller);
 });
 
 test("list_companies advances from the newest saturated relay boundary", async () => {

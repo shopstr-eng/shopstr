@@ -239,11 +239,18 @@ function buildResponse(
           returnedReviewEvents
         );
       } else {
+        const returnedIds = new Set(
+          returnedReviewEvents.map((event) => event.id)
+        );
         nextCursor = createNextCursor(
           query,
           cursorState,
           sparseScan!.boundary!,
-          sparseScan!.rawEvents
+          sparseScan!.rawEvents.filter(
+            (event) =>
+              event.created_at === sparseScan!.boundary ||
+              returnedIds.has(event.id)
+          )
         );
       }
     } catch (error) {

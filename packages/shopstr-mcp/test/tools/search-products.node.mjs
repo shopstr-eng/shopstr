@@ -6,6 +6,7 @@ import { MemoryCache } from "../../dist/cache.js";
 import {
   createPaginationCursor,
   createQueryFingerprint,
+  decodePaginationCursor,
   hashPaginationLogicalIdentity,
 } from "../../dist/tools/utils/pagination-cursor.js";
 
@@ -1134,6 +1135,72 @@ test("search_products advances a sparse search through a full relay window", asy
   );
   assert.equal(second.products[0].id, hex("6"));
   assert.equal(capturedFilters[1][0].until, 96);
+});
+
+test("search_products does not overfill cursor seen ids for a large sparse relay window", async () => {
+  const saturatedWindow = Array.from({ length: 185 }, (_, index) =>
+    productEvent({
+      id: index.toString(16).padStart(64, "0"),
+      created_at: 1_000 - index,
+      tags: [
+        ["d", `window-${index}`],
+        ["title", index === 0 ? "Electronics Match" : "Other Product"],
+      ],
+    })
+  );
+  const olderWindow = [
+    productEvent({
+      id: hex("f"),
+      created_at: 814,
+      tags: [
+        ["d", "older-electronics"],
+        ["title", "Older Electronics Match"],
+      ],
+    }),
+  ];
+  const capturedFilters = [];
+  const ctx = {
+    ...context({ "wss://relay.example.com": [] }),
+    nostr: {
+      async fetch(filters) {
+        capturedFilters.push(filters);
+        return filters[0].until === undefined ? saturatedWindow : olderWindow;
+      },
+    },
+  };
+
+  const first = JSON.parse(
+    (await handleSearchProducts({ keyword: "electronics" }, ctx)).content[0]
+      .text
+  );
+  const decodedCursor = decodePaginationCursor(first._pagination.nextCursor, {
+    tool: "search_products",
+    query: createQueryFingerprint("search_products", [
+      "electronics",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      37,
+      "newest",
+    ]),
+  });
+  const second = JSON.parse(
+    (
+      await handleSearchProducts(
+        { keyword: "electronics", cursor: first._pagination.nextCursor },
+        ctx
+      )
+    ).content[0].text
+  );
+
+  assert.equal(first.count, 1);
+  assert.equal(first._pagination.hasMore, true);
+  assert.equal(decodedCursor.boundary, 816);
+  assert.ok(decodedCursor.seen.length <= 2);
+  assert.equal(capturedFilters[1][0].until, 816);
+  assert.equal(second.products[0].id, olderWindow[0].id);
 });
 
 test("search_products advances from the newest saturated relay boundary", async () => {
