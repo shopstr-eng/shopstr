@@ -18,6 +18,7 @@ import {
   HodlInvoiceProviderUnavailableError,
 } from "@/utils/lightning/hodl-invoice-provider-registry";
 import type { HodlInvoiceProvider } from "@/utils/lightning/hodl-invoice-provider";
+import { schedulePayoutToSeller } from "@/utils/lightning/hodl-seller-payout";
 import {
   DatabaseUnavailableError,
   getHodlEscrowOrderParties,
@@ -456,6 +457,15 @@ export default async function handler(
           : { error: settlement.error, reason: settlement.reason }
       );
   }
+
+  // Fire-and-forget, deliberately. The funds are released and the row says
+  // so; forwarding them to the seller's own wallet is a second, independent
+  // leg, and blocking this response on an LNURL round-trip plus a Lightning
+  // payment would let a slow seller wallet turn a completed settlement into a
+  // 5xx — provoking a retry of the whole authorization path for money that
+  // has already moved. The payout's progress lives on its own row instead;
+  // see schedulePayoutToSeller.
+  schedulePayoutToSeller(paymentHash);
 
   // The whole response. No preimage, no event, no row contents — a seller
   // learns that the invoice settled and nothing else about how it was decided.

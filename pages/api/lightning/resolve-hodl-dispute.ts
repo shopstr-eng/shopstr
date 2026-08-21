@@ -27,6 +27,7 @@ import {
   HodlInvoiceProviderUnavailableError,
 } from "@/utils/lightning/hodl-invoice-provider-registry";
 import type { HodlInvoiceProvider } from "@/utils/lightning/hodl-invoice-provider";
+import { schedulePayoutToSeller } from "@/utils/lightning/hodl-seller-payout";
 import {
   DatabaseUnavailableError,
   getHodlEscrowOrderParties,
@@ -705,6 +706,15 @@ export default async function handler(
           ? { error: resolution.error }
           : { error: resolution.error, reason: resolution.reason }
       );
+  }
+
+  // Only the `release:seller` path owes anyone a payout: a `release:buyer`
+  // ruling cancels the HTLC, so the funds go back to the buyer over Lightning
+  // and never sit in the arbiter's balance at all. Fire-and-forget for the
+  // same reason as settle-hodl-invoice.ts — the ruling has already been
+  // carried out, and a slow seller wallet must not turn it into a 5xx.
+  if (resolution.status === "settled") {
+    schedulePayoutToSeller(paymentHash);
   }
 
   // The whole response. No preimage, no event, no row contents — a caller
