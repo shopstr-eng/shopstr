@@ -112,8 +112,11 @@ evicts oldest entries past the configured maximum, and surfaces cache hits in
 
 ## Usage
 
+Requires Node.js 22.4.0 or newer. From the repository root, install from the
+package-local lockfile before building or starting the server:
+
 ```sh
-npm install
+npm ci --prefix packages/shopstr-mcp
 npm --prefix packages/shopstr-mcp run build
 npm --prefix packages/shopstr-mcp start
 ```
@@ -157,6 +160,7 @@ and audit logging.
 ## Development
 
 ```sh
+npm ci --prefix packages/shopstr-mcp
 npm --prefix packages/shopstr-mcp run build
 npm --prefix packages/shopstr-mcp test
 ```
