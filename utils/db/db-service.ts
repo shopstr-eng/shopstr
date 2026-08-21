@@ -508,6 +508,33 @@ async function initializeTables(): Promise<void> {
       -- Migration for tables created before accepted_at existed.
       ALTER TABLE hodl_escrow_orders ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
 
+      -- Seller payouts owed after a hold invoice settles. One row per order,
+      -- keyed on the same payment hash; db/schema.sql documents why the
+      -- invoice is written before it is paid and why every timestamp here is
+      -- TIMESTAMPTZ.
+      CREATE TABLE IF NOT EXISTS hodl_escrow_payouts (
+          payment_hash TEXT PRIMARY KEY,
+          payout_invoice TEXT,
+          payout_invoice_verify_url TEXT,
+          status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'failed', 'abandoned')),
+          attempt_count INTEGER NOT NULL DEFAULT 0,
+          last_error TEXT,
+          -- Lease held by the attempt currently working this payout. Compared
+          -- against CURRENT_TIMESTAMP, so TIMESTAMPTZ for the same reason as
+          -- hodl_escrow_orders.accepted_at: this is arithmetic input.
+          claimed_at TIMESTAMPTZ,
+          invoice_stored_at TIMESTAMPTZ,
+          paid_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- The reconciliation query: every payout that owes a seller money and
+      -- has not delivered it.
+      CREATE INDEX IF NOT EXISTS idx_hodl_escrow_payouts_attention
+        ON hodl_escrow_payouts(status)
+        WHERE status IN ('failed', 'abandoned');
+
       -- Shop slugs table (storefront URL slugs)
       CREATE TABLE IF NOT EXISTS shop_slugs (
           pubkey TEXT PRIMARY KEY,
@@ -2400,6 +2427,603 @@ export async function getHodlEscrowOrderDisputeContext(
     );
   } finally {
     if (client) client.release();
+  }
+}
+
+/**
+ * The lifecycle states a seller payout's `status` column can hold.
+ *
+ * - `pending`   — an invoice may be stored and a payment may be in flight;
+ *                 the real outcome is not known yet. The only non-terminal
+ *                 state from which a payment may be attempted.
+ * - `paid`      — confirmed delivered to the seller. Terminal.
+ * - `failed`    — this attempt did not deliver and a later one may. The
+ *                 seller is still owed, and the row is findable.
+ * - `abandoned` — given up on; needs a human. Terminal, and findable.
+ *
+ * Kept local to this module for the same reason as
+ * {@link HodlEscrowOrderStatus}: nothing here reaches into the Lightning
+ * layer.
+ */
+export type HodlEscrowPayoutStatus =
+  "pending" | "paid" | "failed" | "abandoned";
+
+/**
+ * How long one attempt's claim on a payout is honoured before another attempt
+ * may take it over.
+ *
+ * Long enough that a slow LNURL fetch plus a slow payment cannot lose the
+ * claim mid-send, short enough that a process killed while holding it does
+ * not strand the seller's money for hours.
+ */
+const HODL_PAYOUT_CLAIM_LEASE_SECONDS = 300;
+
+/** Everything the payout logic needs from an order to pay its seller. */
+export type HodlEscrowPayoutOrderContext = {
+  sellerNostrPubkey: string;
+  amountSats: number;
+  /** The order's own status. Only a `settled` order has funds to forward. */
+  orderStatus: HodlEscrowOrderStatus;
+};
+
+/**
+ * Loads the seller and amount a settled order owes, or null when no
+ * commitment row exists.
+ *
+ * No `preimage` in the column list, on the same rule as every other read in
+ * this section: the settlement secret is selected by exactly one function and
+ * this is not it.
+ *
+ * @throws {DatabaseUnavailableError} when the read could not be performed. A
+ * payout that cannot read its own order must not proceed as though the order
+ * were absent — the money is real either way.
+ */
+export async function getHodlEscrowPayoutOrderContext(
+  paymentHash: string
+): Promise<HodlEscrowPayoutOrderContext | null> {
+  const normalizedHash = paymentHash.toLowerCase();
+  let client;
+
+  try {
+    const dbPool = await getInitializedDbPool();
+    client = await dbPool.connect();
+    const result = await client.query<{
+      seller_nostr_pubkey: string;
+      amount_sats: string | number;
+      status: HodlEscrowOrderStatus;
+    }>(
+      `SELECT seller_nostr_pubkey,
+              amount_sats,
+              status
+       FROM hodl_escrow_orders
+       WHERE payment_hash = $1`,
+      [normalizedHash]
+    );
+
+    const row = result.rows[0];
+    if (!row) return null;
+
+    return {
+      sellerNostrPubkey: row.seller_nostr_pubkey,
+      amountSats: Number(row.amount_sats),
+      orderStatus: row.status,
+    };
+  } catch (error) {
+    console.error("Failed to load hodl escrow payout order context:", error);
+    throw new DatabaseUnavailableError(
+      "Failed to load hodl escrow payout order context"
+    );
+  } finally {
+    if (client) client.release();
+  }
+}
+
+/**
+ * The answer {@link claimHodlEscrowPayoutAttempt} gives a caller that wants to
+ * work on a payout.
+ *
+ * `claimed` carries the stored invoice — possibly null — because that single
+ * value decides everything the caller does next: null means no payment has
+ * ever been sent under this payout and fetching a fresh invoice is safe;
+ * non-null means an invoice exists whose real status must be checked before
+ * any new money moves.
+ */
+export type HodlEscrowPayoutClaim =
+  | {
+      outcome: "claimed";
+      invoice: string | null;
+      verifyUrl: string | null;
+      /** This attempt's number, already incremented. */
+      attemptCount: number;
+    }
+  /** Another attempt holds a live claim; this caller must not act. */
+  | { outcome: "in-progress" }
+  | {
+      outcome: "terminal";
+      status: "paid" | "abandoned";
+      lastError: string | null;
+    };
+
+type HodlEscrowPayoutClaimRow = {
+  payout_invoice: string | null;
+  payout_invoice_verify_url: string | null;
+  status: HodlEscrowPayoutStatus;
+  attempt_count: number | string;
+  last_error: string | null;
+  lease_active: boolean;
+};
+
+/**
+ * Takes exclusive ownership of a payout attempt, creating the payout row on
+ * the first call.
+ *
+ * Row-locked inside a transaction rather than a bare conditional UPDATE, for
+ * the same reason as {@link updateHodlEscrowOrderStatusIfAdvancing} but with
+ * more at stake: two retries that both read "no invoice stored" would both go
+ * on to fetch an invoice and pay it, and the seller would be paid twice out
+ * of platform funds. The second transaction blocks on the `FOR UPDATE` lock
+ * and sees the claim the first one took.
+ *
+ * The lock alone only serializes the claim, not the seconds of Lightning work
+ * that follow it, so the claim is also a lease: `claimed_at` is re-stamped
+ * here and a second caller arriving inside
+ * {@link HODL_PAYOUT_CLAIM_LEASE_SECONDS} is told `in-progress` instead of
+ * being handed a claim of its own. A crashed holder's lease goes stale and
+ * the payout becomes claimable again — at which point the stored invoice,
+ * written before any payment was attempted, is what keeps the retry from
+ * paying twice.
+ *
+ * A brand-new row is born `pending` with no invoice: that is the honest
+ * description of a payout that is owed and has had nothing sent for it.
+ *
+ * `failed` rows are claimable — a failed payout is one still owed. `paid` and
+ * `abandoned` are terminal and reported as such without a write.
+ */
+export async function claimHodlEscrowPayoutAttempt(
+  paymentHash: string
+): Promise<HodlEscrowPayoutClaim> {
+  const normalizedHash = paymentHash.toLowerCase();
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    await client.query("BEGIN");
+    // `lease_active` is computed in SQL, against the same clock that stamped
+    // `claimed_at`, so nothing here depends on the Node process's clock
+    // agreeing with the database's.
+    const result = await client.query<HodlEscrowPayoutClaimRow>(
+      `SELECT payout_invoice,
+              payout_invoice_verify_url,
+              status,
+              attempt_count,
+              last_error,
+              (claimed_at IS NOT NULL
+                AND claimed_at > CURRENT_TIMESTAMP
+                  - make_interval(secs => $2::double precision)) AS lease_active
+       FROM hodl_escrow_payouts
+       WHERE payment_hash = $1
+       FOR UPDATE`,
+      [normalizedHash, HODL_PAYOUT_CLAIM_LEASE_SECONDS]
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      await client.query(
+        `INSERT INTO hodl_escrow_payouts (
+           payment_hash,
+           status,
+           attempt_count,
+           claimed_at,
+           created_at,
+           updated_at
+         )
+         VALUES ($1, 'pending', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [normalizedHash]
+      );
+      await client.query("COMMIT");
+      return {
+        outcome: "claimed",
+        invoice: null,
+        verifyUrl: null,
+        attemptCount: 1,
+      };
+    }
+
+    // Checked before the lease: a terminal payout is not work in progress, it
+    // is work that will never be done again.
+    if (row.status === "paid" || row.status === "abandoned") {
+      await client.query("COMMIT");
+      return {
+        outcome: "terminal",
+        status: row.status,
+        lastError: row.last_error,
+      };
+    }
+
+    if (row.lease_active) {
+      await client.query("COMMIT");
+      return { outcome: "in-progress" };
+    }
+
+    // The status is deliberately left alone. A `failed` row being retried is
+    // still a failed payout until something delivers it, and re-stamping it
+    // `pending` would hide it from the reconciliation sweep for as long as
+    // the attempt runs.
+    await client.query(
+      `UPDATE hodl_escrow_payouts
+       SET attempt_count = attempt_count + 1,
+           claimed_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE payment_hash = $1`,
+      [normalizedHash]
+    );
+    await client.query("COMMIT");
+
+    return {
+      outcome: "claimed",
+      invoice: row.payout_invoice,
+      verifyUrl: row.payout_invoice_verify_url,
+      attemptCount: Number(row.attempt_count) + 1,
+    };
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // Preserve the original database error.
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Stores the payout invoice fetched from the seller's Lightning address.
+ *
+ * Call this BEFORE attempting payment, always. That ordering is the whole
+ * reason this table exists: an invoice written after a successful send would
+ * leave a crash window in which money left the node with no record naming the
+ * invoice it paid, and the next retry would fetch a second invoice and pay it
+ * too.
+ *
+ * First-write-wins, expressed as `payout_invoice IS NULL` in the WHERE
+ * clause — the same discipline as `registerHodlEscrowOrder`'s
+ * `ON CONFLICT DO NOTHING`. A caller told `not-stored` must not pay the
+ * invoice it just fetched: some other attempt's invoice is the one on the
+ * row, and paying an untracked invoice is exactly what the ordering above
+ * exists to prevent.
+ *
+ * @returns "not-stored" when a row already holds an invoice, when the payout
+ * is terminal, or when no row matched.
+ */
+export async function recordHodlEscrowPayoutInvoice(
+  paymentHash: string,
+  invoice: { invoice: string; verifyUrl: string | null }
+): Promise<"stored" | "not-stored"> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    const result = await client.query(
+      `UPDATE hodl_escrow_payouts
+       SET payout_invoice = $2,
+           payout_invoice_verify_url = $3,
+           invoice_stored_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE payment_hash = $1
+         AND payout_invoice IS NULL
+         AND status NOT IN ('paid', 'abandoned')`,
+      [paymentHash.toLowerCase(), invoice.invoice, invoice.verifyUrl]
+    );
+    return (result.rowCount ?? 0) > 0 ? "stored" : "not-stored";
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Clears a stored payout invoice that has been CONFIRMED unpaid and dead, and
+ * marks the payout failed so a later attempt can fetch a fresh one.
+ *
+ * The confirmation is the precondition, and it is not negotiable. Clearing an
+ * invoice whose status was merely unknown — or which merely looked old —
+ * discards the one record that stops the next attempt paying a second time,
+ * so the only caller allowed to reach this is one holding a definite "unpaid
+ * and unpayable" answer from the invoice's own verify endpoint.
+ *
+ * Row-locked, and refuses to touch a terminal row: an invoice on a `paid`
+ * payout was the one that delivered the money.
+ *
+ * @returns the row's status after this call, or "not-found".
+ */
+export async function discardHodlEscrowPayoutInvoice(
+  paymentHash: string,
+  reason: string
+): Promise<HodlEscrowPayoutStatus | "not-found"> {
+  const normalizedHash = paymentHash.toLowerCase();
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    await client.query("BEGIN");
+    const result = await client.query<{ status: HodlEscrowPayoutStatus }>(
+      `SELECT status
+       FROM hodl_escrow_payouts
+       WHERE payment_hash = $1
+       FOR UPDATE`,
+      [normalizedHash]
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      await client.query("COMMIT");
+      return "not-found";
+    }
+    if (row.status === "paid" || row.status === "abandoned") {
+      await client.query("COMMIT");
+      return row.status;
+    }
+
+    await client.query(
+      `UPDATE hodl_escrow_payouts
+       SET payout_invoice = NULL,
+           payout_invoice_verify_url = NULL,
+           status = 'failed',
+           last_error = $2,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE payment_hash = $1`,
+      [normalizedHash, truncatePayoutError(reason)]
+    );
+    await client.query("COMMIT");
+    return "failed";
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // Preserve the original database error.
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Every payout status transition {@link advanceHodlEscrowPayoutStatus} will
+ * actually write.
+ *
+ * `paid` and `abandoned` map to empty sets: both are terminal, and a payout
+ * that reached `paid` must never be walked back to a state something would
+ * retry from.
+ */
+const HODL_PAYOUT_ADVANCING_TRANSITIONS: Record<
+  HodlEscrowPayoutStatus,
+  ReadonlySet<HodlEscrowPayoutStatus>
+> = {
+  pending: new Set(["paid", "failed", "abandoned"]),
+  // `failed` -> `failed` is included so a second unsuccessful attempt can
+  // replace `last_error` with its own reason rather than leaving whoever
+  // reconciles the row reading a stale one.
+  failed: new Set(["paid", "failed", "abandoned"]),
+  paid: new Set(),
+  abandoned: new Set(),
+};
+
+/** Keeps a provider's error prose from filling the column. */
+function truncatePayoutError(reason: string): string {
+  const collapsed = reason.replace(/\s+/g, " ").trim();
+  return collapsed.length > 500 ? `${collapsed.slice(0, 500)}…` : collapsed;
+}
+
+/**
+ * Moves a payout's status forward, or leaves the row untouched if that would
+ * not be a forward move.
+ *
+ * Row-locked inside a transaction, exactly as
+ * {@link updateHodlEscrowOrderStatusIfAdvancing} is and for the same reason:
+ * two attempts holding stale reads must not both conclude a transition is
+ * legal.
+ *
+ * @returns the row's status after this call, or "not-found".
+ */
+async function advanceHodlEscrowPayoutStatus(
+  paymentHash: string,
+  newStatus: HodlEscrowPayoutStatus,
+  reason: string | null
+): Promise<HodlEscrowPayoutStatus | "not-found"> {
+  const normalizedHash = paymentHash.toLowerCase();
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    await client.query("BEGIN");
+    const result = await client.query<{ status: HodlEscrowPayoutStatus }>(
+      `SELECT status
+       FROM hodl_escrow_payouts
+       WHERE payment_hash = $1
+       FOR UPDATE`,
+      [normalizedHash]
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      await client.query("COMMIT");
+      return "not-found";
+    }
+
+    const currentStatus = row.status;
+    if (!HODL_PAYOUT_ADVANCING_TRANSITIONS[currentStatus].has(newStatus)) {
+      await client.query("COMMIT");
+      return currentStatus;
+    }
+
+    // `paid_at` is stamped in the same statement as the status, so there is
+    // never a window in which a payout reads `paid` with no time attached.
+    await client.query(
+      newStatus === "paid"
+        ? `UPDATE hodl_escrow_payouts
+           SET status = 'paid',
+               paid_at = CURRENT_TIMESTAMP,
+               last_error = NULL,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE payment_hash = $1`
+        : `UPDATE hodl_escrow_payouts
+           SET status = $2,
+               last_error = COALESCE($3, last_error),
+               updated_at = CURRENT_TIMESTAMP
+           WHERE payment_hash = $1`,
+      newStatus === "paid"
+        ? [normalizedHash]
+        : [
+            normalizedHash,
+            newStatus,
+            reason === null ? null : truncatePayoutError(reason),
+          ]
+    );
+    await client.query("COMMIT");
+    return newStatus;
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // Preserve the original database error.
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Records that a payout was confirmed delivered to the seller.
+ *
+ * Call this only once the payment is known to have succeeded — either the
+ * send returned, or the stored invoice's own verify endpoint said it was
+ * paid. A guess here is a seller who never gets their money and a row saying
+ * they did.
+ */
+export async function markHodlEscrowPayoutPaid(
+  paymentHash: string
+): Promise<HodlEscrowPayoutStatus | "not-found"> {
+  return advanceHodlEscrowPayoutStatus(paymentHash, "paid", null);
+}
+
+/**
+ * Records that this attempt did not deliver, and that a later one may.
+ *
+ * Only for failures where nothing was sent — an unreachable Lightning
+ * address, a missing one, a payer that refused before dialling out. A send
+ * whose outcome is unknown must use {@link recordHodlEscrowPayoutError}
+ * instead and stay `pending`.
+ */
+export async function markHodlEscrowPayoutFailed(
+  paymentHash: string,
+  reason: string
+): Promise<HodlEscrowPayoutStatus | "not-found"> {
+  return advanceHodlEscrowPayoutStatus(paymentHash, "failed", reason);
+}
+
+/**
+ * Gives up on delivering a payout automatically and hands it to a human.
+ *
+ * Terminal by design. The seller is still owed the money; what ends here is
+ * the attempt to send it without anyone looking, which is the alternative to
+ * an unbounded retry loop that quietly never succeeds.
+ * {@link listHodlEscrowPayoutsNeedingAttention} is how the row is found again.
+ */
+export async function markHodlEscrowPayoutAbandoned(
+  paymentHash: string,
+  reason: string
+): Promise<HodlEscrowPayoutStatus | "not-found"> {
+  return advanceHodlEscrowPayoutStatus(paymentHash, "abandoned", reason);
+}
+
+/**
+ * Records why an attempt could not confirm its own outcome, WITHOUT moving
+ * the payout's status.
+ *
+ * This is the write for a send that threw. A payment that errored may still
+ * be in flight, so calling it failed would invite a second payment for the
+ * same money; the row stays `pending` with its invoice intact, and the next
+ * attempt asks that invoice's verify endpoint what actually happened.
+ */
+export async function recordHodlEscrowPayoutError(
+  paymentHash: string,
+  reason: string
+): Promise<void> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    await client.query(
+      `UPDATE hodl_escrow_payouts
+       SET last_error = $2,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE payment_hash = $1`,
+      [paymentHash.toLowerCase(), truncatePayoutError(reason)]
+    );
+  } finally {
+    client.release();
+  }
+}
+
+/** One undelivered payout, as a reconciliation process would want it. */
+export type HodlEscrowPayoutAttentionRow = {
+  paymentHash: string;
+  status: HodlEscrowPayoutStatus;
+  attemptCount: number;
+  lastError: string | null;
+  invoice: string | null;
+  updatedAt: Date;
+};
+
+/**
+ * Every payout that owes a seller money and has not delivered it.
+ *
+ * Both `failed` and `abandoned`, deliberately. Listing only the terminal
+ * state would hide payouts that are stuck retrying and getting nowhere, which
+ * are the ones a human can still fix cheaply.
+ *
+ * No caller in the application reads this yet; it exists so the data written
+ * above is answerable to "who are we still short-changing?" without anyone
+ * having to write ad-hoc SQL against production first.
+ */
+export async function listHodlEscrowPayoutsNeedingAttention(): Promise<
+  HodlEscrowPayoutAttentionRow[]
+> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    const result = await client.query<{
+      payment_hash: string;
+      status: HodlEscrowPayoutStatus;
+      attempt_count: number | string;
+      last_error: string | null;
+      payout_invoice: string | null;
+      updated_at: Date;
+    }>(
+      `SELECT payment_hash,
+              status,
+              attempt_count,
+              last_error,
+              payout_invoice,
+              updated_at
+       FROM hodl_escrow_payouts
+       WHERE status IN ('failed', 'abandoned')
+       ORDER BY updated_at ASC`
+    );
+
+    return result.rows.map((row) => ({
+      paymentHash: row.payment_hash,
+      status: row.status,
+      attemptCount: Number(row.attempt_count),
+      lastError: row.last_error,
+      invoice: row.payout_invoice,
+      updatedAt: row.updated_at,
+    }));
+  } finally {
+    client.release();
   }
 }
 

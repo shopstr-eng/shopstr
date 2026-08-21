@@ -253,3 +253,67 @@ CREATE TABLE IF NOT EXISTS hodl_escrow_orders (
 
 CREATE INDEX IF NOT EXISTS idx_hodl_escrow_orders_buyer ON hodl_escrow_orders(buyer_nostr_pubkey);
 CREATE INDEX IF NOT EXISTS idx_hodl_escrow_orders_seller ON hodl_escrow_orders(seller_nostr_pubkey);
+
+-- Money owed to a seller after their hold invoice settled.
+--
+-- Settlement moves the buyer's funds into the arbiter's node, not into the
+-- seller's wallet. This table is the record of the second leg: a fresh
+-- invoice fetched from the seller's own Lightning address, and the outcome of
+-- paying it. One row per order, keyed on the same payment hash, so "does this
+-- order still owe its seller money?" is a primary-key lookup.
+--
+-- The ordering the whole table exists to support: the invoice is written here
+-- BEFORE any payment is attempted. Written afterwards, a crash in between
+-- would leave a paid invoice that no record mentions, and the next retry
+-- would fetch a second invoice and pay the seller twice out of platform
+-- funds. Stored first, every retry has something to check against.
+CREATE TABLE IF NOT EXISTS hodl_escrow_payouts (
+    -- The settled order this payout belongs to. Deliberately not a foreign
+    -- key: a payout row records money owed, and it has to stay findable even
+    -- if the commitment row it came from is ever removed.
+    payment_hash TEXT PRIMARY KEY,
+    -- The seller's BOLT-11 payout invoice. NULL means no invoice has been
+    -- fetched yet, which is the one state in which fetching a fresh one is
+    -- safe. Cleared back to NULL only after a status check has CONFIRMED the
+    -- stored invoice both unpaid and expired -- never because it merely looks
+    -- old.
+    payout_invoice TEXT,
+    -- LUD-21 verify URL from the same LNURL-pay response, stored alongside
+    -- the invoice because it is the only thing that can answer "was this
+    -- actually paid?" later. NULL when the seller's provider offers no verify
+    -- endpoint, in which case the payout's status can never be confirmed and
+    -- the row stays pending for a human to reconcile.
+    payout_invoice_verify_url TEXT,
+    -- pending   -- an invoice may be stored and a payment may be in flight;
+    --              the real outcome is not known. The only non-terminal state
+    --              a payment can be attempted from.
+    -- paid      -- confirmed delivered. Terminal.
+    -- failed    -- this attempt did not deliver and a later one may; the
+    --              seller is still owed. Retryable, and findable.
+    -- abandoned -- given up on, needs a human. Terminal, and findable.
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'failed', 'abandoned')),
+    -- Bounds the retries. Past the limit the row is abandoned rather than
+    -- retried forever in silence.
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    -- Why the last attempt did not deliver, for whoever reconciles this row.
+    last_error TEXT,
+    -- Lease held by the attempt currently working this payout. Two concurrent
+    -- retries cannot both hold it: the claim runs SELECT ... FOR UPDATE, the
+    -- same row-locking discipline as updateHodlEscrowOrderStatusIfAdvancing.
+    --
+    -- TIMESTAMPTZ, not TIMESTAMP, for the reason spelled out on
+    -- hodl_escrow_orders.accepted_at: this column is compared against
+    -- CURRENT_TIMESTAMP, so a zone-less value would skew the lease by the
+    -- reading process's UTC offset.
+    claimed_at TIMESTAMPTZ,
+    invoice_stored_at TIMESTAMPTZ,
+    paid_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- The reconciliation query: every payout that owes a seller money and has not
+-- delivered it. Partial, because those are the only rows anyone sweeps for.
+CREATE INDEX IF NOT EXISTS idx_hodl_escrow_payouts_attention
+  ON hodl_escrow_payouts(status)
+  WHERE status IN ('failed', 'abandoned');
