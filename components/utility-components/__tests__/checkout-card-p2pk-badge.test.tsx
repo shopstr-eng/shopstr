@@ -155,11 +155,6 @@ jest.mock(
   })
 );
 
-jest.mock("@/utils/safe-json", () => ({
-  ...jest.requireActual("@/utils/safe-json"),
-  getLocalStorageJson: jest.fn().mockReturnValue(null),
-}));
-
 jest.mock("@/utils/cart-discounts", () => ({
   isCartDiscountsMap: jest.fn().mockReturnValue(false),
 }));

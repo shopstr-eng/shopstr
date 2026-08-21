@@ -77,7 +77,12 @@ import {
   parseDisputeEvent,
   publishDisputeEvent,
 } from "@/utils/nostr/dispute-records";
-import { storage, STORAGE_KEYS } from "@/utils/storage";
+import {
+  createStorageKey,
+  storage,
+  STORAGE_KEY_PREFIXES,
+  STORAGE_KEYS,
+} from "@/utils/storage";
 
 export default function ClaimButton({
   token,
@@ -130,7 +135,7 @@ export default function ClaimButton({
   );
 
   const paymentRequestSentAtKey = (id: string) =>
-    `shopstr.escrow.paymentRequestSentAt.${id}`;
+    createStorageKey(STORAGE_KEY_PREFIXES.PAYMENT_REQUEST_SENT_AT, id);
 
   // Restores "awaiting buyer confirmation" state across reloads. The DM
   // timestamp isn't a reliable client-independent clock, so this trusts the

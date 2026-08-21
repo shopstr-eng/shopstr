@@ -16,7 +16,7 @@ import {
   getStoredReadRelays,
   getStoredRelays,
   getStoredWriteRelays,
-  isStoredSignerData,
+  isStoredSignerDataOrUndefined,
 } from "@/utils/nostr/nostr-helper-functions";
 import PassphraseChallengeModal from "@/components/utility-components/request-passphrase-modal";
 import AuthUrlChallengeModal from "@/components/utility-components/auth-challenge-modal";
@@ -134,7 +134,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
     const signer = storage.getJson<any | undefined>(
       STORAGE_KEYS.SIGNER,
       undefined,
-      { validate: isStoredSignerData }
+      { validate: isStoredSignerDataOrUndefined }
     );
     const signInMethod = storage.getItem(STORAGE_KEYS.SIGN_IN_METHOD);
 

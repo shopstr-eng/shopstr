@@ -20,7 +20,13 @@ import {
   buildSignedHttpRequestProofTemplate,
 } from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
-import { storage, STORAGE_KEYS } from "@/utils/storage";
+import {
+  createStorageKey,
+  storage,
+  STORAGE_KEY_PREFIXES,
+  STORAGE_KEYS,
+} from "@/utils/storage";
+import type { StorageKey } from "@/utils/storage";
 import { buildWalletConfigV1 } from "@/utils/cashu/wallet-config";
 import { isHexPubkey } from "@/utils/nostr/pubkey";
 import { pickPreferredReplaceableEvent } from "@/utils/nostr/replaceable-events";
@@ -972,13 +978,13 @@ const isUnknownArray = (value: unknown): value is unknown[] =>
 const isSavedAddressArray = (value: unknown): value is SavedAddress[] =>
   Array.isArray(value);
 
-const isStoredSignerDataOrUndefined = (
+export const isStoredSignerDataOrUndefined = (
   value: unknown
 ): value is LocalStorageInterface["signer"] | undefined =>
   value === undefined || isStoredSignerData(value);
 
 function getStoredStringArray(
-  key: string,
+  key: StorageKey,
   fallback: string[] = [],
   persistFallback = false
 ): string[] {
@@ -1029,10 +1035,10 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     storage.getItem(STORAGE_KEYS.ENCRYPTED_PRIVATE_KEY) || undefined;
 
   if (signInMethod) {
-    storage.removeItem("npub");
-    storage.removeItem("signIn");
-    storage.removeItem("chats");
-    storage.removeItem("cashuWalletRelays");
+    storage.removeItem(STORAGE_KEYS.LEGACY_NPUB);
+    storage.removeItem(STORAGE_KEYS.LEGACY_SIGN_IN);
+    storage.removeItem(STORAGE_KEYS.LEGACY_CHATS);
+    storage.removeItem(STORAGE_KEYS.LEGACY_CASHU_WALLET_RELAYS);
   }
 
   const relays = getStoredStringArray(
@@ -1152,10 +1158,10 @@ export const getLocalStorageData = (): LocalStorageInterface => {
 };
 
 export const LogOut = () => {
-  storage.removeItem("npub");
-  storage.removeItem("signIn");
-  storage.removeItem("chats");
-  storage.removeItem("cashuWalletRelays");
+  storage.removeItem(STORAGE_KEYS.LEGACY_NPUB);
+  storage.removeItem(STORAGE_KEYS.LEGACY_SIGN_IN);
+  storage.removeItem(STORAGE_KEYS.LEGACY_CHATS);
+  storage.removeItem(STORAGE_KEYS.LEGACY_CASHU_WALLET_RELAYS);
   storage.clearKeys([
     STORAGE_KEYS.SIGNER,
     STORAGE_KEYS.SIGN_IN_METHOD,
@@ -1238,7 +1244,7 @@ export const saveNWCString = (nwcString: string) => {
 };
 
 export const getLocalUserProfileKey = (pubkey: string) =>
-  `shopstr:user-profile:${pubkey}`;
+  createStorageKey(STORAGE_KEY_PREFIXES.USER_PROFILE, pubkey);
 
 export interface LocalProfileFallback {
   content: Record<string, unknown>;

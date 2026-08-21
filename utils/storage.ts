@@ -25,6 +25,8 @@ export const STORAGE_KEYS = {
   HISTORY: "history",
   WOT: "wot",
   PENDING_MINT_QUOTES: "shopstr.pendingMintQuotes",
+  P2PK_ESCROW_RECORDS: "shopstr.p2pkEscrowRecords",
+  P2PK_ESCROW_RECORDS_ENCRYPTED: "shopstr.p2pkEscrowRecords.encrypted",
 
   // NWC
   NWC_STRING: "nwcString",
@@ -49,10 +51,35 @@ export const STORAGE_KEYS = {
   THEME: "theme",
   USER_NPUB: "userNPub",
   USER_PUBKEY: "userPubkey",
+  LEGACY_NPUB: "npub",
+  LEGACY_SIGN_IN: "signIn",
+  LEGACY_CHATS: "chats",
+  LEGACY_CASHU_WALLET_RELAYS: "cashuWalletRelays",
+  LAST_FILTERS_REF: "last-filters-ref",
+  MARKETPLACE_PAGE_GENERAL: "marketplace-page-general",
 } as const;
 
-export type StorageKey =
-  (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS] | string;
+export const STORAGE_KEY_PREFIXES = {
+  USER_PROFILE: "shopstr:user-profile:",
+  PAYMENT_REQUEST_SENT_AT: "shopstr.escrow.paymentRequestSentAt.",
+  MARKETPLACE_PAGE: "marketplace-page-",
+} as const;
+
+export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
+export type StorageKeyPrefix =
+  (typeof STORAGE_KEY_PREFIXES)[keyof typeof STORAGE_KEY_PREFIXES];
+declare const dynamicStorageKeyBrand: unique symbol;
+export type DynamicStorageKey = string & {
+  readonly [dynamicStorageKeyBrand]: true;
+};
+type StorageIdentifier = StorageKey | DynamicStorageKey;
+
+export function createStorageKey(
+  prefix: StorageKeyPrefix,
+  identifier: string
+): DynamicStorageKey {
+  return `${prefix}${identifier}` as DynamicStorageKey;
+}
 
 class StorageManager {
   /**
@@ -65,7 +92,7 @@ class StorageManager {
   /**
    * Get a string item from localStorage
    */
-  getItem(key: StorageKey): string | null {
+  getItem(key: StorageIdentifier): string | null {
     if (!this.isBrowser) return null;
     return localStorage.getItem(key);
   }
@@ -73,7 +100,7 @@ class StorageManager {
   /**
    * Set a string item in localStorage
    */
-  setItem(key: StorageKey, value: string): void {
+  setItem(key: StorageIdentifier, value: string): void {
     if (!this.isBrowser) return;
     localStorage.setItem(key, value);
   }
@@ -81,7 +108,7 @@ class StorageManager {
   /**
    * Remove an item from localStorage
    */
-  removeItem(key: StorageKey): void {
+  removeItem(key: StorageIdentifier): void {
     if (!this.isBrowser) return;
     localStorage.removeItem(key);
   }
@@ -90,7 +117,7 @@ class StorageManager {
    * Get and parse JSON data with a fallback and type-safety
    */
   getJson<T>(
-    key: StorageKey,
+    key: StorageIdentifier,
     fallback: T,
     options?: StorageParseOptions<T>
   ): T {
@@ -121,7 +148,7 @@ class StorageManager {
   /**
    * Stringify and set JSON data in localStorage safely
    */
-  setJson<T>(key: StorageKey, value: T): void {
+  setJson<T>(key: StorageIdentifier, value: T): void {
     if (!this.isBrowser) return;
     try {
       const serialized = JSON.stringify(value);
@@ -134,7 +161,7 @@ class StorageManager {
   /**
    * Clear multiple specific keys. Useful for logout routines.
    */
-  clearKeys(keys: StorageKey[]): void {
+  clearKeys(keys: StorageIdentifier[]): void {
     if (!this.isBrowser) return;
     keys.forEach((key) => localStorage.removeItem(key));
   }
@@ -150,12 +177,12 @@ class StorageManager {
 
   // Session Storage Helpers (for non-persistent session data)
 
-  setSessionItem(key: string, value: string): void {
+  setSessionItem(key: StorageIdentifier, value: string): void {
     if (!this.isBrowser) return;
     sessionStorage.setItem(key, value);
   }
 
-  getSessionItem(key: string): string | null {
+  getSessionItem(key: StorageIdentifier): string | null {
     if (!this.isBrowser) return null;
     return sessionStorage.getItem(key);
   }
@@ -164,7 +191,7 @@ class StorageManager {
    * Get and parse JSON data from sessionStorage
    */
   getSessionJson<T>(
-    key: string,
+    key: StorageIdentifier,
     fallback: T,
     options?: StorageParseOptions<T>
   ): T {
@@ -195,7 +222,7 @@ class StorageManager {
   /**
    * Stringify and set JSON data in sessionStorage
    */
-  setSessionJson<T>(key: string, value: T): void {
+  setSessionJson<T>(key: StorageIdentifier, value: T): void {
     if (!this.isBrowser) return;
     try {
       const serialized = JSON.stringify(value);
@@ -208,7 +235,7 @@ class StorageManager {
   /**
    * Remove an item from sessionStorage
    */
-  removeSessionItem(key: string): void {
+  removeSessionItem(key: StorageIdentifier): void {
     if (!this.isBrowser) return;
     sessionStorage.removeItem(key);
   }
