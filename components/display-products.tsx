@@ -458,6 +458,7 @@ const DisplayProducts = ({
                     productData={productData}
                     onProductClick={onProductClick}
                     href={getProductHref(productData)}
+                    hydrateProfileFromRelays={Boolean(focusedPubkey)}
                     reportSignal={getListingReportSignal(
                       productData,
                       reportSummaries
