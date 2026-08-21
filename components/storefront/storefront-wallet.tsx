@@ -1,8 +1,7 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { StorefrontColorScheme } from "@/utils/types/types";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { storage, STORAGE_KEYS } from "@/utils/storage";
-import { getStoredMints } from "@/utils/nostr/nostr-helper-functions";
+import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import MintButton from "@/components/wallet/mint-button";
 import ReceiveButton from "@/components/wallet/receive-button";
 import SendButton from "@/components/wallet/send-button";
@@ -15,6 +14,7 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import { useRouter } from "next/router";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 
 interface StorefrontWalletProps {
   colors: StorefrontColorScheme;
@@ -30,8 +30,8 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
   const [wallet, setWallet] = useState<CashuWallet>();
   const [mintKeySetIds, setMintKeySetIds] = useState<MintKeyset[]>([]);
 
-  const mints = getStoredMints();
-  const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
+  const localStorageData = useMemo(() => getLocalStorageData(), []);
+  const { mints, tokens } = localStorageData;
 
   useEffect(() => {
     if (mints && mints[0]) {
@@ -45,6 +45,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
   useEffect(() => {
     const fetchLocalKeySet = async () => {
       if (wallet) {
+        await wallet.loadMint();
         const mintKeySetIdsArray = await wallet.keyChain.getKeysets();
         if (mintKeySetIdsArray) {
           setMintKeySetIds(mintKeySetIdsArray);
@@ -65,36 +66,20 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
 
   useEffect(() => {
     if (tokens) {
-      const tokensTotal =
-        tokens.length >= 1
-          ? tokens.reduce(
-              (acc: number, token: Proof) => acc + token.amount.toNumber(),
-              0
-            )
-          : 0;
+      const tokensTotal = tokens.length >= 1 ? sumProofAmounts(tokens) : 0;
       setTotalBalance(tokensTotal);
     }
     const walletTotal =
-      filteredProofs.length >= 1
-        ? filteredProofs.reduce(
-            (acc: number, p: Proof) => acc + p.amount.toNumber(),
-            0
-          )
-        : 0;
+      filteredProofs.length >= 1 ? sumProofAmounts(filteredProofs) : 0;
     setWalletBalance(walletTotal);
   }, [tokens, filteredProofs]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const newTokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
+      const { tokens: newTokens } = getLocalStorageData();
       if (newTokens) {
         const tokensTotal =
-          newTokens.length >= 1
-            ? newTokens.reduce(
-                (acc: number, token: Proof) => acc + token.amount.toNumber(),
-                0
-              )
-            : 0;
+          newTokens.length >= 1 ? sumProofAmounts(newTokens as Proof[]) : 0;
         setTotalBalance(tokensTotal);
         if (mintKeySetIds) {
           const newFilteredProofs = newTokens.filter((p: Proof) =>
@@ -102,10 +87,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
           );
           const newWalletTotal =
             newFilteredProofs.length >= 1
-              ? newFilteredProofs.reduce(
-                  (acc: number, p: Proof) => acc + p.amount.toNumber(),
-                  0
-                )
+              ? sumProofAmounts(newFilteredProofs)
               : 0;
           setWalletBalance(newWalletTotal);
         }

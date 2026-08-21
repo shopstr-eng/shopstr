@@ -1,5 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
-
 import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
@@ -32,6 +30,14 @@ import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wra
 import ProtectedRoute from "@/components/utility-components/protected-route";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
+import { isSellerP2pkEscrowActive } from "@/utils/cashu/p2pk-checkout";
+import { mapWithConcurrency } from "@/utils/concurrency";
+import {
+  computeProductPricing,
+  ProductPricingResult,
+} from "@/utils/cart-totals";
+
+const CART_PRICE_CONVERSION_CONCURRENCY = 6;
 
 interface QuantitySelectorProps {
   value: number;
@@ -84,6 +90,16 @@ function QuantitySelector({
 export default function Component() {
   const shopContext = useContext(ShopMapContext);
   const profileContext = useContext(ProfileMapContext);
+
+  const renderP2pkCartBadge = (sellerPubkey: string) => {
+    const p2pk = profileContext.profileData.get(sellerPubkey)?.content.p2pk;
+    if (!isSellerP2pkEscrowActive(p2pk)) return null;
+    return (
+      <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 text-[11px] font-medium text-yellow-700 dark:text-yellow-300">
+        🔒 P2PK Escrow · {p2pk!.refundDelayDays}d reclaim opens
+      </div>
+    );
+  };
 
   const [products, setProducts] = useState<ProductData[]>([]);
   const [satPrices, setSatPrices] = useState<{ [key: string]: number | null }>(
@@ -169,7 +185,7 @@ export default function Component() {
             ? product.volumePrice
             : product.weightPrice !== undefined
               ? product.weightPrice
-              : product.price;
+              : (product.price ?? 0);
       const qty = quantities[product.id] || 1;
       const discount = appliedDiscounts[product.pubkey] || 0;
       const discountedPrice =
@@ -340,50 +356,44 @@ export default function Component() {
       const shipping: { [key: string]: number } = {};
       const totals: { [key: string]: number } = {};
       let subtotalAmount = 0;
-
-      for (const product of products) {
-        try {
-          const priceSats = await convertPriceToSats(product);
-          const shippingSatPrice = await convertShippingToSats(product);
-          const discount = appliedDiscounts[product.pubkey] || 0;
-          let discountedPrice = priceSats;
-          let productSubtotal = 0;
-          let productShipping = 0;
-
-          if (discount > 0) {
-            discountedPrice = Math.ceil(priceSats * (1 - discount / 100));
+      const results = await mapWithConcurrency(
+        products,
+        CART_PRICE_CONVERSION_CONCURRENCY,
+        async (product): Promise<ProductPricingResult> => {
+          try {
+            const priceSats = await convertPriceToSats(product);
+            const shippingSats = await convertShippingToSats(product);
+            return computeProductPricing({
+              id: product.id,
+              priceSats,
+              shippingSats,
+              discountPercent: appliedDiscounts[product.pubkey] || 0,
+              quantity: quantities[product.id],
+            });
+          } catch (error) {
+            // Outer guard for any unexpected failure during cart pricing.
+            // console.warn (not console.error) keeps the Next.js dev overlay
+            // from popping for a benign per-row failure — the row simply
+            // renders as un-priced and is excluded from checkout.
+            console.warn(
+              `Error converting price for product ${product.id}:`,
+              error
+            );
+            return { id: product.id, status: "error" };
           }
+        }
+      );
 
-          if (discountedPrice !== null || shippingSatPrice !== null) {
-            if (quantities[product.id]) {
-              productSubtotal = Math.ceil(
-                discountedPrice * quantities[product.id]!
-              );
-              productShipping = Math.ceil(
-                shippingSatPrice * quantities[product.id]!
-              );
-              subtotalAmount += productSubtotal;
-            } else {
-              productSubtotal = discountedPrice;
-              productShipping = shippingSatPrice;
-              subtotalAmount += discountedPrice;
-            }
-            prices[product.id] = productSubtotal;
-            shipping[product.id] = productShipping;
-            // Store per-product totals so checkout can apply shipping later.
-            totals[product.id] = productSubtotal;
-          }
-        } catch (error) {
-          // Outer guard for any unexpected failure during cart pricing.
-          // console.warn (not console.error) keeps the Next.js dev overlay
-          // from popping for a benign per-row failure — the row simply
-          // renders as un-priced and is excluded from checkout.
-          console.warn(
-            `Error converting price for product ${product.id}:`,
-            error
-          );
-          prices[product.id] = null;
-          shipping[product.id] = 0;
+      for (const result of results) {
+        if (result.status === "priced") {
+          prices[result.id] = result.price;
+          shipping[result.id] = result.shipping;
+          // Store per-product totals so checkout can apply shipping later.
+          totals[result.id] = result.price;
+          subtotalAmount += result.price;
+        } else if (result.status === "error") {
+          prices[result.id] = null;
+          shipping[result.id] = 0;
         }
       }
 
@@ -521,7 +531,7 @@ export default function Component() {
           ? product.volumePrice
           : product.weightPrice !== undefined
             ? product.weightPrice
-            : product.price;
+            : (product.price ?? 0);
 
     if (
       product.currency.toLowerCase() === "sats" ||
@@ -706,6 +716,7 @@ export default function Component() {
                                       )}
                                     </div>
                                   )}
+                                  {renderP2pkCartBadge(product.pubkey)}
                                 </div>
                               </div>
                               <div className="mt-4 flex md:mt-0 md:items-center">

@@ -13,6 +13,7 @@ import parseTags, {
 } from "@/utils/parsers/product-parser-functions";
 import { nip19 } from "nostr-tools";
 import ProductCard from "@/components/utility-components/product-card";
+import { productSatisfiesPriceFilter } from "@/utils/parsers/product-filter-helpers";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 interface OrderSummaryData {
@@ -95,7 +96,8 @@ export default function StorefrontOrderConfirmation({
           parsed &&
           parsed.pubkey === shopPubkey &&
           parsed.title &&
-          parsed.images.length > 0
+          parsed.images.length > 0 &&
+          productSatisfiesPriceFilter(parsed)
         ) {
           products.push(parsed);
         }

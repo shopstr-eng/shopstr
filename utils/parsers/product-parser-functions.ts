@@ -1,6 +1,11 @@
-import { ShippingOptionsType } from "@/utils/STATIC-VARIABLES";
-import { calculateTotalCost } from "@/components/utility-components/display-monetary-info";
-import { parseShippingTag } from "@/utils/parsers/product-tag-helpers";
+import {
+  calculateTotalCost,
+  type ShippingOptionsType,
+} from "@/utils/parsers/product-tag-helpers";
+import {
+  parseProductEvent,
+  type ProductResponse,
+} from "@/utils/parsers/canonical-product-parser";
 import { NostrEvent } from "@/utils/types/types";
 
 export type ProductData = {
@@ -13,14 +18,20 @@ export type ProductData = {
   images: string[];
   categories: string[];
   location: string;
-  price: number;
+  price?: number;
   currency: string;
+  priceStatus?: ProductResponse["priceStatus"];
+  productType?: ProductResponse["productType"];
+  productFormat?: ProductResponse["productFormat"];
+  visibility?: ProductResponse["visibility"];
   shippingType?: ShippingOptionsType;
   shippingCost?: number;
+  subscription?: ProductResponse["subscription"];
   totalCost: number;
   d?: string;
   contentWarning?: boolean;
   quantity?: number;
+  stock?: number;
   sizes?: string[];
   sizeQuantities?: Map<string, number>;
   volumes?: string[];
@@ -39,157 +50,112 @@ export type ProductData = {
   selectedBulkOption?: number;
   bulkPrice?: number;
   required?: string;
+  requiredCustomerInfo?: string;
   restrictions?: string;
   pickupLocations?: string[];
   expiration?: number;
   rawEvent?: NostrEvent;
 };
 
-export const parseTags = (productEvent: NostrEvent) => {
+export function buildUiVariantMaps(product: ProductResponse) {
+  const sizes = product.sizes?.map((entry) => entry.size) ?? [];
+  const sizeQuantities = new Map<string, number>();
+  for (const entry of product.sizes ?? []) {
+    if (entry.quantity !== undefined) {
+      sizeQuantities.set(entry.size, entry.quantity);
+    }
+  }
+
+  const volumes = product.volumes?.map((entry) => entry.volume) ?? [];
+  const volumePrices = new Map<string, number>();
+  for (const entry of product.volumes ?? []) {
+    if (entry.price !== undefined) {
+      volumePrices.set(entry.volume, entry.price);
+    }
+  }
+
+  const weights = product.weights?.map((entry) => entry.weight) ?? [];
+  const weightPrices = new Map<string, number>();
+  for (const entry of product.weights ?? []) {
+    if (entry.price !== undefined) {
+      weightPrices.set(entry.weight, entry.price);
+    }
+  }
+
+  const bulkPrices = new Map<number, number>();
+  for (const entry of product.bulk ?? []) {
+    bulkPrices.set(entry.units, entry.price);
+  }
+
+  return {
+    sizes,
+    sizeQuantities,
+    volumes,
+    volumePrices,
+    weights,
+    weightPrices,
+    bulkPrices,
+  };
+}
+
+export const parseTags = (
+  productEvent: NostrEvent
+): ProductData | undefined => {
+  if (productEvent.tags === undefined) return;
+
+  const product = parseProductEvent(productEvent);
+  const variantMaps = buildUiVariantMaps(product);
+  const summary = productEvent.content?.trim()
+    ? productEvent.content
+    : product.summary;
+
   const parsedData: ProductData = {
-    id: "",
-    pubkey: "",
-    createdAt: 0,
-    title: "",
-    summary: productEvent.content || "",
-    publishedAt: "",
-    images: [],
-    categories: [],
-    location: "",
-    price: 0,
-    currency: "",
+    id: product.id,
+    pubkey: product.pubkey,
+    createdAt: product.createdAt,
+    title: product.title,
+    summary,
+    publishedAt: product.publishedAt ?? "",
+    images: product.images.map((image) => image.url),
+    categories: product.categories,
+    location: product.location,
+    ...(product.price !== undefined && { price: product.price }),
+    currency: product.currency ?? "",
+    priceStatus: product.priceStatus,
+    productType: product.productType,
+    productFormat: product.productFormat,
+    visibility: product.visibility,
+    ...(product.shippingType && { shippingType: product.shippingType }),
+    ...(product.shippingCost !== undefined && {
+      shippingCost: product.shippingCost,
+    }),
+    subscription: product.subscription,
     totalCost: 0,
+    ...(product.d && { d: product.d }),
+    ...(product.contentWarning && { contentWarning: product.contentWarning }),
+    ...(product.quantity !== undefined && { quantity: product.quantity }),
+    ...(product.stock !== undefined && { stock: product.stock }),
+    sizes: variantMaps.sizes,
+    sizeQuantities: variantMaps.sizeQuantities,
+    volumes: variantMaps.volumes,
+    volumePrices: variantMaps.volumePrices,
+    weights: variantMaps.weights,
+    weightPrices: variantMaps.weightPrices,
+    bulkPrices: variantMaps.bulkPrices,
+    ...(product.condition && { condition: product.condition }),
+    ...(product.status && { status: product.status }),
+    ...(product.required && { required: product.required }),
+    ...(product.requiredCustomerInfo && {
+      requiredCustomerInfo: product.requiredCustomerInfo,
+    }),
+    ...(product.restrictions && { restrictions: product.restrictions }),
+    ...(product.pickupLocations && {
+      pickupLocations: product.pickupLocations,
+    }),
+    ...(product.expiration !== undefined && { expiration: product.expiration }),
     rawEvent: productEvent,
   };
-  parsedData.pubkey = productEvent.pubkey;
-  parsedData.id = productEvent.id;
-  parsedData.createdAt = productEvent.created_at;
-  const tags = productEvent.tags;
-  if (tags === undefined) return;
-  tags.forEach((tag) => {
-    const [key, ...values] = tag;
-    switch (key) {
-      case "title":
-        parsedData.title = values[0]!;
-        break;
-      case "summary":
-        // NIP-99 uses event content as primary description.
-        // Keep summary tag as backward-compatible fallback when content is empty or whitespace.
-        if (!parsedData.summary.trim()) {
-          parsedData.summary = values[0]!;
-        }
-        break;
-      case "published_at":
-        parsedData.publishedAt = values[0]!;
-        break;
-      case "image":
-        if (parsedData.images === undefined) parsedData.images = [];
-        parsedData.images.push(values[0]!);
-        break;
-      case "t":
-        if (parsedData.categories === undefined) parsedData.categories = [];
-        parsedData.categories.push(values[0]!);
-        break;
-      case "location":
-        parsedData.location = values[0]!;
-        break;
-      case "price":
-        const [amount, currency] = values;
-        parsedData.price = Number(amount);
-        parsedData.currency = currency!;
-        break;
-      case "shipping":
-        const parsedShipping = parseShippingTag(tag);
-        if (parsedShipping) {
-          parsedData.shippingType = parsedShipping.shippingType;
-          parsedData.shippingCost = parsedShipping.shippingCost;
-        }
-        break;
-      case "d":
-        parsedData.d = values[0];
-        break;
-      case "content-warning":
-        parsedData.contentWarning = true;
-        break;
-      case "L":
-        const LValue = values[0];
-        if (LValue === "content-warning") {
-          parsedData.contentWarning = true;
-        }
-        break;
-      case "l":
-        const lValue = values[1];
-        if (lValue === "content-warning") {
-          parsedData.contentWarning = true;
-        }
-        break;
-      case "quantity":
-        parsedData.quantity = Number(values[0]);
-        break;
-      case "size":
-        const [size, quantity] = values;
-        if (parsedData.sizes === undefined) parsedData.sizes = [];
-        parsedData.sizes?.push(size!);
-        if (parsedData.sizeQuantities === undefined)
-          parsedData.sizeQuantities = new Map<string, number>();
-        parsedData.sizeQuantities.set(size!, Number(quantity));
-        break;
-      case "volume":
-        if (!parsedData.volumes) {
-          parsedData.volumes = [];
-          parsedData.volumePrices = new Map<string, number>();
-        }
-        if (values[0]) {
-          parsedData.volumes.push(values[0]);
-          if (values[1]) {
-            parsedData.volumePrices!.set(values[0], parseFloat(values[1]));
-          }
-        }
-        break;
-      case "weight":
-        if (!parsedData.weights) {
-          parsedData.weights = [];
-          parsedData.weightPrices = new Map<string, number>();
-        }
-        if (values[0]) {
-          parsedData.weights.push(values[0]);
-          if (values[1]) {
-            parsedData.weightPrices!.set(values[0], parseFloat(values[1]));
-          }
-        }
-        break;
-      case "bulk":
-        if (!parsedData.bulkPrices) {
-          parsedData.bulkPrices = new Map<number, number>();
-        }
-        if (values[0] && values[1]) {
-          parsedData.bulkPrices.set(parseInt(values[0]), parseFloat(values[1]));
-        }
-        break;
-      case "condition":
-        parsedData.condition = values[0];
-        break;
-      case "status":
-        parsedData.status = values[0];
-        break;
-      case "required":
-        parsedData.required = values[0];
-        break;
-      case "restrictions":
-        parsedData.restrictions = values[0];
-        break;
-      case "pickup_location":
-        if (parsedData.pickupLocations === undefined)
-          parsedData.pickupLocations = [];
-        parsedData.pickupLocations.push(values[0]!);
-        break;
-      case "valid_until":
-        parsedData.expiration = Number(values[0]);
-        break;
-      default:
-        return;
-    }
-  });
+
   parsedData.totalCost = calculateTotalCost(parsedData);
   return parsedData;
 };

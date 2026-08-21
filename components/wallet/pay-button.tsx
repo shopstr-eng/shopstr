@@ -18,10 +18,9 @@ import {
   Spinner,
 } from "@heroui/react";
 import {
-  getStoredMints,
+  getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
-import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   Mint as CashuMint,
@@ -31,6 +30,7 @@ import {
 } from "@cashu/cashu-ts";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
 import { CashuWalletContext } from "../../utils/context/context";
 import {
@@ -38,6 +38,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 const PayButton = () => {
   const [showPayModal, setShowPayModal] = useState(false);
@@ -51,9 +52,7 @@ const PayButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const mints = getStoredMints();
-  const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
-  const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []);
+  const { mints, tokens, history } = getLocalStorageData();
 
   const { theme } = useTheme();
 
@@ -178,10 +177,7 @@ const PayButton = () => {
       const changeProofs = [...keep, ...meltOutcome.changeProofs];
       const changeAmount =
         Array.isArray(changeProofs) && changeProofs.length > 0
-          ? changeProofs.reduce(
-              (acc, current: Proof) => acc + current.amount.toNumber(),
-              0
-            )
+          ? sumProofAmounts(changeProofs)
           : 0;
       const remainingProofs = tokens.filter(
         (p: Proof) =>
@@ -194,10 +190,7 @@ const PayButton = () => {
         proofArray = [...remainingProofs];
       }
       storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
-      const filteredTokenAmount = filteredProofs.reduce(
-        (acc, token: Proof) => acc + token.amount.toNumber(),
-        0
-      );
+      const filteredTokenAmount = sumProofAmounts(filteredProofs);
       const transactionAmount = filteredTokenAmount - changeAmount;
       storage.setJson(STORAGE_KEYS.HISTORY, [
         {

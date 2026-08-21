@@ -1,15 +1,16 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { type Event, verifyEvent } from "nostr-tools";
-import { cacheEvent } from "@/utils/db/db-service";
+import { cacheEventStrict } from "@/utils/db/db-service";
 import { isCacheableEventShape } from "@/utils/db/cache-event-policy";
 import { checkRateLimit, getRequestIp } from "@/utils/rate-limit";
 import { NostrEvent } from "@/utils/types/types";
 
-// Cache writes are a best-effort mirror of relay publishes; they carry
-// order/payment/message gift-wraps during peak checkout load. Limits are
-// primarily per-pubkey (the body's pubkey is verified below before any DB
-// write) so shared-NAT traffic from many buyers does not throttle each other.
-// A coarse per-IP backstop still bounds memory/abuse from pubkey rotation.
+// Cache writes carry order/payment/message gift-wraps during peak checkout
+// load. The endpoint only acknowledges a write after PostgreSQL accepts it,
+// so security-sensitive callers can fail closed. Limits are primarily
+// per-pubkey (the body's pubkey is verified below before any DB write) so
+// shared-NAT traffic from many buyers does not throttle each other. A coarse
+// per-IP backstop still bounds memory/abuse from pubkey rotation.
 const PER_PUBKEY_LIMIT = { limit: 600, windowMs: 60 * 1000 };
 const PER_IP_LIMIT = { limit: 2000, windowMs: 60 * 1000 };
 
@@ -58,7 +59,7 @@ export default async function handler(
     if (!verifyEvent(event as Event)) {
       return res.status(401).json({ error: "Invalid or unsigned Nostr event" });
     }
-    await cacheEvent(event);
+    await cacheEventStrict(event);
     res.status(200).json({ success: true });
   } catch (error) {
     console.error("Failed to cache event:", error);

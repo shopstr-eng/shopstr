@@ -122,10 +122,14 @@ describe("/api/storefront/register-slug (integration)", () => {
       buildStorefrontSlugCreateProof({ pubkey: pk, slug: "owner-shop" })
     );
     const signed = finalizeEvent(template, sk);
+    const tamperedSig = `${signed.sig[0] === "0" ? "1" : "0"}${signed.sig.slice(
+      1
+    )}`;
     const tampered = {
       ...signed,
-      sig: signed.sig.replace(/^.{2}/, "00"),
+      sig: tamperedSig,
     };
+    expect(tampered.sig).not.toBe(signed.sig);
 
     const req = createRequest(
       "POST",

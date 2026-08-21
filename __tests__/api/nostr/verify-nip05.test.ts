@@ -11,6 +11,10 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { lookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
 import handler from "@/pages/api/nostr/verify-nip05";
+import {
+  isPrivateOrLocalIp,
+  verifyNip05Claim,
+} from "@/utils/nostr/canonical-nip05";
 
 describe("/api/nostr/verify-nip05", () => {
   const mockedLookup = lookup as unknown as jest.Mock;
@@ -63,6 +67,8 @@ describe("/api/nostr/verify-nip05", () => {
     ({
       method,
       query,
+      headers: {},
+      socket: { remoteAddress: "127.0.0.1" },
     }) as Partial<NextApiRequest> as NextApiRequest;
 
   const mockPublicDns = () => {
@@ -148,6 +154,7 @@ describe("/api/nostr/verify-nip05", () => {
         headers: {
           Accept: "application/json",
           Host: "example.com",
+          "User-Agent": "Shopstr-NIP05-Verifier/1.0",
         },
         hostname: "example.com",
         method: "GET",
@@ -169,6 +176,53 @@ describe("/api/nostr/verify-nip05", () => {
     const lookupCallback = jest.fn();
     requestOptions.lookup("example.com", {}, lookupCallback);
     expect(lookupCallback).toHaveBeenCalledWith(null, "93.184.216.34", 4);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ verified: true });
+  });
+
+  it("pins the first DNS result and does not perform a second DNS lookup during request", async () => {
+    mockedLookup
+      .mockResolvedValueOnce([
+        {
+          address: "1.2.3.4",
+          family: 4,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          address: "127.0.0.1",
+          family: 4,
+        },
+      ]);
+    mockNip05Response({
+      body: JSON.stringify({
+        names: {
+          alice: "f".repeat(64),
+        },
+      }),
+    });
+
+    const res = createResponse();
+    await handler(
+      makeRequest({
+        nip05: "alice@example.com",
+        pubkey: "f".repeat(64),
+      }),
+      res
+    );
+
+    const requestOptions = mockedRequest.mock.calls[0]?.[0] as {
+      lookup: (
+        hostname: string,
+        options: unknown,
+        callback: (error: Error | null, address: string, family: number) => void
+      ) => void;
+    };
+    const lookupCallback = jest.fn();
+    requestOptions.lookup("example.com", {}, lookupCallback);
+
+    expect(mockedLookup).toHaveBeenCalledTimes(1);
+    expect(lookupCallback).toHaveBeenCalledWith(null, "1.2.3.4", 4);
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ verified: true });
   });
@@ -196,6 +250,31 @@ describe("/api/nostr/verify-nip05", () => {
       "NIP-05 verification fetch failed:",
       expect.any(Error)
     );
+  });
+
+  it("sends a User-Agent header on outbound NIP-05 requests", async () => {
+    mockPublicDns();
+    mockNip05Response({
+      body: JSON.stringify({
+        names: {
+          alice: "f".repeat(64),
+        },
+      }),
+    });
+
+    const res = createResponse();
+    await handler(
+      makeRequest({
+        nip05: "alice@example.com",
+        pubkey: "f".repeat(64),
+      }),
+      res
+    );
+
+    const requestOptions = mockedRequest.mock.calls[0]?.[0] as {
+      headers: Record<string, string>;
+    };
+    expect(requestOptions.headers["User-Agent"]).toBeTruthy();
   });
 
   it("rejects malformed NIP-05 identifiers before making an external request", async () => {
@@ -301,6 +380,31 @@ describe("/api/nostr/verify-nip05", () => {
     expect(res.body).toEqual({ verified: false });
   });
 
+  it.each([
+    "alice@example.local",
+    "alice@service.internal",
+    "alice@example.localhost",
+    "alice@example.localdomain",
+    "alice@example.home.arpa",
+  ])("rejects blocked hostname suffix %s before DNS lookup", async (nip05) => {
+    const res = createResponse();
+
+    await handler(
+      makeRequest({
+        nip05,
+        pubkey: "f".repeat(64),
+      }),
+      res
+    );
+
+    expect(mockedLookup).not.toHaveBeenCalled();
+    expect(mockedRequest).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({
+      error: "Invalid NIP-05 identifier",
+    });
+  });
+
   it("returns verified false when content-length exceeds the NIP-05 limit", async () => {
     mockPublicDns();
     mockNip05Response({
@@ -368,6 +472,148 @@ describe("/api/nostr/verify-nip05", () => {
     expect(res.statusCode).toBe(405);
     expect(res.body).toEqual({
       error: "Method not allowed",
+    });
+  });
+});
+
+describe("canonical NIP-05 verifier", () => {
+  it("classifies IPv4-mapped IPv6 private addresses as blocked", () => {
+    expect(isPrivateOrLocalIp("::ffff:127.0.0.1")).toBe(true);
+    expect(isPrivateOrLocalIp("::ffff:10.0.0.1")).toBe(true);
+  });
+
+  it.each([
+    "0.0.0.0",
+    "10.0.0.1",
+    "100.64.0.1",
+    "127.0.0.1",
+    "169.254.0.1",
+    "172.16.0.1",
+    "192.168.1.1",
+    "198.18.0.1",
+    "224.0.0.1",
+  ])("classifies private/local IPv4 range %s as blocked", (address) => {
+    expect(isPrivateOrLocalIp(address)).toBe(true);
+  });
+
+  it("pins a single resolved public address for the actual request", async () => {
+    const resolveHostname = jest.fn().mockResolvedValue([
+      {
+        address: "93.184.216.34",
+        family: 4,
+      },
+    ]);
+    const fetchJson = jest.fn().mockResolvedValue({
+      names: {
+        alice: "f".repeat(64),
+      },
+    });
+
+    const result = await verifyNip05Claim("alice@example.com", "f".repeat(64), {
+      resolveHostname,
+      fetchJson,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+    });
+
+    expect(resolveHostname).toHaveBeenCalledTimes(1);
+    expect(resolveHostname).toHaveBeenCalledWith("example.com");
+    expect(fetchJson).toHaveBeenCalledWith(
+      "https://example.com/.well-known/nostr.json?name=alice",
+      "example.com",
+      { address: "93.184.216.34", family: 4 },
+      expect.any(AbortSignal),
+      64 * 1024
+    );
+    expect(result).toMatchObject({
+      attempted: true,
+      verified: true,
+      claimed: "alice@example.com",
+      checkedAt: "2024-01-01T00:00:00.000Z",
+    });
+  });
+
+  it("times out when DNS resolution does not settle", async () => {
+    const verification = verifyNip05Claim("alice@example.com", "f".repeat(64), {
+      resolveHostname: () => new Promise(() => undefined),
+      timeoutMs: 5,
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+    });
+
+    const result = await Promise.race([
+      verification,
+      new Promise<"still_pending">((resolve) =>
+        setTimeout(() => resolve("still_pending"), 50)
+      ),
+    ]);
+
+    expect(result).toMatchObject({
+      attempted: true,
+      verified: false,
+      error: "timeout",
+    });
+  });
+
+  it("reports pubkey_mismatch when nostr.json is fetched but does not match", async () => {
+    const result = await verifyNip05Claim("alice@example.com", "f".repeat(64), {
+      resolveHostname: jest.fn().mockResolvedValue([
+        {
+          address: "93.184.216.34",
+          family: 4,
+        },
+      ]),
+      fetchJson: jest.fn().mockResolvedValue({
+        names: {
+          alice: "e".repeat(64),
+        },
+      }),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      attempted: true,
+      verified: false,
+      error: "pubkey_mismatch",
+    });
+  });
+
+  it("reports nostr_json_unavailable when nostr.json cannot be fetched or parsed", async () => {
+    const result = await verifyNip05Claim("alice@example.com", "f".repeat(64), {
+      resolveHostname: jest.fn().mockResolvedValue([
+        {
+          address: "93.184.216.34",
+          family: 4,
+        },
+      ]),
+      fetchJson: jest.fn().mockResolvedValue(null),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      attempted: true,
+      verified: false,
+      error: "nostr_json_unavailable",
+    });
+  });
+
+  it("matches nostr.json pubkeys case-insensitively", async () => {
+    const result = await verifyNip05Claim("alice@example.com", "f".repeat(64), {
+      resolveHostname: jest.fn().mockResolvedValue([
+        {
+          address: "93.184.216.34",
+          family: 4,
+        },
+      ]),
+      fetchJson: jest.fn().mockResolvedValue({
+        names: {
+          alice: "F".repeat(64),
+        },
+      }),
+      now: () => new Date("2024-01-01T00:00:00.000Z"),
+    });
+
+    expect(result).toMatchObject({
+      attempted: true,
+      verified: true,
     });
   });
 });

@@ -1,17 +1,7 @@
-import {
-  EventTemplate,
-  finalizeEvent,
-  generateSecretKey,
-  getPublicKey,
-  getEventHash,
-  nip19,
-  nip44,
-} from "nostr-tools";
+import { EventTemplate } from "nostr-tools";
 import { v4 as uuidv4 } from "uuid";
 import CryptoJS from "crypto-js";
 import {
-  Community,
-  CommunityRelays,
   NostrEvent,
   ProductFormValues,
   SavedAddress,
@@ -22,6 +12,7 @@ import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import {
   cacheEventToDatabase,
+  cacheEventToDatabaseStrict,
   deleteEventsFromDatabase,
 } from "@/utils/db/db-client";
 import {
@@ -30,6 +21,11 @@ import {
 } from "@/utils/nostr/request-auth";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
+import { buildWalletConfigV1 } from "@/utils/cashu/wallet-config";
+import { isHexPubkey } from "@/utils/nostr/pubkey";
+import { pickPreferredReplaceableEvent } from "@/utils/nostr/replaceable-events";
+import { getDefaultRelays, withBlastr } from "./relay-config";
+export { getDefaultRelays, withBlastr };
 
 export const REPORT_TYPES = [
   "nudity",
@@ -42,28 +38,6 @@ export const REPORT_TYPES = [
 ] as const;
 
 export type ReportType = (typeof REPORT_TYPES)[number];
-
-function containsRelay(relays: string[], relay: string): boolean {
-  return relays.some((r) => r.includes(relay));
-}
-
-function generateRandomTimestamp(): number {
-  const now = Math.floor(Date.now() / 1000);
-  const twoDaysInMilliseconds = 172800;
-  const randomSeconds = Math.floor(Math.random() * (twoDaysInMilliseconds + 1));
-  const randomTimestamp = now - randomSeconds;
-  return randomTimestamp;
-}
-
-export async function generateKeys(): Promise<{ nsec: string; npub: string }> {
-  const sk = generateSecretKey();
-  const nsec = nip19.nsecEncode(sk);
-
-  const pk = getPublicKey(sk);
-  const npub = nip19.npubEncode(pk);
-
-  return { nsec, npub };
-}
 
 export async function deleteEvent(
   nostr: NostrManager,
@@ -113,41 +87,6 @@ export function createNostrDeleteEvent(
   return msg;
 }
 
-interface BunkerTokenParams {
-  remotePubkey: string;
-  relays: string[];
-  secret?: string;
-}
-
-export function parseBunkerToken(token: string): BunkerTokenParams | null {
-  try {
-    if (!token.startsWith("bunker://")) {
-      return null;
-    }
-
-    // Extract the basic parts using URL
-    const url = new URL(token.replace("bunker://", "https://"));
-
-    // Get pubkey (hostname in URL)
-    const remotePubkey = url.hostname;
-
-    // Get relays from query params (can have multiple relay params)
-    const relays = url.searchParams.getAll("relay");
-
-    // Get optional secret
-    const secret = url.searchParams.get("secret") || undefined;
-
-    return {
-      remotePubkey,
-      relays,
-      secret,
-    };
-  } catch (error) {
-    console.error("Failed to parse bunker token:", error);
-    return null;
-  }
-}
-
 export async function createNostrProfileEvent(
   nostr: NostrManager,
   signer: NostrSigner,
@@ -170,7 +109,7 @@ export async function PostListing(
   isLoggedIn: boolean,
   nostr: NostrManager
 ) {
-  const relays = getStoredRelays();
+  const { relays } = getLocalStorageData();
 
   if (!signer || !isLoggedIn) throw new Error("Login required");
   const userPubkey = await signer.getPubKey();
@@ -248,267 +187,6 @@ export async function createNostrShopEvent(
     await cacheEventToDatabase(signedEvent).catch((error) =>
       console.error("Failed to cache shop profile event to database:", error)
     );
-  }
-}
-
-interface GiftWrappedMessageEvent {
-  id: string;
-  pubkey: string;
-  created_at: number;
-  content: string;
-  kind: number;
-  tags: string[][];
-}
-
-export async function constructGiftWrappedEvent(
-  senderPubkey: string,
-  recipientPubkey: string,
-  message: string,
-  subject: string,
-  options: {
-    kind?: number;
-    orderId?: string;
-    type?: number;
-    paymentType?: string;
-    paymentReference?: string;
-    paymentProof?: string;
-    orderAmount?: number;
-    status?: string;
-    productData?: ProductData;
-    quantity?: number;
-    productAddress?: string;
-    tracking?: string;
-    carrier?: string;
-    eta?: number;
-    isOrder?: boolean;
-    contact?: string;
-    address?: string;
-    pickup?: string;
-    buyerPubkey?: string;
-    donationAmount?: number;
-    donationPercentage?: number;
-    selectedSize?: string;
-    selectedVolume?: string;
-    selectedWeight?: string;
-    selectedBulkOption?: number;
-  } = {}
-): Promise<GiftWrappedMessageEvent> {
-  const relays = getStoredRelays();
-  const {
-    kind,
-    orderId,
-    type,
-    paymentType,
-    paymentReference,
-    paymentProof,
-    orderAmount,
-    status,
-    productData,
-    quantity,
-    productAddress,
-    tracking,
-    carrier,
-    eta,
-    isOrder,
-    contact,
-    address,
-    pickup,
-    buyerPubkey,
-    donationAmount,
-    donationPercentage,
-    selectedSize,
-    selectedVolume,
-    selectedWeight,
-    selectedBulkOption,
-  } = options;
-
-  const tags = [
-    ["p", recipientPubkey, relays[0]!],
-    ["subject", subject],
-  ];
-
-  // Add order-specific tags
-  if (isOrder) {
-    tags.push(["order", orderId ? orderId : uuidv4()]);
-
-    if (buyerPubkey) tags.push(["b", buyerPubkey]);
-    if (type) tags.push(["type", type.toString()]);
-    if (orderAmount) tags.push(["amount", orderAmount.toString()]);
-    // Add payment tag with format: ["payment", paymentType, paymentReference, paymentProof?]
-    // For order-payment: ["payment", type, destination/token]
-    // For order-receipt: ["payment", type, reference, proof]
-    if (paymentType && paymentReference) {
-      if (paymentProof) {
-        tags.push(["payment", paymentType, paymentReference, paymentProof]);
-      } else {
-        tags.push(["payment", paymentType, paymentReference]);
-      }
-    }
-    if (status) tags.push(["status", status]);
-    if (tracking) tags.push(["tracking", tracking]);
-    if (carrier) tags.push(["carrier", carrier]);
-    if (eta) tags.push(["eta", eta.toString()]);
-    if (contact) tags.push(["contact", contact]);
-    if (address) tags.push(["address", address]);
-    if (pickup) tags.push(["pickup", pickup]);
-    if (selectedSize) tags.push(["size", selectedSize]);
-    if (selectedVolume) tags.push(["volume", selectedVolume]);
-    if (selectedWeight) tags.push(["weight", selectedWeight]);
-    if (selectedBulkOption) tags.push(["bulk", selectedBulkOption.toString()]);
-    if (
-      donationAmount &&
-      donationAmount > 0 &&
-      donationPercentage !== undefined
-    ) {
-      tags.push([
-        "donation_amount",
-        donationAmount.toString(),
-        donationPercentage.toString(),
-      ]);
-    }
-
-    // Handle product information for orders
-    if (productData || productAddress) {
-      tags.push([
-        "item",
-        productData
-          ? `30402:${productData.pubkey}:${productData.d}`
-          : productAddress!,
-        quantity ? quantity.toString() : "1",
-      ]);
-    }
-  } else {
-    // Handle regular message product references
-    if (productData) {
-      tags.push([
-        "a",
-        `30402:${productData.pubkey}:${productData.d}`,
-        relays[0]!,
-      ]);
-    } else if (productAddress) {
-      tags.push(["a", productAddress, relays[0]!]);
-    }
-  }
-
-  const bareEvent = {
-    pubkey: senderPubkey,
-    created_at: Math.floor(Date.now() / 1000),
-    content: message,
-    kind: kind ? kind : 14,
-    tags,
-  };
-
-  // To generate a predictable ID before signing (as required by NIP-17 gift wrap structure),
-  // we create a temporary full event object and hash it using the official NIP-01 method.
-  const eventToHash: NostrEvent = {
-    ...bareEvent,
-    id: "", // dummy value for hashing
-    sig: "", // dummy value for hashing
-  };
-  const eventId = getEventHash(eventToHash);
-  return {
-    id: eventId,
-    ...bareEvent,
-  } as GiftWrappedMessageEvent;
-}
-
-export async function constructMessageSeal(
-  signer: NostrSigner,
-  messageEvent: GiftWrappedMessageEvent,
-  senderPubkey: string,
-  recipientPubkey: string,
-  randomPrivkey?: Uint8Array
-): Promise<NostrEvent> {
-  const stringifiedEvent = JSON.stringify(messageEvent);
-  let encryptedContent;
-  if (randomPrivkey) {
-    const conversationKey = nip44.getConversationKey(
-      randomPrivkey,
-      recipientPubkey
-    );
-    encryptedContent = nip44.encrypt(stringifiedEvent, conversationKey);
-  } else {
-    encryptedContent = await signer.encrypt(recipientPubkey, stringifiedEvent);
-  }
-
-  const sealEvent = {
-    pubkey: senderPubkey,
-    created_at: generateRandomTimestamp(),
-    content: encryptedContent,
-    kind: 13,
-    tags: [],
-  };
-  let signedEvent;
-  if (randomPrivkey) {
-    signedEvent = finalizeEvent(sealEvent, randomPrivkey);
-  } else {
-    signedEvent = await signer.sign(sealEvent);
-  }
-  return signedEvent;
-}
-
-export async function constructMessageGiftWrap(
-  sealEvent: NostrEvent,
-  randomPubkey: string,
-  randomPrivkey: Uint8Array,
-  recipientPubkey: string
-): Promise<NostrEvent> {
-  const relays = getStoredRelays();
-  const stringifiedEvent = JSON.stringify(sealEvent);
-  const conversationKey = nip44.getConversationKey(
-    randomPrivkey,
-    recipientPubkey
-  );
-  const encryptedEvent = nip44.encrypt(stringifiedEvent, conversationKey);
-  const giftWrapEvent = {
-    pubkey: randomPubkey,
-    created_at: generateRandomTimestamp(),
-    content: encryptedEvent,
-    kind: 1059,
-    tags: [["p", recipientPubkey, relays[0]!]],
-  };
-  const signedEvent = finalizeEvent(giftWrapEvent, randomPrivkey);
-  return signedEvent;
-}
-
-export async function sendGiftWrappedMessageEvent(
-  nostr: NostrManager,
-  giftWrappedMessageEvent: NostrEvent,
-  signer?: NostrSigner
-) {
-  const relays = getStoredRelays();
-  const writeRelays = getStoredWriteRelays();
-  const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-
-  // Cache the gift-wrapped event to database first and wait for confirmation
-  await cacheEventToDatabase(giftWrappedMessageEvent);
-
-  // After DB confirmation, attempt to publish to relays with timeout
-  try {
-    await newPromiseWithTimeout(
-      async (resolve, reject) => {
-        try {
-          await nostr.publish(giftWrappedMessageEvent, allWriteRelays);
-          resolve(undefined);
-        } catch (err) {
-          reject(err as Error);
-        }
-      },
-      { timeout: 21000 } // 21 second timeout
-    );
-  } catch (error) {
-    // Timeout or relay publish error - track for retry
-    console.warn(
-      "Relay publish timed out or failed for gift-wrapped message, but event is saved to database:",
-      error
-    );
-    const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
-    await trackFailedRelayPublish(
-      giftWrappedMessageEvent.id,
-      giftWrappedMessageEvent,
-      allWriteRelays,
-      signer
-    ).catch(console.error);
   }
 }
 
@@ -595,9 +273,9 @@ export async function createNostrRelayEvent(
   nostr: NostrManager,
   signer: NostrSigner
 ) {
-  const relayList = getStoredRelays();
-  const readRelayList = getStoredReadRelays();
-  const writeRelayList = getStoredWriteRelays();
+  const relayList = getLocalStorageData().relays;
+  const readRelayList = getLocalStorageData().readRelays;
+  const writeRelayList = getLocalStorageData().writeRelays;
   const relayTags = [];
   for (const relay of relayList) {
     relayTags.push(["r", relay]);
@@ -655,7 +333,7 @@ export async function createBlossomServerEvent(
   nostr: NostrManager,
   signer: NostrSigner
 ) {
-  const blossomServers = getStoredBlossomServers();
+  const blossomServers = getLocalStorageData().blossomServers;
   const serverTags = [];
   for (const server of blossomServers) {
     serverTags.push(["server", server]);
@@ -708,14 +386,15 @@ export async function publishSavedForLaterEvent(
 ) {
   try {
     let cartTags: string[][] = [];
+    const productAddress = `30402:${product.pubkey}:${product.d}`;
 
     if (quantity && quantity < 0) {
       cartTags = [...cartAddresses].filter(
-        (address) => !address[1]!.includes(`:${product.d}`)
+        (address) => !(address[0] === "a" && address[1] === productAddress)
       );
     } else if (quantity && quantity > 0) {
       for (let i = 0; i < quantity; i++) {
-        const productTag = ["a", "30402:" + product.pubkey + ":" + product.d];
+        const productTag = ["a", productAddress];
         cartTags.push(productTag);
       }
     }
@@ -747,20 +426,20 @@ export async function publishSavedForLaterEvent(
 
 export async function publishWalletEvent(
   nostr: NostrManager,
-  signer: NostrSigner
+  signer: NostrSigner,
+  keys: { cashuPubkey?: string; cashuPrivkey?: string },
+  options?: { mints?: string[] }
 ) {
   try {
-    const mints = getStoredMints();
+    if (!keys.cashuPrivkey) return;
+
     const userPubkey = await signer.getPubKey();
 
     const mintTagsSet = new Set<string>();
 
-    let walletMints = [];
-
-    mints.forEach((mint) => mintTagsSet.add(mint));
-    walletMints = Array.from(mintTagsSet);
-    const mintTags = walletMints.map((mint) => ["mint", mint]);
-    const walletContent = [...mintTags];
+    options?.mints?.forEach((mint) => mintTagsSet.add(mint));
+    const walletMints = Array.from(mintTagsSet);
+    const walletContent = buildWalletConfigV1(keys.cashuPrivkey, walletMints);
     const cashuWalletEvent: EventTemplate = {
       kind: 17375,
       tags: [],
@@ -842,8 +521,7 @@ export async function publishSpendingHistoryEvent(
   sentEventIds?: string[]
 ) {
   try {
-    const relays = getStoredRelays();
-    const writeRelays = getStoredWriteRelays();
+    const { relays, writeRelays } = getLocalStorageData();
     const allWriteRelays = withBlastr([...relays, ...writeRelays]);
 
     const eventContent = [
@@ -874,191 +552,9 @@ export async function publishSpendingHistoryEvent(
   }
 }
 
-export async function createOrUpdateCommunity(
-  signer: NostrSigner,
-  nostr: NostrManager,
-  details: {
-    d: string; // The unique identifier, should be constant for a community
-    name: string;
-    description: string;
-    image: string;
-    moderators: string[];
-    relays?: CommunityRelays; // optional relay declarations
-  }
-) {
-  const tags: string[][] = [
-    ["d", details.d],
-    ["name", details.name],
-    ["description", details.description],
-    ["image", details.image],
-    ["t", "shopstr"],
-  ];
-
-  // moderators as p tags with role marker
-  for (const mod_pk of details.moderators) {
-    tags.push(["p", mod_pk, "", "moderator"]);
-  }
-
-  // include relay tags if provided: ["relay", url, type]
-  if (details.relays) {
-    const {
-      approvals = [],
-      requests = [],
-      metadata = [],
-      all = [],
-    } = details.relays;
-    for (const r of approvals) tags.push(["relay", r, "approvals"]);
-    for (const r of requests) tags.push(["relay", r, "requests"]);
-    for (const r of metadata) tags.push(["relay", r, "metadata"]);
-    for (const r of all) tags.push(["relay", r]);
-  }
-
-  const eventTemplate: EventTemplate = {
-    kind: 34550,
-    created_at: Math.floor(Date.now() / 1000),
-    tags,
-    content: "",
-  };
-
-  const signedEvent = await finalizeAndSendNostrEvent(
-    signer,
-    nostr,
-    eventTemplate
-  );
-  // Cache community event to database
-  if (signedEvent) {
-    await cacheEventToDatabase(signedEvent).catch((error) =>
-      console.error("Failed to cache community event to database:", error)
-    );
-  }
-  return signedEvent;
-}
-
-export async function createCommunityPost(
-  signer: NostrSigner,
-  nostr: NostrManager,
-  community: Community,
-  content: string,
-  options?: {
-    parentEvent?: NostrEvent; // reply
-    crosspostCommunities?: Community[]; // cross-post to other communities (NIP-18)
-    externalId?: string; // NIP-73 external content id
-    contentKind?: string; // optional k/i usage
-  }
-) {
-  const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
-  const tags: string[][] = [];
-
-  // Always include uppercase A/P tags pointing to the community address/pubkey
-  tags.push(["A", communityAddress]);
-  tags.push(["P", community.pubkey]);
-  tags.push(["K", String(community.kind)]);
-
-  if (options?.parentEvent) {
-    // reply: reference parent event via e and p tags and include parent kind
-    tags.push(["a", communityAddress]);
-    tags.push(["e", options.parentEvent.id, ""]);
-    tags.push(["p", options.parentEvent.pubkey, ""]);
-    tags.push(["k", String(options.parentEvent.kind)]);
-  } else {
-    // top-level announcement: include lowercase a/p/k pointing to the community address/kind
-    tags.push(["a", communityAddress]);
-    tags.push(["p", community.pubkey]);
-    tags.push(["k", String(community.kind)]);
-  }
-
-  // cross-posting: include additional lowercase a tags pointing to other communities' addresses
-  if (options?.crosspostCommunities) {
-    for (const c of options.crosspostCommunities) {
-      const addr = `${c.kind}:${c.pubkey}:${c.d}`;
-      tags.push(["a", addr]);
-    }
-  }
-
-  // NIP-73 external ID support (i tag)
-  if (options?.externalId) {
-    tags.push(["i", options.externalId]);
-    if (options?.contentKind) tags.push(["k", options.contentKind]);
-  }
-
-  const eventTemplate: EventTemplate = {
-    kind: 1111,
-    created_at: Math.floor(Date.now() / 1000),
-    tags,
-    content,
-  };
-
-  // returns signed event (so caller can know id)
-  const signedEvent = await finalizeAndSendNostrEvent(
-    signer,
-    nostr,
-    eventTemplate
-  );
-  // Cache community post event to database
-  if (signedEvent) {
-    await cacheEventToDatabase(signedEvent).catch((error) =>
-      console.error("Failed to cache community post event to database:", error)
-    );
-  }
-  return signedEvent;
-}
-
-export async function approveCommunityPost(
-  signer: NostrSigner,
-  nostr: NostrManager,
-  postToApprove: NostrEvent,
-  community: Community
-) {
-  const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
-  const tags: string[][] = [
-    ["a", communityAddress],
-    ["e", postToApprove.id],
-    ["p", postToApprove.pubkey],
-    ["k", String(postToApprove.kind)],
-  ];
-  const eventTemplate: EventTemplate = {
-    kind: 4550,
-    created_at: Math.floor(Date.now() / 1000),
-    tags,
-    content: JSON.stringify(postToApprove),
-  };
-
-  // returns signed approval event (so caller can persist approval id)
-  const signedEvent = await finalizeAndSendNostrEvent(
-    signer,
-    nostr,
-    eventTemplate
-  );
-  // Cache community approval event to database
-  if (signedEvent) {
-    await cacheEventToDatabase(signedEvent).catch((error) =>
-      console.error(
-        "Failed to cache community approval event to database:",
-        error
-      )
-    );
-  }
-  return signedEvent;
-}
-
-// Moderator retract of approval -> publish deletion event (NIP-09, kind 5)
-export async function retractApproval(
-  signer: NostrSigner,
-  nostr: NostrManager,
-  approvalEventId: string,
-  reason?: string
-) {
-  const eventTemplate: EventTemplate = {
-    kind: 5,
-    created_at: Math.floor(Date.now() / 1000),
-    tags: [["e", approvalEventId]],
-    content: reason || `Retract approval ${approvalEventId}`,
-  };
-  return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
-}
-
 type FinalizeAndSendOptions = {
   waitForRelayPublish?: boolean;
+  requireDurableCache?: boolean;
 };
 
 async function publishEventWithRetryTracking(
@@ -1105,12 +601,15 @@ export async function finalizeAndSendNostrEvent(
   options: FinalizeAndSendOptions = {}
 ): Promise<NostrEvent> {
   try {
-    const writeRelays = getStoredWriteRelays();
-    const relays = getStoredRelays();
+    const { writeRelays, relays } = getLocalStorageData();
     const signedEvent = await signer.sign(eventTemplate);
 
     // Cache to database first and wait for confirmation
-    await cacheEventToDatabase(signedEvent);
+    if (options.requireDurableCache) {
+      await cacheEventToDatabaseStrict(signedEvent);
+    } else {
+      await cacheEventToDatabase(signedEvent);
+    }
 
     const allWriteRelays = withBlastr([...writeRelays, ...relays]);
 
@@ -1313,16 +812,6 @@ export async function blossomUploadImages(
 
 /***** HELPER FUNCTIONS *****/
 
-// function to validate public and private keys
-export function validateNPubKey(publicKey: string) {
-  const validPubKey = /^npub[a-zA-Z0-9]{59}$/;
-  return publicKey.match(validPubKey) !== null;
-}
-export function validateNSecKey(privateKey: string) {
-  const validPrivKey = /^nsec[a-zA-Z0-9]{59}$/;
-  return privateKey.match(validPrivKey) !== null;
-}
-
 export const setLocalStorageDataOnSignIn = ({
   encryptedPrivateKey,
   relays,
@@ -1413,7 +902,7 @@ export interface LocalStorageInterface {
   /**
    * @deprecated
    */
-  signInMethod: string;
+  signInMethod: string; // deprecated
   relays: string[];
   readRelays: string[];
   writeRelays: string[];
@@ -1693,44 +1182,6 @@ export const LogOut = () => {
   window.dispatchEvent(new Event("storage"));
 };
 
-export const decryptNpub = (npub: string): string | null => {
-  try {
-    const decoded = nip19.decode(npub);
-    return decoded.type === "npub" && typeof decoded.data === "string"
-      ? decoded.data
-      : null;
-  } catch {
-    return null;
-  }
-};
-
-export function nostrExtensionLoaded() {
-  if (!window.nostr) {
-    return false;
-  }
-  return true;
-}
-
-export function getDefaultRelays(): string[] {
-  return [
-    "wss://relay.damus.io",
-    "wss://nos.lol",
-    "wss://purplepag.es",
-    "wss://relay.primal.net",
-    "wss://relay.nostr.band",
-  ];
-}
-
-export function withBlastr(relays: string[]): string[] {
-  const out = [...relays];
-
-  const blastrRelay = "wss://sendit.nosflare.com";
-  if (!containsRelay(out, blastrRelay)) {
-    out.push(blastrRelay);
-  }
-  return out;
-}
-
 export function getDefaultMint(): string {
   return "https://mint.minibits.cash/Bitcoin";
 }
@@ -1845,3 +1296,278 @@ export {
   deleteAddress,
   setDefaultAddress,
 } from "@/utils/nostr/saved-address-helpers";
+
+const CONTACT_LIST_FETCH_TIMEOUT_MS = 2500;
+const latestLocalContactListEvents = new Map<string, NostrEvent>();
+const contactListMutationQueues = new Map<string, Promise<void>>();
+
+export type FollowMutationFailureReason =
+  | "invalid-pubkey"
+  | "self-follow"
+  | "unverified-contact-list"
+  | "no-contact-list"
+  | "unknown";
+
+export type FollowMutationResult =
+  | {
+      ok: true;
+      event: NostrEvent;
+      alreadyApplied: boolean;
+    }
+  | {
+      ok: false;
+      reason: FollowMutationFailureReason;
+    };
+
+export function getLatestLocalContactListEvent(
+  userPubkey: string
+): NostrEvent | null {
+  return latestLocalContactListEvents.get(userPubkey) ?? null;
+}
+
+function getContactListRelays(): string[] {
+  const { readRelays, writeRelays, relays } = getLocalStorageData();
+  return [...new Set([...readRelays, ...writeRelays, ...relays])];
+}
+
+async function withContactListFetchTimeout<T>(
+  task: () => Promise<T>,
+  fallback: T
+): Promise<{ value: T; didRespond: boolean }> {
+  try {
+    const value = await newPromiseWithTimeout<T>(
+      (resolve, reject) => {
+        void task().then(resolve).catch(reject);
+      },
+      { timeout: CONTACT_LIST_FETCH_TIMEOUT_MS }
+    );
+    return { value, didRespond: true };
+  } catch {
+    return { value: fallback, didRespond: false };
+  }
+}
+
+async function fetchLatestContactListEvent(
+  nostr: NostrManager,
+  userPubkey: string
+): Promise<{ event: NostrEvent | null; confirmedEmpty: boolean }> {
+  const localEvent = latestLocalContactListEvents.get(userPubkey) ?? null;
+  const relays = getContactListRelays();
+
+  const relayFetchPromise = Promise.all(
+    relays.map((relay) =>
+      withContactListFetchTimeout(
+        () =>
+          nostr.fetch(
+            [{ kinds: [3], authors: [userPubkey] }],
+            {},
+            [relay],
+            CONTACT_LIST_FETCH_TIMEOUT_MS
+          ),
+        [] as NostrEvent[]
+      )
+    )
+  );
+
+  const dbFetchPromise = withContactListFetchTimeout(
+    async () => {
+      if (typeof fetch !== "function") return null;
+
+      const response = await fetch(
+        `/api/db/fetch-contacts?pubkey=${encodeURIComponent(userPubkey)}`
+      );
+      if (!response.ok) {
+        throw new Error(`DB fetch failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      return (data?.contactList as NostrEvent) ?? null;
+    },
+    null as NostrEvent | null
+  );
+
+  const [relayResults, dbFetch] = await Promise.all([
+    relayFetchPromise,
+    dbFetchPromise,
+  ]);
+
+  const relayEvents = relayResults.flatMap((result) => result.value);
+  // Creating a brand-new contact list overwrites the user's follow list
+  // network-wide (kind 3 is replaceable), so "empty" is only trusted when
+  // EVERY relay responded — a single timed-out relay may be the one holding
+  // the real list.
+  const relayConfirmedEmpty =
+    relays.length === 0 || relayResults.every((result) => result.didRespond);
+  const dbEvent = dbFetch.value;
+  const allExternalEvents = dbEvent?.id
+    ? [...relayEvents, dbEvent]
+    : relayEvents;
+  const externalEvent = pickPreferredReplaceableEvent(allExternalEvents);
+
+  const confirmedEmpty =
+    !externalEvent &&
+    !localEvent &&
+    relayConfirmedEmpty &&
+    dbFetch.didRespond &&
+    !dbEvent &&
+    relayEvents.length === 0;
+
+  return {
+    event: pickPreferredReplaceableEvent(
+      [localEvent, externalEvent].filter(Boolean) as NostrEvent[]
+    ),
+    confirmedEmpty,
+  };
+}
+
+function getNextContactListCreatedAt(latestEvent: NostrEvent | null): number {
+  const now = Math.floor(Date.now() / 1000);
+  return latestEvent ? Math.max(now, Number(latestEvent.created_at) + 1) : now;
+}
+
+function enqueueContactListMutation(
+  userPubkey: string,
+  mutation: () => Promise<FollowMutationResult>
+): Promise<FollowMutationResult> {
+  const previous =
+    contactListMutationQueues.get(userPubkey) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(mutation);
+  contactListMutationQueues.set(
+    userPubkey,
+    next.then(
+      () => undefined,
+      () => undefined
+    )
+  );
+  return next;
+}
+
+export async function signNostrEvent(
+  signer: NostrSigner,
+  eventTemplate: EventTemplate
+): Promise<NostrEvent> {
+  return (await signer.sign(eventTemplate)) as NostrEvent;
+}
+
+async function persistContactListEvent(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  signedEvent: NostrEvent
+) {
+  const { writeRelays, relays } = getLocalStorageData();
+  const allWriteRelays = withBlastr([...writeRelays, ...relays]);
+
+  try {
+    await cacheEventToDatabase(signedEvent);
+  } catch (error) {
+    console.error(
+      "Failed to cache contact list event before relay publish:",
+      error
+    );
+  }
+
+  await publishEventWithRetryTracking(
+    nostr,
+    signer,
+    signedEvent,
+    allWriteRelays
+  );
+}
+
+export function cacheAndPublishSignedEventInBackground(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  signedEvent: NostrEvent
+) {
+  void persistContactListEvent(nostr, signer, signedEvent).catch((error) => {
+    console.error(
+      "Unexpected error while persisting contact list event:",
+      error
+    );
+  });
+}
+
+async function mutateContactList(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  targetPubkey: string,
+  action: "follow" | "unfollow"
+): Promise<FollowMutationResult> {
+  if (!isHexPubkey(targetPubkey)) {
+    return { ok: false, reason: "invalid-pubkey" };
+  }
+
+  const userPubkey = await signer.getPubKey();
+  if (action === "follow" && userPubkey === targetPubkey) {
+    return { ok: false, reason: "self-follow" };
+  }
+
+  return enqueueContactListMutation(userPubkey, async () => {
+    const { event: latestEvent, confirmedEmpty } =
+      await fetchLatestContactListEvent(nostr, userPubkey);
+
+    if (!latestEvent && !confirmedEmpty) {
+      return { ok: false, reason: "unverified-contact-list" };
+    }
+
+    const existingTags = latestEvent?.tags ?? [];
+    const existingContent = latestEvent?.content ?? "";
+    const isFollowing = existingTags.some(
+      (tag) => tag[0] === "p" && tag[1] === targetPubkey
+    );
+
+    if (action === "follow" && isFollowing && latestEvent) {
+      return { ok: true, event: latestEvent, alreadyApplied: true };
+    }
+    if (action === "unfollow" && !isFollowing) {
+      return latestEvent
+        ? { ok: true, event: latestEvent, alreadyApplied: true }
+        : { ok: false, reason: "no-contact-list" };
+    }
+
+    const nextTags =
+      action === "follow"
+        ? [...existingTags, ["p", targetPubkey]]
+        : existingTags.filter(
+            (tag) => !(tag[0] === "p" && tag[1] === targetPubkey)
+          );
+
+    const eventTemplate: EventTemplate = {
+      kind: 3,
+      created_at: getNextContactListCreatedAt(latestEvent),
+      tags: nextTags,
+      content: existingContent,
+    };
+
+    const signedEvent = await signNostrEvent(signer, eventTemplate);
+    latestLocalContactListEvents.set(userPubkey, signedEvent);
+    cacheAndPublishSignedEventInBackground(nostr, signer, signedEvent);
+    return { ok: true, event: signedEvent, alreadyApplied: false };
+  });
+}
+
+export async function followUser(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  targetPubkey: string
+): Promise<FollowMutationResult> {
+  try {
+    return await mutateContactList(nostr, signer, targetPubkey, "follow");
+  } catch (error) {
+    console.error("followUser failed:", error);
+    return { ok: false, reason: "unknown" };
+  }
+}
+
+export async function unfollowUser(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  targetPubkey: string
+): Promise<FollowMutationResult> {
+  try {
+    return await mutateContactList(nostr, signer, targetPubkey, "unfollow");
+  } catch (error) {
+    console.error("unfollowUser failed:", error);
+    return { ok: false, reason: "unknown" };
+  }
+}

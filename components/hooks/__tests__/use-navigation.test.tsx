@@ -15,6 +15,7 @@ describe("useNavigation Hook", () => {
     { path: "/wallet", activeFlag: "isWalletActive" },
     { path: "/my-listings", activeFlag: "isMyListingsActive" },
     { path: "/settings", activeFlag: "isProfileActive" },
+    { path: "/communities/bitcoin", activeFlag: "isCommunitiesActive" },
     { path: "/unknown-path", activeFlag: null }, // A case where no flag should be active
   ];
 

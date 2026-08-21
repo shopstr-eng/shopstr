@@ -2,6 +2,7 @@ import type { Event } from "nostr-tools";
 import { verifyEvent } from "nostr-tools";
 import type { NextApiRequest } from "next";
 import { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
+import { getTagValue } from "@/utils/nostr/tag-utils";
 
 export const SIGNED_EVENT_HEADER = "x-signed-event";
 export const SIGNED_HTTP_REQUEST_KIND = 27235;
@@ -37,10 +38,6 @@ function sortedProofFields(
         : ([[key, normalizedValue]] as Array<[string, string]>);
     })
     .sort(([left], [right]) => left.localeCompare(right));
-}
-
-function getTagValue(event: Event, tagName: string): string | undefined {
-  return event.tags.find((tag) => tag[0] === tagName)?.[1];
 }
 
 export function buildSignedHttpRequestProofTemplate(
@@ -97,7 +94,7 @@ export function matchesSignedHttpRequestProof(
     return (
       typeof tagName === "string" &&
       typeof tagValue === "string" &&
-      getTagValue(event, tagName) === tagValue
+      getTagValue(event.tags, tagName) === tagValue
     );
   });
 }

@@ -27,9 +27,16 @@ import {
   CommunityContext,
   CommunityContextInterface,
 } from "../utils/context/context";
-import { getDefaultRelays, LogOut } from "@/utils/nostr/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  getDefaultRelays,
+  LogOut,
+  followUser,
+  unfollowUser,
+} from "@/utils/nostr/nostr-helper-functions";
+import type { FollowMutationResult } from "@/utils/nostr/nostr-helper-functions";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
-import { HeroUIProvider } from "@heroui/react";
+import { HeroUIProvider, ToastProvider } from "@heroui/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
   fetchReviews,
@@ -39,9 +46,11 @@ import {
   fetchAllRelays,
   fetchAllBlossomServers,
   fetchCashuWallet,
+  fetchEscrowRecords,
   fetchAllCommunities,
   fetchGiftWrappedChatsAndMessages,
   fetchReports,
+  getUniqueProofs,
 } from "@/utils/nostr/fetch-service";
 import { fetchAllPostsAbortable } from "@/utils/nostr/fetch-all-posts-abortable";
 import {
@@ -65,6 +74,11 @@ import {
 import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
 import { MintRecoveryBoot } from "@/components/utility-components/mint-recovery-boot";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
+import {
+  applyAuthoritativeFollowsRefresh,
+  applyOptimisticFollow,
+  applyOptimisticUnfollow,
+} from "@/utils/nostr/follow-state";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 const mergeReportEvents = (
@@ -329,11 +343,110 @@ function Shopstr({ props }: { props: AppProps }) {
 
   const [followsContext, setFollowsContext] = useState<FollowsContextInterface>(
     {
+      directFollowList: [],
       followList: [],
       firstDegreeFollowsLength: 0,
       isLoading: true,
+      addFollow: async () => ({ ok: false, reason: "unknown" }),
+      removeFollow: async () => ({ ok: false, reason: "unknown" }),
     }
   );
+
+  const refreshFollowsAfterMutation = useCallback(
+    async (mutationVersion: number) => {
+      if (!nostr || !signer) return;
+
+      try {
+        const userPubkey = await signer.getPubKey();
+        const { relays, readRelays } = getLocalStorageData();
+        const allRelays = [...new Set([...relays, ...readRelays])];
+        const effectiveRelays =
+          allRelays.length > 0 ? allRelays : getDefaultRelays();
+
+        await fetchAllFollows(
+          nostr,
+          effectiveRelays,
+          (
+            directFollowList,
+            followList,
+            firstDegreeFollowsLength,
+            isLoading
+          ) => {
+            setFollowsContext((prev) => {
+              if (followsMutationVersionRef.current !== mutationVersion) {
+                return {
+                  ...prev,
+                  isLoading,
+                };
+              }
+
+              return applyAuthoritativeFollowsRefresh(prev, {
+                directFollowList,
+                followList,
+                firstDegreeFollowsLength,
+                isLoading,
+              });
+            });
+          },
+          userPubkey
+        );
+      } catch (error) {
+        console.error("Failed to refresh follows after mutation:", error);
+        setFollowsContext((prev) =>
+          followsMutationVersionRef.current === mutationVersion
+            ? { ...prev, isLoading: false }
+            : prev
+        );
+      }
+    },
+    [nostr, signer]
+  );
+
+  const addFollow = useCallback(
+    async (targetPubkey: string): Promise<FollowMutationResult> => {
+      if (!nostr || !signer) return { ok: false, reason: "unknown" };
+
+      const result = await followUser(nostr, signer, targetPubkey);
+      if (!result.ok) return result;
+
+      const mutationVersion = followsMutationVersionRef.current + 1;
+      followsMutationVersionRef.current = mutationVersion;
+      setFollowsContext(
+        (prev) => applyOptimisticFollow(prev, targetPubkey).state
+      );
+      void refreshFollowsAfterMutation(mutationVersion);
+
+      return result;
+    },
+    [nostr, refreshFollowsAfterMutation, signer]
+  );
+
+  const removeFollow = useCallback(
+    async (targetPubkey: string): Promise<FollowMutationResult> => {
+      if (!nostr || !signer) return { ok: false, reason: "unknown" };
+
+      const result = await unfollowUser(nostr, signer, targetPubkey);
+      if (!result.ok) return result;
+
+      const mutationVersion = followsMutationVersionRef.current + 1;
+      followsMutationVersionRef.current = mutationVersion;
+      setFollowsContext(
+        (prev) => applyOptimisticUnfollow(prev, targetPubkey).state
+      );
+      void refreshFollowsAfterMutation(mutationVersion);
+
+      return result;
+    },
+    [nostr, refreshFollowsAfterMutation, signer]
+  );
+
+  useEffect(() => {
+    setFollowsContext((prev) => ({
+      ...prev,
+      addFollow,
+      removeFollow,
+    }));
+  }, [addFollow, removeFollow]);
 
   const [communityContext, setCommunityContext] =
     useState<CommunityContextInterface>({
@@ -376,6 +489,7 @@ function Shopstr({ props }: { props: AppProps }) {
   const hydratedMarketplaceProductIdsRef = useRef<Set<string>>(new Set());
   const pendingMarketplaceProductIdsRef = useRef<Set<string>>(new Set());
   const didCompleteInitialMarketplaceHydrationRef = useRef(false);
+  const followsMutationVersionRef = useRef(0);
 
   const mergeReportsContext = (nextReports: NostrEvent[]) => {
     if (nextReports.length === 0) return;
@@ -508,18 +622,6 @@ function Shopstr({ props }: { props: AppProps }) {
     setIsChatLoading(isLoading);
   };
 
-  const editFollowsContext = (
-    followList: string[],
-    firstDegreeFollowsLength: number,
-    isLoading: boolean
-  ) => {
-    setFollowsContext({
-      followList,
-      firstDegreeFollowsLength,
-      isLoading,
-    });
-  };
-
   const editCommunityContext = (
     communities: Map<string, Community>,
     isLoading: boolean
@@ -556,13 +658,21 @@ function Shopstr({ props }: { props: AppProps }) {
     proofEvents: any[],
     cashuMints: string[],
     cashuProofs: Proof[],
-    isLoading: boolean
+    isLoading: boolean,
+    keys?: {
+      cashuPubkey?: string;
+      cashuPrivkey?: string;
+      walletIdentityUnavailable?: boolean;
+    }
   ) => {
     setCashuWalletContext({
       proofEvents,
       cashuMints,
       cashuProofs,
       isLoading,
+      cashuPubkey: keys?.cashuPubkey,
+      cashuPrivkey: keys?.cashuPrivkey,
+      walletIdentityUnavailable: keys?.walletIdentityUnavailable,
     });
   };
 
@@ -579,6 +689,7 @@ function Shopstr({ props }: { props: AppProps }) {
     async function fetchData() {
       const runId = ++initializationRunRef.current;
       const isCurrentRun = () => runId === initializationRunRef.current;
+      const capturedFollowsMutationVersion = followsMutationVersionRef.current;
       type EditorFn = (...args: any[]) => void;
 
       const guard = <TFn extends EditorFn>(fn: TFn) => {
@@ -618,7 +729,33 @@ function Shopstr({ props }: { props: AppProps }) {
         guardedEditShopContext: editShopContext,
         guardedEditProfileContext: editProfileContext,
         guardedEditChatContext: editChatContext,
-        guardedEditFollowsContext: editFollowsContext,
+        guardedEditFollowsContext: (
+          directFollowList: string[],
+          followList: string[],
+          firstDegreeFollowsLength: number,
+          isLoading: boolean
+        ) => {
+          setFollowsContext((prev) => {
+            const userMutatedSinceFetchStarted =
+              followsMutationVersionRef.current >
+              capturedFollowsMutationVersion;
+
+            if (userMutatedSinceFetchStarted) {
+              return {
+                ...prev,
+                isLoading,
+              };
+            }
+
+            return {
+              ...prev,
+              directFollowList,
+              followList,
+              firstDegreeFollowsLength,
+              isLoading,
+            };
+          });
+        },
         guardedEditRelaysContext: editRelaysContext,
         guardedEditBlossomContext: editBlossomContext,
         guardedEditCashuWalletContext: editCashuWalletContext,
@@ -643,14 +780,15 @@ function Shopstr({ props }: { props: AppProps }) {
 
       try {
         // Check login status
-        if (storage.getItem(STORAGE_KEYS.SIGN_IN_METHOD) === "amber") {
+        if (getLocalStorageData().signInMethod === "amber") {
           LogOut();
           return;
         }
 
-        const signInMethod = storage.getItem(STORAGE_KEYS.SIGN_IN_METHOD);
-        const storedSigner = storage.getJson<any>(STORAGE_KEYS.SIGNER, null);
-        if (signInMethod === "extension" || storedSigner?.type === "nip07") {
+        if (
+          getLocalStorageData().signInMethod === "extension" ||
+          getLocalStorageData().signer?.type === "nip07"
+        ) {
           if (!window.nostr?.nip44) {
             LogOut();
             return;
@@ -658,11 +796,8 @@ function Shopstr({ props }: { props: AppProps }) {
         }
 
         // Initialize relays
-        const relays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
-        const readRelays = storage.getJson<string[]>(
-          STORAGE_KEYS.READ_RELAYS,
-          []
-        );
+        const relays = getLocalStorageData().relays || [];
+        const readRelays = getLocalStorageData().readRelays || [];
         let allRelays = [...relays, ...readRelays];
 
         if (allRelays.length === 0) {
@@ -741,6 +876,12 @@ function Shopstr({ props }: { props: AppProps }) {
             )
           : Promise.resolve(undefined);
 
+        const escrowPromise = isLoggedIn
+          ? runTask("fetching escrow records", () =>
+              fetchEscrowRecords(nostr!, signer!, allRelays)
+            )
+          : Promise.resolve(undefined);
+
         const followsPromise = runTask(
           "fetching follows",
           () =>
@@ -750,7 +891,7 @@ function Shopstr({ props }: { props: AppProps }) {
               guardedEditFollowsContext,
               userPubkey
             ),
-          () => guardedEditFollowsContext([], 0, false)
+          () => guardedEditFollowsContext([], [], 0, false)
         );
 
         const communitiesPromise = runTask(
@@ -889,6 +1030,7 @@ function Shopstr({ props }: { props: AppProps }) {
           walletPromise,
           followsPromise,
           communitiesPromise,
+          escrowPromise,
         ]);
 
         if (!isCurrentRun()) return;
@@ -901,8 +1043,14 @@ function Shopstr({ props }: { props: AppProps }) {
         }
 
         if (walletResult?.cashuMints?.length && walletResult.cashuProofs) {
+          const { tokens: currentTokens } = getLocalStorageData();
+          const mergedProofs = getUniqueProofs([
+            ...(currentTokens as Proof[]),
+            ...walletResult.cashuProofs,
+          ]);
+
           storage.setJson(STORAGE_KEYS.MINTS, walletResult.cashuMints);
-          storage.setJson(STORAGE_KEYS.TOKENS, walletResult.cashuProofs);
+          storage.setJson(STORAGE_KEYS.TOKENS, mergedProofs);
         }
 
         await runTask("retrying relay publishes", async () => {
@@ -910,13 +1058,13 @@ function Shopstr({ props }: { props: AppProps }) {
             return;
           }
 
-          const relays = storage.getJson<string[]>(STORAGE_KEYS.RELAYS, []);
-          const writeRelays = storage.getJson<string[]>(
-            STORAGE_KEYS.WRITE_RELAYS,
-            []
-          );
+          const { relays, writeRelays } = getLocalStorageData();
           const retryNostr = new NostrManager([...relays, ...writeRelays]);
-          await retryFailedRelayPublishes(retryNostr, signer);
+          try {
+            await retryFailedRelayPublishes(retryNostr, signer);
+          } finally {
+            retryNostr.close();
+          }
         });
       } catch (error) {
         console.error("Critical error during app initialization:", error);
@@ -927,7 +1075,7 @@ function Shopstr({ props }: { props: AppProps }) {
         guardedEditShopContext(new Map(), false);
         guardedEditProfileContext(new Map(), false);
         guardedEditChatContext(new Map(), false);
-        guardedEditFollowsContext([], 0, false);
+        guardedEditFollowsContext([], [], 0, false);
         guardedEditRelaysContext([], [], [], false);
         guardedEditBlossomContext([], false);
         guardedEditCashuWalletContext([], [], [], false);
@@ -1102,6 +1250,7 @@ function App(props: AppProps) {
   return (
     <>
       <HeroUIProvider>
+        <ToastProvider />
         <NextThemesProvider attribute="class">
           <NostrContextProvider>
             <SignerContextProvider>

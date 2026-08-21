@@ -22,11 +22,14 @@ import {
 } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
-  getStoredMints,
+  getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
-import { storage, STORAGE_KEYS } from "@/utils/storage";
-import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  Proof,
+} from "@cashu/cashu-ts";
 import QRCode from "qrcode";
 import FailureModal from "@/components/utility-components/failure-modal";
 import {
@@ -38,12 +41,15 @@ import {
   MintOperationError,
   withMintRetry,
 } from "@/utils/cashu/mint-retry-service";
+import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
+import { getUniqueProofs } from "@/utils/nostr/fetch-service";
 import {
   markMintQuoteClaimed,
   markMintQuotePaid,
   recordPendingMintQuote,
   updatePendingMintQuote,
 } from "@/utils/cashu/pending-mint-operations";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 const MintButton = () => {
   const [showMintModal, setShowMintModal] = useState(false);
@@ -60,9 +66,7 @@ const MintButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const mints = getStoredMints();
-  const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
-  const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []);
+  const { mints } = getLocalStorageData();
 
   const {
     handleSubmit: handleMintSubmit,
@@ -84,11 +88,12 @@ const MintButton = () => {
   };
 
   const handleMint = async (numSats: number) => {
+    const invoiceAmount = toCashuMintAmountSats(numSats);
     const wallet = new CashuWallet(new CashuMint(mints[0]!));
     await wallet.loadMint();
 
     const { request: pr, quote: hash } = await withMintRetry(
-      () => wallet.createMintQuoteBolt11(numSats),
+      () => wallet.createMintQuoteBolt11(invoiceAmount),
       { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
     );
 
@@ -97,7 +102,7 @@ const MintButton = () => {
     recordPendingMintQuote({
       quoteId: hash,
       mintUrl: mints[0]!,
-      amount: numSats,
+      amount: invoiceAmount,
       invoice: pr,
     });
 
@@ -130,7 +135,7 @@ const MintButton = () => {
         console.error(e);
       }
     }
-    await invoiceHasBeenPaid(wallet, numSats, hash);
+    await invoiceHasBeenPaid(wallet, invoiceAmount, hash);
   };
 
   /**
@@ -140,7 +145,7 @@ const MintButton = () => {
    */
   async function invoiceHasBeenPaid(
     wallet: CashuWallet,
-    numSats: number,
+    invoiceAmount: number,
     hash: string
   ) {
     const pollMaxRounds = 30; // ~1 minute of UNPAID polling
@@ -149,8 +154,7 @@ const MintButton = () => {
 
     while (roundsConsumed < pollMaxRounds && !claimDone) {
       let quoteState:
-        | Awaited<ReturnType<typeof wallet.checkMintQuoteBolt11>>
-        | undefined;
+        Awaited<ReturnType<typeof wallet.checkMintQuoteBolt11>> | undefined;
       try {
         quoteState = await withMintRetry(
           () => wallet.checkMintQuoteBolt11(hash),
@@ -206,19 +210,24 @@ const MintButton = () => {
 
       try {
         const proofs = await withMintRetry(
-          () => wallet.mintProofsBolt11(numSats, hash),
+          () => wallet.mintProofsBolt11(invoiceAmount, hash),
           { maxAttempts: 5, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
         );
         if (proofs && proofs.length > 0) {
-          const proofArray = [...tokens, ...proofs];
+          const { tokens: currentTokens, history: currentHistory } =
+            getLocalStorageData();
+          const proofArray = getUniqueProofs([
+            ...(currentTokens as Proof[]),
+            ...proofs,
+          ]);
           storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
           storage.setJson(STORAGE_KEYS.HISTORY, [
             {
               type: 3,
-              amount: numSats,
+              amount: invoiceAmount,
               date: Math.floor(Date.now() / 1000),
             },
-            ...history,
+            ...currentHistory,
           ]);
           await publishProofEvent(
             nostr!,
@@ -226,7 +235,7 @@ const MintButton = () => {
             mints[0]!,
             proofs,
             "in",
-            numSats.toString()
+            invoiceAmount.toString()
           );
           markMintQuoteClaimed(hash);
           setPaymentConfirmed(true);

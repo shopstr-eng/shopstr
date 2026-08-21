@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
+import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import MintButton from "../../components/wallet/mint-button";
 import ReceiveButton from "../../components/wallet/receive-button";
 import SendButton from "../../components/wallet/send-button";
@@ -12,8 +13,7 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import ProtectedRoute from "@/components/utility-components/protected-route";
-import { storage, STORAGE_KEYS } from "@/utils/storage";
-import { getStoredMints } from "@/utils/nostr/nostr-helper-functions";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
@@ -23,11 +23,8 @@ const Wallet = () => {
   const [mintKeySetIds, setMintKeySetIds] = useState<MintKeyset[]>([]);
   const router = useRouter();
 
-  const mints = useMemo(() => getStoredMints(), []);
-  const tokens = useMemo(
-    () => storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []),
-    []
-  );
+  const localStorageData = useMemo(() => getLocalStorageData(), []);
+  const { mints, tokens } = localStorageData;
 
   useEffect(() => {
     const currentMint = new CashuMint(mints[0]!);
@@ -39,6 +36,7 @@ const Wallet = () => {
   useEffect(() => {
     const fetchLocalKeySet = async () => {
       if (wallet) {
+        await wallet.loadMint();
         const mintKeySetIdsArray = await wallet.keyChain.getKeysets();
         if (mintKeySetIdsArray) {
           setMintKeySetIds(mintKeySetIdsArray);
@@ -59,34 +57,21 @@ const Wallet = () => {
 
   useEffect(() => {
     if (tokens) {
-      const tokensTotal =
-        tokens.length >= 1
-          ? tokens.reduce(
-              (acc, token: Proof) => acc + token.amount.toNumber(),
-              0
-            )
-          : 0;
+      const tokensTotal = tokens.length >= 1 ? sumProofAmounts(tokens) : 0;
       setTotalBalance(tokensTotal);
     }
 
     const walletTotal =
-      filteredProofs.length >= 1
-        ? filteredProofs.reduce((acc, p: Proof) => acc + p.amount.toNumber(), 0)
-        : 0;
+      filteredProofs.length >= 1 ? sumProofAmounts(filteredProofs) : 0;
     setWalletBalance(walletTotal);
   }, [tokens, filteredProofs]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const newTokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
+      const { tokens: newTokens } = getLocalStorageData();
       if (newTokens) {
         const tokensTotal =
-          newTokens.length >= 1
-            ? newTokens.reduce(
-                (acc: number, token: Proof) => acc + token.amount.toNumber(),
-                0
-              )
-            : 0;
+          newTokens.length >= 1 ? sumProofAmounts(newTokens as Proof[]) : 0;
         setTotalBalance(tokensTotal);
 
         if (mintKeySetIds) {
@@ -95,10 +80,7 @@ const Wallet = () => {
           );
           const newWalletTotal =
             newFilteredProofs.length >= 1
-              ? newFilteredProofs.reduce(
-                  (acc: number, p: Proof) => acc + p.amount.toNumber(),
-                  0
-                )
+              ? sumProofAmounts(newFilteredProofs)
               : 0;
           setWalletBalance(newWalletTotal);
         }

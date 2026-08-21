@@ -15,8 +15,8 @@ import {
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { CommunityContext } from "@/utils/context/context";
+import { createOrUpdateCommunity } from "@/utils/nostr/community";
 import {
-  createOrUpdateCommunity,
   deleteEvent,
   finalizeAndSendNostrEvent,
 } from "@/utils/nostr/nostr-helper-functions";

@@ -6,6 +6,7 @@ import parseTags, {
 } from "@/utils/parsers/product-parser-functions";
 import ProductCard from "@/components/utility-components/product-card";
 import { getListingSlug } from "@/utils/url-slugs";
+import { productSatisfiesPriceFilter } from "@/utils/parsers/product-filter-helpers";
 
 interface StorefrontMyListingsProps {
   shopPubkey: string;
@@ -23,7 +24,8 @@ export default function StorefrontMyListings({
     return productContext.productEvents
       .filter((event: any) => event.pubkey === shopPubkey)
       .map((event: any) => parseTags(event))
-      .filter((p: ProductData | undefined) => p !== undefined) as ProductData[];
+      .filter((p: ProductData | undefined): p is ProductData => p !== undefined)
+      .filter(productSatisfiesPriceFilter);
   }, [shopPubkey, productContext.productEvents]);
 
   return (

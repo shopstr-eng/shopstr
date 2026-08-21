@@ -1,5 +1,6 @@
 import {
   buildShippingAdjustedProductTotals,
+  computeProductPricing,
   sumProductTotalsInSats,
 } from "../cart-totals";
 
@@ -89,5 +90,90 @@ describe("cart totals helpers", () => {
         "product-3": 300,
       })
     ).toBe(650);
+  });
+
+  describe("computeProductPricing", () => {
+    it("passes price and shipping through when there is no discount or quantity", () => {
+      expect(
+        computeProductPricing({
+          id: "product-1",
+          priceSats: 1000,
+          shippingSats: 50,
+          discountPercent: 0,
+          quantity: undefined,
+        })
+      ).toEqual({
+        id: "product-1",
+        status: "priced",
+        price: 1000,
+        shipping: 50,
+      });
+    });
+
+    it("scales price and shipping by quantity (rounding up)", () => {
+      expect(
+        computeProductPricing({
+          id: "product-1",
+          priceSats: 1000,
+          shippingSats: 50,
+          discountPercent: 0,
+          quantity: 3,
+        })
+      ).toEqual({
+        id: "product-1",
+        status: "priced",
+        price: 3000,
+        shipping: 150,
+      });
+    });
+
+    it("applies the discount and rounds up", () => {
+      // 1005 * 0.9 = 904.5 -> ceil 905
+      expect(
+        computeProductPricing({
+          id: "product-1",
+          priceSats: 1005,
+          shippingSats: 0,
+          discountPercent: 10,
+          quantity: undefined,
+        })
+      ).toEqual({ id: "product-1", status: "priced", price: 905, shipping: 0 });
+    });
+
+    it("rounds up after multiplying fractional sat amounts by quantity", () => {
+      // ceil(50.5 * 3) = ceil(151.5) = 152; ceil(10.2 * 3) = ceil(30.6) = 31
+      expect(
+        computeProductPricing({
+          id: "product-1",
+          priceSats: 10.2,
+          shippingSats: 50.5,
+          discountPercent: 0,
+          quantity: 3,
+        })
+      ).toEqual({
+        id: "product-1",
+        status: "priced",
+        price: 31,
+        shipping: 152,
+      });
+    });
+
+    it("applies the discount before multiplying by quantity", () => {
+      // discount: ceil(1005 * 0.85) = ceil(854.25) = 855; then * 2 = 1710
+      expect(
+        computeProductPricing({
+          id: "product-1",
+          priceSats: 1005,
+          shippingSats: 20,
+          discountPercent: 15,
+          quantity: 2,
+        })
+      ).toEqual({
+        id: "product-1",
+        status: "priced",
+        price: 1710,
+        shipping: 40,
+      });
+    });
   });
 });

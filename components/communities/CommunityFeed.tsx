@@ -28,7 +28,7 @@ import {
   createCommunityPost,
   approveCommunityPost,
   retractApproval,
-} from "@/utils/nostr/nostr-helper-functions";
+} from "@/utils/nostr/community";
 import { ProfileWithDropdown } from "../utility-components/profile/profile-dropdown";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 
