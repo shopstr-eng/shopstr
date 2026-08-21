@@ -21,15 +21,8 @@ import {
   Input,
 } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import {
-  getLocalStorageData,
-  publishProofEvent,
-} from "@/utils/nostr/nostr-helper-functions";
-import {
-  Mint as CashuMint,
-  Wallet as CashuWallet,
-  Proof,
-} from "@cashu/cashu-ts";
+import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
+import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import QRCode from "qrcode";
 import FailureModal from "@/components/utility-components/failure-modal";
 import {
@@ -42,13 +35,14 @@ import {
   withMintRetry,
 } from "@/utils/cashu/mint-retry-service";
 import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
-import { getUniqueProofs } from "@/utils/nostr/fetch-service";
 import {
   markMintQuoteClaimed,
   markMintQuotePaid,
   recordPendingMintQuote,
   updatePendingMintQuote,
 } from "@/utils/cashu/pending-mint-operations";
+import { creditProofsToLocalWallet } from "@/utils/cashu/local-wallet-cache";
+import { publishProofEventBestEffort } from "@/utils/cashu/wallet-recovery";
 
 const MintButton = () => {
   const [showMintModal, setShowMintModal] = useState(false);
@@ -213,25 +207,8 @@ const MintButton = () => {
           { maxAttempts: 5, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
         );
         if (proofs && proofs.length > 0) {
-          const { tokens: currentTokens, history: currentHistory } =
-            getLocalStorageData();
-          const proofArray = getUniqueProofs([
-            ...(currentTokens as Proof[]),
-            ...proofs,
-          ]);
-          localStorage.setItem("tokens", JSON.stringify(proofArray));
-          localStorage.setItem(
-            "history",
-            JSON.stringify([
-              {
-                type: 3,
-                amount: invoiceAmount,
-                date: Math.floor(Date.now() / 1000),
-              },
-              ...currentHistory,
-            ])
-          );
-          await publishProofEvent(
+          creditProofsToLocalWallet(proofs, invoiceAmount, 3);
+          const proofEventPublished = await publishProofEventBestEffort(
             nostr!,
             signer!,
             mints[0]!,
@@ -239,6 +216,23 @@ const MintButton = () => {
             "in",
             invoiceAmount.toString()
           );
+
+          if (!proofEventPublished) {
+            updatePendingMintQuote(hash, {
+              status: "paid_unclaimed",
+              lastErrorMessage:
+                "Failed to publish wallet proof event after mint",
+            });
+            setShowInvoiceCard(false);
+            setInvoice("");
+            setQrCodeUrl(null);
+            setFailureText(
+              "Payment received, but wallet backup failed. We'll automatically retry the claim the next time you open the app."
+            );
+            setShowFailureModal(true);
+            return;
+          }
+
           markMintQuoteClaimed(hash);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);

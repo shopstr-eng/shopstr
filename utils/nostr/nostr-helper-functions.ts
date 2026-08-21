@@ -470,12 +470,13 @@ export async function publishProofEvent(
   proofs: Proof[],
   direction: "in" | "out",
   amount: string,
-  deletedEventsArray?: string[]
+  deletedEventsArray?: string[],
+  options: { throwOnFailure?: boolean } = {}
 ) {
   try {
     const userPubkey = await signer?.getPubKey?.();
 
-    let signedEvent;
+    let signedEvent: NostrEvent | undefined;
     if (proofs.length > 0) {
       const tokenArray = {
         mint: mint,
@@ -507,7 +508,11 @@ export async function publishProofEvent(
       signedEvent && signedEvent.id ? signedEvent.id : "",
       deletedEventsArray
     );
-  } catch {
+    return signedEvent;
+  } catch (error) {
+    if (options.throwOnFailure) {
+      throw error;
+    }
     return;
   }
 }
@@ -837,6 +842,84 @@ const LOCALSTORAGECONSTANTS = {
   savedAddresses: "savedAddresses",
 };
 
+let cashuProofCache: Proof[] = [];
+
+const getProofKey = (proof: Partial<Proof>): string | undefined => {
+  if (typeof proof.secret === "string" && proof.secret.length > 0) {
+    return `secret:${proof.secret}`;
+  }
+  if (typeof proof.C === "string" && proof.C.length > 0) {
+    return `C:${proof.C}`;
+  }
+  return undefined;
+};
+
+const isCashuProofLike = (value: unknown): value is Proof => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const proof = value as {
+    id?: unknown;
+    amount?: unknown;
+    secret?: unknown;
+    C?: unknown;
+  };
+
+  return (
+    typeof proof.id === "string" &&
+    proof.amount !== undefined &&
+    typeof proof.secret === "string" &&
+    typeof proof.C === "string"
+  );
+};
+
+const getUniqueCashuProofs = (proofs: Proof[]): Proof[] => {
+  const seenProofs = new Set<string>();
+  const uniqueProofs: Proof[] = [];
+
+  for (const proof of proofs) {
+    const proofKey = getProofKey(proof);
+    if (!proofKey || seenProofs.has(proofKey)) continue;
+    seenProofs.add(proofKey);
+    uniqueProofs.push(proof);
+  }
+
+  return uniqueProofs;
+};
+
+export const getStoredLegacyCashuProofs = (): Proof[] => {
+  if (typeof window === "undefined") return [];
+
+  const storedProofs = localStorage.getItem(LOCALSTORAGECONSTANTS.tokens);
+  if (!storedProofs) return [];
+
+  try {
+    const parsedProofs = JSON.parse(storedProofs);
+    if (!Array.isArray(parsedProofs)) {
+      localStorage.removeItem(LOCALSTORAGECONSTANTS.tokens);
+      return [];
+    }
+
+    return getUniqueCashuProofs(parsedProofs.filter(isCashuProofLike));
+  } catch {
+    localStorage.removeItem(LOCALSTORAGECONSTANTS.tokens);
+    return [];
+  }
+};
+
+export const getCachedCashuProofs = (): Proof[] => [...cashuProofCache];
+
+export const setCachedCashuProofs = (proofs: Proof[] = []) => {
+  cashuProofCache = Array.isArray(proofs)
+    ? getUniqueCashuProofs([...proofs])
+    : [];
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"));
+  }
+};
+
 export const setLocalStorageDataOnSignIn = ({
   encryptedPrivateKey,
   relays,
@@ -868,6 +951,8 @@ export const setLocalStorageDataOnSignIn = ({
   signer?: NostrSigner;
   migrationComplete?: boolean;
 }) => {
+  setCachedCashuProofs([]);
+
   if (encryptedPrivateKey) {
     localStorage.setItem(
       LOCALSTORAGECONSTANTS.encryptedPrivateKey,
@@ -1104,16 +1189,10 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       );
     }
 
-    tokens = getLocalStorageJson<unknown[]>(LOCALSTORAGECONSTANTS.tokens, [], {
-      removeOnError: true,
-      validate: isArray,
-    });
-    if (
-      tokens.length === 0 &&
-      !localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)
-    ) {
-      localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
-    }
+    tokens = getUniqueCashuProofs([
+      ...getCachedCashuProofs(),
+      ...getStoredLegacyCashuProofs(),
+    ]);
 
     history = getLocalStorageJson<unknown[]>(
       LOCALSTORAGECONSTANTS.history,
@@ -1234,6 +1313,8 @@ export const getLocalStorageData = (): LocalStorageInterface => {
 };
 
 export const LogOut = () => {
+  setCachedCashuProofs([]);
+
   // remove old data
   localStorage.removeItem("npub");
   localStorage.removeItem("signIn");

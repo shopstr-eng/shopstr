@@ -4,10 +4,31 @@ import {
   getDefaultRelays,
   getLocalStorageData,
 } from "../nostr-helper-functions";
+import * as NostrHelpers from "../nostr-helper-functions";
+
+type CashuCacheHelpers = typeof NostrHelpers & {
+  getCachedCashuProofs?: () => unknown[];
+  setCachedCashuProofs?: (proofs?: unknown[]) => void;
+};
+
+type VolatileCashuCacheHelpers = typeof NostrHelpers & {
+  getCachedCashuProofs: () => unknown[];
+  setCachedCashuProofs: (proofs?: unknown[]) => void;
+};
+
+const cashuHelpers = NostrHelpers as CashuCacheHelpers;
+
+const getVolatileCashuCacheHelpers = ():
+  VolatileCashuCacheHelpers | undefined =>
+  typeof cashuHelpers.getCachedCashuProofs === "function" &&
+  typeof cashuHelpers.setCachedCashuProofs === "function"
+    ? (cashuHelpers as VolatileCashuCacheHelpers)
+    : undefined;
 
 describe("getLocalStorageData", () => {
   beforeEach(() => {
     localStorage.clear();
+    cashuHelpers.setCachedCashuProofs?.([]);
     jest.restoreAllMocks();
   });
 
@@ -69,5 +90,38 @@ describe("getLocalStorageData", () => {
       type: "nsec",
       encryptedPrivKey: "ncryptsec1mock",
     });
+  });
+
+  it("keeps the volatile Cashu proof cache isolated from caller mutation when available", () => {
+    const volatileCashuHelpers = getVolatileCashuCacheHelpers();
+    if (!volatileCashuHelpers) {
+      expect(cashuHelpers.setCachedCashuProofs).toBeUndefined();
+      return;
+    }
+
+    const firstProof = {
+      id: "00d0a1b24d1c1a53",
+      amount: 1,
+      secret: "first-secret",
+      C: "first-c",
+    };
+    const secondProof = {
+      id: "00d0a1b24d1c1a53",
+      amount: 2,
+      secret: "second-secret",
+      C: "second-c",
+    };
+    const originalProofs = [firstProof];
+
+    volatileCashuHelpers.setCachedCashuProofs(originalProofs);
+    originalProofs.push(secondProof);
+
+    expect(volatileCashuHelpers.getCachedCashuProofs()).toEqual([firstProof]);
+
+    const returnedProofs = volatileCashuHelpers.getCachedCashuProofs();
+    returnedProofs.push(secondProof as never);
+
+    expect(volatileCashuHelpers.getCachedCashuProofs()).toEqual([firstProof]);
+    expect(getLocalStorageData().tokens).toEqual([firstProof]);
   });
 });
