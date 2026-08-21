@@ -20,6 +20,7 @@ import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { resolveSellerCheckoutProfile } from "@/utils/cashu/p2pk-checkout";
 import { constructGiftWrappedEvent } from "@/utils/nostr/gift-wrap";
 import { recoverProofsToBuyerWallet } from "@/utils/cashu/wallet-recovery";
+import { getPendingSellerLightningPayouts } from "@/utils/payments/pending-lightning-payouts";
 import { NostrWebLNProvider } from "@getalby/sdk";
 import type { ProductData } from "@/utils/parsers/product-parser-functions";
 import type { ProductTotalsInSats } from "@/utils/cart-totals";
@@ -366,6 +367,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   installFetchMock();
   sessionStorage.clear();
+  localStorage.clear();
   mockGetLocalStorageData.mockReturnValue({ ...DEFAULT_LOCAL_STORAGE_DATA });
   mockGetSatoshiValue.mockResolvedValue(500);
   mockCashuWalletCtor.mockImplementation(() => ({
@@ -911,6 +913,19 @@ describe("sendTokens — per-product loop", () => {
     }));
   }
 
+  function renderSingleSellerCashuCheckout() {
+    const products = [
+      makeCartProduct({ id: "prod-a", pubkey: "seller_a", price: 1000 }),
+    ];
+    mockGetLocalStorageData.mockReturnValue({
+      ...DEFAULT_LOCAL_STORAGE_DATA,
+      tokens: [{ id: "ks1", amount: 1000, secret: "s1" }],
+    });
+    const rendered = renderCartInvoiceCard(products);
+    fireEvent.click(screen.getByRole("button", { name: /Online order/i }));
+    return rendered;
+  }
+
   it("calls safeSwap once per product in the cart (products loop individually, sellers are not consolidated)", async () => {
     const { products, setInvoiceIsPaid } = renderDigitalReadyToPay();
     mockFetchJsonOnce(makeCartQuoteResponse(products));
@@ -927,6 +942,174 @@ describe("sendTokens — per-product loop", () => {
     });
     expect(mockSafeSwap).toHaveBeenCalledTimes(2);
   }, 10000);
+
+  it("falls back to an ecash seller payment when Lightning cannot create a melt quote", async () => {
+    const { products, setCashuPaymentSent, setCashuPaymentFailed } =
+      renderSingleSellerCashuCheckout();
+    mockFetchJsonOnce(makeCartQuoteResponse(products));
+    mockResolveSellerCheckoutProfile.mockResolvedValueOnce({
+      content: {
+        payment_preference: "lightning",
+        lud16: "seller@getalby.com",
+        shopstr_donation: 0,
+      },
+    });
+    mockCashuWalletCtor.mockImplementation(() => ({
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      createMeltQuoteBolt11: jest.fn().mockResolvedValue(null),
+      keyChain: {
+        getKeysets: jest.fn().mockResolvedValue([{ id: "ks1" }]),
+      },
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(
+      () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+      { timeout: 5000 }
+    );
+    expect(setCashuPaymentFailed).not.toHaveBeenCalledWith(true);
+    expect(mockSafeMeltProofs).not.toHaveBeenCalled();
+    expect(
+      mockConstructGiftWrappedEvent.mock.calls.some(
+        ([, recipient, , subject, options]) =>
+          recipient === "seller_a" &&
+          subject === "order-payment" &&
+          options?.paymentType === "ecash" &&
+          options?.paymentReference === "cashuAmocktoken"
+      )
+    ).toBe(true);
+  });
+
+  it("keeps the successful Lightning order-payment contract unchanged", async () => {
+    const { products, setCashuPaymentSent } = renderSingleSellerCashuCheckout();
+    mockFetchJsonOnce(makeCartQuoteResponse(products));
+    mockResolveSellerCheckoutProfile.mockResolvedValueOnce({
+      content: {
+        payment_preference: "lightning",
+        lud16: "seller@getalby.com",
+        shopstr_donation: 0,
+      },
+    });
+    mockCashuWalletCtor.mockImplementation(() => ({
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      createMeltQuoteBolt11: jest.fn().mockResolvedValue({
+        amount: 978,
+        fee_reserve: 5,
+        quote: "paid-quote",
+      }),
+      keyChain: {
+        getKeysets: jest.fn().mockResolvedValue([{ id: "ks1" }]),
+      },
+    }));
+    mockSafeSwap
+      .mockResolvedValueOnce({
+        status: "swapped",
+        keep: [],
+        send: [{ id: "ks1", amount: 1000, secret: "seller" }],
+      })
+      .mockResolvedValueOnce({
+        status: "swapped",
+        keep: [{ id: "ks1", amount: 17, secret: "keep" }],
+        send: [{ id: "ks1", amount: 983, secret: "melt" }],
+      });
+    mockSafeMeltProofs.mockResolvedValueOnce({
+      status: "paid",
+      meltQuote: { amount: 978, quote: "paid-quote" },
+      changeProofs: [],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(
+      () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+      {
+        timeout: 5000,
+      }
+    );
+    expect(
+      mockConstructGiftWrappedEvent.mock.calls.some(
+        ([, recipient, , subject, options]) =>
+          recipient === "seller_a" &&
+          subject === "order-payment" &&
+          options?.paymentType === "lightning" &&
+          options?.paymentReference === "seller@getalby.com" &&
+          options?.orderAmount === 978
+      )
+    ).toBe(true);
+  });
+
+  it("does not report success or send an order-payment event while a Lightning melt is pending", async () => {
+    const setItemSpy = jest.spyOn(Storage.prototype, "setItem");
+    const { products, setCashuPaymentSent, setCashuPaymentFailed } =
+      renderSingleSellerCashuCheckout();
+    mockFetchJsonOnce(makeCartQuoteResponse(products));
+    mockResolveSellerCheckoutProfile.mockResolvedValueOnce({
+      content: {
+        payment_preference: "lightning",
+        lud16: "seller@getalby.com",
+        shopstr_donation: 0,
+      },
+    });
+    mockCashuWalletCtor.mockImplementation(() => ({
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      createMeltQuoteBolt11: jest.fn().mockResolvedValue({
+        amount: 978,
+        fee_reserve: 5,
+        quote: "pending-quote",
+      }),
+      keyChain: {
+        getKeysets: jest.fn().mockResolvedValue([{ id: "ks1" }]),
+      },
+    }));
+    mockSafeSwap
+      .mockResolvedValueOnce({
+        status: "swapped",
+        keep: [],
+        send: [{ id: "ks1", amount: 1000, secret: "seller" }],
+      })
+      .mockResolvedValueOnce({
+        status: "swapped",
+        keep: [{ id: "ks1", amount: 17, secret: "keep" }],
+        send: [{ id: "ks1", amount: 983, secret: "melt" }],
+      });
+    mockSafeMeltProofs.mockResolvedValueOnce({
+      status: "pending",
+      meltQuote: { quote: "pending-quote" },
+      changeProofs: [],
+      errorMessage: "mint still processing",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(() =>
+      expect(setCashuPaymentFailed).toHaveBeenCalledWith(true)
+    );
+    expect(setCashuPaymentSent).not.toHaveBeenCalledWith(true);
+    expect(
+      mockConstructGiftWrappedEvent.mock.calls.some(
+        ([, , , subject]) => subject === "order-payment"
+      )
+    ).toBe(false);
+    expect(getPendingSellerLightningPayouts()).toEqual([
+      expect.objectContaining({
+        mintUrl: "https://mint.example.com",
+        sellerPubkey: "seller_a",
+        status: "pending",
+        meltQuoteId: "pending-quote",
+        recoverableProofs: [
+          expect.objectContaining({ secret: "keep", amount: 17 }),
+        ],
+        quarantinedProofs: [
+          expect.objectContaining({ secret: "melt", amount: 983 }),
+        ],
+      }),
+    ]);
+    expect(setItemSpy).toHaveBeenCalledWith(
+      "tokens",
+      JSON.stringify([{ id: "ks1", amount: 17, secret: "keep" }])
+    );
+  });
 
   it("passes the complete cart payment contract to the Nostr sending layer", async () => {
     const coffee = makeCartProduct({
@@ -1040,6 +1223,175 @@ describe("sendTokens — per-product loop", () => {
     );
     expect(sentForProductA).toBe(true);
   }, 10000);
+
+  it("recovers only definitely unspent proofs after a PAID invoice when a seller melt is pending", async () => {
+    const products = [
+      makeCartProduct({ id: "prod-a", pubkey: "seller_a", price: 1000 }),
+    ];
+    mockGetLocalStorageData.mockReturnValue({ ...DEFAULT_LOCAL_STORAGE_DATA });
+    renderCartInvoiceCard(products);
+    fireEvent.click(screen.getByRole("button", { name: /Online order/i }));
+    mockFetchJsonOnce(makeCartQuoteResponse(products));
+    mockResolveSellerCheckoutProfile.mockResolvedValueOnce({
+      content: {
+        payment_preference: "lightning",
+        lud16: "seller@getalby.com",
+        shopstr_donation: 0,
+      },
+    });
+    mockSafeSwap
+      .mockResolvedValueOnce({
+        status: "swapped",
+        keep: [],
+        send: [{ id: "ks1", amount: 1000, secret: "seller" }],
+      })
+      .mockResolvedValueOnce({
+        status: "swapped",
+        keep: [{ id: "ks1", amount: 17, secret: "keep" }],
+        send: [{ id: "ks1", amount: 983, secret: "melt" }],
+      });
+    mockSafeMeltProofs.mockResolvedValueOnce({
+      status: "pending",
+      meltQuote: { quote: "pending-quote" },
+      changeProofs: [],
+      errorMessage: "mint still processing",
+    });
+    mockCashuWalletCtor.mockImplementation(() => ({
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      checkMintQuoteBolt11: jest.fn().mockResolvedValue({ state: "PAID" }),
+      mintProofsBolt11: jest
+        .fn()
+        .mockResolvedValue([{ id: "ks1", amount: 1000, secret: "s1" }]),
+      createMeltQuoteBolt11: jest.fn().mockResolvedValue({
+        amount: 978,
+        fee_reserve: 5,
+        quote: "pending-quote",
+      }),
+      keyChain: { getKeysets: jest.fn().mockResolvedValue([]) },
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Lightning/ }));
+
+    await waitFor(() =>
+      expect(mockRecoverProofsToBuyerWallet).toHaveBeenCalled()
+    );
+    expect(mockRecoverProofsToBuyerWallet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      "https://mint.example.com",
+      [expect.objectContaining({ secret: "keep", amount: 17 })],
+      17
+    );
+    expect(mockRecoverProofsToBuyerWallet).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      [expect.objectContaining({ secret: "s1" })],
+      expect.anything()
+    );
+    expect(await screen.findByText(/do not retry/i)).toBeInTheDocument();
+  }, 10000);
+});
+
+describe("shouldUseShipping / shouldUseContact — combined-mode routing", () => {
+  function renderMixedShippingAndPickupCart() {
+    const shipped = makeCartProduct({
+      id: "shipped-item",
+      pubkey: "seller_shipped",
+      title: "Poster",
+      shippingType: "Added Cost",
+    });
+    const pickup = makeCartProduct({
+      id: "pickup-item",
+      pubkey: "seller_pickup",
+      title: "Bakery Box",
+      shippingType: "Added Cost/Pickup",
+    });
+    const products = [shipped, pickup];
+    mockGetLocalStorageData.mockReturnValue({
+      ...DEFAULT_LOCAL_STORAGE_DATA,
+      tokens: [{ id: "ks1", amount: 3000, secret: "s1" }],
+    });
+    const rendered = renderCartInvoiceCard(products, undefined, {
+      signer: {
+        pubkey: BUYER_PUBKEY,
+        isLoggedIn: true,
+        signer: { getPubKey: jest.fn().mockResolvedValue(BUYER_PUBKEY) },
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Mixed delivery/ }));
+
+    return rendered;
+  }
+
+  it("routes an Added Cost/Pickup item to the contact/pickup path (not shipping) when the buyer picks Pickup", async () => {
+    const { products, setCashuPaymentSent } =
+      renderMixedShippingAndPickupCart();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Pickup/ }));
+    fillShippingForm({
+      Name: "Grace Hopper",
+      Address: "456 Oak Ave",
+      City: "Arlington",
+      "Postal Code": "22201",
+      "State/Province": "VA",
+      Country: "USA",
+    });
+    mockFetchJsonOnce(makeCartQuoteResponse(products));
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(
+      () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+      { timeout: 9000 }
+    );
+
+    const inquiryCall = mockConstructGiftWrappedEvent.mock.calls.find(
+      ([, recipient, , subject]: any) =>
+        recipient === "seller_pickup" && subject === "listing-inquiry"
+    );
+    expect(inquiryCall).toBeDefined();
+
+    const shipCall = mockConstructGiftWrappedEvent.mock.calls.find(
+      ([, recipient, message]: any) =>
+        recipient === "seller_pickup" &&
+        typeof message === "string" &&
+        message.startsWith("Please ship the product")
+    );
+    expect(shipCall).toBeUndefined();
+  }, 12000);
+
+  it("still routes an Added Cost/Pickup item to the shipping path when the buyer picks Free shipping", async () => {
+    const { products, setCashuPaymentSent } =
+      renderMixedShippingAndPickupCart();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Free shipping/ }));
+    fillShippingForm({
+      Name: "Grace Hopper",
+      Address: "456 Oak Ave",
+      City: "Arlington",
+      "Postal Code": "22201",
+      "State/Province": "VA",
+      Country: "USA",
+    });
+    mockFetchJsonOnce(makeCartQuoteResponse(products));
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(
+      () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+      { timeout: 9000 }
+    );
+
+    const shipCall = mockConstructGiftWrappedEvent.mock.calls.find(
+      ([, recipient, message]: any) =>
+        recipient === "seller_pickup" &&
+        typeof message === "string" &&
+        message.startsWith("Please ship the product")
+    );
+    expect(shipCall).toBeDefined();
+  }, 12000);
 });
 
 describe("cart clearing on success (localStorage['cart'])", () => {

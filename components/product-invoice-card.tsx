@@ -28,13 +28,18 @@ import {
   Keyset as MintKeyset,
   Proof,
 } from "@cashu/cashu-ts";
-import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
-import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import {
   resolveP2pkCheckoutOutputConfig,
   resolveSellerCheckoutProfile,
 } from "@/utils/cashu/p2pk-checkout";
+import { executeSellerLightningPayout } from "@/utils/payments/lightning-payout";
+import {
+  isUnresolvedSellerLightningPayoutError,
+  recordPendingSellerLightningPayout,
+  UnresolvedSellerLightningPayoutError,
+} from "@/utils/payments/pending-lightning-payouts";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
 import {
@@ -77,7 +82,6 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
 } from "@/utils/nostr/gift-wrap";
-import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { nip19 } from "nostr-tools";
@@ -1285,21 +1289,30 @@ export default function ProductInvoiceCard({
                 setInvoiceIsPaid(true);
                 break;
               } catch (handoffError) {
-                await recoverProofsToBuyerWallet(
-                  nostr!,
-                  signer!,
-                  mintUrl,
-                  proofs,
-                  newPrice
-                );
+                const unresolvedPayout =
+                  isUnresolvedSellerLightningPayoutError(handoffError);
+                const proofsToRecover = unresolvedPayout
+                  ? handoffError.recoverableProofs
+                  : proofs;
+                if (proofsToRecover.length > 0) {
+                  await recoverProofsToBuyerWallet(
+                    nostr!,
+                    signer!,
+                    mintUrl,
+                    proofsToRecover,
+                    sumProofAmounts(proofsToRecover)
+                  );
+                }
                 markMintQuoteClaimed(hash);
                 setShowInvoiceCard(false);
                 setInvoice("");
                 setQrCodeUrl(null);
                 setFailureText(
-                  isTimeoutError(handoffError)
-                    ? "Your payment was received but delivery to the seller timed out. Your sats have been credited to your wallet — please try the order again."
-                    : "Your payment was received but couldn't be delivered to the seller. Your sats have been credited to your wallet — please try the order again."
+                  unresolvedPayout
+                    ? handoffError.message
+                    : isTimeoutError(handoffError)
+                      ? "Your payment was received but delivery to the seller timed out. Your sats have been credited to your wallet — please try the order again."
+                      : "Your payment was received but couldn't be delivered to the seller. Your sats have been credited to your wallet — please try the order again."
                 );
                 setShowFailureModal(true);
                 console.warn(
@@ -1401,6 +1414,7 @@ export default function ProductInvoiceCard({
     let remainingProofs = proofs;
     let sellerToken;
     let donationToken;
+    let donationProofs: Proof[] = [];
     const orderId = uuidv4();
 
     if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
@@ -1478,6 +1492,7 @@ export default function ProductInvoiceCard({
         mint: tokenMintUrl,
         proofs: send,
       });
+      donationProofs = send;
       remainingProofs = keep;
     }
 
@@ -1500,158 +1515,112 @@ export default function ProductInvoiceCard({
     const paymentPreference =
       sellerProfile?.content?.payment_preference || "ecash";
     const lnurl = sellerProfile?.content?.lud16 || "";
+    const isLightningPayout = isEligibleForLightningPayout({
+      sellerP2pk: sellerProfile?.content?.p2pk,
+      paymentPreference,
+      lnurl,
+    });
+    let shouldSendEcashPayout = !isLightningPayout;
+    let ecashPayoutAmount = sellerAmount;
 
     // Step 1: Send payment message
-    if (
-      isEligibleForLightningPayout({
-        sellerP2pk: sellerProfile?.content?.p2pk,
-        paymentPreference,
+    if (isLightningPayout && sellerProofs) {
+      const payoutOutcome = await executeSellerLightningPayout(
+        wallet,
         lnurl,
-      }) &&
-      sellerProofs
-    ) {
-      const newAmount = Math.floor(sellerAmount * 0.98 - 2);
-      const ln = new LightningAddress(lnurl);
-      await wallet.loadMint();
-      await ln.fetch();
-      const invoice = await ln.requestInvoice({ satoshi: newAmount });
-      const invoicePaymentRequest = invoice.paymentRequest;
-      const meltQuote = await wallet.createMeltQuoteBolt11(
-        invoicePaymentRequest
+        sellerAmount,
+        sellerProofs
       );
-      if (meltQuote) {
-        const meltQuoteTotal =
-          meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
-        const swapOutcome = await safeSwap(
-          wallet,
-          meltQuoteTotal,
-          sellerProofs,
-          { sendConfig: { includeFees: true } }
+      if (payoutOutcome.status === "completed") {
+        const { meltAmount, changeProofs, changeAmount } = payoutOutcome;
+        const productDetails = buildProductDetailsSuffix({
+          selectedSize,
+          selectedVolume,
+          selectedWeight,
+          selectedBulkOption,
+          pickupLocation: selectedPickupLocation,
+        });
+        const paymentMessage = buildLightningPaymentMessage({
+          buyerNpub: userNPub,
+          title: productData.title,
+          productDetails,
+          lnurl,
+        });
+        await sendPaymentAndContactMessage(
+          productData.pubkey,
+          paymentMessage,
+          true,
+          false,
+          false,
+          orderId,
+          "lightning",
+          lnurl,
+          undefined,
+          meltAmount,
+          undefined,
+          undefined,
+          selectedPickupLocation || undefined,
+          donationAmount,
+          donationPercentage
         );
-        if (swapOutcome.status !== "swapped") {
-          throw new Error(
-            swapOutcome.errorMessage ??
-              `Pre-melt swap did not complete (${swapOutcome.status})`
-          );
-        }
-        const { keep, send } = swapOutcome;
-        const meltOutcome = await safeMeltProofs(wallet, meltQuote, send);
-        if (meltOutcome.status !== "paid") {
-          throw new Error(
-            meltOutcome.errorMessage ??
-              `Melt did not complete (${meltOutcome.status})`
-          );
-        }
-        if (meltOutcome.meltQuote) {
-          const meltAmount = meltOutcome.meltQuote.amount.toNumber();
-          const changeProofs = [...keep, ...meltOutcome.changeProofs];
-          const changeAmount =
-            Array.isArray(changeProofs) && changeProofs.length > 0
-              ? sumProofAmounts(changeProofs)
-              : 0;
-          const productDetails = buildProductDetailsSuffix({
-            selectedSize,
-            selectedVolume,
-            selectedWeight,
-            selectedBulkOption,
-            pickupLocation: selectedPickupLocation,
-          });
-          const paymentMessage = buildLightningPaymentMessage({
-            buyerNpub: userNPub,
-            title: productData.title,
-            productDetails,
-            lnurl,
-          });
-          await sendPaymentAndContactMessage(
-            productData.pubkey,
-            paymentMessage,
-            true,
-            false,
-            false,
-            orderId,
-            "lightning",
-            lnurl,
-            undefined,
-            meltAmount,
-            undefined,
-            undefined,
-            selectedPickupLocation || undefined,
-            donationAmount,
-            donationPercentage
-          );
 
-          if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
-            // Add delay between messages to prevent browser throttling
-            await new Promise((resolve) => setTimeout(resolve, 500));
+        if (changeAmount >= 1 && changeProofs.length > 0) {
+          // Add delay between messages to prevent browser throttling
+          await new Promise((resolve) => setTimeout(resolve, 500));
 
-            const encodedChange = getEncodedToken({
-              mint: tokenMintUrl,
-              proofs: changeProofs,
-            });
-            const changeMessage = "Overpaid fee change: " + encodedChange;
-            try {
-              await sendPaymentAndContactMessage(
-                productData.pubkey,
-                changeMessage,
-                true,
-                false,
-                false,
-                orderId,
-                "ecash",
-                encodedChange,
-                undefined,
-                changeAmount
-              );
-              await new Promise((resolve) => setTimeout(resolve, 500));
-            } catch (error) {
-              console.error("Failed to send change message:", error);
-            }
-          }
-        } else {
-          const unusedProofs = [...keep, ...send, ...meltOutcome.changeProofs];
-          const unusedAmount =
-            Array.isArray(unusedProofs) && unusedProofs.length > 0
-              ? sumProofAmounts(unusedProofs)
-              : 0;
-          const unusedToken = getEncodedToken({
+          const encodedChange = getEncodedToken({
             mint: tokenMintUrl,
-            proofs: unusedProofs,
+            proofs: changeProofs,
           });
-          const productDetails = buildProductDetailsSuffix({
-            selectedSize,
-            selectedVolume,
-            selectedWeight,
-            selectedBulkOption,
-            pickupLocation: selectedPickupLocation,
-          });
-          if (unusedToken && unusedProofs) {
-            const paymentMessage = buildEcashPaymentMessage({
-              buyerNpub: userNPub,
-              title: productData.title,
-              productDetails,
-              token: unusedToken,
-            });
+          const changeMessage = "Overpaid fee change: " + encodedChange;
+          try {
             await sendPaymentAndContactMessage(
               productData.pubkey,
-              paymentMessage,
+              changeMessage,
               true,
               false,
               false,
               orderId,
               "ecash",
-              unusedToken,
+              encodedChange,
               undefined,
-              unusedAmount,
-              undefined,
-              undefined,
-              selectedPickupLocation || undefined,
-              donationAmount,
-              donationPercentage
+              changeAmount
             );
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          } catch (error) {
+            console.error("Failed to send change message:", error);
           }
         }
+      } else if (payoutOutcome.status === "fallback") {
+        sellerProofs = payoutOutcome.fallbackProofs;
+        ecashPayoutAmount = payoutOutcome.fallbackAmount;
+        sellerToken = getEncodedToken({
+          mint: tokenMintUrl,
+          proofs: sellerProofs,
+        });
+        shouldSendEcashPayout = true;
+      } else {
+        const payout = recordPendingSellerLightningPayout({
+          orderId,
+          mintUrl: tokenMintUrl,
+          sellerPubkey: productData.pubkey,
+          lnurl,
+          sellerAmount,
+          status: payoutOutcome.status,
+          meltQuoteId: payoutOutcome.meltQuoteId,
+          recoverableProofs: [
+            ...remainingProofs,
+            ...donationProofs,
+            ...payoutOutcome.recoverableProofs,
+          ],
+          quarantinedProofs: payoutOutcome.quarantinedProofs,
+          errorMessage: payoutOutcome.errorMessage,
+        });
+        throw new UnresolvedSellerLightningPayoutError(payout);
       }
-    } else {
+    }
+
+    if (shouldSendEcashPayout) {
       const productDetails = buildProductDetailsSuffix({
         selectedSize,
         selectedVolume,
@@ -1676,7 +1645,7 @@ export default function ProductInvoiceCard({
           "ecash",
           sellerToken,
           undefined,
-          sellerAmount,
+          ecashPayoutAmount,
           undefined,
           undefined,
           selectedPickupLocation || undefined,
@@ -1910,6 +1879,12 @@ export default function ProductInvoiceCard({
   );
 
   const handleCashuPayment = async (price: number, data: any) => {
+    let cashuPaymentContext:
+      | {
+          currentTokens: Proof[];
+          filteredProofs: Proof[];
+        }
+      | undefined;
     try {
       if (!mints || mints.length === 0) {
         throw new Error("No Cashu mint available");
@@ -1965,6 +1940,10 @@ export default function ProductInvoiceCard({
       const filteredProofs = (currentTokens as Proof[]).filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
+      cashuPaymentContext = {
+        currentTokens: currentTokens as Proof[],
+        filteredProofs,
+      };
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
@@ -2026,7 +2005,31 @@ export default function ProductInvoiceCard({
       );
       setCashuPaymentSent(true);
       setPaymentConfirmed(true);
-    } catch {
+    } catch (error) {
+      if (
+        isUnresolvedSellerLightningPayoutError(error) &&
+        cashuPaymentContext
+      ) {
+        const consumedSecrets = new Set(
+          cashuPaymentContext.filteredProofs.map((proof) => proof.secret)
+        );
+        const unaffectedProofs = cashuPaymentContext.currentTokens.filter(
+          (proof) => !consumedSecrets.has(proof.secret)
+        );
+        try {
+          localStorage.setItem(
+            "tokens",
+            JSON.stringify([...unaffectedProofs, ...error.recoverableProofs])
+          );
+        } catch (storageError) {
+          console.warn(
+            "[product-invoice-card] failed to restore confirmed-unspent proofs to the local wallet:",
+            storageError
+          );
+        }
+        setFailureText(error.message);
+        setShowFailureModal(true);
+      }
       setCashuPaymentFailed(true);
     }
   };

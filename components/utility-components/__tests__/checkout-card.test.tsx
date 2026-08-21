@@ -591,3 +591,63 @@ describe("cart hydration on mount", () => {
     expect(screen.getByRole("button", { name: "Add To Cart" })).toBeEnabled();
   });
 });
+
+describe("merchant-quality badge thresholds", () => {
+  function renderWithMerchantReview(score: number) {
+    return renderCheckoutCard(
+      {},
+      {
+        reviews: {
+          merchantReviewsData: new Map([[SELLER_PUBKEY, [score]]]),
+          productReviewsData: new Map([[SELLER_PUBKEY, new Map()]]),
+        },
+      }
+    );
+  }
+
+  it("shows no badge at all when the seller has no review data", () => {
+    renderCheckoutCard();
+
+    expect(screen.queryByText("Trustworthy")).not.toBeInTheDocument();
+    expect(screen.queryByText("Solid")).not.toBeInTheDocument();
+    expect(screen.queryByText("Questionable")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Don't trust, don't bother verifying")
+    ).not.toBeInTheDocument();
+  });
+
+  it("labels a score of exactly 0.75 'Trustworthy'", () => {
+    renderWithMerchantReview(0.75);
+    expect(screen.getByText("Trustworthy")).toBeInTheDocument();
+  });
+
+  it("labels a score just below 0.75 'Solid', not 'Trustworthy'", () => {
+    renderWithMerchantReview(0.74);
+    expect(screen.getByText("Solid")).toBeInTheDocument();
+    expect(screen.queryByText("Trustworthy")).not.toBeInTheDocument();
+  });
+
+  it("labels a score of exactly 0.5 'Solid'", () => {
+    renderWithMerchantReview(0.5);
+    expect(screen.getByText("Solid")).toBeInTheDocument();
+  });
+
+  it("labels a score just below 0.5 'Questionable', not 'Solid'", () => {
+    renderWithMerchantReview(0.49);
+    expect(screen.getByText("Questionable")).toBeInTheDocument();
+    expect(screen.queryByText("Solid")).not.toBeInTheDocument();
+  });
+
+  it("labels a score of exactly 0.25 'Questionable'", () => {
+    renderWithMerchantReview(0.25);
+    expect(screen.getByText("Questionable")).toBeInTheDocument();
+  });
+
+  it("labels a score just below 0.25 'Don't trust, don't bother verifying', not 'Questionable'", () => {
+    renderWithMerchantReview(0.24);
+    expect(
+      screen.getByText("Don't trust, don't bother verifying")
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Questionable")).not.toBeInTheDocument();
+  });
+});

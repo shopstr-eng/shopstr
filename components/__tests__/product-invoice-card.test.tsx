@@ -21,6 +21,7 @@ import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { resolveSellerCheckoutProfile } from "@/utils/cashu/p2pk-checkout";
 import { constructGiftWrappedEvent } from "@/utils/nostr/gift-wrap";
 import { recoverProofsToBuyerWallet } from "@/utils/cashu/wallet-recovery";
+import { getPendingSellerLightningPayouts } from "@/utils/payments/pending-lightning-payouts";
 import { NostrWebLNProvider } from "@getalby/sdk";
 import QRCode from "qrcode";
 import type { ProductData } from "@/utils/parsers/product-parser-functions";
@@ -327,6 +328,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   installFetchMock();
   sessionStorage.clear();
+  localStorage.clear();
   mockGetLocalStorageData.mockReturnValue({ ...DEFAULT_LOCAL_STORAGE_DATA });
   mockGetSatoshiValue.mockResolvedValue(500);
   mockCashuWalletCtor.mockImplementation(() => ({
@@ -812,6 +814,69 @@ describe("invoiceHasBeenPaid polling", () => {
       await screen.findByText(/couldn't be delivered to the seller/)
     ).toBeInTheDocument();
   });
+
+  it("recovers only definitely unspent proofs after a PAID invoice when the seller melt is pending", async () => {
+    renderLightningReadyToPay();
+    mockFetchJsonOnce(makeMintQuoteResponse());
+    mockResolveSellerCheckoutProfile.mockResolvedValueOnce({
+      content: {
+        payment_preference: "lightning",
+        lud16: "seller@getalby.com",
+        shopstr_donation: 0,
+      },
+    });
+    mockSafeSwap
+      .mockResolvedValueOnce({
+        status: "swapped",
+        keep: [],
+        send: [{ id: "ks1", amount: 1000, secret: "seller" }],
+      })
+      .mockResolvedValueOnce({
+        status: "swapped",
+        keep: [{ id: "ks1", amount: 17, secret: "keep" }],
+        send: [{ id: "ks1", amount: 983, secret: "melt" }],
+      });
+    mockSafeMeltProofs.mockResolvedValueOnce({
+      status: "pending",
+      meltQuote: { quote: "pending-quote" },
+      changeProofs: [],
+      errorMessage: "mint still processing",
+    });
+    mockCashuWalletCtor.mockImplementation(() => ({
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      checkMintQuoteBolt11: jest.fn().mockResolvedValue({ state: "PAID" }),
+      mintProofsBolt11: jest
+        .fn()
+        .mockResolvedValue([{ id: "ks1", amount: 1000, secret: "s1" }]),
+      createMeltQuoteBolt11: jest.fn().mockResolvedValue({
+        amount: 978,
+        fee_reserve: 5,
+        quote: "pending-quote",
+      }),
+      keyChain: { getKeysets: jest.fn().mockResolvedValue([]) },
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Lightning/ }));
+
+    await waitFor(() =>
+      expect(mockRecoverProofsToBuyerWallet).toHaveBeenCalled()
+    );
+    expect(mockRecoverProofsToBuyerWallet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      "https://mint.example.com",
+      [expect.objectContaining({ secret: "keep", amount: 17 })],
+      17
+    );
+    expect(mockRecoverProofsToBuyerWallet).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      [expect.objectContaining({ secret: "s1" })],
+      expect.anything()
+    );
+    expect(await screen.findByText(/do not retry/i)).toBeInTheDocument();
+  });
 });
 
 describe("handleCashuPayment", () => {
@@ -941,6 +1006,174 @@ describe("sendTokens — seller payout branches", () => {
     fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
 
     await waitFor(() => expect(mockSafeMeltProofs).toHaveBeenCalled());
+  });
+
+  it("keeps the successful Lightning order-payment contract unchanged", async () => {
+    const { setCashuPaymentSent } = renderCashuReadyToPay();
+    mockFetchJsonOnce(makeMintQuoteResponse());
+    mockResolveSellerCheckoutProfile.mockResolvedValueOnce({
+      content: {
+        payment_preference: "lightning",
+        lud16: "seller@getalby.com",
+        shopstr_donation: 0,
+      },
+    });
+    mockCashuWalletCtor.mockImplementation(() => ({
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      createMeltQuoteBolt11: jest.fn().mockResolvedValue({
+        amount: 978,
+        fee_reserve: 5,
+        quote: "paid-quote",
+      }),
+      keyChain: {
+        getKeysets: jest.fn().mockResolvedValue([{ id: "ks1" }]),
+      },
+    }));
+    mockSafeSwap
+      .mockResolvedValueOnce({
+        status: "swapped",
+        keep: [],
+        send: [{ id: "ks1", amount: 1000, secret: "seller" }],
+      })
+      .mockResolvedValueOnce({
+        status: "swapped",
+        keep: [{ id: "ks1", amount: 17, secret: "keep" }],
+        send: [{ id: "ks1", amount: 983, secret: "melt" }],
+      });
+    mockSafeMeltProofs.mockResolvedValueOnce({
+      status: "paid",
+      meltQuote: { amount: 978, quote: "paid-quote" },
+      changeProofs: [],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(
+      () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+      {
+        timeout: 5000,
+      }
+    );
+    expect(
+      mockConstructGiftWrappedEvent.mock.calls.some(
+        ([, recipient, , subject, options]) =>
+          recipient === SELLER_PUBKEY &&
+          subject === "order-payment" &&
+          options?.paymentType === "lightning" &&
+          options?.paymentReference === "seller@getalby.com" &&
+          options?.orderAmount === 978
+      )
+    ).toBe(true);
+  });
+
+  it("falls back to an ecash seller payment when Lightning cannot create a melt quote", async () => {
+    const { setCashuPaymentSent, setCashuPaymentFailed } =
+      renderCashuReadyToPay();
+    mockFetchJsonOnce(makeMintQuoteResponse());
+    mockResolveSellerCheckoutProfile.mockResolvedValueOnce({
+      content: {
+        payment_preference: "lightning",
+        lud16: "seller@getalby.com",
+        shopstr_donation: 0,
+      },
+    });
+    mockCashuWalletCtor.mockImplementation(() => ({
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      createMeltQuoteBolt11: jest.fn().mockResolvedValue(null),
+      keyChain: {
+        getKeysets: jest.fn().mockResolvedValue([{ id: "ks1" }]),
+      },
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(
+      () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+      { timeout: 5000 }
+    );
+    expect(setCashuPaymentFailed).not.toHaveBeenCalledWith(true);
+    expect(mockSafeMeltProofs).not.toHaveBeenCalled();
+    expect(
+      mockConstructGiftWrappedEvent.mock.calls.some(
+        ([, recipient, , subject, options]) =>
+          recipient === SELLER_PUBKEY &&
+          subject === "order-payment" &&
+          options?.paymentType === "ecash" &&
+          options?.paymentReference === "cashuAmocktoken"
+      )
+    ).toBe(true);
+  });
+
+  it("does not report success or send an order-payment event while a Lightning melt is pending", async () => {
+    const setItemSpy = jest.spyOn(Storage.prototype, "setItem");
+    const { setCashuPaymentSent, setCashuPaymentFailed } =
+      renderCashuReadyToPay();
+    mockFetchJsonOnce(makeMintQuoteResponse());
+    mockResolveSellerCheckoutProfile.mockResolvedValueOnce({
+      content: {
+        payment_preference: "lightning",
+        lud16: "seller@getalby.com",
+        shopstr_donation: 0,
+      },
+    });
+    mockCashuWalletCtor.mockImplementation(() => ({
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      createMeltQuoteBolt11: jest.fn().mockResolvedValue({
+        amount: 978,
+        fee_reserve: 5,
+        quote: "pending-quote",
+      }),
+      keyChain: {
+        getKeysets: jest.fn().mockResolvedValue([{ id: "ks1" }]),
+      },
+    }));
+    mockSafeSwap
+      .mockResolvedValueOnce({
+        status: "swapped",
+        keep: [],
+        send: [{ id: "ks1", amount: 1000, secret: "seller" }],
+      })
+      .mockResolvedValueOnce({
+        status: "swapped",
+        keep: [{ id: "ks1", amount: 17, secret: "keep" }],
+        send: [{ id: "ks1", amount: 983, secret: "melt" }],
+      });
+    mockSafeMeltProofs.mockResolvedValueOnce({
+      status: "pending",
+      meltQuote: { quote: "pending-quote" },
+      changeProofs: [],
+      errorMessage: "mint still processing",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(() =>
+      expect(setCashuPaymentFailed).toHaveBeenCalledWith(true)
+    );
+    expect(setCashuPaymentSent).not.toHaveBeenCalledWith(true);
+    expect(
+      mockConstructGiftWrappedEvent.mock.calls.some(
+        ([, , , subject]) => subject === "order-payment"
+      )
+    ).toBe(false);
+    expect(getPendingSellerLightningPayouts()).toEqual([
+      expect.objectContaining({
+        mintUrl: "https://mint.example.com",
+        sellerPubkey: SELLER_PUBKEY,
+        status: "pending",
+        meltQuoteId: "pending-quote",
+        recoverableProofs: [
+          expect.objectContaining({ secret: "keep", amount: 17 }),
+        ],
+        quarantinedProofs: [
+          expect.objectContaining({ secret: "melt", amount: 983 }),
+        ],
+      }),
+    ]);
+    expect(setItemSpy).toHaveBeenCalledWith(
+      "tokens",
+      JSON.stringify([{ id: "ks1", amount: 17, secret: "keep" }])
+    );
   });
 
   it.each([
