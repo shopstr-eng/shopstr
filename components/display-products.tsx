@@ -33,6 +33,12 @@ import {
   getListingReportSignal,
   summarizeReportEvents,
 } from "@/utils/nostr/report-moderation";
+import {
+  createStorageKey,
+  storage,
+  STORAGE_KEY_PREFIXES,
+  STORAGE_KEYS,
+} from "@/utils/storage";
 import { nip19 } from "nostr-tools";
 
 const isNip19SearchQuery = (search: string) => {
@@ -117,9 +123,9 @@ const DisplayProducts = ({
   useEffect(() => {
     if (typeof window !== "undefined") {
       const storageKey = focusedPubkey
-        ? `marketplace-page-${focusedPubkey}`
-        : "marketplace-page-general";
-      const savedPage = sessionStorage.getItem(storageKey);
+        ? createStorageKey(STORAGE_KEY_PREFIXES.MARKETPLACE_PAGE, focusedPubkey)
+        : STORAGE_KEYS.MARKETPLACE_PAGE_GENERAL;
+      const savedPage = storage.getSessionItem(storageKey);
       if (savedPage) {
         const pageNum = parseInt(savedPage, 10);
         if (!isNaN(pageNum) && pageNum > 0) {
@@ -287,23 +293,28 @@ const DisplayProducts = ({
     const prevFiltersRef = `${selectedSearch}-${selectedLocation}-${Array.from(
       selectedCategories
     ).join(",")}`;
-    const currentFiltersRef = sessionStorage.getItem("last-filters-ref");
+    const currentFiltersRef = storage.getSessionItem(
+      STORAGE_KEYS.LAST_FILTERS_REF
+    );
 
     if (currentFiltersRef && currentFiltersRef !== prevFiltersRef) {
       // Filters changed, reset to page 1
       setCurrentPage(1);
       if (typeof window !== "undefined") {
         const storageKey = focusedPubkey
-          ? `marketplace-page-${focusedPubkey}`
-          : "marketplace-page-general";
-        sessionStorage.setItem(storageKey, "1");
+          ? createStorageKey(
+              STORAGE_KEY_PREFIXES.MARKETPLACE_PAGE,
+              focusedPubkey
+            )
+          : STORAGE_KEYS.MARKETPLACE_PAGE_GENERAL;
+        storage.setSessionItem(storageKey, "1");
       }
     } else if (currentPage > newTotalPages) {
       // Current page exceeds total pages, go to last page
       setCurrentPage(newTotalPages);
     }
 
-    sessionStorage.setItem("last-filters-ref", prevFiltersRef);
+    storage.setSessionItem(STORAGE_KEYS.LAST_FILTERS_REF, prevFiltersRef);
 
     onFilteredProductsChange?.(filtered);
   }, [
@@ -423,9 +434,9 @@ const DisplayProducts = ({
     // Save to session storage
     if (typeof window !== "undefined") {
       const storageKey = focusedPubkey
-        ? `marketplace-page-${focusedPubkey}`
-        : "marketplace-page-general";
-      sessionStorage.setItem(storageKey, page.toString());
+        ? createStorageKey(STORAGE_KEY_PREFIXES.MARKETPLACE_PAGE, focusedPubkey)
+        : STORAGE_KEYS.MARKETPLACE_PAGE_GENERAL;
+      storage.setSessionItem(storageKey, page.toString());
     }
   };
 

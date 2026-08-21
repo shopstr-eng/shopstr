@@ -9,6 +9,7 @@ import {
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { saveNWCString } from "@/utils/nostr/nostr-helper-functions";
 import { NostrWebLNProvider } from "@getalby/sdk";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 const OnboardingWallet = () => {
   const router = useRouter();
@@ -42,7 +43,7 @@ const OnboardingWallet = () => {
       const info = await nwc.getInfo();
 
       saveNWCString(nwcString);
-      localStorage.setItem("nwcInfo", JSON.stringify(info));
+      storage.setJson(STORAGE_KEYS.NWC_INFO, info);
 
       handleNext();
     } catch (e: any) {

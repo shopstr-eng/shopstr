@@ -20,7 +20,6 @@ import {
   Wallet as CashuWallet,
 } from "@cashu/cashu-ts";
 import {
-  getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
@@ -33,7 +32,7 @@ import {
 jest.setTimeout(15000);
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
-  getLocalStorageData: jest.fn(),
+  ...jest.requireActual("@/utils/nostr/nostr-helper-functions"),
   publishProofEvent: jest.fn(),
   publishWalletEvent: jest.fn(),
 }));
@@ -142,7 +141,7 @@ jest.mock("@heroicons/react/24/outline", () => ({
   InformationCircleIcon: () => <div data-testid="info-icon" />,
 }));
 
-const mockGetLocalStorageData = getLocalStorageData as jest.Mock;
+// No more mocks needed for getLocalStorageData as we use StorageManager now
 const mockGetDecodedToken = getDecodedToken as jest.Mock;
 const mockGetTokenMetadata = getTokenMetadata as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
@@ -202,12 +201,8 @@ const VALID_TOKEN =
 describe("ReceiveButton", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    Storage.prototype.setItem = jest.fn();
-    mockGetLocalStorageData.mockReturnValue({
-      mints: [],
-      tokens: [],
-      history: [],
-    });
+    window.localStorage.clear();
+    jest.spyOn(Storage.prototype, "setItem");
     mockPublishProofEvent.mockResolvedValue(undefined);
     mockPublishWalletEvent.mockResolvedValue(undefined);
     mockParseP2PKProofSet.mockReturnValue({ p2pk: null });
@@ -475,11 +470,9 @@ describe("ReceiveButton", () => {
       secret: "secret",
       C: "C1",
     };
-    mockGetLocalStorageData.mockReturnValue({
-      mints: [],
-      tokens: [mockProof],
-      history: [],
-    });
+    window.localStorage.setItem("tokens", JSON.stringify([mockProof]));
+    window.localStorage.setItem("mints", JSON.stringify([]));
+    window.localStorage.setItem("history", JSON.stringify([]));
     mockGetDecodedToken.mockReturnValue({
       mint: "https://testmint.com",
       proofs: [mockProof],

@@ -14,6 +14,7 @@ import {
   buildSignedHttpRequestProofTemplate,
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 export type EscrowPaymentRequestPayload = {
   type: "escrow-payment-request";
@@ -142,24 +143,18 @@ export async function combineAndRedeem(params: {
     const uniqueProofs = freshProofs.filter(
       (proof: Proof) => !tokens.some((t: Proof) => t.C === proof.C)
     );
-    localStorage.setItem(
-      "tokens",
-      JSON.stringify([...tokens, ...uniqueProofs])
-    );
+    storage.setJson(STORAGE_KEYS.TOKENS, [...tokens, ...uniqueProofs]);
     if (!mints.includes(tokenMint)) {
-      localStorage.setItem("mints", JSON.stringify([...mints, tokenMint]));
+      storage.setJson(STORAGE_KEYS.MINTS, [...mints, tokenMint]);
     }
-    localStorage.setItem(
-      "history",
-      JSON.stringify([
-        {
-          type: 1,
-          amount: tokenAmount,
-          date: Math.floor(Date.now() / 1000),
-        },
-        ...history,
-      ])
-    );
+    storage.setJson(STORAGE_KEYS.HISTORY, [
+      {
+        type: 1,
+        amount: tokenAmount,
+        date: Math.floor(Date.now() / 1000),
+      },
+      ...history,
+    ]);
 
     await publishProofEvent(
       nostr,

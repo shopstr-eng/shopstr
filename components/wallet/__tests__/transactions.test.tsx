@@ -1,12 +1,7 @@
 import { render, screen, act, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import Transactions from "../transactions";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import { Transaction } from "@/utils/types/types";
-
-jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
-  getLocalStorageData: jest.fn(() => ({ history: [] })),
-}));
 
 jest.mock("@heroicons/react/24/outline", () => ({
   ArrowDownTrayIcon: () => <div data-testid="icon-deposit" />,
@@ -16,11 +11,12 @@ jest.mock("@heroicons/react/24/outline", () => ({
   ShoppingBagIcon: () => <div data-testid="icon-purchase" />,
 }));
 
-const mockedGetLocalStorageData = getLocalStorageData as jest.Mock;
+// No more mocks needed for getLocalStorageData as we use StorageManager now
 
 describe("Transactions", () => {
   beforeEach(() => {
     jest.useFakeTimers();
+    window.localStorage.clear();
   });
 
   afterEach(() => {
@@ -41,7 +37,7 @@ describe("Transactions", () => {
       { type: 1, amount: 1000, date: 1721915400 }, // Deposit
       { type: 2, amount: 500, date: 1721915500 }, // Withdraw
     ];
-    mockedGetLocalStorageData.mockReturnValue({ history: mockHistory });
+    window.localStorage.setItem("history", JSON.stringify(mockHistory));
 
     render(<Transactions />);
 
@@ -59,7 +55,7 @@ describe("Transactions", () => {
       { type: 4, amount: 100, date: 1721915400 }, // Lightning
       { type: 5, amount: 100, date: 1721915400 }, // Purchase
     ];
-    mockedGetLocalStorageData.mockReturnValue({ history: mockHistory });
+    window.localStorage.setItem("history", JSON.stringify(mockHistory));
 
     render(<Transactions />);
 
@@ -74,7 +70,7 @@ describe("Transactions", () => {
     const initialHistory: Transaction[] = [
       { type: 1, amount: 100, date: 1721915400 },
     ];
-    mockedGetLocalStorageData.mockReturnValue({ history: initialHistory });
+    window.localStorage.setItem("history", JSON.stringify(initialHistory));
     render(<Transactions />);
 
     expect(screen.getByText("100 sats")).toBeInTheDocument();
@@ -84,7 +80,7 @@ describe("Transactions", () => {
       ...initialHistory,
       { type: 2, amount: 200, date: 1721915500 },
     ];
-    mockedGetLocalStorageData.mockReturnValue({ history: updatedHistory });
+    window.localStorage.setItem("history", JSON.stringify(updatedHistory));
 
     act(() => {
       jest.advanceTimersByTime(2100);
@@ -93,7 +89,6 @@ describe("Transactions", () => {
     await waitFor(() => {
       expect(screen.getByText("200 sats")).toBeInTheDocument();
     });
-    expect(mockedGetLocalStorageData).toHaveBeenCalledTimes(2);
   });
 
   it("should clean up the interval on component unmount", () => {

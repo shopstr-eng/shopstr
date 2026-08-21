@@ -3,9 +3,11 @@ import { NostrManager } from "@/utils/nostr/nostr-manager";
 import type { EventTemplate } from "nostr-tools";
 import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
+import type { StorageKey } from "@/utils/storage";
 
-const LOCAL_STORAGE_KEY = "shopstr.p2pkEscrowRecords";
-const ENCRYPTED_STORAGE_KEY = "shopstr.p2pkEscrowRecords.encrypted";
+const LOCAL_STORAGE_KEY = STORAGE_KEYS.P2PK_ESCROW_RECORDS;
+const ENCRYPTED_STORAGE_KEY = STORAGE_KEYS.P2PK_ESCROW_RECORDS_ENCRYPTED;
 export const BUYER_P2PK_ESCROW_EVENT_KIND = 30406;
 const BUYER_P2PK_ESCROW_D_PREFIX = "shopstr:p2pk-escrow";
 
@@ -205,22 +207,16 @@ function isEncryptedBuyerP2pkEscrowRecord(
   );
 }
 
-function readJsonArray<T>(storageKey: string): T[] {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+function readJsonArray<T>(storageKey: StorageKey): T[] {
+  return storage.getJson<T[]>(storageKey, [], {
+    removeOnError: true,
+    removeOnValidationError: true,
+    validate: (value): value is T[] => Array.isArray(value),
+  });
 }
 
-function writeJsonArray<T>(storageKey: string, records: T[]): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(storageKey, JSON.stringify(records));
+function writeJsonArray<T>(storageKey: StorageKey, records: T[]): void {
+  storage.setJson(storageKey, records);
 }
 
 export function getLocalBuyerP2pkEscrowRecords(): BuyerP2pkEscrowRecord[] {
@@ -274,8 +270,8 @@ function removeLocalBuyerP2pkEscrowRecord(orderId: string): void {
 
   if (records.length > 0) {
     writeJsonArray(LOCAL_STORAGE_KEY, records);
-  } else if (typeof window !== "undefined") {
-    window.localStorage.removeItem(LOCAL_STORAGE_KEY);
+  } else {
+    storage.removeItem(LOCAL_STORAGE_KEY);
   }
 }
 

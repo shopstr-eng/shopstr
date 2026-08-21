@@ -44,6 +44,7 @@ import SignInModal from "@/components/sign-in/SignInModal";
 import useReportEventFlow from "@/components/utility-components/use-report-event-flow";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import { useFollowToggle } from "@/components/hooks/use-follow-toggle";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 type ListingPageProps = {
   ogMeta: OgMetaProps;
@@ -258,12 +259,10 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
   } = useFollowToggle(sellerPubkey, { onRequireSignIn: onOpen });
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const pk =
-        sessionStorage.getItem("sf_seller_pubkey") ||
-        localStorage.getItem("sf_seller_pubkey");
-      if (pk) setSfSellerPubkey(pk);
-    }
+    const pk =
+      storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) ||
+      storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
+    if (pk) setSfSellerPubkey(pk);
   }, []);
 
   useEffect(() => {
@@ -324,10 +323,10 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
       if (matchingEvent) {
         if (sfSellerPubkey && matchingEvent.pubkey !== sfSellerPubkey) {
           setSfSellerPubkey("");
-          sessionStorage.removeItem("sf_seller_pubkey");
-          sessionStorage.removeItem("sf_shop_slug");
-          localStorage.removeItem("sf_seller_pubkey");
-          localStorage.removeItem("sf_shop_slug");
+          storage.removeSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
+          storage.removeSessionItem(STORAGE_KEYS.SF_SHOP_SLUG);
+          storage.removeItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
+          storage.removeItem(STORAGE_KEYS.SF_SHOP_SLUG);
         }
         const resolvedListing = resolveListingStateFromEvent(matchingEvent);
         if (resolvedListing) {

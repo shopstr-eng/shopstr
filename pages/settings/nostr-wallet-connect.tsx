@@ -8,10 +8,8 @@ import {
   Spinner,
 } from "@heroui/react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
-import {
-  getLocalStorageData,
-  saveNWCString,
-} from "@/utils/nostr/nostr-helper-functions";
+import { saveNWCString } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   CheckCircleIcon,
@@ -33,8 +31,9 @@ const NWCSettingsPage = () => {
   // Load existing connection and info on mount
   useEffect(() => {
     const loadInfo = () => {
-      const { nwcString: savedString, nwcInfo: savedInfo } =
-        getLocalStorageData();
+      const savedString = storage.getItem(STORAGE_KEYS.NWC_STRING);
+      const savedInfo = storage.getItem(STORAGE_KEYS.NWC_INFO);
+
       if (savedString) {
         setNwcString(savedString);
       }
@@ -42,7 +41,7 @@ const NWCSettingsPage = () => {
         try {
           const info = JSON.parse(savedInfo);
           setWalletInfo(info);
-          if (info.methods.includes("get_balance") && savedString) {
+          if (info.methods?.includes("get_balance") && savedString) {
             fetchBalance(savedString);
           }
         } catch (e) {
@@ -108,7 +107,7 @@ const NWCSettingsPage = () => {
 
       // Save successful connection
       saveNWCString(nwcString);
-      localStorage.setItem("nwcInfo", JSON.stringify(info));
+      storage.setJson(STORAGE_KEYS.NWC_INFO, info);
       setWalletInfo(info);
       setIsSaved(true);
 
@@ -125,7 +124,7 @@ const NWCSettingsPage = () => {
         }`
       );
       saveNWCString("");
-      localStorage.removeItem("nwcInfo");
+      storage.removeItem(STORAGE_KEYS.NWC_INFO);
     } finally {
       setIsLoading(false);
       if (nwc) {
@@ -140,7 +139,7 @@ const NWCSettingsPage = () => {
     setBalance(null);
     setError(null);
     saveNWCString("");
-    localStorage.removeItem("nwcInfo");
+    storage.removeItem(STORAGE_KEYS.NWC_INFO);
   };
 
   return (

@@ -1,8 +1,6 @@
 import { Proof } from "@cashu/cashu-ts";
-import {
-  getLocalStorageData,
-  publishProofEvent,
-} from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEvent } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 type Nostr = Parameters<typeof publishProofEvent>[0];
 type Signer = Parameters<typeof publishProofEvent>[1];
@@ -16,7 +14,6 @@ type Signer = Parameters<typeof publishProofEvent>[1];
  * Idempotency: callers must only invoke this once per failed claim. The
  * pending-mint-store should be transitioned to `claimed` immediately after
  * a successful call so boot recovery does not re-attempt the (already issued)
- * mint quote.
  */
 export async function recoverProofsToBuyerWallet(
   nostr: Nostr,
@@ -28,20 +25,19 @@ export async function recoverProofsToBuyerWallet(
   if (typeof window === "undefined") return;
   if (!proofs || proofs.length === 0) return;
 
-  const { tokens, history } = getLocalStorageData();
+  const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
+  const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []);
+
   const proofArray = [...tokens, ...proofs];
-  window.localStorage.setItem("tokens", JSON.stringify(proofArray));
-  window.localStorage.setItem(
-    "history",
-    JSON.stringify([
-      {
-        type: 3,
-        amount,
-        date: Math.floor(Date.now() / 1000),
-      },
-      ...history,
-    ])
-  );
+  storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
+  storage.setJson(STORAGE_KEYS.HISTORY, [
+    {
+      type: 3,
+      amount,
+      date: Math.floor(Date.now() / 1000),
+    },
+    ...history,
+  ]);
 
   // Best-effort wallet event publish; localStorage is the source of truth and
   // sendGiftWrappedMessageEvent / publishProofEvent already cache to DB first

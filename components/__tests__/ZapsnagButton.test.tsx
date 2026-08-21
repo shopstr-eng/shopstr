@@ -96,6 +96,7 @@ jest.mock("nostr-tools", () => ({
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalStorageData: jest.fn(),
+  getStoredRelays: jest.fn(() => []),
 }));
 
 jest.mock("@/utils/nostr/gift-wrap", () => ({

@@ -15,7 +15,6 @@ import {
   mockFetchJsonOnce,
   type CheckoutContextOverrides,
 } from "@/test-utils/checkout-test-helpers";
-import { getLocalStorageJson } from "@/utils/safe-json";
 import { isP2pkEscrowFeatureEnabled } from "@/utils/cashu/p2pk-checkout";
 import type { ProductData } from "@/utils/parsers/product-parser-functions";
 
@@ -208,13 +207,8 @@ jest.mock(
   })
 );
 
-jest.mock("@/utils/safe-json", () => ({
-  getLocalStorageJson: jest.fn(),
-}));
-
 // ── Typed mock handles ────────────────────────────────────────────────────────
 
-const mockGetLocalStorageJson = getLocalStorageJson as jest.Mock;
 const mockIsP2pkEscrowFeatureEnabled = isP2pkEscrowFeatureEnabled as jest.Mock;
 
 // ── Fixtures & render helper ─────────────────────────────────────────────────
@@ -267,9 +261,6 @@ function latestCallProps(mockFn: jest.Mock) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockIsP2pkEscrowFeatureEnabled.mockReturnValue(false);
-  mockGetLocalStorageJson.mockImplementation(
-    (_key: string, fallback: unknown) => fallback
-  );
   installFetchMock();
   localStorage.clear();
   jest.spyOn(Storage.prototype, "setItem");
@@ -445,10 +436,6 @@ describe("handleAddToCart", () => {
   });
 
   it("persists {code: discountCode} into localStorage cartDiscounts keyed by productData.pubkey, guarded by isCartDiscountsMap", async () => {
-    mockGetLocalStorageJson.mockImplementation(
-      (key: string, fallback: unknown) =>
-        key === "cartDiscounts" ? {} : fallback
-    );
     const { productData } = renderCheckoutCard({
       currency: "SATS",
       totalCost: 900,
@@ -470,11 +457,9 @@ describe("handleAddToCart", () => {
   });
 
   it("does not corrupt existing cartDiscounts entries for other products when adding this one", async () => {
-    mockGetLocalStorageJson.mockImplementation(
-      (key: string, fallback: unknown) =>
-        key === "cartDiscounts"
-          ? { other_seller_pubkey: { code: "OLD10" } }
-          : fallback
+    localStorage.setItem(
+      "cartDiscounts",
+      JSON.stringify({ other_seller_pubkey: { code: "OLD10" } })
     );
     const { productData } = renderCheckoutCard({
       currency: "SATS",
@@ -570,22 +555,15 @@ describe("Buy Now / Add to Cart gating", () => {
 });
 
 describe("cart hydration on mount", () => {
-  it("hydrates cart state from localStorage via getLocalStorageJson", () => {
-    mockGetLocalStorageJson.mockImplementation(
-      (key: string, fallback: unknown) =>
-        key === "cart" ? [{ id: "prod1" }] : fallback
-    );
+  it("hydrates cart state from the storage manager", () => {
+    localStorage.setItem("cart", JSON.stringify([{ id: "prod1" }]));
 
     renderCheckoutCard({ id: "prod1" });
 
     expect(screen.getByRole("button", { name: "Add To Cart" })).toBeDisabled();
   });
 
-  it("defaults to an empty cart when getLocalStorageJson returns null", () => {
-    mockGetLocalStorageJson.mockImplementation(
-      (key: string, fallback: unknown) => (key === "cart" ? null : fallback)
-    );
-
+  it("defaults to an empty cart when storage is empty", () => {
     renderCheckoutCard({ id: "prod1" });
 
     expect(screen.getByRole("button", { name: "Add To Cart" })).toBeEnabled();

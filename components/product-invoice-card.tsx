@@ -101,6 +101,7 @@ import {
   SavedAddress,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 type ListingMintQuoteResponse = {
   request: string;
@@ -324,29 +325,26 @@ export default function ProductInvoiceCard({
   useEffect(() => {
     if (paymentConfirmed && pendingOrderRef.current) {
       try {
-        sessionStorage.setItem(
-          "orderSummary",
-          JSON.stringify({
-            productTitle: pendingOrderRef.current.productTitle,
-            productImage: productData.images[0] || "",
-            amount: pendingOrderRef.current.amount,
-            currency: pendingOrderRef.current.currency,
-            paymentMethod: pendingOrderRef.current.paymentMethod,
-            orderId: pendingOrderRef.current.orderId,
-            shippingCost: productData.shippingCost
-              ? String(productData.shippingCost)
-              : undefined,
-            selectedSize,
-            selectedVolume,
-            selectedWeight,
-            selectedBulkOption: selectedBulkOption
-              ? String(selectedBulkOption)
-              : undefined,
-            shippingAddress: pendingOrderRef.current.shippingAddress,
-            pickupLocation: selectedPickupLocation || undefined,
-            sellerPubkey: pendingOrderRef.current.sellerPubkey,
-          })
-        );
+        storage.setSessionJson(STORAGE_KEYS.ORDER_SUMMARY, {
+          productTitle: pendingOrderRef.current.productTitle,
+          productImage: productData.images[0] || "",
+          amount: pendingOrderRef.current.amount,
+          currency: pendingOrderRef.current.currency,
+          paymentMethod: pendingOrderRef.current.paymentMethod,
+          orderId: pendingOrderRef.current.orderId,
+          shippingCost: productData.shippingCost
+            ? String(productData.shippingCost)
+            : undefined,
+          selectedSize,
+          selectedVolume,
+          selectedWeight,
+          selectedBulkOption: selectedBulkOption
+            ? String(selectedBulkOption)
+            : undefined,
+          shippingAddress: pendingOrderRef.current.shippingAddress,
+          pickupLocation: selectedPickupLocation || undefined,
+          sellerPubkey: pendingOrderRef.current.sellerPubkey,
+        });
       } catch {}
     }
   }, [paymentConfirmed]);
@@ -2003,18 +2001,15 @@ export default function ProductInvoiceCard({
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
-      localStorage.setItem(
-        "history",
-        JSON.stringify([
-          {
-            type: 5,
-            amount: serverAmount,
-            date: Math.floor(Date.now() / 1000),
-          },
-          ...currentHistory,
-        ])
-      );
+      storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
+      storage.setJson(STORAGE_KEYS.HISTORY, [
+        {
+          type: 5,
+          amount: serverAmount,
+          date: Math.floor(Date.now() / 1000),
+        },
+        ...currentHistory,
+      ]);
       await publishProofEvent(
         nostr!,
         signer!,

@@ -49,6 +49,7 @@ import {
   recordPendingMintQuote,
   updatePendingMintQuote,
 } from "@/utils/cashu/pending-mint-operations";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 const MintButton = () => {
   const [showMintModal, setShowMintModal] = useState(false);
@@ -219,18 +220,15 @@ const MintButton = () => {
             ...(currentTokens as Proof[]),
             ...proofs,
           ]);
-          localStorage.setItem("tokens", JSON.stringify(proofArray));
-          localStorage.setItem(
-            "history",
-            JSON.stringify([
-              {
-                type: 3,
-                amount: invoiceAmount,
-                date: Math.floor(Date.now() / 1000),
-              },
-              ...currentHistory,
-            ])
-          );
+          storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
+          storage.setJson(STORAGE_KEYS.HISTORY, [
+            {
+              type: 3,
+              amount: invoiceAmount,
+              date: Math.floor(Date.now() / 1000),
+            },
+            ...currentHistory,
+          ]);
           await publishProofEvent(
             nostr!,
             signer!,

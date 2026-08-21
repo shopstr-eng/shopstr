@@ -21,6 +21,7 @@ jest.mock("@/utils/nostr/nip98-auth", () => ({
 
 import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
+import { storage } from "@/utils/storage";
 
 // Phase 1 fixture: no arbiterPubkey/disputeStatus, matching records
 // persisted before Phase 2 shipped.
@@ -94,8 +95,12 @@ describe("p2pk-escrow-records", () => {
   });
 
   it("restoreEscrowRecordLocally writes the record to localStorage, defaulting disputeStatus to none", () => {
+    const setJson = jest.spyOn(storage, "setJson");
     restoreEscrowRecordLocally(record);
     expect(getLocalBuyerP2pkEscrowRecords()).toEqual([normalizedRecord]);
+    expect(setJson).toHaveBeenCalledWith("shopstr.p2pkEscrowRecords", [
+      normalizedRecord,
+    ]);
   });
 
   it("restoreEscrowRecordLocally deduplicates by orderId — calling twice does not create a duplicate", () => {
