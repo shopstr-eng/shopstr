@@ -4653,7 +4653,7 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     expect(result.profileSetFromChats).toContain(senderPubkey);
   });
 
-  it("logs error and alert when a message event has no p-tag (lines 1030-1038)", async () => {
+  it("skips a message without a p-tag and completes chat loading", async () => {
     jest.doMock("@/utils/db/db-client", () => ({
       cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
     }));
@@ -4708,29 +4708,35 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
         .mockResolvedValueOnce(JSON.stringify(msgEvent)),
     };
 
-    const consoleErrorSpy = jest
-      .spyOn(console, "error")
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
       .mockImplementation(() => {});
     const alertMock = jest.spyOn(window, "alert").mockImplementation(() => {});
+    const editChatContext = jest.fn();
 
-    fetchGiftWrappedChatsAndMessages(
-      nostr as any,
-      signer as any,
-      ["wss://relay.example"],
-      jest.fn(),
-      userPubkey
-    );
+    const result = await Promise.race([
+      fetchGiftWrappedChatsAndMessages(
+        nostr as any,
+        signer as any,
+        ["wss://relay.example"],
+        editChatContext,
+        userPubkey
+      ),
+      new Promise<"timeout">((resolve) =>
+        setTimeout(() => resolve("timeout"), 100)
+      ),
+    ]);
 
-    // Wait for all nested awaits inside the function to complete
-    await new Promise((r) => setTimeout(r, 0));
+    expect(result).not.toBe("timeout");
+    expect(result).toEqual({ profileSetFromChats: new Set() });
+    expect(editChatContext).toHaveBeenCalledWith(new Map(), false);
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      "Skipping gift-wrapped chat message without recipient p tag",
+      { wrappedEventId: wrapEvent.id }
+    );
+    expect(alertMock).not.toHaveBeenCalled();
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("fetchAllOutgoingChats")
-    );
-    expect(alertMock).toHaveBeenCalledWith(
-      expect.stringContaining("fetchAllOutgoingChats")
-    );
-    consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
     alertMock.mockRestore();
   });
 
