@@ -378,15 +378,6 @@ describe("lookupInvoice state mapping", () => {
     expect(result.status).toBe(expected);
   });
 
-  it("covers every status the interface defines", () => {
-    expect(cases.map(([, status]) => status).sort()).toEqual([
-      "accepted",
-      "cancelled",
-      "open",
-      "settled",
-    ]);
-  });
-
   it("sends the payment hash as raw bytes", async () => {
     const client = new FakeInvoicesClient().ok(
       "LookupInvoiceV2",

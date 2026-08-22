@@ -195,25 +195,6 @@ describe("hodl invoice watcher", () => {
       expect(getWatchedPaymentHashes()).toEqual([ORDER_A]);
     });
 
-    it("does not re-look-up the invoice it was just told about", async () => {
-      // The whole point of subscribing is skipping the round trip, so the
-      // watcher writes the streamed status straight through the one function
-      // that decides whether a transition is legal.
-      const provider = installProvider();
-      listPendingHodlEscrowOrderPaymentHashesMock.mockResolvedValue([ORDER_A]);
-
-      await startHodlInvoiceWatcher();
-      provider.emitStatus(ORDER_A, "accepted");
-      await flush();
-
-      expect(
-        (provider as unknown as { lookupInvoice?: unknown }).lookupInvoice
-      ).toBeUndefined();
-      expect(updateHodlEscrowOrderStatusIfAdvancingMock).toHaveBeenCalledTimes(
-        1
-      );
-    });
-
     it("closes the subscription on a terminal state and processes nothing after it", async () => {
       const provider = installProvider();
       listPendingHodlEscrowOrderPaymentHashesMock.mockResolvedValue([

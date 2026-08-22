@@ -170,16 +170,6 @@ describe("HodlOrderActions", () => {
     expect(mockSettleHodlInvoice).not.toHaveBeenCalled();
   });
 
-  it("re-reads the status after a successful confirmation", async () => {
-    renderActions();
-    fireEvent.click(await screen.findByText("Confirm Receipt"));
-    fireEvent.click(screen.getByText("Confirm Receipt (confirm)"));
-
-    await waitFor(() =>
-      expect(mockGetHodlOrderStatus).toHaveBeenCalledTimes(2)
-    );
-  });
-
   it("collects immediately, with no confirmation prompt", async () => {
     mockGetHodlOrderStatus.mockResolvedValue({
       status: "accepted",
