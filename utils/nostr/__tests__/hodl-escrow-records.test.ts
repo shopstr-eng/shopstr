@@ -1,0 +1,1490 @@
+import type { NostrEvent } from "@/utils/nostr/nostr-manager";
+
+jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
+  finalizeAndSendNostrEvent: jest.fn().mockResolvedValue({ id: "event-id" }),
+}));
+
+const verifyEventMock = jest.fn().mockReturnValue(true);
+jest.mock("nostr-tools", () => ({
+  ...jest.requireActual("nostr-tools"),
+  verifyEvent: (...args: unknown[]) => verifyEventMock(...args),
+}));
+
+import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions";
+import {
+  HODL_CONFIRM_EVENT_KIND,
+  HODL_RELEASE_EVENT_KIND,
+  HODL_DISPUTE_EVENT_KIND,
+  createHodlConfirmEventTemplate,
+  createHodlReleaseEventTemplate,
+  createHodlDisputeEventTemplate,
+  publishHodlConfirmEvent,
+  publishHodlReleaseEvent,
+  publishHodlDisputeEvent,
+  parseHodlConfirmEvent,
+  parseHodlReleaseEvent,
+  parseHodlDisputeEvent,
+  fetchHodlConfirmEvents,
+  fetchHodlReleaseEvents,
+  fetchHodlDisputeEvents,
+  HodlRelayUnavailableError,
+} from "../hodl-escrow-records";
+
+const PAYMENT_HASH = "ab".repeat(32);
+const OTHER_PAYMENT_HASH = "cd".repeat(32);
+
+const mkConfirmEvent = (
+  overrides: Partial<NostrEvent> & { tags: string[][] }
+): NostrEvent =>
+  ({
+    id: "id",
+    pubkey: "author-pubkey",
+    created_at: 100,
+    kind: HODL_CONFIRM_EVENT_KIND,
+    content: "",
+    sig: "sig",
+    ...overrides,
+  }) as unknown as NostrEvent;
+
+const mkReleaseEvent = (
+  overrides: Partial<NostrEvent> & { tags: string[][] }
+): NostrEvent =>
+  ({
+    id: "id",
+    pubkey: "author-pubkey",
+    created_at: 100,
+    kind: HODL_RELEASE_EVENT_KIND,
+    content: "arbiter reasoning",
+    sig: "sig",
+    ...overrides,
+  }) as unknown as NostrEvent;
+
+const mkDisputeEvent = (
+  overrides: Partial<NostrEvent> & { tags: string[][] }
+): NostrEvent =>
+  ({
+    id: "id",
+    pubkey: "author-pubkey",
+    created_at: 100,
+    kind: HODL_DISPUTE_EVENT_KIND,
+    content: "item never arrived",
+    sig: "sig",
+    ...overrides,
+  }) as unknown as NostrEvent;
+
+describe("event kind allocation", () => {
+  it("uses the next three free parameterized-replaceable kinds after 30407", () => {
+    expect(HODL_CONFIRM_EVENT_KIND).toBe(30408);
+    expect(HODL_RELEASE_EVENT_KIND).toBe(30409);
+    expect(HODL_DISPUTE_EVENT_KIND).toBe(30410);
+  });
+
+  it("keeps all three message types on distinct kinds", () => {
+    expect(HODL_CONFIRM_EVENT_KIND).not.toBe(HODL_RELEASE_EVENT_KIND);
+    expect(HODL_CONFIRM_EVENT_KIND).not.toBe(HODL_DISPUTE_EVENT_KIND);
+    expect(HODL_RELEASE_EVENT_KIND).not.toBe(HODL_DISPUTE_EVENT_KIND);
+  });
+});
+
+describe("createHodlConfirmEventTemplate", () => {
+  it("builds a kind 30408 event whose only tag is the d tag", () => {
+    const template = createHodlConfirmEventTemplate({
+      paymentHash: PAYMENT_HASH,
+      createdAt: 1234,
+    });
+
+    expect(template.kind).toBe(HODL_CONFIRM_EVENT_KIND);
+    expect(template.tags).toEqual([["d", PAYMENT_HASH]]);
+    expect(template.content).toBe("");
+    expect(template.created_at).toBe(1234);
+  });
+
+  it("carries an optional free-text note as the content", () => {
+    const template = createHodlConfirmEventTemplate({
+      paymentHash: PAYMENT_HASH,
+      note: "package arrived, thanks",
+    });
+    expect(template.content).toBe("package arrived, thanks");
+  });
+
+  it("never emits a p tag or any tag naming a buyer", () => {
+    const template = createHodlConfirmEventTemplate({
+      paymentHash: PAYMENT_HASH,
+      note: "note",
+    });
+    const flattened = JSON.stringify(template.tags);
+
+    expect(template.tags.some((tag) => tag[0] === "p")).toBe(false);
+    expect(flattened).not.toContain("buyer");
+  });
+
+  it("emits no status tag — the event's existence is the confirmation", () => {
+    const template = createHodlConfirmEventTemplate({
+      paymentHash: PAYMENT_HASH,
+    });
+    expect(template.tags.some((tag) => tag[0] === "status")).toBe(false);
+  });
+
+  it("lowercases the payment hash so relay #d filters match", () => {
+    const template = createHodlConfirmEventTemplate({
+      paymentHash: PAYMENT_HASH.toUpperCase(),
+    });
+    expect(template.tags).toEqual([["d", PAYMENT_HASH]]);
+  });
+
+  it("defaults created_at to now, in seconds", () => {
+    const before = Math.floor(Date.now() / 1000);
+    const template = createHodlConfirmEventTemplate({
+      paymentHash: PAYMENT_HASH,
+    });
+    expect(template.created_at).toBeGreaterThanOrEqual(before);
+    expect(template.created_at).toBeLessThanOrEqual(
+      Math.floor(Date.now() / 1000)
+    );
+  });
+
+  it.each([
+    ["too short", "ab".repeat(31)],
+    ["too long", "ab".repeat(33)],
+    ["non-hex", "zz".repeat(32)],
+    ["empty", ""],
+  ])("rejects a %s payment hash", (_label, paymentHash) => {
+    expect(() => createHodlConfirmEventTemplate({ paymentHash })).toThrow(
+      /32 bytes of hex/
+    );
+  });
+});
+
+describe("publishHodlConfirmEvent", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("signs and sends a kind 30408 event with the expected tags", async () => {
+    const nostr = {} as any;
+    const signer = {} as any;
+
+    await publishHodlConfirmEvent({
+      paymentHash: PAYMENT_HASH,
+      note: "received",
+      nostr,
+      signer,
+    });
+
+    expect(finalizeAndSendNostrEvent).toHaveBeenCalledTimes(1);
+    const [calledSigner, calledNostr, eventTemplate, options] = (
+      finalizeAndSendNostrEvent as jest.Mock
+    ).mock.calls[0]!;
+
+    expect(calledSigner).toBe(signer);
+    expect(calledNostr).toBe(nostr);
+    expect(eventTemplate.kind).toBe(HODL_CONFIRM_EVENT_KIND);
+    expect(eventTemplate.content).toBe("received");
+    expect(eventTemplate.tags).toEqual([["d", PAYMENT_HASH]]);
+    expect(options).toEqual({
+      waitForRelayPublish: true,
+      requireDurableCache: false,
+    });
+  });
+
+  it("publishes an empty note when none is given", async () => {
+    await publishHodlConfirmEvent({
+      paymentHash: PAYMENT_HASH,
+      nostr: {} as any,
+      signer: {} as any,
+    });
+
+    const [, , eventTemplate] = (finalizeAndSendNostrEvent as jest.Mock).mock
+      .calls[0]!;
+    expect(eventTemplate.content).toBe("");
+  });
+
+  it("does not publish anything for a malformed payment hash", async () => {
+    await expect(
+      publishHodlConfirmEvent({
+        paymentHash: "beef",
+        nostr: {} as any,
+        signer: {} as any,
+      })
+    ).rejects.toThrow(/32 bytes of hex/);
+    expect(finalizeAndSendNostrEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("parseHodlConfirmEvent", () => {
+  it("returns the order id, author pubkey and timestamp", () => {
+    const parsed = parseHodlConfirmEvent(
+      mkConfirmEvent({
+        pubkey: "signer-pubkey",
+        created_at: 4242,
+        content: "arrived",
+        tags: [["d", PAYMENT_HASH]],
+      })
+    );
+
+    expect(parsed).toEqual({
+      orderId: PAYMENT_HASH,
+      authorPubkey: "signer-pubkey",
+      note: "arrived",
+      createdAt: 4242,
+    });
+  });
+
+  it("exposes the signer only as authorPubkey, never as a trusted role", () => {
+    const parsed = parseHodlConfirmEvent(
+      mkConfirmEvent({ pubkey: "signer-pubkey", tags: [["d", PAYMENT_HASH]] })
+    )!;
+
+    expect(parsed.authorPubkey).toBe("signer-pubkey");
+    expect(Object.keys(parsed)).toEqual([
+      "orderId",
+      "authorPubkey",
+      "note",
+      "createdAt",
+    ]);
+    // Field *names* only: `note` is author-written free text and may contain
+    // any word at all, so it is the shape of the result that is under test.
+    const keys = Object.keys(parsed).join(",").toLowerCase();
+    for (const forbidden of ["buyer", "verified", "authorized", "trusted"]) {
+      expect(keys).not.toContain(forbidden);
+    }
+  });
+
+  it("does not promote a forged buyer role tag into the parsed result", () => {
+    const parsed = parseHodlConfirmEvent(
+      mkConfirmEvent({
+        pubkey: "attacker-pubkey",
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["p", "real-buyer-pubkey", "", "buyer"],
+        ],
+      })
+    )!;
+
+    // The attacker's own key is all that is reported; the tag they wrote
+    // claiming to speak for the real buyer is ignored entirely.
+    expect(parsed.authorPubkey).toBe("attacker-pubkey");
+    expect(Object.values(parsed)).not.toContain("real-buyer-pubkey");
+  });
+
+  it("lowercases a mixed-case d tag", () => {
+    const parsed = parseHodlConfirmEvent(
+      mkConfirmEvent({ tags: [["d", PAYMENT_HASH.toUpperCase()]] })
+    );
+    expect(parsed?.orderId).toBe(PAYMENT_HASH);
+  });
+
+  it("returns an empty note when the content is empty", () => {
+    const parsed = parseHodlConfirmEvent(
+      mkConfirmEvent({ content: "", tags: [["d", PAYMENT_HASH]] })
+    );
+    expect(parsed?.note).toBe("");
+  });
+
+  it("rejects an event of the wrong kind", () => {
+    expect(
+      parseHodlConfirmEvent(
+        mkConfirmEvent({
+          kind: HODL_RELEASE_EVENT_KIND,
+          tags: [["d", PAYMENT_HASH]],
+        })
+      )
+    ).toBeNull();
+    expect(
+      parseHodlConfirmEvent(
+        mkConfirmEvent({ kind: 1, tags: [["d", PAYMENT_HASH]] })
+      )
+    ).toBeNull();
+  });
+
+  it.each([
+    ["no d tag", []],
+    ["non-hex", [["d", "order-1"]]],
+    ["wrong length", [["d", "ab".repeat(31)]]],
+    ["no value", [["d"]]],
+  ])("rejects a d tag that is %s", (_label, tags) => {
+    expect(
+      parseHodlConfirmEvent(mkConfirmEvent({ tags: tags as string[][] }))
+    ).toBeNull();
+  });
+
+  it("rejects an event with a missing or malformed pubkey", () => {
+    expect(
+      parseHodlConfirmEvent(
+        mkConfirmEvent({ pubkey: "", tags: [["d", PAYMENT_HASH]] })
+      )
+    ).toBeNull();
+    expect(
+      parseHodlConfirmEvent(
+        mkConfirmEvent({
+          pubkey: undefined as any,
+          tags: [["d", PAYMENT_HASH]],
+        })
+      )
+    ).toBeNull();
+  });
+
+  it("rejects an event with a non-numeric created_at", () => {
+    expect(
+      parseHodlConfirmEvent(
+        mkConfirmEvent({
+          created_at: "100" as any,
+          tags: [["d", PAYMENT_HASH]],
+        })
+      )
+    ).toBeNull();
+  });
+
+  it("rejects an event with no tags array at all", () => {
+    expect(
+      parseHodlConfirmEvent({
+        id: "id",
+        pubkey: "author-pubkey",
+        created_at: 100,
+        kind: HODL_CONFIRM_EVENT_KIND,
+        content: "",
+        sig: "sig",
+      } as unknown as NostrEvent)
+    ).toBeNull();
+  });
+
+  it("rejects a null or undefined event", () => {
+    expect(parseHodlConfirmEvent(null as any)).toBeNull();
+    expect(parseHodlConfirmEvent(undefined as any)).toBeNull();
+  });
+
+  it("round-trips a template built by createHodlConfirmEventTemplate", () => {
+    const template = createHodlConfirmEventTemplate({
+      paymentHash: PAYMENT_HASH,
+      note: "ok",
+      createdAt: 999,
+    });
+    const parsed = parseHodlConfirmEvent(
+      mkConfirmEvent({
+        ...template,
+        pubkey: "signer",
+      } as Partial<NostrEvent> & { tags: string[][] })
+    );
+
+    expect(parsed).toEqual({
+      orderId: PAYMENT_HASH,
+      authorPubkey: "signer",
+      note: "ok",
+      createdAt: 999,
+    });
+  });
+});
+
+describe("createHodlReleaseEventTemplate", () => {
+  it("builds a kind 30409 event with d and decision tags", () => {
+    const template = createHodlReleaseEventTemplate({
+      paymentHash: PAYMENT_HASH,
+      decision: "release:seller",
+      reasoning: "tracking shows delivery",
+      createdAt: 555,
+    });
+
+    expect(template.kind).toBe(HODL_RELEASE_EVENT_KIND);
+    expect(template.tags).toEqual([
+      ["d", PAYMENT_HASH],
+      ["decision", "release:seller"],
+    ]);
+    expect(template.content).toBe("tracking shows delivery");
+    expect(template.created_at).toBe(555);
+  });
+
+  it("adds bare p tags for discovery, with no role markers", () => {
+    const template = createHodlReleaseEventTemplate({
+      paymentHash: PAYMENT_HASH,
+      decision: "release:buyer",
+      buyerPubkey: "buyer-pubkey",
+      sellerPubkey: "seller-pubkey",
+    });
+
+    const pTags = template.tags.filter((tag) => tag[0] === "p");
+    expect(pTags).toEqual([
+      ["p", "buyer-pubkey"],
+      ["p", "seller-pubkey"],
+    ]);
+    // No 4th-element role marker that a later reader could mistake for proof.
+    expect(pTags.every((tag) => tag.length === 2)).toBe(true);
+    expect(JSON.stringify(template.tags)).not.toContain('buyer-pubkey",""');
+  });
+
+  it("omits p tags when no pubkeys are supplied", () => {
+    const template = createHodlReleaseEventTemplate({
+      paymentHash: PAYMENT_HASH,
+      decision: "release:buyer",
+    });
+    expect(template.tags.some((tag) => tag[0] === "p")).toBe(false);
+  });
+
+  it("defaults reasoning to empty content", () => {
+    const template = createHodlReleaseEventTemplate({
+      paymentHash: PAYMENT_HASH,
+      decision: "release:buyer",
+    });
+    expect(template.content).toBe("");
+  });
+
+  it("rejects a malformed payment hash", () => {
+    expect(() =>
+      createHodlReleaseEventTemplate({
+        paymentHash: "beef",
+        decision: "release:buyer",
+      })
+    ).toThrow(/32 bytes of hex/);
+  });
+
+  it("rejects an unrecognized decision", () => {
+    expect(() =>
+      createHodlReleaseEventTemplate({
+        paymentHash: PAYMENT_HASH,
+        decision: "release:arbiter" as any,
+      })
+    ).toThrow(/decision must be one of/);
+  });
+});
+
+describe("publishHodlReleaseEvent", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("signs and sends a kind 30409 event with the expected tags", async () => {
+    const nostr = {} as any;
+    const signer = {} as any;
+
+    await publishHodlReleaseEvent({
+      paymentHash: PAYMENT_HASH,
+      decision: "release:buyer",
+      reasoning: "no proof of shipment",
+      buyerPubkey: "buyer-pubkey",
+      sellerPubkey: "seller-pubkey",
+      nostr,
+      signer,
+    });
+
+    const [calledSigner, calledNostr, eventTemplate, options] = (
+      finalizeAndSendNostrEvent as jest.Mock
+    ).mock.calls[0]!;
+
+    expect(calledSigner).toBe(signer);
+    expect(calledNostr).toBe(nostr);
+    expect(eventTemplate.kind).toBe(HODL_RELEASE_EVENT_KIND);
+    expect(eventTemplate.content).toBe("no proof of shipment");
+    expect(eventTemplate.tags).toEqual([
+      ["d", PAYMENT_HASH],
+      ["decision", "release:buyer"],
+      ["p", "buyer-pubkey"],
+      ["p", "seller-pubkey"],
+    ]);
+    expect(options).toEqual({
+      waitForRelayPublish: true,
+      requireDurableCache: false,
+    });
+  });
+
+  it("does not publish anything for an unrecognized decision", async () => {
+    await expect(
+      publishHodlReleaseEvent({
+        paymentHash: PAYMENT_HASH,
+        decision: "release:nobody" as any,
+        nostr: {} as any,
+        signer: {} as any,
+      })
+    ).rejects.toThrow(/decision must be one of/);
+    expect(finalizeAndSendNostrEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("parseHodlReleaseEvent", () => {
+  it("returns the order id, decision, author pubkey and reasoning", () => {
+    const parsed = parseHodlReleaseEvent(
+      mkReleaseEvent({
+        pubkey: "signer-pubkey",
+        created_at: 777,
+        content: "buyer never received it",
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["decision", "release:buyer"],
+        ],
+      })
+    );
+
+    expect(parsed).toEqual({
+      orderId: PAYMENT_HASH,
+      decision: "release:buyer",
+      authorPubkey: "signer-pubkey",
+      reasoning: "buyer never received it",
+      createdAt: 777,
+    });
+  });
+
+  it("exposes the signer only as authorPubkey, never as a trusted arbiter", () => {
+    const parsed = parseHodlReleaseEvent(
+      mkReleaseEvent({
+        pubkey: "signer-pubkey",
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["decision", "release:seller"],
+        ],
+      })
+    )!;
+
+    expect(Object.keys(parsed)).toEqual([
+      "orderId",
+      "decision",
+      "authorPubkey",
+      "reasoning",
+      "createdAt",
+    ]);
+    // Field *names* only: `reasoning` is arbiter-written free text and may say
+    // anything, so it is the shape of the result that must not imply trust.
+    const keys = Object.keys(parsed).join(",").toLowerCase();
+    expect(keys).not.toContain("arbiter");
+    expect(keys).not.toContain("authorized");
+  });
+
+  it("never surfaces the p tags, which are author-controlled claims", () => {
+    const parsed = parseHodlReleaseEvent(
+      mkReleaseEvent({
+        pubkey: "attacker-pubkey",
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["decision", "release:seller"],
+          ["p", "real-buyer-pubkey"],
+          ["p", "real-seller-pubkey"],
+        ],
+      })
+    )!;
+
+    expect(parsed.authorPubkey).toBe("attacker-pubkey");
+    expect(JSON.stringify(parsed)).not.toContain("real-buyer-pubkey");
+    expect(JSON.stringify(parsed)).not.toContain("real-seller-pubkey");
+  });
+
+  it("rejects an event of the wrong kind", () => {
+    expect(
+      parseHodlReleaseEvent(
+        mkReleaseEvent({
+          kind: HODL_CONFIRM_EVENT_KIND,
+          tags: [
+            ["d", PAYMENT_HASH],
+            ["decision", "release:buyer"],
+          ],
+        })
+      )
+    ).toBeNull();
+  });
+
+  it("rejects an event with no decision tag", () => {
+    expect(
+      parseHodlReleaseEvent(mkReleaseEvent({ tags: [["d", PAYMENT_HASH]] }))
+    ).toBeNull();
+  });
+
+  it.each([
+    ["an unknown value", "release:arbiter"],
+    ["an empty value", ""],
+    ["a near-miss", "release:Buyer"],
+    ["a status-style value", "resolved:buyer"],
+  ])("rejects a decision tag with %s", (_label, decision) => {
+    expect(
+      parseHodlReleaseEvent(
+        mkReleaseEvent({
+          tags: [
+            ["d", PAYMENT_HASH],
+            ["decision", decision],
+          ],
+        })
+      )
+    ).toBeNull();
+  });
+
+  it("rejects a malformed d tag", () => {
+    expect(
+      parseHodlReleaseEvent(
+        mkReleaseEvent({
+          tags: [
+            ["d", "order-1"],
+            ["decision", "release:buyer"],
+          ],
+        })
+      )
+    ).toBeNull();
+  });
+
+  it("rejects a null event", () => {
+    expect(parseHodlReleaseEvent(null as any)).toBeNull();
+  });
+
+  it("round-trips a template built by createHodlReleaseEventTemplate", () => {
+    const template = createHodlReleaseEventTemplate({
+      paymentHash: PAYMENT_HASH,
+      decision: "release:seller",
+      reasoning: "delivered",
+      createdAt: 321,
+    });
+    const parsed = parseHodlReleaseEvent(
+      mkReleaseEvent({
+        ...template,
+        pubkey: "signer",
+      } as Partial<NostrEvent> & { tags: string[][] })
+    );
+
+    expect(parsed).toEqual({
+      orderId: PAYMENT_HASH,
+      decision: "release:seller",
+      authorPubkey: "signer",
+      reasoning: "delivered",
+      createdAt: 321,
+    });
+  });
+});
+
+describe("fetchHodlConfirmEvents", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    verifyEventMock.mockReturnValue(true);
+  });
+
+  const mkNostr = (events: NostrEvent[]) => ({
+    fetch: jest.fn().mockResolvedValue(events),
+  });
+
+  it("queries relays by kind and lowercased d tag", async () => {
+    const nostr = mkNostr([]);
+
+    await fetchHodlConfirmEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH.toUpperCase(),
+      timeoutMs: 1500,
+    });
+
+    expect(nostr.fetch).toHaveBeenCalledWith(
+      [{ kinds: [HODL_CONFIRM_EVENT_KIND], "#d": [PAYMENT_HASH] }],
+      undefined,
+      undefined,
+      1500
+    );
+  });
+
+  it("returns parsed matches", async () => {
+    const nostr = mkNostr([
+      mkConfirmEvent({
+        pubkey: "author-a",
+        created_at: 100,
+        content: "got it",
+        tags: [["d", PAYMENT_HASH]],
+      }),
+    ]);
+
+    const results = await fetchHodlConfirmEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    });
+
+    expect(results).toEqual([
+      {
+        orderId: PAYMENT_HASH,
+        authorPubkey: "author-a",
+        note: "got it",
+        createdAt: 100,
+      },
+    ]);
+  });
+
+  it("keeps one entry per author, newest wins", async () => {
+    const nostr = mkNostr([
+      mkConfirmEvent({
+        pubkey: "author-a",
+        created_at: 100,
+        content: "old",
+        tags: [["d", PAYMENT_HASH]],
+      }),
+      mkConfirmEvent({
+        pubkey: "author-a",
+        created_at: 200,
+        content: "new",
+        tags: [["d", PAYMENT_HASH]],
+      }),
+    ]);
+
+    const results = await fetchHodlConfirmEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]!.note).toBe("new");
+  });
+
+  it("does not let a later event from another author hide an earlier one", async () => {
+    const nostr = mkNostr([
+      mkConfirmEvent({
+        pubkey: "real-buyer",
+        created_at: 100,
+        tags: [["d", PAYMENT_HASH]],
+      }),
+      mkConfirmEvent({
+        pubkey: "unrelated-pubkey",
+        created_at: 999,
+        tags: [["d", PAYMENT_HASH]],
+      }),
+    ]);
+
+    const results = await fetchHodlConfirmEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    });
+
+    // Both are returned so the caller must decide which author it believes;
+    // the newer one does not silently win.
+    expect(results.map((r) => r.authorPubkey)).toEqual([
+      "unrelated-pubkey",
+      "real-buyer",
+    ]);
+  });
+
+  it("sorts newest first", async () => {
+    const nostr = mkNostr([
+      mkConfirmEvent({
+        pubkey: "author-a",
+        created_at: 100,
+        tags: [["d", PAYMENT_HASH]],
+      }),
+      mkConfirmEvent({
+        pubkey: "author-b",
+        created_at: 300,
+        tags: [["d", PAYMENT_HASH]],
+      }),
+      mkConfirmEvent({
+        pubkey: "author-c",
+        created_at: 200,
+        tags: [["d", PAYMENT_HASH]],
+      }),
+    ]);
+
+    const results = await fetchHodlConfirmEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    });
+
+    expect(results.map((r) => r.createdAt)).toEqual([300, 200, 100]);
+  });
+
+  it("drops events whose signature does not verify", async () => {
+    verifyEventMock.mockReturnValue(false);
+    const nostr = mkNostr([
+      mkConfirmEvent({ pubkey: "author-a", tags: [["d", PAYMENT_HASH]] }),
+    ]);
+
+    const results = await fetchHodlConfirmEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    });
+
+    expect(results).toEqual([]);
+  });
+
+  it("drops events a relay returned for a different order", async () => {
+    const nostr = mkNostr([
+      mkConfirmEvent({
+        pubkey: "author-a",
+        tags: [["d", OTHER_PAYMENT_HASH]],
+      }),
+      mkConfirmEvent({ pubkey: "author-b", tags: [["d", PAYMENT_HASH]] }),
+    ]);
+
+    const results = await fetchHodlConfirmEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    });
+
+    expect(results.map((r) => r.authorPubkey)).toEqual(["author-b"]);
+  });
+
+  it("drops malformed and wrong-kind events", async () => {
+    const nostr = mkNostr([
+      mkConfirmEvent({ pubkey: "author-a", tags: [] }),
+      mkConfirmEvent({
+        pubkey: "author-b",
+        kind: 1,
+        tags: [["d", PAYMENT_HASH]],
+      }),
+      mkReleaseEvent({
+        pubkey: "author-c",
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["decision", "release:buyer"],
+        ],
+      }),
+    ]);
+
+    const results = await fetchHodlConfirmEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    });
+
+    expect(results).toEqual([]);
+  });
+
+  it("returns nothing and does not query for a malformed payment hash", async () => {
+    const nostr = mkNostr([]);
+
+    const results = await fetchHodlConfirmEvents({
+      nostr: nostr as any,
+      paymentHash: "beef",
+    });
+
+    expect(results).toEqual([]);
+    expect(nostr.fetch).not.toHaveBeenCalled();
+  });
+
+  // The empty list is a claim about what relays hold. A read that never
+  // happened cannot make it, or the settle endpoint downstream turns an
+  // outage into "the buyer never confirmed" and refuses a valid settlement.
+  it("throws relay_connection_failure, as an instance of HodlRelayUnavailableError, when the relay query fails", async () => {
+    const nostr = { fetch: jest.fn().mockRejectedValue(new Error("offline")) };
+
+    const error = await fetchHodlConfirmEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    }).catch((thrown: HodlRelayUnavailableError) => thrown);
+
+    expect(error).toBeInstanceOf(HodlRelayUnavailableError);
+    expect(error).toMatchObject({
+      name: "HodlRelayUnavailableError",
+      reason: "relay_connection_failure",
+    });
+  });
+
+  it("does not quote the underlying transport error", async () => {
+    // Relay transport errors have no contract about their contents, and this
+    // message reaches server logs.
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockRejectedValue(new Error(`socket died mid-frame ${PAYMENT_HASH}`)),
+    };
+
+    const error = await fetchHodlConfirmEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    }).catch((e) => e);
+
+    expect(error).toBeInstanceOf(HodlRelayUnavailableError);
+    expect(error.message).not.toContain("socket died");
+    expect(error.cause).toBeUndefined();
+  });
+
+  it("still returns an empty list when relays answer with no events", async () => {
+    const nostr = mkNostr([]);
+
+    await expect(
+      fetchHodlConfirmEvents({
+        nostr: nostr as any,
+        paymentHash: PAYMENT_HASH,
+      })
+    ).resolves.toEqual([]);
+  });
+
+  it("returns results whose shape implies nothing about identity or settlement", async () => {
+    const nostr = mkNostr([
+      mkConfirmEvent({ pubkey: "author-a", tags: [["d", PAYMENT_HASH]] }),
+    ]);
+
+    const results = await fetchHodlConfirmEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    });
+
+    const keys = Object.keys(results[0]!).join(",").toLowerCase();
+    for (const forbidden of [
+      "buyer",
+      "seller",
+      "arbiter",
+      "authorized",
+      "verified",
+      "trusted",
+      "preimage",
+    ]) {
+      expect(keys).not.toContain(forbidden);
+    }
+  });
+});
+
+describe("createHodlDisputeEventTemplate", () => {
+  it("builds a kind 30410 event with d and p (arbiter) tags", () => {
+    const template = createHodlDisputeEventTemplate({
+      paymentHash: PAYMENT_HASH,
+      arbiterPubkey: "arbiter-pubkey",
+      description: "package never arrived",
+      createdAt: 123,
+    });
+
+    expect(template.kind).toBe(HODL_DISPUTE_EVENT_KIND);
+    expect(template.tags).toEqual([
+      ["d", PAYMENT_HASH],
+      ["p", "arbiter-pubkey"],
+    ]);
+    expect(template.content).toBe("package never arrived");
+    expect(template.created_at).toBe(123);
+  });
+
+  it("never emits a role tag naming buyer or seller", () => {
+    const template = createHodlDisputeEventTemplate({
+      paymentHash: PAYMENT_HASH,
+      arbiterPubkey: "arbiter-pubkey",
+    });
+    const flattened = JSON.stringify(template.tags).toLowerCase();
+
+    expect(flattened).not.toContain("buyer");
+    expect(flattened).not.toContain("seller");
+    // Only one p tag — the arbiter's, for discovery — never a second one.
+    expect(template.tags.filter((tag) => tag[0] === "p")).toHaveLength(1);
+  });
+
+  it("defaults description to empty content", () => {
+    const template = createHodlDisputeEventTemplate({
+      paymentHash: PAYMENT_HASH,
+      arbiterPubkey: "arbiter-pubkey",
+    });
+    expect(template.content).toBe("");
+  });
+
+  it("lowercases the payment hash so relay #d filters match", () => {
+    const template = createHodlDisputeEventTemplate({
+      paymentHash: PAYMENT_HASH.toUpperCase(),
+      arbiterPubkey: "arbiter-pubkey",
+    });
+    expect(template.tags[0]).toEqual(["d", PAYMENT_HASH]);
+  });
+
+  it("rejects a malformed payment hash", () => {
+    expect(() =>
+      createHodlDisputeEventTemplate({
+        paymentHash: "beef",
+        arbiterPubkey: "arbiter-pubkey",
+      })
+    ).toThrow(/32 bytes of hex/);
+  });
+
+  it("rejects a missing arbiter pubkey", () => {
+    expect(() =>
+      createHodlDisputeEventTemplate({
+        paymentHash: PAYMENT_HASH,
+        arbiterPubkey: "",
+      })
+    ).toThrow(/arbiterPubkey is required/);
+  });
+});
+
+describe("publishHodlDisputeEvent", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("signs and sends a kind 30410 event with the expected tags", async () => {
+    const nostr = {} as any;
+    const signer = {} as any;
+
+    await publishHodlDisputeEvent({
+      paymentHash: PAYMENT_HASH,
+      arbiterPubkey: "arbiter-pubkey",
+      description: "no tracking info provided",
+      nostr,
+      signer,
+    });
+
+    expect(finalizeAndSendNostrEvent).toHaveBeenCalledTimes(1);
+    const [calledSigner, calledNostr, eventTemplate, options] = (
+      finalizeAndSendNostrEvent as jest.Mock
+    ).mock.calls[0]!;
+
+    expect(calledSigner).toBe(signer);
+    expect(calledNostr).toBe(nostr);
+    expect(eventTemplate.kind).toBe(HODL_DISPUTE_EVENT_KIND);
+    expect(eventTemplate.content).toBe("no tracking info provided");
+    expect(eventTemplate.tags).toEqual([
+      ["d", PAYMENT_HASH],
+      ["p", "arbiter-pubkey"],
+    ]);
+    expect(options).toEqual({
+      waitForRelayPublish: true,
+      requireDurableCache: false,
+    });
+  });
+
+  it("does not publish anything for a malformed payment hash", async () => {
+    await expect(
+      publishHodlDisputeEvent({
+        paymentHash: "beef",
+        arbiterPubkey: "arbiter-pubkey",
+        nostr: {} as any,
+        signer: {} as any,
+      })
+    ).rejects.toThrow(/32 bytes of hex/);
+    expect(finalizeAndSendNostrEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("parseHodlDisputeEvent", () => {
+  it("returns the order id, author pubkey, description and timestamp", () => {
+    const parsed = parseHodlDisputeEvent(
+      mkDisputeEvent({
+        pubkey: "signer-pubkey",
+        created_at: 555,
+        content: "goods damaged in transit",
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["p", "arbiter-pubkey"],
+        ],
+      })
+    );
+
+    expect(parsed).toEqual({
+      orderId: PAYMENT_HASH,
+      authorPubkey: "signer-pubkey",
+      description: "goods damaged in transit",
+      createdAt: 555,
+    });
+  });
+
+  it("never surfaces a role in the parsed result, even when one is forged into the raw event", () => {
+    const parsed = parseHodlDisputeEvent(
+      mkDisputeEvent({
+        pubkey: "attacker-pubkey",
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["p", "arbiter-pubkey"],
+          // A forged role tag and a forged second p tag claiming to speak
+          // for the real buyer — neither may leak into the parsed shape.
+          ["role", "buyer"],
+          ["p", "real-buyer-pubkey", "", "buyer"],
+        ],
+      })
+    )!;
+
+    expect(parsed.authorPubkey).toBe("attacker-pubkey");
+    expect(Object.keys(parsed)).toEqual([
+      "orderId",
+      "authorPubkey",
+      "description",
+      "createdAt",
+    ]);
+    const serialized = JSON.stringify(parsed).toLowerCase();
+    expect(serialized).not.toContain("buyer");
+    expect(serialized).not.toContain("real-buyer-pubkey");
+    expect(serialized).not.toContain("arbiter-pubkey");
+  });
+
+  it("lowercases a mixed-case d tag", () => {
+    const parsed = parseHodlDisputeEvent(
+      mkDisputeEvent({
+        tags: [
+          ["d", PAYMENT_HASH.toUpperCase()],
+          ["p", "arbiter-pubkey"],
+        ],
+      })
+    );
+    expect(parsed?.orderId).toBe(PAYMENT_HASH);
+  });
+
+  it("returns an empty description when the content is empty", () => {
+    const parsed = parseHodlDisputeEvent(
+      mkDisputeEvent({ content: "", tags: [["d", PAYMENT_HASH]] })
+    );
+    expect(parsed?.description).toBe("");
+  });
+
+  it("rejects an event of the wrong kind", () => {
+    expect(
+      parseHodlDisputeEvent(
+        mkDisputeEvent({
+          kind: HODL_CONFIRM_EVENT_KIND,
+          tags: [["d", PAYMENT_HASH]],
+        })
+      )
+    ).toBeNull();
+  });
+
+  it.each([
+    ["no d tag", []],
+    ["non-hex", [["d", "order-1"]]],
+  ])("rejects a d tag that is %s", (_label, tags) => {
+    expect(
+      parseHodlDisputeEvent(mkDisputeEvent({ tags: tags as string[][] }))
+    ).toBeNull();
+  });
+
+  it("rejects an event with a missing or malformed pubkey", () => {
+    expect(
+      parseHodlDisputeEvent(
+        mkDisputeEvent({ pubkey: "", tags: [["d", PAYMENT_HASH]] })
+      )
+    ).toBeNull();
+  });
+
+  it("rejects an event with a non-numeric created_at", () => {
+    expect(
+      parseHodlDisputeEvent(
+        mkDisputeEvent({
+          created_at: "100" as any,
+          tags: [["d", PAYMENT_HASH]],
+        })
+      )
+    ).toBeNull();
+  });
+
+  it("rejects a null or undefined event", () => {
+    expect(parseHodlDisputeEvent(null as any)).toBeNull();
+    expect(parseHodlDisputeEvent(undefined as any)).toBeNull();
+  });
+
+  it("round-trips a template built by createHodlDisputeEventTemplate", () => {
+    const template = createHodlDisputeEventTemplate({
+      paymentHash: PAYMENT_HASH,
+      arbiterPubkey: "arbiter-pubkey",
+      description: "wrong item shipped",
+      createdAt: 999,
+    });
+    const parsed = parseHodlDisputeEvent(
+      mkDisputeEvent({
+        ...template,
+        pubkey: "signer",
+      } as Partial<NostrEvent> & { tags: string[][] })
+    );
+
+    expect(parsed).toEqual({
+      orderId: PAYMENT_HASH,
+      authorPubkey: "signer",
+      description: "wrong item shipped",
+      createdAt: 999,
+    });
+  });
+});
+
+describe("fetchHodlReleaseEvents", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    verifyEventMock.mockReturnValue(true);
+  });
+
+  const mkNostr = (events: NostrEvent[]) => ({
+    fetch: jest.fn().mockResolvedValue(events),
+  });
+
+  it("queries relays by kind and lowercased d tag", async () => {
+    const nostr = mkNostr([]);
+
+    await fetchHodlReleaseEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH.toUpperCase(),
+      timeoutMs: 2000,
+    });
+
+    expect(nostr.fetch).toHaveBeenCalledWith(
+      [{ kinds: [HODL_RELEASE_EVENT_KIND], "#d": [PAYMENT_HASH] }],
+      undefined,
+      undefined,
+      2000
+    );
+  });
+
+  it("returns parsed matches", async () => {
+    const nostr = mkNostr([
+      mkReleaseEvent({
+        pubkey: "arbiter-a",
+        created_at: 100,
+        content: "delivery confirmed by tracking",
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["decision", "release:seller"],
+        ],
+      }),
+    ]);
+
+    const results = await fetchHodlReleaseEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    });
+
+    expect(results).toEqual([
+      {
+        orderId: PAYMENT_HASH,
+        decision: "release:seller",
+        authorPubkey: "arbiter-a",
+        reasoning: "delivery confirmed by tracking",
+        createdAt: 100,
+      },
+    ]);
+  });
+
+  it("keeps one entry per author, newest wins", async () => {
+    const nostr = mkNostr([
+      mkReleaseEvent({
+        pubkey: "arbiter-a",
+        created_at: 100,
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["decision", "release:buyer"],
+        ],
+      }),
+      mkReleaseEvent({
+        pubkey: "arbiter-a",
+        created_at: 200,
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["decision", "release:seller"],
+        ],
+      }),
+    ]);
+
+    const results = await fetchHodlReleaseEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]!.decision).toBe("release:seller");
+  });
+
+  it("drops events whose signature does not verify", async () => {
+    verifyEventMock.mockReturnValue(false);
+    const nostr = mkNostr([
+      mkReleaseEvent({
+        pubkey: "arbiter-a",
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["decision", "release:buyer"],
+        ],
+      }),
+    ]);
+
+    const results = await fetchHodlReleaseEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    });
+
+    expect(results).toEqual([]);
+  });
+
+  it("drops events a relay returned for a different order", async () => {
+    const nostr = mkNostr([
+      mkReleaseEvent({
+        pubkey: "arbiter-a",
+        tags: [
+          ["d", OTHER_PAYMENT_HASH],
+          ["decision", "release:buyer"],
+        ],
+      }),
+    ]);
+
+    const results = await fetchHodlReleaseEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    });
+
+    expect(results).toEqual([]);
+  });
+
+  it("returns nothing and does not query for a malformed payment hash", async () => {
+    const nostr = mkNostr([]);
+
+    const results = await fetchHodlReleaseEvents({
+      nostr: nostr as any,
+      paymentHash: "beef",
+    });
+
+    expect(results).toEqual([]);
+    expect(nostr.fetch).not.toHaveBeenCalled();
+  });
+
+  it("throws relay_connection_failure when the relay query fails", async () => {
+    const nostr = { fetch: jest.fn().mockRejectedValue(new Error("offline")) };
+
+    await expect(
+      fetchHodlReleaseEvents({
+        nostr: nostr as any,
+        paymentHash: PAYMENT_HASH,
+      })
+    ).rejects.toMatchObject({
+      name: "HodlRelayUnavailableError",
+      reason: "relay_connection_failure",
+    });
+  });
+
+  it("still returns an empty list when relays answer with no events", async () => {
+    const nostr = mkNostr([]);
+
+    await expect(
+      fetchHodlReleaseEvents({
+        nostr: nostr as any,
+        paymentHash: PAYMENT_HASH,
+      })
+    ).resolves.toEqual([]);
+  });
+});
+
+describe("fetchHodlDisputeEvents", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    verifyEventMock.mockReturnValue(true);
+  });
+
+  const mkNostr = (events: NostrEvent[]) => ({
+    fetch: jest.fn().mockResolvedValue(events),
+  });
+
+  it("queries relays by kind and the arbiter's pubkey", async () => {
+    const nostr = mkNostr([]);
+
+    await fetchHodlDisputeEvents({
+      nostr: nostr as any,
+      arbiterPubkey: "arbiter-pubkey",
+      timeoutMs: 3000,
+    });
+
+    expect(nostr.fetch).toHaveBeenCalledWith(
+      [{ kinds: [HODL_DISPUTE_EVENT_KIND], "#p": ["arbiter-pubkey"] }],
+      undefined,
+      undefined,
+      3000
+    );
+  });
+
+  it("is read-only discovery: forged and garbage entries are returned without erroring", async () => {
+    // Nothing here is a trust decision — this proves the function does not
+    // gate its result on any of these being genuine.
+    const nostr = mkNostr([
+      // Well-formed, but signed by a total stranger and tagging an arbiter
+      // pubkey it has no relationship to.
+      mkDisputeEvent({
+        pubkey: "forger-pubkey",
+        created_at: 100,
+        content: "fabricated complaint",
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["p", "arbiter-pubkey"],
+        ],
+      }),
+      // Garbage: no d tag at all.
+      mkDisputeEvent({
+        pubkey: "garbage-pubkey",
+        tags: [["p", "arbiter-pubkey"]],
+      }),
+      // A forged role tag claiming to be the buyer's dispute.
+      mkDisputeEvent({
+        pubkey: "another-forger",
+        created_at: 200,
+        tags: [
+          ["d", OTHER_PAYMENT_HASH],
+          ["p", "arbiter-pubkey"],
+          ["role", "buyer"],
+        ],
+      }),
+    ]);
+
+    const results = await fetchHodlDisputeEvents({
+      nostr: nostr as any,
+      arbiterPubkey: "arbiter-pubkey",
+    });
+
+    // The malformed (no d tag) event is dropped by parseHodlDisputeEvent, but
+    // the two well-formed-though-forged events pass straight through: this
+    // function does not check who published them or whether they belong to a
+    // real order. That is left to a later authorization step.
+    expect(results).toHaveLength(2);
+    expect(results.map((r) => r.authorPubkey).sort()).toEqual([
+      "another-forger",
+      "forger-pubkey",
+    ]);
+  });
+
+  it("drops events whose signature does not verify", async () => {
+    verifyEventMock.mockReturnValue(false);
+    const nostr = mkNostr([
+      mkDisputeEvent({
+        pubkey: "author-a",
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["p", "arbiter-pubkey"],
+        ],
+      }),
+    ]);
+
+    const results = await fetchHodlDisputeEvents({
+      nostr: nostr as any,
+      arbiterPubkey: "arbiter-pubkey",
+    });
+
+    expect(results).toEqual([]);
+  });
+
+  it("returns nothing and does not query for a missing arbiter pubkey", async () => {
+    const nostr = mkNostr([]);
+
+    const results = await fetchHodlDisputeEvents({
+      nostr: nostr as any,
+      arbiterPubkey: "",
+    });
+
+    expect(results).toEqual([]);
+    expect(nostr.fetch).not.toHaveBeenCalled();
+  });
+
+  it("throws relay_connection_failure when the relay query fails", async () => {
+    const nostr = { fetch: jest.fn().mockRejectedValue(new Error("offline")) };
+
+    await expect(
+      fetchHodlDisputeEvents({
+        nostr: nostr as any,
+        arbiterPubkey: "arbiter-pubkey",
+      })
+    ).rejects.toMatchObject({
+      name: "HodlRelayUnavailableError",
+      reason: "relay_connection_failure",
+    });
+  });
+
+  it("still returns an empty list when relays answer with no events", async () => {
+    const nostr = mkNostr([]);
+
+    await expect(
+      fetchHodlDisputeEvents({
+        nostr: nostr as any,
+        arbiterPubkey: "arbiter-pubkey",
+      })
+    ).resolves.toEqual([]);
+  });
+
+  it("sorts newest first", async () => {
+    const nostr = mkNostr([
+      mkDisputeEvent({
+        pubkey: "author-a",
+        created_at: 100,
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["p", "arbiter-pubkey"],
+        ],
+      }),
+      mkDisputeEvent({
+        pubkey: "author-b",
+        created_at: 300,
+        tags: [
+          ["d", OTHER_PAYMENT_HASH],
+          ["p", "arbiter-pubkey"],
+        ],
+      }),
+    ]);
+
+    const results = await fetchHodlDisputeEvents({
+      nostr: nostr as any,
+      arbiterPubkey: "arbiter-pubkey",
+    });
+
+    expect(results.map((r) => r.createdAt)).toEqual([300, 100]);
+  });
+});

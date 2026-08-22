@@ -18,6 +18,7 @@ import {
   BoltIcon,
   CheckIcon,
   ClipboardIcon,
+  ShieldCheckIcon,
   WalletIcon,
 } from "@heroicons/react/24/outline";
 import { getSatoshiValue } from "@getalby/lightning-tools";
@@ -43,12 +44,18 @@ import {
   isEligibleForLightningPayout,
   buildLightningPaymentMessage,
   buildEcashPaymentMessage,
+  buildHodlEscrowPaymentMessage,
   buildShipProductMessage,
   buildShippingAddressTag,
   buildOrderProcessedReceiptMessage,
   buildThankYouReceiptMessage,
   buildPaymentEventOptions,
 } from "@/utils/payments/checkout-messages";
+import {
+  isHodlEscrowFeatureEnabled,
+  registerHodlOrder,
+  getHodlOrderStatus,
+} from "@/utils/lightning/hodl-order-client";
 import {
   recordPendingMintQuote,
   markMintQuoteClaimed,
@@ -166,6 +173,10 @@ export default function ProductInvoiceCard({
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [invoice, setInvoice] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
+  // Escrow reaches the same "paid" state by a different route, and saying
+  // "Payment confirmed!" there would be wrong: the sats are locked, not
+  // released. The seller is not paid until the buyer confirms receipt.
+  const [isHodlCheckout, setIsHodlCheckout] = useState(false);
 
   // Tracks the in-flight invoice polling so a "Back" click or unmount can
   // signal the polling loop to exit cleanly instead of letting it complete
@@ -175,11 +186,19 @@ export default function ProductInvoiceCard({
     activeQuoteId: string | null;
   }>({ cancelled: false, activeQuoteId: null });
 
+  // Hold-invoice escrow polls a status endpoint rather than a mint quote, so
+  // it needs its own flag — but it is cancelled by the same "Back"/unmount
+  // path below, so abandoning either kind of checkout stops either loop.
+  const hodlPollRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+
   // Cancels any in-flight invoice polling. If the quote is still awaiting
   // payment we drop the durable record (no money has moved). If the mint
   // has already moved to PAID, the durable record stays so MintRecoveryBoot
   // can claim the proofs back to the buyer's wallet on next boot.
   const cancelInvoicePolling = useCallback(() => {
+    // No durable record to clean up on the escrow side: the order row lives
+    // server-side and the unpaid hold invoice simply expires on its own.
+    hodlPollRef.current.cancelled = true;
     const state = invoicePollRef.current;
     state.cancelled = true;
     const quoteId = state.activeQuoteId;
@@ -827,7 +846,7 @@ export default function ProductInvoiceCard({
 
   const onFormSubmit = async (
     data: { [x: string]: string },
-    paymentType?: "lightning" | "cashu" | "nwc"
+    paymentType?: "lightning" | "cashu" | "nwc" | "hodl"
   ) => {
     try {
       // Use discounted total instead of original price
@@ -907,6 +926,8 @@ export default function ProductInvoiceCard({
         await handleCashuPayment(invoiceAmount, paymentData);
       } else if (paymentType === "nwc") {
         await handleNWCPayment(invoiceAmount, paymentData);
+      } else if (paymentType === "hodl") {
+        await handleHodlEscrowPayment(invoiceAmount, paymentData);
       } else {
         await handleLightningPayment(invoiceAmount, paymentData);
       }
@@ -1155,6 +1176,330 @@ export default function ProductInvoiceCard({
       setInvoice("");
       setQrCodeUrl(null);
     }
+  };
+
+  /**
+   * Buys through a Lightning hold invoice held in escrow.
+   *
+   * The shape mirrors handleLightningPayment, with two differences that matter:
+   * the sats are locked rather than captured — the seller is paid only once the
+   * buyer confirms receipt — and there is no WebLN auto-pay attempt, because
+   * the only backend implemented so far issues invoices no wallet can pay and
+   * handing one to a wallet produces a confusing failure rather than a clear
+   * "waiting for payment".
+   */
+  const handleHodlEscrowPayment = async (convertedPrice: number, data: any) => {
+    try {
+      const displayedAmount = toCashuMintAmountSats(convertedPrice);
+      if (
+        data.shippingName ||
+        data.shippingAddress ||
+        data.shippingCity ||
+        data.shippingPostalCode ||
+        data.shippingState ||
+        data.shippingCountry
+      ) {
+        validatePaymentData(displayedAmount, {
+          Name: data.shippingName || "",
+          Address: data.shippingAddress || "",
+          Unit: data.shippingUnitNo || "",
+          City: data.shippingCity || "",
+          "Postal Code": data.shippingPostalCode || "",
+          "State/Province": data.shippingState || "",
+          Country: data.shippingCountry || "",
+          Required: data.additionalInfo || "",
+        });
+      } else if (data.contact || data.contactType || data.contactInstructions) {
+        validatePaymentData(displayedAmount, {
+          Contact: data.contact || "",
+          "Contact Type": data.contactType || "",
+          Instructions: data.contactInstructions || "",
+          Required: data.additionalInfo || "",
+        });
+      } else {
+        validatePaymentData(displayedAmount);
+      }
+
+      if (!signer || !userPubkey) {
+        throw new Error(
+          "A Nostr identity is required to pay through Lightning escrow."
+        );
+      }
+
+      setShowInvoiceCard(true);
+      setIsHodlCheckout(true);
+      hodlPollRef.current = { cancelled: false };
+
+      // register-hodl-order takes the amount on the buyer's word and does no
+      // option or discount validation of its own, so the amount escrowed is
+      // repriced server-side first — the same guard the Cashu path applies
+      // before spending from the buyer's wallet.
+      const priceQuote = await requestListingPriceQuote();
+      const serverAmount = toCashuMintAmountSats(priceQuote.amount);
+      assertServerAmountWithinTolerance(serverAmount, displayedAmount);
+      updatePendingOrderAmount(serverAmount);
+
+      const { invoice: holdInvoice, paymentHash } = await registerHodlOrder(
+        signer,
+        { productId: productData.id, amountSats: serverAmount }
+      );
+
+      setInvoice(holdInvoice);
+      QRCode.toDataURL(holdInvoice)
+        .then((url: string) => {
+          setQrCodeUrl(url);
+        })
+        .catch((err: unknown) => {
+          console.error("ERROR", err);
+        });
+
+      await hodlInvoiceHasBeenAccepted(
+        paymentHash,
+        serverAmount,
+        data.shippingName ? data.shippingName : undefined,
+        data.shippingAddress ? data.shippingAddress : undefined,
+        data.shippingUnitNo ? data.shippingUnitNo : undefined,
+        data.shippingCity ? data.shippingCity : undefined,
+        data.shippingPostalCode ? data.shippingPostalCode : undefined,
+        data.shippingState ? data.shippingState : undefined,
+        data.shippingCountry ? data.shippingCountry : undefined,
+        data.additionalInfo ? data.additionalInfo : undefined
+      );
+    } catch (err) {
+      console.error("Lightning escrow checkout failed:", err);
+      setInvoiceGenerationFailed(true);
+      setShowInvoiceCard(false);
+      setInvoice("");
+      setQrCodeUrl(null);
+    }
+  };
+
+  /** WAITS FOR THE HOLD INVOICE TO BE PAID (open -> accepted) */
+  async function hodlInvoiceHasBeenAccepted(
+    paymentHash: string,
+    amountSats: number,
+    shippingName?: string,
+    shippingAddress?: string,
+    shippingUnitNo?: string,
+    shippingCity?: string,
+    shippingPostalCode?: string,
+    shippingState?: string,
+    shippingCountry?: string,
+    additionalInfo?: string
+  ) {
+    // Matches the mint-quote loop's budget: 42 attempts at ~2.1s is a little
+    // over 90 seconds of waiting before the buyer is told to try again.
+    const maxRetries = 42;
+    let retryCount = 0;
+
+    while (retryCount < maxRetries) {
+      if (hodlPollRef.current.cancelled) return;
+
+      try {
+        // Reading the status is also what advances it: the endpoint syncs the
+        // order against the Lightning backend before answering.
+        const { status } = await getHodlOrderStatus(signer!, paymentHash);
+
+        if (hodlPollRef.current.cancelled) return;
+
+        if (status === "accepted" || status === "settled") {
+          setPaymentConfirmed(true);
+          setQrCodeUrl(null);
+          setInvoiceIsPaid(true);
+          await sendHodlOrderMessages(
+            paymentHash,
+            amountSats,
+            shippingName,
+            shippingAddress,
+            shippingUnitNo,
+            shippingCity,
+            shippingPostalCode,
+            shippingState,
+            shippingCountry,
+            additionalInfo
+          );
+          return;
+        }
+
+        if (status === "cancelled") {
+          // The hold invoice expired or was cancelled before anyone paid it.
+          // Nothing was ever locked, so this is a dead end rather than a
+          // failure to retry against the same invoice.
+          throw new Error(
+            "This escrow invoice was cancelled before it was paid. Please start a new order."
+          );
+        }
+      } catch (error) {
+        // A transient status read failing is expected while the buyer is still
+        // fetching their wallet; only give up once the retry budget is spent.
+        if (retryCount === maxRetries - 1) throw error;
+      }
+
+      retryCount++;
+      await new Promise((resolve) => setTimeout(resolve, 2100));
+    }
+
+    throw new Error(
+      "Timed out waiting for the escrow invoice to be paid. If you have already paid, your order will appear in your orders dashboard shortly."
+    );
+  }
+
+  /**
+   * Sends the order DMs for an escrow purchase.
+   *
+   * Deliberately separate from sendTokens: that function's job is splitting and
+   * handing over Cashu proofs, none of which exists here. The sats sit in the
+   * hold invoice, so the only thing to communicate is the payment hash — which
+   * rides in the `payment` tag and is how the seller's dashboard, and later the
+   * arbiter, identify this order.
+   *
+   * There is also no donation split. The hold invoice pays out in full to the
+   * seller on settlement; there are no proofs to divert, so the donation the
+   * Cashu path takes at checkout has no equivalent step here.
+   */
+  const sendHodlOrderMessages = async (
+    paymentHash: string,
+    amountSats: number,
+    shippingName?: string,
+    shippingAddress?: string,
+    shippingUnitNo?: string,
+    shippingCity?: string,
+    shippingPostalCode?: string,
+    shippingState?: string,
+    shippingCountry?: string,
+    additionalInfo?: string
+  ) => {
+    const orderId = uuidv4();
+    if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
+      pendingOrderRef.current.orderId = orderId;
+    }
+
+    const productDetails = buildProductDetailsSuffix({
+      selectedSize,
+      selectedVolume,
+      selectedWeight,
+      selectedBulkOption,
+      pickupLocation: selectedPickupLocation,
+    });
+
+    // Step 1: tell the seller funds are locked, and hand them the payment hash.
+    const paymentMessage = buildHodlEscrowPaymentMessage({
+      buyerNpub: userNPub,
+      title: productData.title,
+      productDetails,
+      paymentHash,
+    });
+    await sendPaymentAndContactMessage(
+      productData.pubkey,
+      paymentMessage,
+      true,
+      false,
+      false,
+      orderId,
+      "hodl",
+      paymentHash,
+      undefined,
+      amountSats,
+      undefined,
+      undefined,
+      selectedPickupLocation || undefined
+    );
+
+    // Step 2: additional customer information.
+    if (additionalInfo) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      try {
+        await sendPaymentAndContactMessage(
+          productData.pubkey,
+          "Additional customer information: " + additionalInfo,
+          false,
+          false,
+          false,
+          orderId
+        );
+      } catch (error) {
+        console.error("Failed to send additional info message:", error);
+      }
+    }
+
+    // Step 3: shipping or pickup details, then the buyer's own receipt.
+    const hasShippingAddress = !!(
+      shippingName &&
+      shippingAddress &&
+      shippingCity &&
+      shippingPostalCode &&
+      shippingState &&
+      shippingCountry
+    );
+
+    let addressTagForShipping: string | undefined;
+    if (hasShippingAddress) {
+      const shippingAddr = {
+        name: shippingName!,
+        address: shippingAddress!,
+        unitNo: shippingUnitNo,
+        city: shippingCity!,
+        postalCode: shippingPostalCode!,
+        state: shippingState!,
+        country: shippingCountry!,
+      };
+      addressTagForShipping = buildShippingAddressTag(shippingAddr);
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await sendPaymentAndContactMessage(
+        productData.pubkey,
+        buildShipProductMessage(productDetails, shippingAddr),
+        false,
+        false,
+        false,
+        orderId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        addressTagForShipping
+      );
+    } else if (
+      productData.shippingType === "N/A" ||
+      productData.shippingType === "Pickup" ||
+      productData.shippingType === "Free/Pickup"
+    ) {
+      await sendInquiryDM(productData.pubkey, productData.title);
+    }
+
+    if (!userPubkey) return;
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const receiptMessage = hasShippingAddress
+      ? buildOrderProcessedReceiptMessage(
+          productData.title,
+          productDetails,
+          nip19.npubEncode(productData.pubkey)
+        )
+      : buildThankYouReceiptMessage(
+          productData.title,
+          productDetails,
+          nip19.npubEncode(productData.pubkey)
+        );
+
+    // The buyer's own copy carries the payment hash too — it is what their
+    // orders dashboard reads to offer "Confirm Receipt".
+    await sendPaymentAndContactMessage(
+      userPubkey,
+      receiptMessage,
+      false,
+      true,
+      false,
+      orderId,
+      "hodl",
+      paymentHash,
+      undefined,
+      amountSats,
+      undefined,
+      addressTagForShipping,
+      selectedPickupLocation || undefined
+    );
   };
 
   /** CHECKS WHETHER INVOICE HAS BEEN PAID */
@@ -2503,7 +2848,11 @@ export default function ProductInvoiceCard({
           <div className="w-full p-6 lg:w-1/2">
             <div className="w-full">
               <div className="mb-6">
-                <h2 className="text-2xl font-bold">Lightning Invoice</h2>
+                <h2 className="text-2xl font-bold">
+                  {isHodlCheckout
+                    ? "Lightning Escrow Invoice"
+                    : "Lightning Invoice"}
+                </h2>
               </div>
               <div className="flex flex-col items-center">
                 {!paymentConfirmed ? (
@@ -2554,8 +2903,17 @@ export default function ProductInvoiceCard({
                 ) : (
                   <div className="flex flex-col items-center justify-center">
                     <h3 className="mt-3 text-center text-lg leading-6 font-medium text-gray-900">
-                      Payment confirmed!
+                      {isHodlCheckout
+                        ? "Payment locked in escrow!"
+                        : "Payment confirmed!"}
                     </h3>
+                    {isHodlCheckout && (
+                      <p className="text-light-text dark:text-dark-text mt-2 max-w-sm text-center text-sm">
+                        Your sats are held until you confirm receipt. Confirm
+                        from your orders dashboard once the order arrives, or
+                        raise a dispute if something goes wrong.
+                      </p>
+                    )}
                     <Image
                       alt="Payment Confirmed"
                       className="object-cover"
@@ -2806,6 +3164,27 @@ export default function ProductInvoiceCard({
                   >
                     Pay with Lightning: {formattedTotalCost}
                   </Button>
+
+                  {isHodlEscrowFeatureEnabled() && (
+                    <Button
+                      className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
+                        !isFormValid ? "cursor-not-allowed opacity-50" : ""
+                      }`}
+                      disabled={!isFormValid}
+                      onClick={() => {
+                        if (!isLoggedIn) {
+                          onOpen();
+                          return;
+                        }
+                        handleFormSubmit((data) =>
+                          onFormSubmit(data, "hodl")
+                        )();
+                      }}
+                      startContent={<ShieldCheckIcon className="h-6 w-6" />}
+                    >
+                      Pay with Lightning Escrow: {formattedTotalCost}
+                    </Button>
+                  )}
 
                   {hasTokensAvailable && (
                     <Button
