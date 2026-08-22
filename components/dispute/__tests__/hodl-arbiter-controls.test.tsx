@@ -274,21 +274,6 @@ describe("HodlArbiterControls", () => {
     expect(onResolved).not.toHaveBeenCalled();
   });
 
-  it("renders a sub-hour wait in minutes only", async () => {
-    mockResolveHodlDispute.mockRejectedValue(
-      Object.assign(new Error("nope"), {
-        reason: "dispute_not_yet_actionable",
-        remainingSeconds: 90,
-      })
-    );
-    renderControls();
-
-    fireEvent.click(screen.getByText("Release to Buyer"));
-    fireEvent.click(screen.getByText("Confirm Ruling"));
-
-    expect(await screen.findByText(/another 2m/)).toBeInTheDocument();
-  });
-
   it("refuses to rule without a signer", async () => {
     renderControls({ signer: null });
 

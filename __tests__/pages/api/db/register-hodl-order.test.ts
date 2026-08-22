@@ -170,27 +170,27 @@ describe("/api/db/register-hodl-order", () => {
     expect(registerHodlEscrowOrderMock).not.toHaveBeenCalled();
   });
 
-  it("refuses to create an invoice when no arbiter is configured", async () => {
-    delete process.env.ARBITER_NOSTR_PUBKEY;
-    const res = createResponse();
+  it.each([
+    ["unset", undefined],
+    ["a placeholder", "replace-with-arbiter-nostr-pubkey-hex"],
+  ])(
+    "refuses to create an invoice when the arbiter is %s",
+    async (_label, value) => {
+      if (value === undefined) {
+        delete process.env.ARBITER_NOSTR_PUBKEY;
+      } else {
+        process.env.ARBITER_NOSTR_PUBKEY = value;
+      }
+      const res = createResponse();
 
-    await handler(createRequest(), res as any);
+      await handler(createRequest(), res as any);
 
-    expect(res.statusCode).toBe(500);
-    // Checked before the invoice exists, so there is no unrecorded invoice.
-    expect(createHoldInvoiceMock).not.toHaveBeenCalled();
-    expect(registerHodlEscrowOrderMock).not.toHaveBeenCalled();
-  });
-
-  it("refuses when the configured arbiter pubkey is a placeholder", async () => {
-    process.env.ARBITER_NOSTR_PUBKEY = "replace-with-arbiter-nostr-pubkey-hex";
-    const res = createResponse();
-
-    await handler(createRequest(), res as any);
-
-    expect(res.statusCode).toBe(500);
-    expect(createHoldInvoiceMock).not.toHaveBeenCalled();
-  });
+      expect(res.statusCode).toBe(500);
+      // Checked before the invoice exists, so there is no unrecorded invoice.
+      expect(createHoldInvoiceMock).not.toHaveBeenCalled();
+      expect(registerHodlEscrowOrderMock).not.toHaveBeenCalled();
+    }
+  );
 
   it("reports escrow as unavailable when no provider is installed", async () => {
     getHodlInvoiceProviderMock.mockImplementation(() => {

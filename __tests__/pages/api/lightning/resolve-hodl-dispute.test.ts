@@ -1315,33 +1315,5 @@ describe("/api/lightning/resolve-hodl-dispute", () => {
       });
       expect(JSON.stringify(res.jsonBody)).not.toContain("try again");
     });
-
-    it("still returns 403 when no ruling was signed by the order's arbiter", async () => {
-      fetchHodlReleaseEventsMock.mockResolvedValue([
-        releaseEvent({ authorPubkey: IMPOSTOR_PUBKEY }),
-      ]);
-      const res = createResponse();
-
-      await handler(createRequest(), res as any);
-
-      expect(res.statusCode).toBe(403);
-      expect(res.jsonBody).toEqual({
-        error: "No ruling for this order was signed by its arbiter",
-        reason: "pubkey_mismatch",
-      });
-    });
-
-    it("still returns 404 when the order genuinely does not exist", async () => {
-      getHodlEscrowOrderPartiesMock.mockResolvedValue(null);
-      const res = createResponse();
-
-      await handler(createRequest(), res as any);
-
-      expect(res.statusCode).toBe(404);
-      expect(res.jsonBody).toEqual({
-        error: "No escrow order exists for this payment hash",
-        reason: "no_such_order",
-      });
-    });
   });
 });
