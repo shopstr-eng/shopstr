@@ -3,6 +3,10 @@ import { verifyEvent } from "nostr-tools";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
 import {
+  getLndPaymentClient,
+  LndPaymentConfigError,
+} from "@/utils/lightning/lnd-payment-client";
+import {
   claimHodlEscrowPayoutAttempt,
   discardHodlEscrowPayoutInvoice,
   getHodlEscrowPayoutOrderContext,
@@ -66,8 +70,10 @@ export type PayoutInvoiceStatus =
   | "unknown";
 
 /**
- * Raised by a payer that refused before anything was dialled out — no
- * Lightning payer is installed at all.
+ * Raised by `payPayoutInvoice` before anything was dialled out — the LND
+ * payment client itself is not configured (`LND_PAYMENT_MACAROON_HEX` and
+ * friends missing or malformed; see
+ * {@link file://./lnd-payment-client.ts}'s `LndPaymentConfigError`).
  *
  * Distinct from an ordinary send failure because it is a certainty rather
  * than an ambiguity: nothing was sent, so the payout may be recorded as
@@ -78,42 +84,6 @@ export class HodlSellerPayoutPayerUnavailableError extends Error {
     super(message);
     this.name = "HodlSellerPayoutPayerUnavailableError";
   }
-}
-
-/**
- * The Lightning node/wallet that sends payouts.
- *
- * Deliberately NOT folded into {@link HodlInvoiceProvider}: that interface is
- * about receiving into a hold invoice and is served by an LND client holding
- * an invoice-only macaroon. Sending is a different capability with a
- * different credential, and giving the escrow provider a `payInvoice` method
- * would widen a contract whose settle/cancel semantics are already relied on
- * elsewhere.
- *
- * NOTE: no implementation is registered by default. Until one is installed
- * via {@link setHodlSellerPayoutPayer}, every payout records itself `failed`
- * with a clear reason rather than silently doing nothing — the seller stays
- * visibly owed. Wiring a real sender (LND `SendPaymentV2`, which needs its
- * own proto surface and a send-capable macaroon) is the next step and is
- * intentionally not guessed at here.
- */
-export interface HodlSellerPayoutPayer {
-  payInvoice(params: {
-    paymentRequest: string;
-    amountSats: number;
-  }): Promise<void>;
-}
-
-let installedPayer: HodlSellerPayoutPayer | null = null;
-
-/**
- * Installs the payer that sends payouts. Pass `null` to clear it — tests use
- * that to get back to a known state.
- */
-export function setHodlSellerPayoutPayer(
-  payer: HodlSellerPayoutPayer | null
-): void {
-  installedPayer = payer;
 }
 
 /** The four outside-world operations a payout needs, as one injectable set. */
@@ -290,24 +260,81 @@ async function checkStoredInvoiceStatus(params: {
   return resolvePayoutInvoiceStatus(invoice);
 }
 
-async function payWithInstalledPayer(params: {
+/**
+ * Fee ceiling passed to `SendPaymentV2` as `fee_limit_sat`, as a fraction of
+ * the amount being forwarded.
+ *
+ * Routing a payout to an LNURL provider is typically one or two hops from a
+ * well-peered node, where real-world fees run well under 1%. A 1% ceiling
+ * comfortably covers that without leaving the fee unbounded — an unbounded
+ * limit is how a bad route quietly eats into what the seller is owed. The
+ * floor keeps a small payout (a few hundred sats) from getting a 0-sat limit,
+ * which LND would reject as unroutable before any route was even tried.
+ */
+const PAYOUT_FEE_LIMIT_FRACTION = 0.01;
+const MIN_PAYOUT_FEE_LIMIT_SATS = 10;
+
+function payoutFeeLimitSats(amountSats: number): number {
+  return Math.max(
+    MIN_PAYOUT_FEE_LIMIT_SATS,
+    Math.ceil(amountSats * PAYOUT_FEE_LIMIT_FRACTION)
+  );
+}
+
+/**
+ * Sends a payout over LND via {@link file://./lnd-payment-client.ts}.
+ *
+ * Three outcomes from `sendPayment`, handled three different ways:
+ *
+ *  - `succeeded` resolves normally.
+ *  - `failed` and `unknown` both throw a plain `Error`. Neither is treated as
+ *    the certainty {@link HodlSellerPayoutPayerUnavailableError} represents —
+ *    a real send was dialled out, so `payoutToSeller` must leave the row
+ *    `pending` with its invoice rather than mark it `failed`. The next
+ *    attempt's `checkPayoutInvoiceStatus` — the LNURL provider's own verify
+ *    endpoint, unrelated to LND — is what actually decides whether the
+ *    invoice is paid, dead, or still unknown; this function does not get to
+ *    pre-empt that by guessing from the send outcome alone.
+ *  - An {@link LndPaymentConfigError} (missing/malformed
+ *    `LND_PAYMENT_MACAROON_HEX` and friends) means nothing was dialled out at
+ *    all, so it is re-thrown as {@link HodlSellerPayoutPayerUnavailableError}
+ *    — the one case that is safe to record as a plain, retryable `failed`.
+ *  - Any other error from `sendPayment` (a real gRPC/connection failure) is
+ *    rethrown as-is, which `payoutToSeller` also treats as ambiguous.
+ */
+async function payWithLnd(params: {
   paymentRequest: string;
   amountSats: number;
 }): Promise<void> {
-  if (!installedPayer) {
-    throw new HodlSellerPayoutPayerUnavailableError(
-      "No Lightning payer is configured, so settled escrow funds cannot be " +
-        "forwarded to the seller. Install one with setHodlSellerPayoutPayer."
-    );
+  let outcome;
+  try {
+    outcome = await getLndPaymentClient().sendPayment({
+      paymentRequest: params.paymentRequest,
+      feeLimitSat: payoutFeeLimitSats(params.amountSats),
+    });
+  } catch (error) {
+    if (error instanceof LndPaymentConfigError) {
+      throw new HodlSellerPayoutPayerUnavailableError(
+        `No Lightning payer is configured: ${error.message}`
+      );
+    }
+    throw error;
   }
-  await installedPayer.payInvoice(params);
+
+  if (outcome.status === "succeeded") return;
+  if (outcome.status === "failed") {
+    throw new Error(`Lightning payment failed: ${outcome.failureReason}`);
+  }
+  throw new Error(
+    "Lightning payment outcome could not be determined before the stream ended"
+  );
 }
 
 const DEFAULT_DEPENDENCIES: HodlSellerPayoutDependencies = {
   resolveLightningAddress: fetchSellerLightningAddress,
   requestPayoutInvoice: requestInvoiceFromLightningAddress,
   checkPayoutInvoiceStatus: checkStoredInvoiceStatus,
-  payPayoutInvoice: payWithInstalledPayer,
+  payPayoutInvoice: payWithLnd,
 };
 
 /**
