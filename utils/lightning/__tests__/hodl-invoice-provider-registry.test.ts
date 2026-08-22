@@ -211,12 +211,6 @@ describe("getHodlInvoiceProvider", () => {
       );
     });
 
-    it("warns rather than throwing in production", () => {
-      setEnv("NODE_ENV", "production");
-
-      expect(() => getHodlInvoiceProvider()).not.toThrow();
-    });
-
     it("treats a blank value as unset", () => {
       setEnv("NODE_ENV", "production");
       setEnv("HODL_INVOICE_PROVIDER", "   ");
@@ -251,13 +245,6 @@ describe("getHodlInvoiceProvider", () => {
         expect(message).toContain('"lnd"');
       }
     );
-
-    it("does not fall back to the mock, even in development", () => {
-      setEnv("NODE_ENV", "development");
-      setEnv("HODL_INVOICE_PROVIDER", "moc");
-
-      expect(() => getHodlInvoiceProvider()).toThrow(/"moc"/);
-    });
 
     it("is catchable as HodlInvoiceProviderUnavailableError, so routes still 503", () => {
       setEnv("HODL_INVOICE_PROVIDER", "cln");

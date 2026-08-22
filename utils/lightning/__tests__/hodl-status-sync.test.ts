@@ -57,8 +57,17 @@ describe("syncHodlOrderStatus", () => {
     );
   });
 
-  it("moves open to cancelled when the provider says the invoice expired", async () => {
-    getHodlEscrowOrderStatusMock.mockResolvedValue("open");
+  it.each([
+    [
+      "open",
+      "moves open to cancelled when the provider says the invoice expired",
+    ],
+    [
+      "accepted",
+      "moves accepted to cancelled when the provider says the held HTLC was released",
+    ],
+  ])("%s -> cancelled: %s", async (storedStatus) => {
+    getHodlEscrowOrderStatusMock.mockResolvedValue(storedStatus);
     lookupInvoiceMock.mockResolvedValue({ status: "cancelled" });
     updateHodlEscrowOrderStatusIfAdvancingMock.mockResolvedValue("cancelled");
 
@@ -69,16 +78,6 @@ describe("syncHodlOrderStatus", () => {
       PAYMENT_HASH,
       "cancelled"
     );
-  });
-
-  it("moves accepted to cancelled when the provider says the held HTLC was released", async () => {
-    getHodlEscrowOrderStatusMock.mockResolvedValue("accepted");
-    lookupInvoiceMock.mockResolvedValue({ status: "cancelled" });
-    updateHodlEscrowOrderStatusIfAdvancingMock.mockResolvedValue("cancelled");
-
-    const result = await syncHodlOrderStatus(PAYMENT_HASH);
-
-    expect(result).toBe("cancelled");
   });
 
   it("never downgrades a settled row even on a stale provider read", async () => {
@@ -111,26 +110,19 @@ describe("syncHodlOrderStatus", () => {
     expect(result).toBe("cancelled");
   });
 
-  it("is a no-op when the provider status matches the stored status", async () => {
-    getHodlEscrowOrderStatusMock.mockResolvedValue("accepted");
-    lookupInvoiceMock.mockResolvedValue({ status: "accepted" });
+  it.each(["accepted", "settled"])(
+    "is a no-op when the provider status matches a stored %s status",
+    async (status) => {
+      getHodlEscrowOrderStatusMock.mockResolvedValue(status);
+      lookupInvoiceMock.mockResolvedValue({ status });
 
-    const result = await syncHodlOrderStatus(PAYMENT_HASH);
+      const result = await syncHodlOrderStatus(PAYMENT_HASH);
 
-    expect(result).toBe("accepted");
-    // No write attempted at all when nothing has changed.
-    expect(updateHodlEscrowOrderStatusIfAdvancingMock).not.toHaveBeenCalled();
-  });
-
-  it("is a no-op when the row is already settled and the provider agrees", async () => {
-    getHodlEscrowOrderStatusMock.mockResolvedValue("settled");
-    lookupInvoiceMock.mockResolvedValue({ status: "settled" });
-
-    const result = await syncHodlOrderStatus(PAYMENT_HASH);
-
-    expect(result).toBe("settled");
-    expect(updateHodlEscrowOrderStatusIfAdvancingMock).not.toHaveBeenCalled();
-  });
+      expect(result).toBe(status);
+      // No write attempted at all when nothing has changed.
+      expect(updateHodlEscrowOrderStatusIfAdvancingMock).not.toHaveBeenCalled();
+    }
+  );
 
   it("returns null and never calls the provider when no order exists", async () => {
     getHodlEscrowOrderStatusMock.mockResolvedValue(null);

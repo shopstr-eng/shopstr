@@ -104,45 +104,22 @@ describe("/api/lightning/sync-hodl-orders", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("rejects a non-Bearer authorization scheme carrying the right secret", async () => {
-    const res = createResponse();
-    await handler(createRequest({ authorization: CRON_SECRET }), res as any);
-
-    expect(res.statusCode).toBe(401);
-  });
-
-  it("rejects a wrong secret of the same length", async () => {
-    const res = createResponse();
-    await handler(
-      {
-        method: "POST",
-        headers: { authorization: `Bearer ${"b".repeat(CRON_SECRET.length)}` },
-      } as any,
-      res as any
-    );
-
-    expect(res.statusCode).toBe(401);
-  });
-
-  it("rejects a secret of a different length without throwing", async () => {
-    // timingSafeEqual throws on unequal buffer lengths, so the length check has
-    // to happen first; a throw here would surface as a 500, not a 401.
+  it.each([
+    ["a non-Bearer scheme carrying the right secret", CRON_SECRET],
+    // timingSafeEqual throws on unequal buffer lengths, so the length check
+    // has to happen first; a throw here would surface as a 500, not a 401.
+    ["a wrong secret of the same length", "b".repeat(CRON_SECRET.length)],
+    ["a secret of a different length", "short"],
+    [
+      "a secret that merely prefixes the configured one",
+      CRON_SECRET.slice(0, -1),
+    ],
+  ])("rejects %s", async (_label, tokenOrHeader) => {
+    const authorization =
+      tokenOrHeader === CRON_SECRET ? CRON_SECRET : `Bearer ${tokenOrHeader}`;
     const res = createResponse();
     await handler(
-      { method: "POST", headers: { authorization: "Bearer short" } } as any,
-      res as any
-    );
-
-    expect(res.statusCode).toBe(401);
-  });
-
-  it("rejects a secret that merely prefixes the configured one", async () => {
-    const res = createResponse();
-    await handler(
-      {
-        method: "POST",
-        headers: { authorization: `Bearer ${CRON_SECRET.slice(0, -1)}` },
-      } as any,
+      { method: "POST", headers: { authorization } } as any,
       res as any
     );
 

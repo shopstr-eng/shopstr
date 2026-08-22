@@ -297,21 +297,15 @@ describe("parseHodlConfirmEvent", () => {
     ).toBeNull();
   });
 
-  it("rejects an event with no d tag", () => {
-    expect(parseHodlConfirmEvent(mkConfirmEvent({ tags: [] }))).toBeNull();
-  });
-
-  it("rejects a d tag that is not a 32-byte hex payment hash", () => {
+  it.each([
+    ["no d tag", []],
+    ["non-hex", [["d", "order-1"]]],
+    ["wrong length", [["d", "ab".repeat(31)]]],
+    ["no value", [["d"]]],
+  ])("rejects a d tag that is %s", (_label, tags) => {
     expect(
-      parseHodlConfirmEvent(mkConfirmEvent({ tags: [["d", "order-1"]] }))
+      parseHodlConfirmEvent(mkConfirmEvent({ tags: tags as string[][] }))
     ).toBeNull();
-    expect(
-      parseHodlConfirmEvent(mkConfirmEvent({ tags: [["d", "ab".repeat(31)]] }))
-    ).toBeNull();
-  });
-
-  it("rejects a d tag with no value", () => {
-    expect(parseHodlConfirmEvent(mkConfirmEvent({ tags: [["d"]] }))).toBeNull();
   });
 
   it("rejects an event with a missing or malformed pubkey", () => {
@@ -851,29 +845,19 @@ describe("fetchHodlConfirmEvents", () => {
   // The empty list is a claim about what relays hold. A read that never
   // happened cannot make it, or the settle endpoint downstream turns an
   // outage into "the buyer never confirmed" and refuses a valid settlement.
-  it("throws relay_connection_failure when the relay query fails", async () => {
+  it("throws relay_connection_failure, as an instance of HodlRelayUnavailableError, when the relay query fails", async () => {
     const nostr = { fetch: jest.fn().mockRejectedValue(new Error("offline")) };
 
-    await expect(
-      fetchHodlConfirmEvents({
-        nostr: nostr as any,
-        paymentHash: PAYMENT_HASH,
-      })
-    ).rejects.toMatchObject({
+    const error = await fetchHodlConfirmEvents({
+      nostr: nostr as any,
+      paymentHash: PAYMENT_HASH,
+    }).catch((thrown: HodlRelayUnavailableError) => thrown);
+
+    expect(error).toBeInstanceOf(HodlRelayUnavailableError);
+    expect(error).toMatchObject({
       name: "HodlRelayUnavailableError",
       reason: "relay_connection_failure",
     });
-  });
-
-  it("throws an error callers can distinguish by instance, not by message", async () => {
-    const nostr = { fetch: jest.fn().mockRejectedValue(new Error("offline")) };
-
-    await expect(
-      fetchHodlConfirmEvents({
-        nostr: nostr as any,
-        paymentHash: PAYMENT_HASH,
-      })
-    ).rejects.toBeInstanceOf(HodlRelayUnavailableError);
   });
 
   it("does not quote the underlying transport error", async () => {
@@ -1126,13 +1110,12 @@ describe("parseHodlDisputeEvent", () => {
     ).toBeNull();
   });
 
-  it("rejects an event with no d tag", () => {
-    expect(parseHodlDisputeEvent(mkDisputeEvent({ tags: [] }))).toBeNull();
-  });
-
-  it("rejects a d tag that is not a 32-byte hex payment hash", () => {
+  it.each([
+    ["no d tag", []],
+    ["non-hex", [["d", "order-1"]]],
+  ])("rejects a d tag that is %s", (_label, tags) => {
     expect(
-      parseHodlDisputeEvent(mkDisputeEvent({ tags: [["d", "order-1"]] }))
+      parseHodlDisputeEvent(mkDisputeEvent({ tags: tags as string[][] }))
     ).toBeNull();
   });
 

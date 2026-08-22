@@ -130,31 +130,22 @@ describe("evaluateHodlDisputeActionability", () => {
     expect(result).not.toHaveProperty("remainingSeconds");
   });
 
-  it("throws unknown_disputer when the author is neither buyer nor seller", async () => {
+  it("throws unknown_disputer, as an instance of HodlDisputeActionabilityError, carrying identifying context", async () => {
     getHodlEscrowOrderDisputeContextMock.mockResolvedValue(orderContext());
 
-    await expect(
-      evaluateHodlDisputeActionability(
-        PAYMENT_HASH,
-        disputeEvent({ authorPubkey: IMPOSTOR_PUBKEY }),
-        NOW_SECONDS
-      )
-    ).rejects.toMatchObject({
+    const error = await evaluateHodlDisputeActionability(
+      PAYMENT_HASH,
+      disputeEvent({ authorPubkey: IMPOSTOR_PUBKEY }),
+      NOW_SECONDS
+    ).catch((thrown: HodlDisputeActionabilityError) => thrown);
+
+    expect(error).toBeInstanceOf(HodlDisputeActionabilityError);
+    expect(error).toMatchObject({
       name: "HodlDisputeActionabilityError",
       reason: "unknown_disputer",
+      paymentHash: PAYMENT_HASH,
+      authorPubkey: IMPOSTOR_PUBKEY,
     });
-  });
-
-  it("throws unknown_disputer as an instance of HodlDisputeActionabilityError", async () => {
-    getHodlEscrowOrderDisputeContextMock.mockResolvedValue(orderContext());
-
-    await expect(
-      evaluateHodlDisputeActionability(
-        PAYMENT_HASH,
-        disputeEvent({ authorPubkey: IMPOSTOR_PUBKEY }),
-        NOW_SECONDS
-      )
-    ).rejects.toBeInstanceOf(HodlDisputeActionabilityError);
   });
 
   it("throws no_such_order when no commitment row exists", async () => {
@@ -186,21 +177,6 @@ describe("evaluateHodlDisputeActionability", () => {
     ).rejects.toMatchObject({
       name: "HodlDisputeActionabilityError",
       reason: "no_accepted_at",
-    });
-  });
-
-  it("carries the payment hash and author pubkey on the thrown error", async () => {
-    getHodlEscrowOrderDisputeContextMock.mockResolvedValue(orderContext());
-
-    await expect(
-      evaluateHodlDisputeActionability(
-        PAYMENT_HASH,
-        disputeEvent({ authorPubkey: IMPOSTOR_PUBKEY }),
-        NOW_SECONDS
-      )
-    ).rejects.toMatchObject({
-      paymentHash: PAYMENT_HASH,
-      authorPubkey: IMPOSTOR_PUBKEY,
     });
   });
 
