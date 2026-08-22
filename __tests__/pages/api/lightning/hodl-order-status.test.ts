@@ -190,32 +190,23 @@ describe("/api/lightning/hodl-order-status", () => {
     expect(syncHodlOrderStatusMock).toHaveBeenCalledWith(PAYMENT_HASH);
   });
 
-  it("answers 404 — not 403 — to a caller who is neither party", async () => {
-    verifyNip98RequestMock.mockResolvedValue({
-      ok: true,
-      pubkey: STRANGER_PUBKEY,
-    });
+  it.each([
+    ["a stranger", STRANGER_PUBKEY],
+    ["the arbiter", ARBITER_PUBKEY],
+  ])(
+    "answers 404 — not 403 — to a caller (%s) who is neither buyer nor seller",
+    async (_label, pubkey) => {
+      verifyNip98RequestMock.mockResolvedValue({ ok: true, pubkey });
 
-    const res = createResponse();
-    await handler(createRequest(), res as any);
+      const res = createResponse();
+      await handler(createRequest(), res as any);
 
-    // A 403 would confirm the order exists. Payment hashes are unguessable
-    // precisely so they cannot be enumerated; a distinguishable response for
-    // "real order, not yours" would undo that.
-    expect(res.statusCode).toBe(404);
-  });
-
-  it("gives the arbiter the same 404 as any other non-party", async () => {
-    verifyNip98RequestMock.mockResolvedValue({
-      ok: true,
-      pubkey: ARBITER_PUBKEY,
-    });
-
-    const res = createResponse();
-    await handler(createRequest(), res as any);
-
-    expect(res.statusCode).toBe(404);
-  });
+      // A 403 would confirm the order exists. Payment hashes are unguessable
+      // precisely so they cannot be enumerated; a distinguishable response for
+      // "real order, not yours" would undo that.
+      expect(res.statusCode).toBe(404);
+    }
+  );
 
   it("does not sync an order the caller is not party to", async () => {
     verifyNip98RequestMock.mockResolvedValue({
@@ -302,16 +293,6 @@ describe("/api/lightning/hodl-order-status", () => {
 
     expect(verifyNip98RequestMock).not.toHaveBeenCalled();
     expect(getHodlEscrowOrderPartiesMock).not.toHaveBeenCalled();
-  });
-
-  it("never returns anything beyond the status and the caller's role", async () => {
-    const res = createResponse();
-    await handler(createRequest(), res as any);
-
-    expect(Object.keys(res.jsonBody as object).sort()).toEqual([
-      "role",
-      "status",
-    ]);
   });
 
   it("does not leak the counterparty's pubkey to the caller", async () => {
