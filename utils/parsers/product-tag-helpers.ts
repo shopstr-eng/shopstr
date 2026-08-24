@@ -1,7 +1,13 @@
-import {
-  SHIPPING_OPTIONS,
-  ShippingOptionsType,
-} from "@/utils/STATIC-VARIABLES";
+export type ShippingOptionsType =
+  "N/A" | "Free" | "Pickup" | "Free/Pickup" | "Added Cost";
+
+export const SHIPPING_OPTIONS = [
+  "N/A",
+  "Free",
+  "Pickup",
+  "Free/Pickup",
+  "Added Cost",
+] as const satisfies readonly ShippingOptionsType[];
 
 export type ParsedShippingTag = {
   shippingType: ShippingOptionsType;
@@ -92,4 +98,53 @@ export function getEffectiveShippingCost(
   }
 
   return shippingCost;
+}
+
+export type ProductMonetaryInfo = {
+  shippingType?: ShippingOptionsType;
+  shippingCost?: number;
+  price?: number;
+  currency: string;
+};
+
+export const calculateTotalCost = (
+  productMonetaryInfo: ProductMonetaryInfo
+) => {
+  const { price, shippingCost } = productMonetaryInfo;
+  let total = price ?? 0;
+  total += shippingCost ? shippingCost : 0;
+  return total;
+};
+
+export type PricingBlock = {
+  amount: number;
+  currency: string;
+  unit: "per item";
+  shippingCost: number | null;
+  shippingType: ShippingOptionsType | "N/A";
+  totalEstimate: number;
+  paymentMethods: string[];
+};
+
+export function buildPricingBlock(
+  price: number,
+  currency: string,
+  shippingType?: ShippingOptionsType,
+  shippingCost?: number,
+  quantity = 1,
+  paymentMethods: string[] = ["lightning", "cashu"]
+): PricingBlock {
+  const effectiveShippingCost = getEffectiveShippingCost(
+    shippingType,
+    shippingCost
+  );
+  return {
+    amount: price,
+    currency: currency || "sats",
+    unit: "per item",
+    shippingCost: effectiveShippingCost,
+    shippingType: shippingType || "N/A",
+    totalEstimate: price * quantity + (effectiveShippingCost ?? 0),
+    paymentMethods,
+  };
 }

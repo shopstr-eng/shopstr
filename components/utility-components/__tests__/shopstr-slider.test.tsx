@@ -5,15 +5,10 @@ import {
   FollowsContext,
   type FollowsContextInterface,
 } from "@/utils/context/context";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 
 const mockUseTheme = { theme: "light" };
 jest.mock("next-themes", () => ({
   useTheme: () => mockUseTheme,
-}));
-
-jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
-  getLocalStorageData: jest.fn(() => ({ wot: 5 })),
 }));
 
 jest.mock("@/utils/STATIC-VARIABLES", () => ({
@@ -40,8 +35,14 @@ jest.mock("@heroui/react", () => ({
 }));
 
 const mockLocalStorageSetItem = jest.fn();
+const mockLocalStorageGetItem = jest.fn(() => "5");
 Object.defineProperty(window, "localStorage", {
-  value: { setItem: mockLocalStorageSetItem },
+  value: {
+    getItem: mockLocalStorageGetItem,
+    setItem: mockLocalStorageSetItem,
+    removeItem: jest.fn(),
+    clear: jest.fn(),
+  },
   writable: true,
 });
 
@@ -70,7 +71,7 @@ describe("ShopstrSlider", () => {
 
   it("initializes with a value from localStorage and does not show the refresh button", () => {
     renderWithContext(defaultFollowsContext);
-    expect(getLocalStorageData).toHaveBeenCalled();
+    expect(mockLocalStorageGetItem).toHaveBeenCalledWith("wot");
     expect(screen.getByTestId("slider")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Refresh to Apply" })

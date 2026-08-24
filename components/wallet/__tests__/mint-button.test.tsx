@@ -34,11 +34,13 @@ const mockMintProofs = jest.fn();
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getCachedCashuProofs: jest.fn(),
   getLocalStorageData: jest.fn(),
+  getStoredMints: jest.fn(),
   publishProofEvent: jest.fn(),
   setCachedCashuProofs: jest.fn(),
 }));
 const mockGetCachedCashuProofs = NostrHelper.getCachedCashuProofs as jest.Mock;
 const mockGetLocalStorageData = NostrHelper.getLocalStorageData as jest.Mock;
+const mockGetStoredMints = NostrHelper.getStoredMints as jest.Mock;
 const mockPublishProofEvent = NostrHelper.publishProofEvent as jest.Mock;
 const mockSetCachedCashuProofs = NostrHelper.setCachedCashuProofs as jest.Mock;
 
@@ -116,6 +118,7 @@ describe("MintButton Component", () => {
     jest.useFakeTimers();
     mockGetCachedCashuProofs.mockReturnValue([]);
     mockGetLocalStorageData.mockReturnValue(mockLocalStorage);
+    mockGetStoredMints.mockReturnValue(mockLocalStorage.mints);
     mockToDataURL.mockResolvedValue("data:image/png;base64,mock-qr-code");
     mockPublishProofEvent.mockResolvedValue(undefined);
     mockSetCachedCashuProofs.mockReturnValue(undefined);

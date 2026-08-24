@@ -95,6 +95,20 @@ describe("PassphraseChallengeModal", () => {
     expect(input).toHaveValue("testpass");
   });
 
+  it("clears passphrase and remember state after closing", () => {
+    const { rerender } = render(<PassphraseChallengeModal {...defaultProps} />);
+    fireEvent.change(screen.getByLabelText("Passphrase"), {
+      target: { value: "testpass" },
+    });
+    fireEvent.click(screen.getByRole("checkbox"));
+
+    rerender(<PassphraseChallengeModal {...defaultProps} isOpen={false} />);
+    rerender(<PassphraseChallengeModal {...defaultProps} isOpen />);
+
+    expect(screen.getByLabelText("Passphrase")).toHaveValue("");
+    expect(screen.getByRole("checkbox")).not.toBeChecked();
+  });
+
   it("should toggle 'remember' checkbox on click", () => {
     render(<PassphraseChallengeModal {...defaultProps} />);
     const checkbox = screen.getByRole("checkbox") as HTMLInputElement;

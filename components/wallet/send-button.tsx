@@ -28,6 +28,7 @@ import {
   publishProofEvent,
   setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import {
   Mint as CashuMint,
   Wallet as CashuWallet,
@@ -150,13 +151,10 @@ const SendButton = () => {
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem(
-        "history",
-        JSON.stringify([
-          { type: 2, amount: numSats, date: Math.floor(Date.now() / 1000) },
-          ...history,
-        ])
-      );
+      storage.setJson(STORAGE_KEYS.HISTORY, [
+        { type: 2, amount: numSats, date: Math.floor(Date.now() / 1000) },
+        ...history,
+      ]);
       await publishProofEvent(
         nostr!,
         signer!,

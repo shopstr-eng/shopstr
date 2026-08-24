@@ -28,21 +28,21 @@ const Keys = () => {
   const { newSigner } = useContext(SignerContext);
   const relaysContext = useContext(RelaysContext);
 
-  const saveSigner = (signer: NostrSigner) => {
+  const saveSigner = async (signer: NostrSigner): Promise<void> => {
     if (
       !relaysContext.isLoading &&
       relaysContext.relayList.length >= 0 &&
       relaysContext.readRelayList &&
       relaysContext.writeRelayList
     ) {
-      setLocalStorageDataOnSignIn({
+      await setLocalStorageDataOnSignIn({
         signer,
         relays: relaysContext.relayList,
         readRelays: relaysContext.readRelayList,
         writeRelays: relaysContext.writeRelayList,
       });
     } else {
-      setLocalStorageDataOnSignIn({ signer });
+      await setLocalStorageDataOnSignIn({ signer });
     }
   };
 
@@ -68,7 +68,7 @@ const Keys = () => {
         pubkey,
       });
       await signer.getPubKey();
-      saveSigner(signer);
+      await saveSigner(signer);
       router.push(
         preselect === "seller"
           ? "/onboarding/user-type?preselect=seller"

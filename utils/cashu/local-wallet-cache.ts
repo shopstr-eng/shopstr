@@ -4,6 +4,7 @@ import {
   getLocalStorageData,
   setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 export function getUniqueProofsBySecret(proofs: Proof[]): Proof[] {
   const seenSecrets = new Set<string>();
@@ -30,17 +31,14 @@ export function creditProofsToLocalWallet(
   setCachedCashuProofs(proofArray);
 
   try {
-    window.localStorage.setItem(
-      "history",
-      JSON.stringify([
-        {
-          type: historyType,
-          amount,
-          date: Math.floor(Date.now() / 1000),
-        },
-        ...history,
-      ])
-    );
+    storage.setJson(STORAGE_KEYS.HISTORY, [
+      {
+        type: historyType,
+        amount,
+        date: Math.floor(Date.now() / 1000),
+      },
+      ...history,
+    ]);
   } catch (error) {
     console.warn("Failed to write Cashu wallet history entry:", error);
   }

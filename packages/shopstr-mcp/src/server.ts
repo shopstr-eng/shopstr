@@ -23,7 +23,17 @@ export function createMcpServer(
       connectionTimeout: config.relayConnectTimeoutMs,
       logger,
     });
-  const cache = dependencies.cache ?? new MemoryCache(config.profileCacheTtlMs);
+  const cache =
+    dependencies.cache ??
+    new MemoryCache(config.profileCacheTtlMs, config.cacheMaxEntries);
+  const categoryCache = new MemoryCache(
+    config.categoryCacheTtlMs,
+    config.cacheMaxEntries
+  );
+  const nip05Cache = new MemoryCache(
+    config.nip05CacheTtlMs,
+    config.cacheMaxEntries
+  );
   const server = new McpServer({
     name: "shopstr-mcp",
     version: config.version,
@@ -32,8 +42,12 @@ export function createMcpServer(
   registerCoreTools(server, {
     nostr,
     relays: config.relays,
+    nip50SearchRelays: config.nip50SearchRelays,
     timeoutMs: config.defaultToolTimeoutMs,
     cache,
+    categoryCache,
+    nip05Cache,
+    maxConcurrentRequests: config.maxConcurrentRequests,
   });
   registerPlaceholderCapabilityHandlers(server);
   attachNostrCloseHandler(server, nostr);

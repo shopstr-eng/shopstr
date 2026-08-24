@@ -79,6 +79,12 @@ import {
   parseDisputeEvent,
   publishDisputeEvent,
 } from "@/utils/nostr/dispute-records";
+import {
+  createStorageKey,
+  storage,
+  STORAGE_KEY_PREFIXES,
+  STORAGE_KEYS,
+} from "@/utils/storage";
 
 export default function ClaimButton({
   token,
@@ -132,7 +138,7 @@ export default function ClaimButton({
   );
 
   const paymentRequestSentAtKey = (id: string) =>
-    `shopstr.escrow.paymentRequestSentAt.${id}`;
+    createStorageKey(STORAGE_KEY_PREFIXES.PAYMENT_REQUEST_SENT_AT, id);
 
   // Restores "awaiting buyer confirmation" state across reloads. The DM
   // timestamp isn't a reliable client-independent clock, so this trusts the
@@ -140,7 +146,7 @@ export default function ClaimButton({
   // gates a client-side UI affordance (the escalate button), not payout.
   useEffect(() => {
     if (!orderId) return;
-    const stored = localStorage.getItem(paymentRequestSentAtKey(orderId));
+    const stored = storage.getItem(paymentRequestSentAtKey(orderId));
     if (stored) {
       setRequestSentAt(Number(stored));
       setIsAwaitingBuyerConfirm(true);
@@ -526,7 +532,7 @@ export default function ClaimButton({
         setCachedCashuProofs([...tokens, ...freshProofs]);
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
-          localStorage.setItem("mints", JSON.stringify(updatedMints));
+          storage.setJson(STORAGE_KEYS.MINTS, updatedMints);
           if (cashuPrivkey) {
             await publishWalletEvent(
               nostr!,
@@ -544,17 +550,14 @@ export default function ClaimButton({
           setIsReceived(true);
         }
         setIsRedeeming(false);
-        localStorage.setItem(
-          "history",
-          JSON.stringify([
-            {
-              type: 1,
-              amount: tokenAmount,
-              date: Math.floor(Date.now() / 1000),
-            },
-            ...history,
-          ])
-        );
+        storage.setJson(STORAGE_KEYS.HISTORY, [
+          {
+            type: 1,
+            amount: tokenAmount,
+            date: Math.floor(Date.now() / 1000),
+          },
+          ...history,
+        ]);
         return;
       }
 
@@ -588,7 +591,7 @@ export default function ClaimButton({
         setCachedCashuProofs(tokenArray);
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
-          localStorage.setItem("mints", JSON.stringify(updatedMints));
+          storage.setJson(STORAGE_KEYS.MINTS, updatedMints);
           if (cashuPrivkey) {
             await publishWalletEvent(
               nostr!,
@@ -604,17 +607,14 @@ export default function ClaimButton({
           setIsReceived(true);
         }
         setIsRedeeming(false);
-        localStorage.setItem(
-          "history",
-          JSON.stringify([
-            {
-              type: 1,
-              amount: tokenAmount,
-              date: Math.floor(Date.now() / 1000),
-            },
-            ...history,
-          ])
-        );
+        storage.setJson(STORAGE_KEYS.HISTORY, [
+          {
+            type: 1,
+            amount: tokenAmount,
+            date: Math.floor(Date.now() / 1000),
+          },
+          ...history,
+        ]);
       } else {
         setIsSpent(true);
         setIsRedeeming(false);
@@ -788,7 +788,7 @@ export default function ClaimButton({
       };
       await sendEscrowDm(buyerPubkey, payload);
       const sentAt = Date.now();
-      localStorage.setItem(paymentRequestSentAtKey(orderId), String(sentAt));
+      storage.setItem(paymentRequestSentAtKey(orderId), String(sentAt));
       setRequestSentAt(sentAt);
       setIsAwaitingBuyerConfirm(true);
     } catch (error) {
@@ -866,7 +866,7 @@ export default function ClaimButton({
       });
       if (result.success) {
         setIsReceived(true);
-        localStorage.removeItem(paymentRequestSentAtKey(orderId));
+        storage.removeItem(paymentRequestSentAtKey(orderId));
         setIsAwaitingBuyerConfirm(false);
       } else {
         setEscrowActionError(result.error ?? "Redemption failed.");
@@ -1019,7 +1019,7 @@ export default function ClaimButton({
         );
       }
 
-      localStorage.removeItem(paymentRequestSentAtKey(orderId));
+      storage.removeItem(paymentRequestSentAtKey(orderId));
     } catch (error) {
       setDisputeStatus("none");
       setIsDisputeInProgress(false);

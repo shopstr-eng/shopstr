@@ -7,23 +7,20 @@ import { NostrNSecSigner } from "./signers/nostr-nsec-signer";
 let migrationAttempted = false;
 
 function findEncryptedKey() {
-  const storedData = getLocalStorageData();
+  const { encryptedPrivateKey, signer } = getLocalStorageData();
 
-  if (storedData.encryptedPrivateKey) {
+  if (encryptedPrivateKey) {
     return {
-      key: storedData.encryptedPrivateKey,
+      key: encryptedPrivateKey,
       inSigner: false,
     };
   }
 
-  if (
-    storedData.signer?.type === "nsec" &&
-    storedData.signer.encryptedPrivKey
-  ) {
+  if (signer?.type === "nsec" && signer.encryptedPrivKey) {
     return {
-      key: storedData.signer.encryptedPrivKey,
+      key: signer.encryptedPrivKey,
       inSigner: true,
-      signer: storedData.signer,
+      signer: signer,
     };
   }
 
@@ -31,7 +28,7 @@ function findEncryptedKey() {
 }
 
 export function needsMigration(): boolean {
-  if (getLocalStorageData().migrationComplete === true) {
+  if (getLocalStorageData().migrationComplete) {
     return false;
   }
   const { key } = findEncryptedKey();
@@ -65,12 +62,12 @@ export async function migrateToNip49(passphrase: string): Promise<boolean> {
     );
 
     if (inSigner && signer) {
-      setLocalStorageDataOnSignIn({
+      await setLocalStorageDataOnSignIn({
         signer: { ...signer, encryptedPrivKey } as any,
         migrationComplete: true,
       });
     } else {
-      setLocalStorageDataOnSignIn({
+      await setLocalStorageDataOnSignIn({
         encryptedPrivateKey: encryptedPrivKey,
         migrationComplete: true,
       });

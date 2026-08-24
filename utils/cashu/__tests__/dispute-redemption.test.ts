@@ -39,6 +39,7 @@ import {
   publishProofEvent,
   setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import {
   createPartialRedemption,
   combineAndRedeem,
@@ -84,6 +85,7 @@ describe("combineAndRedeem", () => {
   });
 
   it("combines two signature sets into each proof's witness and calls wallet.receive with no privkey option", async () => {
+    const setJson = jest.spyOn(storage, "setJson");
     const proofs = [mkProof("secret-a"), mkProof("secret-b")];
     const freshProofs = [mkProof("fresh-a"), mkProof("fresh-b")];
     mockReceive.mockResolvedValue(freshProofs);
@@ -133,6 +135,13 @@ describe("combineAndRedeem", () => {
     expect(JSON.parse(localStorage.getItem("mints")!)).toEqual([
       "https://mint.example",
     ]);
+    expect(setJson).toHaveBeenCalledWith(STORAGE_KEYS.MINTS, [
+      "https://mint.example",
+    ]);
+    expect(setJson).toHaveBeenCalledWith(
+      STORAGE_KEYS.HISTORY,
+      expect.any(Array)
+    );
     expect(publishProofEvent).toHaveBeenCalledWith(
       nostr,
       signer,

@@ -14,7 +14,6 @@ type Signer = Parameters<typeof publishProofEvent>[1];
  * Idempotency: callers must only invoke this once per failed claim. The
  * pending-mint-store should be transitioned to `claimed` immediately after
  * a successful call so boot recovery does not re-attempt the (already issued)
- * mint quote.
  */
 export async function recoverProofsToBuyerWallet(
   nostr: Nostr,

@@ -48,6 +48,7 @@ describe("/api/db/update-order-status", () => {
 
     const req = {
       method: "POST",
+      headers: {},
       body: {
         orderId: "order-123",
         status: "shipped",

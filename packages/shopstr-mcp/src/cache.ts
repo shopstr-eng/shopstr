@@ -15,11 +15,22 @@ type CacheEntry<T> = {
 
 export class MemoryCache {
   private readonly entries = new Map<string, CacheEntry<unknown>>();
+  private readonly maxEntries: number;
+  private readonly now: () => number;
 
   constructor(
     private readonly ttlMs: number,
-    private readonly now: () => number = () => Date.now()
-  ) {}
+    maxEntriesOrNow: number | (() => number) = 5_000,
+    now: () => number = () => Date.now()
+  ) {
+    if (typeof maxEntriesOrNow === "function") {
+      this.maxEntries = 5_000;
+      this.now = maxEntriesOrNow;
+    } else {
+      this.maxEntries = maxEntriesOrNow;
+      this.now = now;
+    }
+  }
 
   get<T>(key: CacheKey): CacheRead<T> | undefined {
     if (this.ttlMs <= 0) return undefined;
@@ -40,9 +51,15 @@ export class MemoryCache {
   }
 
   set<T>(key: CacheKey, value: T): void {
-    if (this.ttlMs <= 0) return;
+    if (this.ttlMs <= 0 || this.maxEntries <= 0) return;
 
-    this.entries.set(toCacheKey(key), {
+    const cacheKey = toCacheKey(key);
+    if (!this.entries.has(cacheKey) && this.entries.size >= this.maxEntries) {
+      const oldestKey = this.entries.keys().next().value;
+      if (oldestKey !== undefined) this.entries.delete(oldestKey);
+    }
+
+    this.entries.set(cacheKey, {
       value,
       expiresAt: this.now() + this.ttlMs,
     });

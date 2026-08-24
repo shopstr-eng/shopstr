@@ -3,8 +3,8 @@ import { Button } from "@heroui/react";
 import { Slider } from "@heroui/react";
 import { useTheme } from "next-themes";
 import { FollowsContext } from "../../utils/context/context";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 const ShopstrSlider = () => {
   const { theme } = useTheme();
@@ -15,12 +15,12 @@ const ShopstrSlider = () => {
   const [wotIsChanged, setWotIsChanged] = useState(false);
 
   useEffect(() => {
-    const savedWot = getLocalStorageData().wot;
+    const savedWot = storage.getJson<number>(STORAGE_KEYS.WOT, 3);
     setWot(savedWot);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("wot", String(wot));
+    storage.setJson(STORAGE_KEYS.WOT, wot);
   }, [wot]);
 
   const refreshPage = () => {

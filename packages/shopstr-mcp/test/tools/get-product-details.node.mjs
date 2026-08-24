@@ -60,6 +60,54 @@ test("get_product_details returns a product by event id via coordinate resolutio
   assert.equal(body._meta.resultCount, 1);
 });
 
+test("get_product_details returns short event content as product description", async () => {
+  const productId = hex("1");
+  const description = "Soft linen shirt with pearl buttons.";
+  const ctx = context((filters) => {
+    if (filters.some((f) => f.ids?.includes(productId))) {
+      return [productEvent({ id: productId, content: description })];
+    }
+    if (filters.some((f) => f["#d"]?.includes("product"))) {
+      return [productEvent({ id: productId, content: description })];
+    }
+    return [];
+  });
+
+  const response = await handleGetProductDetails({ productId }, ctx);
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.description, description);
+  assert.equal(
+    body._meta._hints.some((hint) => hint.startsWith("descriptionTruncated")),
+    false
+  );
+});
+
+test("get_product_details truncates long descriptions at a word boundary", async () => {
+  const productId = hex("1");
+  const description = "leather ".repeat(300);
+  const ctx = context((filters) => {
+    if (filters.some((f) => f.ids?.includes(productId))) {
+      return [productEvent({ id: productId, content: description })];
+    }
+    if (filters.some((f) => f["#d"]?.includes("product"))) {
+      return [productEvent({ id: productId, content: description })];
+    }
+    return [];
+  });
+
+  const response = await handleGetProductDetails({ productId }, ctx);
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.description.endsWith("..."), true);
+  assert.equal(body.description.endsWith("leather..."), true);
+  assert.ok(body.description.length <= 2_000);
+  assert.equal(
+    body._meta._hints.some((hint) => hint.startsWith("descriptionTruncated")),
+    true
+  );
+});
+
 test("get_product_details accepts productAddress and skips pre-flight", async () => {
   const productAddress = `30402:${hex("b")}:product`;
   let fetchCallCount = 0;

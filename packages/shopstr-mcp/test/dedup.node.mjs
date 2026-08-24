@@ -200,3 +200,31 @@ test("mergeAndDeduplicateProfiles returns empty array for empty input", () => {
   const deduped = mergeAndDeduplicateProfiles([]);
   assert.deepEqual(deduped, []);
 });
+
+test("orders same-timestamp events by ascending id for stable pagination", () => {
+  const first = event({ id: hex("a"), created_at: 10 });
+  const second = event({
+    id: hex("b"),
+    created_at: 10,
+    tags: [["d", "product-2"]],
+  });
+
+  assert.deepEqual(
+    mergeAndDeduplicateProducts([second, first]).map((item) => item.id),
+    [first.id, second.id]
+  );
+  assert.deepEqual(
+    mergeAndDeduplicateReviews([
+      { ...second, kind: 31555 },
+      { ...first, kind: 31555 },
+    ]).map((item) => item.id),
+    [first.id, second.id]
+  );
+  assert.deepEqual(
+    mergeAndDeduplicateProfiles([
+      { ...second, kind: 0 },
+      { ...first, kind: 30019 },
+    ]).map((item) => item.id),
+    [first.id, second.id]
+  );
+});

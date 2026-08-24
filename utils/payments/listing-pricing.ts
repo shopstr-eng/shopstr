@@ -48,8 +48,11 @@ export type ListingUnitPricingResult = {
   selectedBulkOption?: number;
 };
 
-function requireFiniteAmount(amount: number, label: string) {
-  if (!Number.isFinite(amount) || amount < 0) {
+function requireFiniteAmount(
+  amount: number | undefined,
+  label: string
+): asserts amount is number {
+  if (amount === undefined || !Number.isFinite(amount) || amount < 0) {
     throw new PricingValidationError(`${label} is invalid`);
   }
 }
@@ -194,9 +197,10 @@ export function computeListingUnitPricing(
   }
 
   requireFiniteAmount(unitPrice, "Listing price");
+  const validatedUnitPrice = unitPrice;
 
   return {
-    unitPrice,
+    unitPrice: validatedUnitPrice,
     currency: product.currency || "sats",
     selectedSize: input.selectedSize || undefined,
     selectedVolume: input.selectedVolume || undefined,

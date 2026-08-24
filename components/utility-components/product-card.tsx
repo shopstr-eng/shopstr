@@ -14,7 +14,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
 import { nip19 } from "nostr-tools";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
+import { getStoredRelays } from "@/utils/nostr/nostr-helper-functions";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import ImageCarousel from "./image-carousel";
 import CompactPriceDisplay from "./display-monetary-info";
@@ -41,6 +41,7 @@ export default function ProductCard({
   onProductClick,
   href,
   reportSignal = EMPTY_REPORT_MODERATION_SIGNAL,
+  hydrateProfileFromRelays = false,
 }: {
   productData: ProductData;
   onProductClick?: (
@@ -49,6 +50,7 @@ export default function ProductCard({
   ) => void;
   href?: string | null;
   reportSignal?: ReportModerationSignal;
+  hydrateProfileFromRelays?: boolean;
 }) {
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
@@ -212,7 +214,7 @@ export default function ProductCard({
     e.preventDefault();
     e.stopPropagation();
     try {
-      const { relays } = getLocalStorageData();
+      const relays = getStoredRelays();
       const targetRelays =
         relays.length > 0
           ? relays.slice(0, 3)
@@ -368,6 +370,7 @@ export default function ProductCard({
         >
           <ProfileWithDropdown
             pubkey={productData.pubkey}
+            hydrateMissingProfileFromRelays={hydrateProfileFromRelays}
             dropDownKeys={
               productData.pubkey === userPubkey
                 ? ["shop_profile"]

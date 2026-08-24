@@ -50,6 +50,18 @@ import {
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
 import {
+  buildProductDetailsSuffix,
+  splitDonationAndSellerAmount,
+  isEligibleForLightningPayout,
+  buildLightningPaymentMessage,
+  buildEcashPaymentMessage,
+  buildShipProductMessage,
+  buildShippingAddressTag,
+  buildOrderProcessedReceiptMessage,
+  buildThankYouReceiptMessage,
+  buildPaymentEventOptions,
+} from "@/utils/payments/checkout-messages";
+import {
   recordPendingMintQuote,
   markMintQuoteClaimed,
   updatePendingMintQuote,
@@ -94,6 +106,7 @@ import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
 import AddressPicker from "./utility-components/address-picker";
 import {
   NostrContext,
+  NWCContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import {
@@ -113,6 +126,7 @@ import {
   sumProductTotalsInSats,
 } from "@/utils/cart-totals";
 import { mapWithConcurrency } from "@/utils/concurrency";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 const CART_SHIPPING_CONVERSION_CONCURRENCY = 6;
 
@@ -140,10 +154,10 @@ export default function CartInvoiceCard({
   discountCodes?: { [key: string]: string };
   shopProfiles?: Map<string, ShopProfile>;
   onBackToCart?: () => void;
-  setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
-  setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
-  setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
-  setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
+  setInvoiceIsPaid: (invoiceIsPaid: boolean) => void;
+  setInvoiceGenerationFailed: (invoiceGenerationFailed: boolean) => void;
+  setCashuPaymentSent: (cashuPaymentSent: boolean) => void;
+  setCashuPaymentFailed: (cashuPaymentFailed: boolean) => void;
 }) {
   const { mints } = getLocalStorageData();
   const tokens = getCachedCashuProofs();
@@ -160,6 +174,8 @@ export default function CartInvoiceCard({
   const profileContext = useContext(ProfileMapContext);
 
   const { nostr } = useContext(NostrContext);
+  const { nwcInfo, hasStoredConnection, ensureUnlocked } =
+    useContext(NWCContext);
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -258,26 +274,23 @@ export default function CartInvoiceCard({
             }
           });
         }
-        sessionStorage.setItem(
-          "orderSummary",
-          JSON.stringify({
-            productTitle: pendingOrderRef.current.productTitle,
-            productImage: products[0]?.images?.[0] || "",
-            amount: String(totalCost),
-            subtotal: String(subtotalCost),
-            currency: pendingOrderRef.current.currency,
-            paymentMethod: pendingOrderRef.current.paymentMethod,
-            orderId: pendingOrderRef.current.orderId,
-            shippingAddress: pendingOrderRef.current.shippingAddress,
-            sellerPubkey: pendingOrderRef.current.sellerPubkey,
-            isCart: true,
-            cartItems,
-            freeShippingApplied: anyFreeShipping,
-            originalShippingCost: anyFreeShipping
-              ? String(originalShipping)
-              : undefined,
-          })
-        );
+        storage.setSessionJson(STORAGE_KEYS.ORDER_SUMMARY, {
+          productTitle: pendingOrderRef.current.productTitle,
+          productImage: products[0]?.images?.[0] || "",
+          amount: String(totalCost),
+          subtotal: String(subtotalCost),
+          currency: pendingOrderRef.current.currency,
+          paymentMethod: pendingOrderRef.current.paymentMethod,
+          orderId: pendingOrderRef.current.orderId,
+          shippingAddress: pendingOrderRef.current.shippingAddress,
+          sellerPubkey: pendingOrderRef.current.sellerPubkey,
+          isCart: true,
+          cartItems,
+          freeShippingApplied: anyFreeShipping,
+          originalShippingCost: anyFreeShipping
+            ? String(originalShipping)
+            : undefined,
+        });
       } catch {}
 
       pendingOrderRef.current = null;
@@ -297,7 +310,10 @@ export default function CartInvoiceCard({
   const sellerFreeShippingStatus = useMemo(
     () =>
       computeSellerFreeShippingStatus({
-        products,
+        products: products.map((product) => ({
+          ...product,
+          price: product.price ?? 0,
+        })),
         quantities,
         appliedDiscounts,
         getShopProfileContent: (pubkey) => shopProfiles?.get(pubkey)?.content,
@@ -426,8 +442,6 @@ export default function CartInvoiceCard({
 
   const [showFailureModal, setShowFailureModal] = useState(false);
 
-  // NWC State
-  const [nwcInfo, setNwcInfo] = useState<any | null>(null);
   const [isNwcLoading, setIsNwcLoading] = useState(false);
   const [failureText, setFailureText] = useState("");
 
@@ -517,28 +531,6 @@ export default function CartInvoiceCard({
         product.pickupLocations.length > 0
     );
   }, [products]);
-
-  // Load NWC info and check cart for NWC compatibility
-  useEffect(() => {
-    const loadNwcInfo = () => {
-      const { nwcInfo: infoString } = getLocalStorageData();
-      if (infoString) {
-        try {
-          const info = JSON.parse(infoString);
-          setNwcInfo(info);
-        } catch (e) {
-          console.error("Failed to parse NWC info", e);
-          setNwcInfo(null);
-        }
-      } else {
-        setNwcInfo(null);
-      }
-    };
-
-    loadNwcInfo();
-    window.addEventListener("storage", loadNwcInfo);
-    return () => window.removeEventListener("storage", loadNwcInfo);
-  }, [products, profileContext.profileData]);
 
   // Validate form completion
   useEffect(() => {
@@ -733,14 +725,14 @@ export default function CartInvoiceCard({
     let messageOptions: any = {};
     if (isPayment) {
       messageSubject = "order-payment";
-      messageOptions = {
-        isOrder: true,
-        type: 2,
+      messageOptions = buildPaymentEventOptions({
         orderAmount: messageAmount ? messageAmount : totalCost,
         orderId,
         productData: product,
+        quantity: productQuantity ? productQuantity : 1,
         paymentType,
         paymentReference,
+        paymentProof,
         contact,
         address,
         buyerPubkey,
@@ -751,7 +743,7 @@ export default function CartInvoiceCard({
         selectedVolume: product.selectedVolume,
         selectedWeight: product.selectedWeight,
         selectedBulkOption: product.selectedBulkOption,
-      };
+      });
     } else if (isReceipt) {
       messageSubject = "order-receipt";
       messageOptions = {
@@ -1236,7 +1228,7 @@ export default function CartInvoiceCard({
       });
       invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
 
-      const { nwcString } = getLocalStorageData();
+      const nwcString = await ensureUnlocked?.();
       if (!nwcString) throw new Error("NWC connection not found.");
 
       nwc = new NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
@@ -1320,12 +1312,7 @@ export default function CartInvoiceCard({
         cartQuote.mintUrl
       );
     } catch {
-      if (setInvoiceGenerationFailed) {
-        setInvoiceGenerationFailed(true);
-      } else {
-        setFailureText("Lightning payment failed. Please try again.");
-        setShowFailureModal(true);
-      }
+      setInvoiceGenerationFailed(true);
       setShowInvoiceCard(false);
       setInvoice("");
       setQrCodeUrl(null);
@@ -1440,11 +1427,9 @@ export default function CartInvoiceCard({
                   "seller payment hand-off"
                 );
                 markMintQuoteClaimed(hash);
-                localStorage.setItem("cart", JSON.stringify([]));
+                storage.setJson(STORAGE_KEYS.CART, []);
                 setPaymentConfirmed(true);
-                if (setInvoiceIsPaid) {
-                  setInvoiceIsPaid(true);
-                }
+                setInvoiceIsPaid(true);
                 setQrCodeUrl(null);
                 break;
               } catch (handoffError) {
@@ -1486,7 +1471,7 @@ export default function CartInvoiceCard({
                 lastErrorMessage:
                   "Mint reports quote ISSUED before local claim recorded proofs",
               });
-              localStorage.setItem("cart", JSON.stringify([]));
+              storage.setJson(STORAGE_KEYS.CART, []);
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
               setFailureText(
@@ -1509,7 +1494,7 @@ export default function CartInvoiceCard({
             status: "failed_terminal",
             lastErrorMessage: "Quote ISSUED before local claim recorded proofs",
           });
-          localStorage.setItem("cart", JSON.stringify([]));
+          storage.setJson(STORAGE_KEYS.CART, []);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setFailureText(
@@ -1517,6 +1502,10 @@ export default function CartInvoiceCard({
           );
           setShowFailureModal(true);
           break;
+        } else {
+          retryCount++;
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+          continue;
         }
       } catch (error) {
         retryCount++;
@@ -1525,14 +1514,7 @@ export default function CartInvoiceCard({
           setShowInvoiceCard(false);
           setInvoice("");
           setQrCodeUrl(null);
-          if (setInvoiceGenerationFailed) {
-            setInvoiceGenerationFailed(true);
-          } else {
-            setFailureText(
-              "Failed to validate invoice! Change your mint in settings and/or please try again."
-            );
-            setShowFailureModal(true);
-          }
+          setInvoiceGenerationFailed(true);
           break;
         }
 
@@ -1541,14 +1523,7 @@ export default function CartInvoiceCard({
           setShowInvoiceCard(false);
           setInvoice("");
           setQrCodeUrl(null);
-          if (setInvoiceGenerationFailed) {
-            setInvoiceGenerationFailed(true);
-          } else {
-            setFailureText(
-              "Payment timed out! Please check your wallet balance or try again."
-            );
-            setShowFailureModal(true);
-          }
+          setInvoiceGenerationFailed(true);
           break;
         }
 
@@ -1618,34 +1593,11 @@ export default function CartInvoiceCard({
       }
       const donationPercentage =
         sellerProfile?.content?.shopstr_donation ?? 2.1;
-      const donationAmount = Math.ceil(
-        (tokenAmount * donationPercentage) / 100
+      const { donationAmount, sellerAmount } = splitDonationAndSellerAmount(
+        tokenAmount,
+        donationPercentage
       );
-      const sellerAmount = tokenAmount - donationAmount;
       let sellerProofs: Proof[] = [];
-
-      let shippingData = data; // Assume data contains shipping info
-      if (formType === "shipping") {
-        shippingData = {
-          Name: data.Name,
-          Address: data.Address,
-          Unit: data.Unit,
-          City: data.City,
-          "State/Province": data["State/Province"],
-          "Postal Code": data["Postal Code"],
-          Country: data.Country,
-        };
-      } else if (formType === "combined") {
-        shippingData = {
-          Name: data.Name,
-          Address: data.Address,
-          Unit: data.Unit,
-          City: data.City,
-          "State/Province": data["State/Province"],
-          "Postal Code": data["Postal Code"],
-          Country: data.Country,
-        };
-      }
 
       // Generate keys once per order to ensure consistent sender pubkey
       const orderKeys = await generateNewKeys();
@@ -1655,46 +1607,6 @@ export default function CartInvoiceCard({
       const paymentPreference =
         sellerProfile?.content?.payment_preference || "ecash";
       const lnurl = sellerProfile?.content?.lud16 || "";
-
-      // Construct address string for order-info type
-      const addressString = shippingData.Name
-        ? `${shippingData.Name}, ${shippingData.Address}${
-            shippingData.Unit ? `, ${shippingData.Unit}` : ""
-          }, ${shippingData.City}, ${shippingData["State/Province"]}, ${
-            shippingData["Postal Code"]
-          }, ${shippingData.Country}`
-        : "";
-
-      // Construct order-info message with address tag
-      const orderInfoMessage = await constructMessageGiftWrap(
-        pubkey as any,
-        "", // Placeholder for seal
-        orderKeys.receiverNsec as any, // Placeholder for keypair
-        pubkey // Recipient pubkey
-      );
-      const orderInfoTags: string[][] = [
-        ["type", "1"],
-        ["subject", "order-info"],
-        ["order", orderId],
-        ["item", product.id],
-        ["shipping", shippingTypes[product.id] || ""], // Assuming shippingId can be derived from shippingTypes
-      ];
-      if (addressString) {
-        orderInfoTags.push(["address", addressString]);
-      }
-      orderInfoTags.push(["amount", tokenAmount.toString()]);
-      if (donationAmount > 0) {
-        orderInfoTags.push([
-          "donation_amount",
-          donationAmount.toString(),
-          donationPercentage.toString(),
-        ]);
-      }
-      orderInfoMessage.tags = orderInfoTags;
-
-      // Construct payment message with cashu token tag
-      let paymentMessageText;
-      let paymentTags;
 
       if (sellerAmount > 0) {
         const swapOutcome = await safeSwap(
@@ -1719,31 +1631,6 @@ export default function CartInvoiceCard({
           proofs: send,
         });
         remainingProofs = keep;
-
-        // Construct payment message with cashu token tag
-        paymentMessageText = await constructMessageGiftWrap(
-          pubkey as any,
-          "", // Placeholder for seal
-          orderKeys.receiverNsec as any, // Placeholder for keypair
-          pubkey // Recipient pubkey
-        );
-        paymentTags = [
-          ["type", "2"],
-          ["subject", "order-payment"],
-          ["order", orderId],
-          ["payment", "ecash", sellerToken],
-        ];
-        if (sellerAmount) {
-          paymentTags.push(["amount", sellerAmount.toString()]);
-        }
-        if (donationAmount > 0) {
-          paymentTags.push([
-            "donation_amount",
-            donationAmount.toString(),
-            donationPercentage.toString(),
-          ]);
-        }
-        paymentMessageText.tags = paymentTags;
       }
 
       // Handle donation if applicable
@@ -1786,11 +1673,11 @@ export default function CartInvoiceCard({
 
       // Step 1: Send payment message (if applicable)
       if (
-        !isSellerP2pkEscrowActive(sellerProfile?.content?.p2pk) &&
-        paymentPreference === "lightning" &&
-        lnurl &&
-        lnurl !== "" &&
-        !lnurl.includes("@zeuspay.com") &&
+        isEligibleForLightningPayout({
+          sellerP2pk: sellerProfile?.content?.p2pk,
+          paymentPreference,
+          lnurl,
+        }) &&
         sellerProofs
       ) {
         const newAmount = Math.floor(sellerAmount * 0.98 - 2);
@@ -1832,75 +1719,26 @@ export default function CartInvoiceCard({
               Array.isArray(changeProofs) && changeProofs.length > 0
                 ? sumProofAmounts(changeProofs)
                 : 0;
-            let productDetails = "";
-            if (product.selectedSize) {
-              productDetails += " in size " + product.selectedSize;
-            }
-            if (product.selectedVolume) {
-              if (productDetails) {
-                productDetails += " and a " + product.selectedVolume;
-              } else {
-                productDetails += " in a " + product.selectedVolume;
-              }
-            }
-            if (product.selectedWeight) {
-              if (productDetails) {
-                productDetails += " and " + product.selectedWeight;
-              } else {
-                productDetails += " in " + product.selectedWeight;
-              }
-            }
-            if (product.selectedBulkOption) {
-              if (productDetails) {
-                productDetails +=
-                  " (bulk: " + product.selectedBulkOption + " units)";
-              } else {
-                productDetails +=
-                  " (bulk: " + product.selectedBulkOption + " units)";
-              }
-            }
-
             // Add pickup location if available for this specific product
             const pickupLocation =
               selectedPickupLocations[product.id] ||
               data[`pickupLocation_${product.id}`];
-            if (pickupLocation) {
-              if (productDetails) {
-                productDetails += " (pickup at: " + pickupLocation + ")";
-              } else {
-                productDetails += " (pickup at: " + pickupLocation + ")";
-              }
-            }
+            const productDetails = buildProductDetailsSuffix({
+              selectedSize: product.selectedSize,
+              selectedVolume: product.selectedVolume,
+              selectedWeight: product.selectedWeight,
+              selectedBulkOption: product.selectedBulkOption,
+              pickupLocation,
+            });
 
-            let paymentMessage = "";
-            if (quantities[product.id] && quantities[product.id]! > 1) {
-              paymentMessage =
-                "You have received a payment from " +
-                (userNPub || "a guest buyer") +
-                " for " +
-                quantities[product.id] +
-                " of your " +
-                title +
-                " listing" +
-                productDetails +
-                " on shopstr.market! Check your Lightning address (" +
-                lnurl +
-                ") for your sats.";
-            } else {
-              paymentMessage =
-                "You have received a payment from " +
-                (userNPub || "a guest buyer") +
-                " for your " +
-                title +
-                " listing" +
-                productDetails +
-                " on shopstr.market! Check your Lightning address (" +
-                lnurl +
-                ") for your sats.";
-            }
-            const pickupLocationForLightning =
-              selectedPickupLocations[product.id] ||
-              data[`pickupLocation_${product.id}`];
+            const paymentMessage = buildLightningPaymentMessage({
+              buyerNpub: userNPub,
+              title,
+              productDetails,
+              lnurl,
+              quantity: quantities[product.id],
+            });
+            const pickupLocationForLightning = pickupLocation;
             await sendPaymentAndContactMessageWithKeys(
               pubkey,
               paymentMessage,
@@ -1919,7 +1757,9 @@ export default function CartInvoiceCard({
               orderKeys,
               undefined,
               shippingAddressTag,
-              pickupLocationForLightning || undefined
+              pickupLocationForLightning || undefined,
+              donationAmount,
+              donationPercentage
             );
 
             if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
@@ -1966,71 +1806,26 @@ export default function CartInvoiceCard({
               mint: paymentMintUrl,
               proofs: unusedProofs,
             });
-            let productDetails = "";
-            if (product.selectedSize) {
-              productDetails += " in size " + product.selectedSize;
-            }
-            if (product.selectedVolume) {
-              if (productDetails) {
-                productDetails += " and a " + product.selectedVolume;
-              } else {
-                productDetails += " in a " + product.selectedVolume;
-              }
-            }
-            if (product.selectedWeight) {
-              if (productDetails) {
-                productDetails += " and " + product.selectedWeight;
-              } else {
-                productDetails += " in " + product.selectedWeight;
-              }
-            }
-            if (product.selectedBulkOption) {
-              if (productDetails) {
-                productDetails +=
-                  " (bulk: " + product.selectedBulkOption + " units)";
-              } else {
-                productDetails +=
-                  " (bulk: " + product.selectedBulkOption + " units)";
-              }
-            }
-
             // Add pickup location if available for this specific product
             const pickupLocation =
               selectedPickupLocations[product.id] ||
               data[`pickupLocation_${product.id}`];
-            if (pickupLocation) {
-              if (productDetails) {
-                productDetails += " (pickup at: " + pickupLocation + ")";
-              } else {
-                productDetails += " (pickup at: " + pickupLocation + ")";
-              }
-            }
+            const productDetails = buildProductDetailsSuffix({
+              selectedSize: product.selectedSize,
+              selectedVolume: product.selectedVolume,
+              selectedWeight: product.selectedWeight,
+              selectedBulkOption: product.selectedBulkOption,
+              pickupLocation,
+            });
 
-            let paymentMessage = "";
             if (unusedToken && unusedProofs) {
-              if (quantities[product.id] && quantities[product.id]! > 1) {
-                paymentMessage =
-                  "This is a Cashu token payment from " +
-                  (userNPub || "a guest buyer") +
-                  " for " +
-                  quantities[product.id] +
-                  " of your " +
-                  title +
-                  " listing" +
-                  productDetails +
-                  " on shopstr.market: " +
-                  unusedToken;
-              } else {
-                paymentMessage =
-                  "This is a Cashu token payment from " +
-                  (userNPub || "a guest buyer") +
-                  " for your " +
-                  title +
-                  " listing" +
-                  productDetails +
-                  " on shopstr.market: " +
-                  unusedToken;
-              }
+              const paymentMessage = buildEcashPaymentMessage({
+                buyerNpub: userNPub,
+                title,
+                productDetails,
+                token: unusedToken,
+                quantity: quantities[product.id],
+              });
               await sendPaymentAndContactMessageWithKeys(
                 pubkey,
                 paymentMessage,
@@ -2049,77 +1844,34 @@ export default function CartInvoiceCard({
                 orderKeys,
                 undefined,
                 shippingAddressTag,
-                pickupLocation || undefined
+                pickupLocation || undefined,
+                donationAmount,
+                donationPercentage
               );
             }
           }
         }
       } else {
-        let productDetails = "";
-        if (product.selectedSize) {
-          productDetails += " in size " + product.selectedSize;
-        }
-        if (product.selectedVolume) {
-          if (productDetails) {
-            productDetails += " and a " + product.selectedVolume;
-          } else {
-            productDetails += " in a " + product.selectedVolume;
-          }
-        }
-        if (product.selectedWeight) {
-          if (productDetails) {
-            productDetails += " and " + product.selectedWeight;
-          } else {
-            productDetails += " in " + product.selectedWeight;
-          }
-        }
-        if (product.selectedBulkOption) {
-          if (productDetails) {
-            productDetails +=
-              " (bulk: " + product.selectedBulkOption + " units)";
-          } else {
-            productDetails +=
-              " (bulk: " + product.selectedBulkOption + " units)";
-          }
-        }
-
         // Add pickup location if available for this specific product
         const pickupLocation =
           selectedPickupLocations[product.id] ||
           data[`pickupLocation_${product.id}`];
-        if (pickupLocation) {
-          if (productDetails) {
-            productDetails += " (pickup at: " + pickupLocation + ")";
-          } else {
-            productDetails += " (pickup at: " + pickupLocation + ")";
-          }
-        }
+        const productDetails = buildProductDetailsSuffix({
+          selectedSize: product.selectedSize,
+          selectedVolume: product.selectedVolume,
+          selectedWeight: product.selectedWeight,
+          selectedBulkOption: product.selectedBulkOption,
+          pickupLocation,
+        });
 
-        let paymentMessage = "";
         if (sellerToken && sellerProofs) {
-          if (quantities[product.id] && quantities[product.id]! > 1) {
-            paymentMessage =
-              "This is a Cashu token payment from " +
-              (userNPub || "a guest buyer") +
-              " for " +
-              quantities[product.id] +
-              " of your " +
-              title +
-              " listing" +
-              productDetails +
-              " on shopstr.market: " +
-              sellerToken;
-          } else {
-            paymentMessage =
-              "This is a Cashu token payment from " +
-              (userNPub || "a guest buyer") +
-              " for your " +
-              title +
-              " listing" +
-              productDetails +
-              " on shopstr.market: " +
-              sellerToken;
-          }
+          const paymentMessage = buildEcashPaymentMessage({
+            buyerNpub: userNPub,
+            title,
+            productDetails,
+            token: sellerToken,
+            quantity: quantities[product.id],
+          });
           await sendPaymentAndContactMessageWithKeys(
             pubkey,
             paymentMessage,
@@ -2138,7 +1890,9 @@ export default function CartInvoiceCard({
             orderKeys,
             undefined,
             shippingAddressTag,
-            pickupLocation || undefined
+            pickupLocation || undefined,
+            donationAmount,
+            donationPercentage
           );
         }
       }
@@ -2230,87 +1984,32 @@ export default function CartInvoiceCard({
           productShippingType === "Free/Pickup" ||
           productShippingType === "Added Cost/Pickup"
         ) {
-          let productDetails = "";
-          if (product.selectedSize) {
-            productDetails += " in size " + product.selectedSize;
-          }
-          if (product.selectedVolume) {
-            if (productDetails) {
-              productDetails += " and a " + product.selectedVolume;
-            } else {
-              productDetails += " in a " + product.selectedVolume;
-            }
-          }
-          if (product.selectedWeight) {
-            if (productDetails) {
-              productDetails += " and " + product.selectedWeight;
-            } else {
-              productDetails += " in " + product.selectedWeight;
-            }
-          }
-          if (product.selectedBulkOption) {
-            if (productDetails) {
-              productDetails +=
-                " (bulk: " + product.selectedBulkOption + " units)";
-            } else {
-              productDetails +=
-                " (bulk: " + product.selectedBulkOption + " units)";
-            }
-          }
-
           // Add pickup location if available for this specific product
           const pickupLocation =
             selectedPickupLocations[product.id] ||
             data[`pickupLocation_${product.id}`];
-          if (pickupLocation) {
-            if (productDetails) {
-              productDetails += " (pickup at: " + pickupLocation + ")";
-            } else {
-              productDetails += " (pickup at: " + pickupLocation + ")";
-            }
-          }
+          const productDetails = buildProductDetailsSuffix({
+            selectedSize: product.selectedSize,
+            selectedVolume: product.selectedVolume,
+            selectedWeight: product.selectedWeight,
+            selectedBulkOption: product.selectedBulkOption,
+            pickupLocation,
+          });
 
-          let contactMessage = "";
-          if (!data.shippingUnitNo) {
-            contactMessage =
-              "Please ship the product" +
-              productDetails +
-              " to " +
-              data.shippingName +
-              " at " +
-              data.shippingAddress +
-              ", " +
-              data.shippingCity +
-              ", " +
-              data.shippingPostalCode +
-              ", " +
-              data.shippingState +
-              ", " +
-              data.shippingCountry +
-              ".";
-          } else {
-            contactMessage =
-              "Please ship the product" +
-              productDetails +
-              " to " +
-              data.shippingName +
-              " at " +
-              data.shippingAddress +
-              " " +
-              data.shippingUnitNo +
-              ", " +
-              data.shippingCity +
-              ", " +
-              data.shippingPostalCode +
-              ", " +
-              data.shippingState +
-              ", " +
-              data.shippingCountry +
-              ".";
-          }
-          const addressTagForShipping = data.shippingUnitNo
-            ? `${data.shippingName}, ${data.shippingAddress}, ${data.shippingUnitNo}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
-            : `${data.shippingName}, ${data.shippingAddress}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`;
+          const shippingAddr = {
+            name: data.shippingName,
+            address: data.shippingAddress,
+            unitNo: data.shippingUnitNo,
+            city: data.shippingCity,
+            postalCode: data.shippingPostalCode,
+            state: data.shippingState,
+            country: data.shippingCountry,
+          };
+          const contactMessage = buildShipProductMessage(
+            productDetails,
+            shippingAddr
+          );
+          const addressTagForShipping = buildShippingAddressTag(shippingAddr);
           await sendPaymentAndContactMessageWithKeys(
             pubkey,
             contactMessage,
@@ -2333,13 +2032,11 @@ export default function CartInvoiceCard({
           );
 
           if (userPubkey) {
-            const receiptMessage =
-              "Your order for " +
-              title +
-              productDetails +
-              " was processed successfully! If applicable, you should be receiving delivery information from " +
-              nip19.npubEncode(product.pubkey) +
-              " as soon as they review your order.";
+            const receiptMessage = buildOrderProcessedReceiptMessage(
+              title,
+              productDetails,
+              nip19.npubEncode(product.pubkey)
+            );
 
             // Add delay between messages
             await new Promise((resolve) => setTimeout(resolve, 500));
@@ -2375,53 +2072,23 @@ export default function CartInvoiceCard({
       ) {
         await sendInquiryDM(pubkey, title);
 
-        let productDetails = "";
-        if (product.selectedSize) {
-          productDetails += " in size " + product.selectedSize;
-        }
-        if (product.selectedVolume) {
-          if (productDetails) {
-            productDetails += " and a " + product.selectedVolume;
-          } else {
-            productDetails += " in a " + product.selectedVolume;
-          }
-        }
-        if (product.selectedWeight) {
-          if (productDetails) {
-            productDetails += " and " + product.selectedWeight;
-          } else {
-            productDetails += " in " + product.selectedWeight;
-          }
-        }
-        if (product.selectedBulkOption) {
-          if (productDetails) {
-            productDetails +=
-              " (bulk: " + product.selectedBulkOption + " units)";
-          } else {
-            productDetails +=
-              " (bulk: " + product.selectedBulkOption + " units)";
-          }
-        }
-
         const pickupLocation =
           selectedPickupLocations[product.id] ||
           data[`pickupLocation_${product.id}`];
-        if (pickupLocation) {
-          if (productDetails) {
-            productDetails += " (pickup at: " + pickupLocation + ")";
-          } else {
-            productDetails += " (pickup at: " + pickupLocation + ")";
-          }
-        }
+        const productDetails = buildProductDetailsSuffix({
+          selectedSize: product.selectedSize,
+          selectedVolume: product.selectedVolume,
+          selectedWeight: product.selectedWeight,
+          selectedBulkOption: product.selectedBulkOption,
+          pickupLocation,
+        });
 
         if (userPubkey) {
-          const receiptMessage =
-            "Your order for " +
-            title +
-            productDetails +
-            " was processed successfully! If applicable, you should be receiving delivery information from " +
-            nip19.npubEncode(product.pubkey) +
-            " as soon as they review your order.";
+          const receiptMessage = buildOrderProcessedReceiptMessage(
+            title,
+            productDetails,
+            nip19.npubEncode(product.pubkey)
+          );
 
           // Add delay between messages
           await new Promise((resolve) => setTimeout(resolve, 500));
@@ -2449,53 +2116,23 @@ export default function CartInvoiceCard({
         }
       } else {
         // Step 5: Always send final receipt message
-        let productDetails = "";
-        if (product.selectedSize) {
-          productDetails += " in size " + product.selectedSize;
-        }
-        if (product.selectedVolume) {
-          if (productDetails) {
-            productDetails += " and a " + product.selectedVolume;
-          } else {
-            productDetails += " in a " + product.selectedVolume;
-          }
-        }
-        if (product.selectedWeight) {
-          if (productDetails) {
-            productDetails += " and " + product.selectedWeight;
-          } else {
-            productDetails += " in " + product.selectedWeight;
-          }
-        }
-        if (product.selectedBulkOption) {
-          if (productDetails) {
-            productDetails +=
-              " (bulk: " + product.selectedBulkOption + " units)";
-          } else {
-            productDetails +=
-              " (bulk: " + product.selectedBulkOption + " units)";
-          }
-        }
-
         // Add pickup location if available for this specific product
         const pickupLocation =
           selectedPickupLocations[product.id] ||
           data[`pickupLocation_${product.id}`];
-        if (pickupLocation) {
-          if (productDetails) {
-            productDetails += " (pickup at: " + pickupLocation + ")";
-          } else {
-            productDetails += " (pickup at: " + pickupLocation + ")";
-          }
-        }
+        const productDetails = buildProductDetailsSuffix({
+          selectedSize: product.selectedSize,
+          selectedVolume: product.selectedVolume,
+          selectedWeight: product.selectedWeight,
+          selectedBulkOption: product.selectedBulkOption,
+          pickupLocation,
+        });
 
-        const receiptMessage =
-          "Thank you for your purchase of " +
-          title +
-          productDetails +
-          " from " +
-          nip19.npubEncode(product.pubkey) +
-          ".";
+        const receiptMessage = buildThankYouReceiptMessage(
+          title,
+          productDetails,
+          nip19.npubEncode(product.pubkey)
+        );
         await sendPaymentAndContactMessageWithKeys(
           userPubkey!,
           receiptMessage,
@@ -2639,17 +2276,14 @@ export default function CartInvoiceCard({
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem(
-        "history",
-        JSON.stringify([
-          {
-            type: 5,
-            amount: serverAmount,
-            date: Math.floor(Date.now() / 1000),
-          },
-          ...currentHistory,
-        ])
-      );
+      storage.setJson(STORAGE_KEYS.HISTORY, [
+        {
+          type: 5,
+          amount: serverAmount,
+          date: Math.floor(Date.now() / 1000),
+        },
+        ...currentHistory,
+      ]);
       await publishProofEvent(
         nostr!,
         signer!,
@@ -2660,19 +2294,12 @@ export default function CartInvoiceCard({
         deletedEventIds
       );
       setCachedCashuProofs(proofArray);
-      localStorage.setItem("cart", JSON.stringify([]));
+      storage.setJson(STORAGE_KEYS.CART, []);
       setOrderConfirmed(true);
       setPaymentConfirmed(true);
-      if (setCashuPaymentSent) {
-        setCashuPaymentSent(true);
-      }
+      setCashuPaymentSent(true);
     } catch {
-      if (setCashuPaymentFailed) {
-        setCashuPaymentFailed(true);
-      } else {
-        setFailureText("Cashu payment failed. Please try again.");
-        setShowFailureModal(true);
-      }
+      setCashuPaymentFailed(true);
     }
   };
 
@@ -3126,7 +2753,8 @@ export default function CartInvoiceCard({
                             ? product.volumePrice
                             : product.weightPrice !== undefined
                               ? product.weightPrice
-                              : product.price) * (quantities[product.id] || 1);
+                              : (product.price ?? 0)) *
+                        (quantities[product.id] || 1);
                       const discountedPrice =
                         discount > 0
                           ? basePrice * (1 - discount / 100)
@@ -3358,7 +2986,7 @@ export default function CartInvoiceCard({
                           ? product.volumePrice
                           : product.weightPrice !== undefined
                             ? product.weightPrice
-                            : product.price;
+                            : (product.price ?? 0);
                     const basePrice =
                       originalPrice * (quantities[product.id] || 1);
                     const discountedPrice =
@@ -3732,7 +3360,7 @@ export default function CartInvoiceCard({
                   )}
 
                   {/* NWC Button */}
-                  {nwcInfo && (
+                  {nwcInfo && hasStoredConnection && (
                     <Button
                       className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                         !isFormValid ? "cursor-not-allowed opacity-50" : ""

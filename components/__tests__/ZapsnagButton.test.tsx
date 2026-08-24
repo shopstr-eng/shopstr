@@ -9,6 +9,7 @@ import {
 import ZapsnagButton, { clearSellerZapContextCache } from "../ZapsnagButton";
 import {
   NostrContext,
+  NWCContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import * as nostrHelpers from "@/utils/nostr/nostr-helper-functions";
@@ -96,6 +97,7 @@ jest.mock("nostr-tools", () => ({
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   getLocalStorageData: jest.fn(),
+  getStoredRelays: jest.fn(() => []),
 }));
 
 jest.mock("@/utils/nostr/gift-wrap", () => ({
@@ -146,14 +148,21 @@ const renderComponent = (contextOverrides = {}, product = mockProduct) => {
       isLoggedIn: true,
       pubkey: "buyer-pubkey",
     },
+    nwcContext: {
+      nwcString: null,
+      hasStoredConnection: false,
+      ensureUnlocked: jest.fn(),
+    },
     ...contextOverrides,
   };
 
   return render(
     <NostrContext.Provider value={defaultContext.nostrContext as any}>
-      <SignerContext.Provider value={defaultContext.signerContext as any}>
-        <ZapsnagButton product={product as any} />
-      </SignerContext.Provider>
+      <NWCContext.Provider value={defaultContext.nwcContext as any}>
+        <SignerContext.Provider value={defaultContext.signerContext as any}>
+          <ZapsnagButton product={product as any} />
+        </SignerContext.Provider>
+      </NWCContext.Provider>
     </NostrContext.Provider>
   );
 };
@@ -697,7 +706,6 @@ describe("ZapsnagButton Component", () => {
 
   test("handles NWC connection if nwcString exists", async () => {
     (nostrHelpers.getLocalStorageData as jest.Mock).mockReturnValue({
-      nwcString: "nostr+walletconnect://...",
       relays: [],
     });
 
@@ -708,7 +716,15 @@ describe("ZapsnagButton Component", () => {
       },
     ]);
 
-    renderComponent();
+    renderComponent({
+      nwcContext: {
+        nwcString: "nostr+walletconnect://...",
+        hasStoredConnection: true,
+        ensureUnlocked: jest
+          .fn()
+          .mockResolvedValue("nostr+walletconnect://..."),
+      },
+    });
     fireEvent.click(screen.getByText(/Zap to Buy/i));
 
     fireEvent.change(screen.getByLabelText("Full Name"), {

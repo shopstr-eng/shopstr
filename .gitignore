@@ -33,4 +33,7 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
+
+# generated standalone MCP package sources
+/packages/shopstr-mcp/src/generated/
 next-env.d.ts

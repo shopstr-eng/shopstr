@@ -1,6 +1,11 @@
 import type { ZodError } from "zod";
 
 import {
+  acceptCategoryTag,
+  getAcceptedCategoryTags,
+  normalizeCategoryTag,
+} from "../../category-tags.js";
+import {
   MCP_ERROR_CODES,
   createErrorResponse,
   type ToolMeta,
@@ -12,11 +17,117 @@ export const PRODUCT_KIND = 30402;
 export const REVIEW_KIND = 31555;
 export const PROFILE_KIND = 0;
 export const SHOP_PROFILE_KIND = 30019;
+export const CACHE_KINDS = {
+  SELLER_PRODUCTS: 0x7e570001,
+  SELLER_REVIEWS: 0x7e570002,
+  CATEGORY_SUMMARY: 0x7e570003,
+  NIP05_VERIFICATION: 0x7e570004,
+  PRODUCT_COORDINATE: 30402,
+} as const;
 export const PRODUCT_RESPONSE_BUDGET = 37;
 export const REVIEW_RESPONSE_BUDGET = 50;
 export const SELLER_LIST_RESPONSE_BUDGET = 50;
 export const REVIEW_PRODUCT_FILTER_LIMIT = 20;
 export const RELAY_RETRY_AFTER_MS = 2_000;
+export const CATEGORY_VARIANT_REGISTRY_MAX_ENTRIES = 5_000;
+
+export { normalizeCategoryTag } from "../../category-tags.js";
+
+const categoryVariantRegistry = new Map<string, Set<string>>();
+const categoryVariantInsertionOrder = new Map<
+  string,
+  { normalized: string; raw: string }
+>();
+
+export function observeCategoryTags(tags: readonly string[][]): void {
+  for (const category of getAcceptedCategoryTags(tags)) {
+    observeAcceptedCategoryTag(category);
+  }
+}
+
+export function observeCategoryTag(raw: string): void {
+  const category = acceptCategoryTag(raw);
+  if (!category) return;
+  observeAcceptedCategoryTag(category);
+}
+
+function observeAcceptedCategoryTag(category: {
+  normalized: string;
+  raw: string;
+}): void {
+  const { normalized, raw } = category;
+  const variants = categoryVariantRegistry.get(normalized) ?? new Set<string>();
+  if (variants.has(raw)) return;
+
+  if (
+    categoryVariantInsertionOrder.size >= CATEGORY_VARIANT_REGISTRY_MAX_ENTRIES
+  ) {
+    evictOldestCategoryVariant();
+  }
+
+  variants.add(raw);
+  categoryVariantRegistry.set(normalized, variants);
+  categoryVariantInsertionOrder.set(toCategoryVariantKey(normalized, raw), {
+    normalized,
+    raw,
+  });
+}
+
+export function observeProductEventsForCategories(
+  events: readonly { tags: string[][] }[]
+): void {
+  for (const event of events) {
+    observeCategoryTags(event.tags || []);
+  }
+}
+
+export function getObservedCategoryVariants(category: string): string[] {
+  const normalized = normalizeCategoryTag(category);
+  const observed = categoryVariantRegistry.get(normalized);
+  return observed ? Array.from(observed) : [];
+}
+
+export function getCategoryQueryVariants(category: string): string[] {
+  const normalized = normalizeCategoryTag(category);
+  if (!normalized) return [];
+
+  return Array.from(
+    new Set([
+      ...getObservedCategoryVariants(normalized),
+      normalized,
+      toTitleCase(normalized),
+      normalized.toUpperCase(),
+    ])
+  );
+}
+
+function toTitleCase(value: string): string {
+  return value.replace(
+    /\S+/g,
+    (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  );
+}
+
+function evictOldestCategoryVariant(): void {
+  const oldestKey = categoryVariantInsertionOrder.keys().next().value;
+  if (oldestKey === undefined) return;
+
+  const oldest = categoryVariantInsertionOrder.get(oldestKey);
+  categoryVariantInsertionOrder.delete(oldestKey);
+  if (!oldest) return;
+
+  const variants = categoryVariantRegistry.get(oldest.normalized);
+  if (!variants) return;
+
+  variants.delete(oldest.raw);
+  if (variants.size === 0) {
+    categoryVariantRegistry.delete(oldest.normalized);
+  }
+}
+
+function toCategoryVariantKey(normalized: string, raw: string): string {
+  return JSON.stringify([normalized, raw]);
+}
 
 export function formatValidationError(error: ZodError): string {
   return error.issues

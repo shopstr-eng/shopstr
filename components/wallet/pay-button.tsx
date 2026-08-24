@@ -40,6 +40,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 const PayButton = () => {
   const [showPayModal, setShowPayModal] = useState(false);
@@ -193,17 +194,14 @@ const PayButton = () => {
       }
       const filteredTokenAmount = sumProofAmounts(filteredProofs);
       const transactionAmount = filteredTokenAmount - changeAmount;
-      localStorage.setItem(
-        "history",
-        JSON.stringify([
-          {
-            type: 4,
-            amount: transactionAmount,
-            date: Math.floor(Date.now() / 1000),
-          },
-          ...history,
-        ])
-      );
+      storage.setJson(STORAGE_KEYS.HISTORY, [
+        {
+          type: 4,
+          amount: transactionAmount,
+          date: Math.floor(Date.now() / 1000),
+        },
+        ...history,
+      ]);
       await publishProofEvent(
         nostr!,
         signer!,

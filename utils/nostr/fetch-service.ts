@@ -55,19 +55,43 @@ import {
   buildSignedHttpRequestProofTemplate,
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
+import {
+  fetchNip58ProfileBadges,
+  Nip58ProfileBadgesResult,
+} from "@/utils/nostr/badges";
+import type { Nip58ProfileBadge } from "@/utils/types/types";
 
 interface NipProfile {
   pubkey: string;
   created_at: number;
   content: { nip05?: string; [key: string]: any };
   nip05Verified: boolean;
+  badges?: Nip58ProfileBadge[];
 }
 
 type SearchFilter = Filter & { search: string };
 
 const PRODUCT_SEARCH_LIMIT = 100;
 export const NIP50_SEARCH_TIMEOUT_MS = 10_000;
+const NIP11_RELAY_INFO_TIMEOUT_MS = 3_000;
+const NIP11_RELAY_INFO_CACHE_TTL_MS = 5 * 60_000;
 const COMMUNITY_POST_BATCH_CONCURRENCY = 4;
+export const NIP58_BADGE_HYDRATION_RETRY_MS = 5_000;
+
+export interface Nip58BadgeHydrationOutcome {
+  retryAt: number | null;
+}
+
+interface Nip58BadgeHydrationState {
+  relayKey: string;
+  inFlight?: Promise<Map<string, Nip58ProfileBadgesResult>>;
+}
+
+let nip58BadgeHydrationStates = new WeakMap<
+  object,
+  Map<string, Nip58BadgeHydrationState>
+>();
+let nip58BadgeHydrationEpoch = 0;
 export const DEFAULT_NIP50_SEARCH_RELAYS = [
   "wss://relay.nostr.band",
   "wss://nostr.wine",
@@ -76,6 +100,14 @@ export const DEFAULT_NIP50_SEARCH_RELAYS = [
   "wss://antiprimal.net",
   "wss://relay.ditto.pub",
 ];
+
+interface Nip50RelaySupportCacheEntry {
+  expiresAt: number;
+  supportPromise: Promise<boolean>;
+}
+
+const nip50RelaySupportCache = new Map<string, Nip50RelaySupportCacheEntry>();
+let relayInfoFetchImpl: typeof globalThis.fetch | undefined;
 
 function normalizeRelayUrl(relay: string): string {
   const trimmedRelay = relay.trim();
@@ -100,22 +132,244 @@ function getUniqueRelayUrls(relays: string[]): string[] {
   return Array.from(relayMap.values());
 }
 
-function getNip50SearchRelays(relays: string[]): string[] {
-  const selectedSearchRelays = getUniqueRelayUrls(relays);
-  const selectedSearchRelaySet = new Set(
-    selectedSearchRelays.map((relay) => relay.toLowerCase())
-  );
-  const backupSearchRelays = DEFAULT_NIP50_SEARCH_RELAYS.filter(
-    (relay) => !selectedSearchRelaySet.has(relay.toLowerCase())
-  );
+function getNip58RelayKey(relays: string[]): string {
+  return getUniqueRelayUrls(relays)
+    .map((relay) => relay.toLowerCase())
+    .sort()
+    .join(",");
+}
 
-  // All user-selected relays are queried first, then any curated NIP-50 relays
-  // not already in the user's list are appended as fallbacks. Note: this means
-  // search terms are sent to every user-configured relay, not just those that
-  // advertise NIP-50 support. Non-NIP-50 relays may return unfiltered results,
-  // but fetchNip50ProductSearch post-filters via eventMatchesProductSearch so
-  // only matching events reach the UI — the only cost is extra bandwidth.
-  return [...selectedSearchRelays, ...backupSearchRelays];
+function getNip58ManagerStates(
+  nostr: object
+): Map<string, Nip58BadgeHydrationState> {
+  const existingStates = nip58BadgeHydrationStates.get(nostr);
+  if (existingStates) return existingStates;
+
+  const states = new Map<string, Nip58BadgeHydrationState>();
+  nip58BadgeHydrationStates.set(nostr, states);
+  return states;
+}
+
+function earlierRetryAt(
+  current: number | null,
+  candidate: number | null
+): number | null {
+  if (candidate === null) return current;
+  return current === null ? candidate : Math.min(current, candidate);
+}
+
+export function clearNip58ProfileBadgeHydrationCache(): void {
+  nip58BadgeHydrationStates = new WeakMap();
+  nip58BadgeHydrationEpoch += 1;
+}
+
+export async function hydrateNip58ProfileBadges(
+  nostr: NostrManager,
+  relays: string[],
+  pubkeys: string[],
+  editProfileContext: (
+    profileMap: Map<string, NipProfile | null>,
+    isLoading: boolean
+  ) => void,
+  existingProfileMap: Map<string, any> = new Map()
+): Promise<Nip58BadgeHydrationOutcome> {
+  const uniquePubkeys = Array.from(new Set(pubkeys.filter(isHexPubkey)));
+  if (!uniquePubkeys.length) return { retryAt: null };
+
+  const relayKey = getNip58RelayKey(relays);
+  const hydrationEpoch = nip58BadgeHydrationEpoch;
+  const managerStates = getNip58ManagerStates(nostr);
+  const pendingHydrations = new Set<
+    Promise<Map<string, Nip58ProfileBadgesResult>>
+  >();
+  const statesToHydrate = new Map<string, Nip58BadgeHydrationState>();
+  let retryAt: number | null = null;
+  const isCurrentState = (pubkey: string, state: Nip58BadgeHydrationState) =>
+    hydrationEpoch === nip58BadgeHydrationEpoch &&
+    managerStates.get(pubkey) === state;
+
+  for (const pubkey of uniquePubkeys) {
+    const existingState = managerStates.get(pubkey);
+    if (existingState?.relayKey === relayKey && existingState.inFlight) {
+      pendingHydrations.add(existingState.inFlight);
+      continue;
+    }
+
+    const state: Nip58BadgeHydrationState = { relayKey };
+    managerStates.set(pubkey, state);
+    statesToHydrate.set(pubkey, state);
+  }
+
+  if (statesToHydrate.size) {
+    let hydrationPromise: Promise<Map<string, Nip58ProfileBadgesResult>>;
+    hydrationPromise = (async () => {
+      const badgeResults = await fetchNip58ProfileBadges(
+        nostr,
+        relays,
+        Array.from(statesToHydrate.keys())
+      );
+      const currentResults = new Map<string, Nip58ProfileBadgesResult>();
+
+      for (const [pubkey, state] of statesToHydrate) {
+        if (!isCurrentState(pubkey, state)) continue;
+        const badgeResult = badgeResults.get(pubkey);
+        if (badgeResult) currentResults.set(pubkey, badgeResult);
+      }
+      return currentResults;
+    })().finally(() => {
+      for (const [pubkey, state] of statesToHydrate) {
+        if (!isCurrentState(pubkey, state)) continue;
+        if (state.inFlight !== hydrationPromise) continue;
+        managerStates.delete(pubkey);
+      }
+    });
+
+    for (const state of statesToHydrate.values()) {
+      state.inFlight = hydrationPromise;
+    }
+    pendingHydrations.add(hydrationPromise);
+  }
+
+  const badgeResultMaps = await Promise.all(pendingHydrations);
+  const badgeResults = new Map<string, Nip58ProfileBadgesResult>();
+  for (const resultMap of badgeResultMaps) {
+    for (const [pubkey, result] of resultMap) {
+      if (uniquePubkeys.includes(pubkey)) badgeResults.set(pubkey, result);
+    }
+  }
+
+  const profileUpdates = new Map<string, NipProfile | null>();
+  for (const pubkey of uniquePubkeys) {
+    const badgeResult = badgeResults.get(pubkey);
+    if (!badgeResult?.complete) {
+      if (badgeResult?.retryable !== false) {
+        retryAt = earlierRetryAt(
+          retryAt,
+          Date.now() + NIP58_BADGE_HYDRATION_RETRY_MS
+        );
+      }
+      continue;
+    }
+
+    const existingProfile = existingProfileMap.get(pubkey);
+    const profile: NipProfile = existingProfile || {
+      pubkey,
+      created_at: 0,
+      content: {},
+      nip05Verified: false,
+    };
+    profileUpdates.set(pubkey, {
+      ...profile,
+      badges: badgeResult.badges,
+    });
+  }
+
+  if (profileUpdates.size) {
+    editProfileContext(profileUpdates, false);
+  }
+  return { retryAt };
+}
+
+function buildRelayInformationUrl(relay: string): string | null {
+  try {
+    const url = new URL(relay);
+
+    if (url.protocol === "wss:") {
+      url.protocol = "https:";
+    } else if (url.protocol === "ws:") {
+      url.protocol = "http:";
+    } else if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return null;
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function relayInfoAdvertisesNip50(relayInfo: unknown): boolean {
+  if (!relayInfo || typeof relayInfo !== "object") return false;
+
+  const supportedNips = (relayInfo as { supported_nips?: unknown })
+    .supported_nips;
+
+  return (
+    Array.isArray(supportedNips) &&
+    supportedNips.some((nip) => nip === 50 || nip === "50")
+  );
+}
+
+async function fetchRelayAdvertisesNip50(relay: string): Promise<boolean> {
+  const fetchImpl = globalThis.fetch;
+  if (typeof fetchImpl !== "function") return false;
+
+  if (relayInfoFetchImpl !== fetchImpl) {
+    nip50RelaySupportCache.clear();
+    relayInfoFetchImpl = fetchImpl;
+  }
+
+  const relayCacheKey = relay.toLowerCase();
+  const cachedSupport = nip50RelaySupportCache.get(relayCacheKey);
+  if (cachedSupport && cachedSupport.expiresAt > Date.now()) {
+    return cachedSupport.supportPromise;
+  }
+  if (cachedSupport) nip50RelaySupportCache.delete(relayCacheKey);
+
+  const relayInformationUrl = buildRelayInformationUrl(relay);
+  if (!relayInformationUrl) return false;
+
+  const cacheEntry: Nip50RelaySupportCacheEntry = {
+    expiresAt: Date.now() + NIP11_RELAY_INFO_CACHE_TTL_MS,
+    supportPromise: Promise.resolve(false),
+  };
+
+  cacheEntry.supportPromise = (async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      NIP11_RELAY_INFO_TIMEOUT_MS
+    );
+
+    try {
+      const response = await fetchImpl(relayInformationUrl, {
+        headers: { Accept: "application/nostr+json" },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) throw new Error("Relay information request failed");
+
+      return relayInfoAdvertisesNip50(await response.json());
+    } catch {
+      if (nip50RelaySupportCache.get(relayCacheKey) === cacheEntry) {
+        nip50RelaySupportCache.delete(relayCacheKey);
+      }
+      return false;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  })();
+
+  nip50RelaySupportCache.set(relayCacheKey, cacheEntry);
+  return cacheEntry.supportPromise;
+}
+
+async function getSelectedNip50SearchRelays(
+  relays: string[]
+): Promise<string[]> {
+  const knownSearchRelaySet = new Set(
+    DEFAULT_NIP50_SEARCH_RELAYS.map((relay) => relay.toLowerCase())
+  );
+  const selectedSearchRelays = (
+    await Promise.all(
+      getUniqueRelayUrls(relays).map(async (relay) => {
+        if (knownSearchRelaySet.has(relay.toLowerCase())) return relay;
+        return (await fetchRelayAdvertisesNip50(relay)) ? relay : null;
+      })
+    )
+  ).filter((relay): relay is string => !!relay);
+
+  return selectedSearchRelays;
 }
 
 export function getProductEventKey(event: NostrEvent): string {
@@ -203,8 +457,6 @@ export async function fetchNip50ProductSearch(
     return { productEvents: [] };
   }
 
-  const searchRelays = getNip50SearchRelays(relays);
-
   const fetchSearchEvents = async (targetRelays: string[]) => {
     if (targetRelays.length === 0) return Promise.resolve([]);
 
@@ -225,14 +477,42 @@ export async function fetchNip50ProductSearch(
     return relayResults.flat();
   };
 
+  const curatedSearchEventsByRelay = new Map(
+    DEFAULT_NIP50_SEARCH_RELAYS.map((relay) => [
+      relay.toLowerCase(),
+      fetchSearchEvents([relay]),
+    ])
+  );
+  const selectedSearchRelays = await getSelectedNip50SearchRelays(relays);
+  const selectedSearchRelaySet = new Set(
+    selectedSearchRelays.map((relay) => relay.toLowerCase())
+  );
+  const selectedSearchEventsPromise = Promise.all(
+    selectedSearchRelays.map(
+      (relay) =>
+        curatedSearchEventsByRelay.get(relay.toLowerCase()) ??
+        fetchSearchEvents([relay])
+    )
+  ).then((relayResults) => relayResults.flat());
+  const fallbackSearchEventsPromise = Promise.all(
+    DEFAULT_NIP50_SEARCH_RELAYS.filter(
+      (relay) => !selectedSearchRelaySet.has(relay.toLowerCase())
+    ).map((relay) => curatedSearchEventsByRelay.get(relay.toLowerCase())!)
+  ).then((relayResults) => relayResults.flat());
+
   const filterSearchProductEvents = (events: NostrEvent[]) =>
     events.filter(
       (event) => event.id && event.sig && event.pubkey && event.kind === 30402
     );
 
-  let searchProductEvents = filterSearchProductEvents(
-    await fetchSearchEvents(searchRelays)
-  );
+  const [selectedSearchEvents, fallbackSearchEvents] = await Promise.all([
+    selectedSearchEventsPromise,
+    fallbackSearchEventsPromise,
+  ]);
+  let searchProductEvents = filterSearchProductEvents([
+    ...selectedSearchEvents,
+    ...fallbackSearchEvents,
+  ]);
   let relevantSearchProductEvents = searchProductEvents.filter((event) =>
     eventMatchesProductSearch(event, searchQuery)
   );
@@ -783,13 +1063,17 @@ export const fetchProfile = async (
   existingProfileMap: Map<string, any> = new Map()
 ): Promise<{
   profileMap: Map<string, NipProfile | null>;
+  badgeHydration: Promise<Nip58BadgeHydrationOutcome>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
       if (!pubkeyProfilesToFetch.length) {
         const preservedProfileMap = new Map(existingProfileMap);
         editProfileContext(preservedProfileMap, false);
-        resolve({ profileMap: preservedProfileMap });
+        resolve({
+          profileMap: preservedProfileMap,
+          badgeHydration: Promise.resolve({ retryAt: null }),
+        });
         return;
       }
 
@@ -802,7 +1086,11 @@ export const fetchProfile = async (
           !existingProfile ||
           (profile.created_at ?? 0) >= (existingProfile.created_at ?? 0)
         ) {
-          mergedProfileMap.set(profile.pubkey, profile);
+          const nextProfile =
+            profile.badges === undefined && existingProfile?.badges
+              ? { ...profile, badges: existingProfile.badges }
+              : profile;
+          mergedProfileMap.set(profile.pubkey, nextProfile);
         }
       };
 
@@ -908,8 +1196,19 @@ export const fetchProfile = async (
       }
 
       editProfileContext(new Map(mergedProfileMap), false);
-
-      resolve({ profileMap: mergedProfileMap });
+      const badgeHydration = hydrateNip58ProfileBadges(
+        nostr,
+        relays,
+        pubkeyProfilesToFetch,
+        editProfileContext,
+        mergedProfileMap
+      ).catch((error) => {
+        console.error("Failed to fetch NIP-58 profile badges:", error);
+        return {
+          retryAt: Date.now() + NIP58_BADGE_HYDRATION_RETRY_MS,
+        };
+      });
+      resolve({ profileMap: mergedProfileMap, badgeHydration });
     } catch (error) {
       reject(error);
     }

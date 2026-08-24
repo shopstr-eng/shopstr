@@ -51,6 +51,7 @@ import {
   fetchAllCommunities,
   fetchGiftWrappedChatsAndMessages,
   fetchReports,
+  getUniqueProofs,
 } from "@/utils/nostr/fetch-service";
 import { fetchAllPostsAbortable } from "@/utils/nostr/fetch-all-posts-abortable";
 import {
@@ -67,6 +68,7 @@ import DynamicHead from "../components/dynamic-meta-head";
 import StructuredData from "../components/structured-data";
 import {
   NostrContextProvider,
+  NWCContextProvider,
   SignerContextProvider,
   NostrContext,
   SignerContext,
@@ -80,6 +82,7 @@ import {
   applyOptimisticFollow,
   applyOptimisticUnfollow,
 } from "@/utils/nostr/follow-state";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 const mergeReportEvents = (
   existingReports: NostrEvent[],
@@ -589,6 +592,13 @@ function Shopstr({ props }: { props: AppProps }) {
 
       profileData.forEach((incomingProfile, pubkey) => {
         const existingProfile = mergedProfileData.get(pubkey);
+        if (existingProfile && Array.isArray(incomingProfile?.badges)) {
+          mergedProfileData.set(pubkey, {
+            ...existingProfile,
+            badges: incomingProfile.badges,
+          });
+          return;
+        }
         if (
           !existingProfile ||
           (incomingProfile?.created_at ?? 0) >
@@ -802,7 +812,7 @@ function Shopstr({ props }: { props: AppProps }) {
 
         if (allRelays.length === 0) {
           allRelays = getDefaultRelays();
-          localStorage.setItem("relays", JSON.stringify(allRelays));
+          storage.setJson(STORAGE_KEYS.RELAYS, allRelays);
         }
 
         // Fire them first and in parellel since independent of each other and other depend on it
@@ -827,14 +837,11 @@ function Shopstr({ props }: { props: AppProps }) {
         if (!isCurrentRun()) return;
 
         if (relayResult && relayResult.relayList.length !== 0) {
-          localStorage.setItem("relays", JSON.stringify(relayResult.relayList));
-          localStorage.setItem(
-            "readRelays",
-            JSON.stringify(relayResult.readRelayList)
-          );
-          localStorage.setItem(
-            "writeRelays",
-            JSON.stringify(relayResult.writeRelayList)
+          storage.setJson(STORAGE_KEYS.RELAYS, relayResult.relayList);
+          storage.setJson(STORAGE_KEYS.READ_RELAYS, relayResult.readRelayList);
+          storage.setJson(
+            STORAGE_KEYS.WRITE_RELAYS,
+            relayResult.writeRelayList
           );
           allRelays = [...relayResult.relayList, ...relayResult.readRelayList];
         }
@@ -1039,21 +1046,24 @@ function Shopstr({ props }: { props: AppProps }) {
         if (!isCurrentRun()) return;
 
         if (blossomResult?.blossomServers?.length) {
-          localStorage.setItem(
-            "blossomServers",
-            JSON.stringify(blossomResult.blossomServers)
+          storage.setJson(
+            STORAGE_KEYS.BLOSSOM_SERVERS,
+            blossomResult.blossomServers
           );
         }
 
         if (walletResult?.cashuMints?.length) {
-          localStorage.setItem(
-            "mints",
-            JSON.stringify(walletResult.cashuMints)
-          );
+          storage.setJson(STORAGE_KEYS.MINTS, walletResult.cashuMints);
         }
 
         if (walletResult?.cashuProofs) {
-          setCachedCashuProofs(walletResult.cashuProofs);
+          const { tokens: currentTokens } = getLocalStorageData();
+          setCachedCashuProofs(
+            getUniqueProofs([
+              ...(currentTokens as Proof[]),
+              ...walletResult.cashuProofs,
+            ])
+          );
         }
 
         if (walletResult && signer && nostr) {
@@ -1282,10 +1292,12 @@ function App(props: AppProps) {
         <ToastProvider />
         <NextThemesProvider attribute="class">
           <NostrContextProvider>
-            <SignerContextProvider>
-              <MintRecoveryBoot />
-              <Shopstr props={props} />
-            </SignerContextProvider>
+            <NWCContextProvider>
+              <SignerContextProvider>
+                <MintRecoveryBoot />
+                <Shopstr props={props} />
+              </SignerContextProvider>
+            </NWCContextProvider>
           </NostrContextProvider>
         </NextThemesProvider>
       </HeroUIProvider>

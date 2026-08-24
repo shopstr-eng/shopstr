@@ -13,6 +13,7 @@ import {
   NostrSigner,
 } from "@/utils/nostr/signers/nostr-signer";
 import { v4 as uuidv4 } from "uuid";
+import { decryptNIP46SignerCredentials } from "@/utils/nostr/nip46-encryption";
 type BunkerData = {
   url: string;
   bunkerPubkey: string;
@@ -28,14 +29,19 @@ type Listener = {
 };
 
 export class NostrNIP46Signer implements NostrSigner {
-  private readonly bunker: BunkerData;
-  private readonly appPrivKey: Uint8Array;
-  private readonly appPubKey: string;
-  private readonly nostr: NostrManager;
+  private bunker?: BunkerData;
+  private appPrivKey?: Uint8Array;
+  private appPubKey?: string;
+  private nostr?: NostrManager;
+  private readonly encryptedSigner?: string;
   private readonly listeners: { [key: string]: Listener } = {};
   private readonly challengeHandler: ChallengeHandler;
   private readonly instanceId: string = uuidv4();
   private readonly pendingChallenges: Map<string, AbortController> = new Map();
+  private rememberedPassphrase?: string;
+  private inputPassphrase?: string;
+  private inputPassphraseClearer?: ReturnType<typeof setTimeout>;
+  private initializationPromise?: Promise<void>;
 
   // used to increment the requestId
   private eventCounter: number = 0;
@@ -44,13 +50,28 @@ export class NostrNIP46Signer implements NostrSigner {
     {
       bunker,
       appPrivKey,
+      encryptedSigner,
     }: {
-      bunker: string;
+      bunker?: string;
       appPrivKey?: Uint8Array;
+      encryptedSigner?: string;
     },
     challengeHandler: ChallengeHandler
   ) {
     this.challengeHandler = challengeHandler;
+    this.encryptedSigner = encryptedSigner;
+    if (encryptedSigner) return;
+    if (!bunker) throw new Error("Invalid NIP-46 signer: missing bunker URL");
+    this.initialize({ bunker, appPrivKey });
+  }
+
+  private initialize({
+    bunker,
+    appPrivKey,
+  }: {
+    bunker: string;
+    appPrivKey?: Uint8Array;
+  }): void {
     this.appPrivKey = appPrivKey ?? generateSecretKey();
     this.appPubKey = getPublicKey(this.appPrivKey);
     const url = bunker.replace("bunker://", "http://");
@@ -91,7 +112,80 @@ export class NostrNIP46Signer implements NostrSigner {
     );
   }
 
+  private async ensureInitialized(): Promise<void> {
+    if (this.bunker && this.appPrivKey && this.nostr) return;
+    if (!this.initializationPromise) {
+      this.initializationPromise = this.initializeEncryptedSigner().finally(
+        () => {
+          this.initializationPromise = undefined;
+        }
+      );
+    }
+    await this.initializationPromise;
+  }
+
+  private async initializeEncryptedSigner(): Promise<void> {
+    if (!this.encryptedSigner) {
+      throw new Error("Invalid NIP-46 signer credentials.");
+    }
+
+    let error: Error | undefined;
+    let aborted = false;
+    do {
+      try {
+        let passphrase = this.rememberedPassphrase ?? this.inputPassphrase;
+        let remember = false;
+        if (!passphrase) {
+          const abortController = new AbortController();
+          const response = await this.challengeHandler(
+            "passphrase",
+            "Enter passphrase",
+            () => {
+              aborted = true;
+              abortController.abort();
+            },
+            abortController.signal,
+            error
+          );
+          passphrase = response.res;
+          remember = response.remind;
+        }
+
+        const credentials = await decryptNIP46SignerCredentials(
+          this.encryptedSigner,
+          passphrase || ""
+        );
+        this.initialize({
+          bunker: credentials.bunker,
+          appPrivKey: hexToBytes(credentials.appPrivKey),
+        });
+
+        if (remember) this.rememberedPassphrase = passphrase;
+        if (this.inputPassphraseClearer) {
+          clearTimeout(this.inputPassphraseClearer);
+        }
+        this.inputPassphrase = passphrase;
+        this.inputPassphraseClearer = setTimeout(() => {
+          this.inputPassphrase = undefined;
+          this.inputPassphraseClearer = undefined;
+        }, 5000);
+        return;
+      } catch (caughtError) {
+        error = caughtError as Error;
+      }
+    } while (!aborted);
+
+    throw new Error("Action cancelled by user");
+  }
+
+  private isInitialized(): boolean {
+    return Boolean(this.bunker && this.appPrivKey && this.nostr);
+  }
+
   public toJSON(): { [key: string]: any } {
+    if (!this.bunker || !this.appPrivKey) {
+      return { type: "nip46", encryptedSigner: this.encryptedSigner };
+    }
     return {
       type: "nip46",
       bunker: this.bunker.url,
@@ -103,7 +197,14 @@ export class NostrNIP46Signer implements NostrSigner {
     json: { [key: string]: any },
     challengeHandler: ChallengeHandler
   ): NostrNIP46Signer | undefined {
-    if (json.type !== "nip46" || !json.bunker) return undefined;
+    if (json.type !== "nip46") return undefined;
+    if (typeof json.encryptedSigner === "string" && !json.bunker) {
+      return new NostrNIP46Signer(
+        { encryptedSigner: json.encryptedSigner },
+        challengeHandler
+      );
+    }
+    if (!json.bunker) return undefined;
     return new NostrNIP46Signer(
       {
         bunker: json.bunker,
@@ -117,7 +218,7 @@ export class NostrNIP46Signer implements NostrSigner {
     let content: any;
     try {
       const conversationKey = nip44.getConversationKey(
-        this.appPrivKey,
+        this.appPrivKey!,
         event.pubkey
       );
       const decrypted = nip44.decrypt(event.content, conversationKey);
@@ -170,9 +271,10 @@ export class NostrNIP46Signer implements NostrSigner {
   }
 
   public async connect() {
+    if (!this.isInitialized()) await this.ensureInitialized();
     const args: string[] = [];
-    args.push(this.bunker.bunkerPubkey);
-    args.push(this.bunker.secret || "");
+    args.push(this.bunker!.bunkerPubkey);
+    args.push(this.bunker!.secret || "");
     args.push(
       "sign_event:0,sign_event:5,sign_event:13,sign_event:1059,sign_event:1111,sign_event:4550,sign_event:7375,sign_event:7376,sign_event:10002,sign_event:17375,kind:30019,sign_event:30402,sign_event:30405,sign_event:30406,sign_event:30407,sign_event:31555,sign_event:31989,sign_event:31990,sign_event:34550,get_public_key,nip44_encrypt,nip44_decrypt"
     );
@@ -180,7 +282,10 @@ export class NostrNIP46Signer implements NostrSigner {
   }
 
   public async close(): Promise<void> {
-    this.nostr.close();
+    this.rememberedPassphrase = undefined;
+    this.inputPassphrase = undefined;
+    if (this.inputPassphraseClearer) clearTimeout(this.inputPassphraseClearer);
+    this.nostr?.close();
   }
 
   public async getPubKey(): Promise<string> {
@@ -222,8 +327,9 @@ export class NostrNIP46Signer implements NostrSigner {
   }
 
   private async sendRPC(method: string, params: any): Promise<any> {
+    if (!this.isInitialized()) await this.ensureInitialized();
     const requestId = this.getNewRequestId();
-    const remotePubKey = this.bunker.bunkerPubkey;
+    const remotePubKey = this.bunker!.bunkerPubkey;
 
     const signEvent = {
       kind: 24133,
@@ -237,11 +343,11 @@ export class NostrNIP46Signer implements NostrSigner {
     };
 
     const conversationKey = nip44.getConversationKey(
-      this.appPrivKey,
+      this.appPrivKey!,
       remotePubKey
     );
     signEvent.content = nip44.encrypt(signEvent.content, conversationKey);
-    const signedEvent = finalizeEvent(signEvent, this.appPrivKey);
+    const signedEvent = finalizeEvent(signEvent, this.appPrivKey!);
 
     // we need to start waiting for the response before we publish the event
     // to make sure we don't miss the response if it comes in before we have a chance to wait for it
@@ -250,7 +356,7 @@ export class NostrNIP46Signer implements NostrSigner {
       requestId
     );
 
-    await this.nostr.publish(signedEvent);
+    await this.nostr!.publish(signedEvent);
 
     const resp: NostrEvent = await respPromise; // now we wait for the response
     const content = JSON.parse(resp.content);

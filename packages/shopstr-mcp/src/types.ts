@@ -99,6 +99,12 @@ export type ReviewResponse = {
   content: string;
   ratings: Record<string, number>;
   createdAt: number;
+  /**
+   * Omitted means the review matched through the canonical #a product address.
+   * Present only when the event was included through legacy #d/#e/#p/seller
+   * fallback matching.
+   */
+  matchConfidence?: "legacy_fallback";
 };
 
 export type RelayFailure = {

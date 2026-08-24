@@ -13,7 +13,6 @@ import {
   searchProductsSchema,
   searchSchema,
   sellerReputationInputSchema,
-  storefrontInputSchema,
 } from "../dist/validation.js";
 
 const pubkey = "a".repeat(64);
@@ -34,9 +33,17 @@ test("normalizes search strings", () => {
   assert.equal(searchSchema.parse("  hardware   wallet  "), "hardware wallet");
 });
 
-test("requires currency when price filters are used", () => {
+test("requires currency when price filters or price sorting are used", () => {
   assert.equal(
     searchProductsSchema.safeParse({ maxPrice: 50, limit: 10 }).success,
+    false
+  );
+  assert.equal(
+    searchProductsSchema.safeParse({ sortBy: "price_asc" }).success,
+    false
+  );
+  assert.equal(
+    searchProductsSchema.safeParse({ sortBy: "price_desc" }).success,
     false
   );
   const parsed = searchProductsSchema.parse({
@@ -46,6 +53,23 @@ test("requires currency when price filters are used", () => {
   });
   assert.equal(parsed.currency, "USD");
   assert.equal(parsed.limit, 10);
+  assert.equal(
+    searchProductsSchema.safeParse({
+      sortBy: "price_asc",
+      currency: "USD",
+    }).success,
+    true
+  );
+});
+
+test("search product pagination accepts a bounded cursor and rejects legacy until", () => {
+  const parsed = searchProductsSchema.parse({ cursor: "cursor-token" });
+  assert.equal(parsed.cursor, "cursor-token");
+  assert.equal(
+    searchProductsSchema.safeParse({ cursor: "a".repeat(16_385) }).success,
+    false
+  );
+  assert.equal(searchProductsSchema.safeParse({ until: 1 }).success, false);
 });
 
 test("requires at least one reviews lookup identifier", () => {
@@ -57,47 +81,59 @@ test("requires at least one reviews lookup identifier", () => {
   );
 });
 
-// ─── PR4 schema tests ───────────────────────────────────────────────
-
-test("listCompaniesSchema defaults limit to 50 and accepts until", () => {
-  const result = listCompaniesSchema.parse({});
-  assert.equal(result.limit, 50);
-  assert.equal(result.until, undefined);
-
-  const withUntil = listCompaniesSchema.parse({ until: 1700000000 });
-  assert.equal(withUntil.until, 1700000000);
-  assert.equal(withUntil.limit, 50);
-});
-
-test("listCompaniesSchema rejects negative until", () => {
-  assert.equal(listCompaniesSchema.safeParse({ until: -1 }).success, false);
-});
-
-test("companyDetailsInputSchema canonicalizes npub to hex", () => {
-  const npub = nip19.npubEncode(pubkey);
-  const result = companyDetailsInputSchema.parse({ pubkey: npub });
-  assert.equal(result.pubkey, pubkey);
-});
-
-test("companyDetailsInputSchema rejects invalid pubkey", () => {
+test("reviews pagination accepts a cursor and rejects legacy until", () => {
+  const parsed = reviewsInputSchema.parse({
+    sellerPubkey: pubkey,
+    cursor: "cursor-token",
+  });
+  assert.equal(parsed.cursor, "cursor-token");
   assert.equal(
-    companyDetailsInputSchema.safeParse({ pubkey: "not-a-key" }).success,
+    reviewsInputSchema.safeParse({ sellerPubkey: pubkey, until: 1 }).success,
     false
   );
 });
 
-test("storefrontInputSchema requires pubkey", () => {
-  assert.equal(storefrontInputSchema.safeParse({}).success, false);
+// ─── PR4 schema tests ───────────────────────────────────────────────
+
+test("listCompaniesSchema defaults limit to 50, accepts a bounded cursor, and rejects legacy until", () => {
+  const result = listCompaniesSchema.parse({});
+  assert.equal(result.limit, 50);
+  assert.equal(result.cursor, undefined);
+
+  const withCursor = listCompaniesSchema.parse({ cursor: "cursor-token" });
+  assert.equal(withCursor.cursor, "cursor-token");
+  assert.equal(withCursor.limit, 50);
   assert.equal(
-    storefrontInputSchema.safeParse({ pubkey: pubkey }).success,
-    true
+    listCompaniesSchema.safeParse({ until: 1700000000 }).success,
+    false
+  );
+  assert.equal(
+    listCompaniesSchema.safeParse({ cursor: "a".repeat(16_385) }).success,
+    false
   );
 });
 
-test("storefrontInputSchema canonicalizes npub pubkey", () => {
+test("companyDetailsInputSchema canonicalizes npub to hex", () => {
   const npub = nip19.npubEncode(pubkey);
-  const result = storefrontInputSchema.parse({ pubkey: npub });
-  assert.equal(result.pubkey, pubkey);
+  const result = companyDetailsInputSchema.parse({ sellerPubkey: npub });
+  assert.equal(result.sellerPubkey, pubkey);
+  assert.deepEqual(result.include, ["products", "reviews"]);
+});
+
+test("companyDetailsInputSchema rejects invalid pubkey", () => {
+  assert.equal(
+    companyDetailsInputSchema.safeParse({ sellerPubkey: "not-a-key" }).success,
+    false
+  );
+});
+
+test("companyDetailsInputSchema supports include sections", () => {
+  const result = companyDetailsInputSchema.parse({
+    sellerPubkey: pubkey,
+    include: [],
+  });
+
+  assert.deepEqual(result.include, []);
 });
 
 test("sellerReputationInputSchema canonicalizes pubkey", () => {

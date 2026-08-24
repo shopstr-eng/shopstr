@@ -283,5 +283,75 @@ describe("NostrManager", () => {
       await expect(fetchPromise).resolves.toEqual([{ id: "partial-1" }]);
       expect(subClose).toHaveBeenCalledTimes(1);
     });
+
+    it("reports whether a fetch ended at EOSE or with partial timeout data", async () => {
+      const completedSubClose = jest.fn();
+      fakePoolInstance.subscribeMap.mockReturnValueOnce({
+        close: completedSubClose,
+      });
+
+      const completedFetch = mgr.fetchWithStatus(
+        [{ kinds: [10008] }],
+        {},
+        ["u1"],
+        1234
+      );
+      await waitForSubscribeMap();
+      const completedParams = fakePoolInstance.subscribeMap.mock.calls[0][1];
+      completedParams.onevent({ id: "complete-1" });
+      completedParams.oneose();
+
+      await expect(completedFetch).resolves.toEqual({
+        events: [{ id: "complete-1" }],
+        complete: true,
+      });
+
+      fakePoolInstance.subscribeMap.mockClear();
+      const partialSubClose = jest.fn();
+      fakePoolInstance.subscribeMap.mockReturnValueOnce({
+        close: partialSubClose,
+      });
+      const partialFetch = mgr.fetchWithStatus(
+        [{ kinds: [10008] }],
+        {},
+        ["u1"],
+        1234
+      );
+      await waitForSubscribeMap();
+      const partialParams = fakePoolInstance.subscribeMap.mock.calls[0][1];
+      partialParams.onevent({ id: "partial-1" });
+      latestAbortController!.abort();
+
+      await expect(partialFetch).resolves.toEqual({
+        events: [{ id: "partial-1" }],
+        complete: false,
+      });
+      expect(partialSubClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("fetches from transient relays without retaining them", async () => {
+      const subClose = jest.fn();
+      fakePoolInstance.subscribeMap.mockReturnValueOnce({ close: subClose });
+
+      const fetchPromise = mgr.fetchTransientWithStatus(
+        [{ kinds: [8] }],
+        {},
+        ["wss://hinted.relay"],
+        1234
+      );
+      await waitForSubscribeMap();
+
+      expect(mgr.relays.map((relay: any) => relay.url)).toEqual(["u1"]);
+      const params = fakePoolInstance.subscribeMap.mock.calls[0][1];
+      params.onevent({ id: "hinted-award" });
+      params.oneose();
+
+      await expect(fetchPromise).resolves.toEqual({
+        events: [{ id: "hinted-award" }],
+        complete: true,
+      });
+      expect(mgr.relays.map((relay: any) => relay.url)).toEqual(["u1"]);
+      expect(subClose).toHaveBeenCalledTimes(1);
+    });
   });
 });

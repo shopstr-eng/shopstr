@@ -40,6 +40,7 @@ import {
   checkMintP2pkSupport,
   parseP2PKProofSet,
 } from "@/utils/cashu/p2pk-checkout";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 const ReceiveButton = () => {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
@@ -91,7 +92,7 @@ const ReceiveButton = () => {
     setCachedCashuProofs(tokenArray);
     if (!mints.includes(tokenMint)) {
       const updatedMints = [...mints, tokenMint];
-      localStorage.setItem("mints", JSON.stringify(updatedMints));
+      storage.setJson(STORAGE_KEYS.MINTS, updatedMints);
       if (cashuPrivkey) {
         await publishWalletEvent(
           nostr!,
@@ -103,17 +104,14 @@ const ReceiveButton = () => {
     }
     setIsClaimed(true);
     handleToggleReceiveModal();
-    localStorage.setItem(
-      "history",
-      JSON.stringify([
-        {
-          type: 1,
-          amount: transactionAmount,
-          date: Math.floor(Date.now() / 1000),
-        },
-        ...history,
-      ])
-    );
+    storage.setJson(STORAGE_KEYS.HISTORY, [
+      {
+        type: 1,
+        amount: transactionAmount,
+        date: Math.floor(Date.now() / 1000),
+      },
+      ...history,
+    ]);
     await publishProofEvent(
       nostr!,
       signer!,

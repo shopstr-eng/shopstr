@@ -15,6 +15,7 @@ import {
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
 import { creditProofsToLocalWallet } from "@/utils/cashu/local-wallet-cache";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 export type EscrowPaymentRequestPayload = {
   type: "escrow-payment-request";
@@ -144,7 +145,7 @@ export async function combineAndRedeem(params: {
     );
     creditProofsToLocalWallet(uniqueProofs, tokenAmount, 1);
     if (!mints.includes(tokenMint)) {
-      localStorage.setItem("mints", JSON.stringify([...mints, tokenMint]));
+      storage.setJson(STORAGE_KEYS.MINTS, [...mints, tokenMint]);
     }
 
     await publishProofEvent(
