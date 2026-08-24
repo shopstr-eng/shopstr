@@ -174,6 +174,10 @@ jest.mock("@/utils/cashu/pending-mint-operations", () => ({
 
 jest.mock("@/utils/cashu/wallet-recovery", () => ({
   recoverProofsToBuyerWallet: jest.fn().mockResolvedValue(undefined),
+  publishProofEventBestEffort: jest.fn().mockResolvedValue({
+    published: true,
+    queued: false,
+  }),
   withDeadline: jest.fn((fn: () => Promise<unknown>) => fn()),
   isTimeoutError: jest.fn().mockReturnValue(false),
 }));

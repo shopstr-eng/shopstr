@@ -28,22 +28,18 @@ export async function recoverProofsToBuyerWallet(
   creditProofsToLocalWallet(proofs, amount, 3);
 
   // Best-effort wallet event publish. Local proof cache is credited first, and
-  // publishProofEvent queues encrypted retries on failure before rethrowing.
-  // Await it so the cache/pending-publish write finishes before callers mark
-  // the mint quote claimed.
-  await publishProofEvent(
+  // Await durability before callers mark the one-shot mint quote claimed.
+  const result = await publishProofEventBestEffort(
     nostr,
     signer,
     mintUrl,
     proofs,
     "in",
     amount.toString()
-  ).catch((err) => {
-    console.warn(
-      "[wallet-recovery] proof event publish failed; proofs are safe in local cache:",
-      err
-    );
-  });
+  );
+  if (!result.published && !result.queued) {
+    throw new Error("Cashu proofs could not be published or queued");
+  }
 }
 
 export async function publishProofEventBestEffort(
@@ -54,18 +50,23 @@ export async function publishProofEventBestEffort(
   direction: "in" | "out",
   amount: string,
   deletedEventsArray?: string[]
-): Promise<void> {
-  await publishProofEvent(
-    nostr,
-    signer,
-    mintUrl,
-    proofs,
-    direction,
-    amount,
-    deletedEventsArray
-  ).catch((err) => {
+): Promise<{ published: boolean; queued: boolean }> {
+  try {
+    const result = await publishProofEvent(
+      nostr,
+      signer,
+      mintUrl,
+      proofs,
+      direction,
+      amount,
+      deletedEventsArray,
+      { throwOnFailure: false }
+    );
+    return result;
+  } catch (err) {
     console.warn("[wallet-recovery] proof event publish failed:", err);
-  });
+    return { published: false, queued: false };
+  }
 }
 
 /**

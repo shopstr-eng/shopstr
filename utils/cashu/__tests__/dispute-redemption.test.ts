@@ -148,7 +148,9 @@ describe("combineAndRedeem", () => {
       "https://mint.example",
       freshProofs,
       "in",
-      "20"
+      "20",
+      undefined,
+      { throwOnFailure: false }
     );
   });
 

@@ -20,9 +20,9 @@ import {
 import {
   getCachedCashuProofs,
   getLocalStorageData,
-  publishProofEvent,
   setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEventBestEffort } from "@/utils/cashu/wallet-recovery";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   Mint as CashuMint,
@@ -202,7 +202,8 @@ const PayButton = () => {
         },
         ...history,
       ]);
-      await publishProofEvent(
+      setCachedCashuProofs(proofArray);
+      await publishProofEventBestEffort(
         nostr!,
         signer!,
         mints[0]!,
@@ -211,7 +212,6 @@ const PayButton = () => {
         transactionAmount.toString(),
         deletedEventIds
       );
-      setCachedCashuProofs(proofArray);
       setIsPaid(true);
       setIsRedeeming(false);
       handleTogglePayModal();

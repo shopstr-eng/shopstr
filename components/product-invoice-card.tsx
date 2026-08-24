@@ -58,6 +58,7 @@ import {
 } from "@/utils/cashu/pending-mint-operations";
 import {
   recoverProofsToBuyerWallet,
+  publishProofEventBestEffort,
   withDeadline,
   isTimeoutError,
 } from "@/utils/cashu/wallet-recovery";
@@ -69,7 +70,6 @@ import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
   getCachedCashuProofs,
   getLocalStorageData,
-  publishProofEvent,
   setCachedCashuProofs,
   getSavedAddresses,
 } from "@/utils/nostr/nostr-helper-functions";
@@ -1993,7 +1993,8 @@ export default function ProductInvoiceCard({
         },
         ...currentHistory,
       ]);
-      await publishProofEvent(
+      setCachedCashuProofs(proofArray);
+      await publishProofEventBestEffort(
         nostr!,
         signer!,
         mints[0]!,
@@ -2002,7 +2003,6 @@ export default function ProductInvoiceCard({
         serverAmount.toString(),
         deletedEventIds
       );
-      setCachedCashuProofs(proofArray);
       setCashuPaymentSent(true);
       setPaymentConfirmed(true);
     } catch {

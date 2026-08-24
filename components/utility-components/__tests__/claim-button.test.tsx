@@ -539,7 +539,9 @@ describe("ClaimButton — non-P2PK token (regression)", () => {
         "https://testmint.com",
         [mockProof],
         "in",
-        "100"
+        "100",
+        undefined,
+        { throwOnFailure: false }
       )
     );
     expect(mockSetCachedCashuProofs).toHaveBeenCalledWith([mockProof]);
@@ -685,7 +687,9 @@ describe("ClaimButton — P2PK receive path", () => {
         "https://testmint.com",
         [mockFreshProof],
         "in",
-        "100"
+        "100",
+        undefined,
+        { throwOnFailure: false }
       )
     );
     // Original locked proof must not be published
@@ -1015,7 +1019,9 @@ describe("ClaimButton — P2PK refund path", () => {
         "https://testmint.com",
         [mockFreshProof],
         "in",
-        "100"
+        "100",
+        undefined,
+        { throwOnFailure: false }
       )
     );
   });

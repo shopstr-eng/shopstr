@@ -19,10 +19,10 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   getCachedCashuProofs,
   getLocalStorageData,
-  publishProofEvent,
   publishWalletEvent,
   setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEventBestEffort } from "@/utils/cashu/wallet-recovery";
 import {
   Mint as CashuMint,
   Wallet as CashuWallet,
@@ -112,7 +112,7 @@ const ReceiveButton = () => {
       },
       ...history,
     ]);
-    await publishProofEvent(
+    await publishProofEventBestEffort(
       nostr!,
       signer!,
       tokenMint,

@@ -57,6 +57,7 @@ import {
   getDefaultMint,
   getDefaultRelays,
   getLatestLocalContactListEvent,
+  getPendingCashuProofPublishes,
   getLocalStorageData,
   getLocalUserProfileKey,
   isProfileContentPopulated,
@@ -3091,6 +3092,66 @@ describe("publishProofEvent", () => {
     await expect(
       publishProofEvent(nostr as any, signer as any, mint, proofs, "in", "100")
     ).rejects.toThrow("Signer unavailable");
+  });
+
+  it("durably queues an outbound proof update when publishing fails", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn() };
+    (cacheEventToDatabase as jest.Mock).mockRejectedValueOnce(
+      new Error("cache unavailable")
+    );
+
+    const result = await publishProofEvent(
+      nostr as any,
+      signer as any,
+      mint,
+      proofs,
+      "out",
+      "100",
+      ["old-proof-event-id"],
+      { throwOnFailure: false }
+    );
+
+    expect(result).toMatchObject({ published: false, queued: true });
+    expect(getPendingCashuProofPublishes()).toEqual([
+      expect.objectContaining({
+        mint,
+        direction: "out",
+        deletedEventsArray: ["old-proof-event-id"],
+      }),
+    ]);
+  });
+
+  it("reports when neither publishing nor encrypted queuing succeeds", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn() };
+    (cacheEventToDatabase as jest.Mock).mockRejectedValueOnce(
+      new Error("cache unavailable")
+    );
+    const setItemSpy = jest
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation((key) => {
+        if (key === "shopstr.pendingProofPublishes") {
+          throw new Error("storage unavailable");
+        }
+      });
+
+    try {
+      await expect(
+        publishProofEvent(
+          nostr as any,
+          signer as any,
+          mint,
+          proofs,
+          "in",
+          "100",
+          undefined,
+          { throwOnFailure: false }
+        )
+      ).resolves.toMatchObject({ published: false, queued: false });
+    } finally {
+      setItemSpy.mockRestore();
+    }
   });
 });
 

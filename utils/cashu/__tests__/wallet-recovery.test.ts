@@ -36,7 +36,10 @@ describe("recoverProofsToBuyerWallet", () => {
     helpers.setCachedCashuProofs.mockReset();
     helpers.getCachedCashuProofs.mockReturnValue([]);
     helpers.getLocalStorageData.mockReturnValue({ tokens: [], history: [] });
-    helpers.publishProofEvent.mockResolvedValue(undefined);
+    helpers.publishProofEvent.mockResolvedValue({
+      published: true,
+      queued: false,
+    });
   });
 
   it("appends proofs to the volatile proof cache and writes a history entry", async () => {
@@ -92,8 +95,11 @@ describe("recoverProofsToBuyerWallet", () => {
     expect(window.localStorage.getItem("tokens")).toBeNull();
   });
 
-  it("does not throw when proof event publish fails", async () => {
-    helpers.publishProofEvent.mockRejectedValueOnce(new Error("relay down"));
+  it("does not throw when a failed proof event is durably queued", async () => {
+    helpers.publishProofEvent.mockResolvedValueOnce({
+      published: false,
+      queued: true,
+    });
     await expect(
       recoverProofsToBuyerWallet(
         {} as never,
@@ -110,9 +116,10 @@ describe("recoverProofsToBuyerWallet", () => {
   });
 
   it("waits for proof publish handling before resolving", async () => {
-    let resolvePublish: (() => void) | undefined;
+    let resolvePublish:
+      ((result: { published: boolean; queued: boolean }) => void) | undefined;
     helpers.publishProofEvent.mockReturnValueOnce(
-      new Promise<void>((resolve) => {
+      new Promise<{ published: boolean; queued: boolean }>((resolve) => {
         resolvePublish = resolve;
       })
     );
@@ -131,7 +138,7 @@ describe("recoverProofsToBuyerWallet", () => {
     await Promise.resolve();
     expect(settled).toBe(false);
 
-    resolvePublish?.();
+    resolvePublish?.({ published: true, queued: false });
     await recoveryPromise;
 
     expect(settled).toBe(true);

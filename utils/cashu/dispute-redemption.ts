@@ -6,7 +6,7 @@ import {
   signP2PKProof,
 } from "@cashu/cashu-ts";
 import { verifyEvent } from "nostr-tools";
-import { publishProofEvent } from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEventBestEffort } from "@/utils/cashu/wallet-recovery";
 import { NostrEvent, NostrManager } from "@/utils/nostr/nostr-manager";
 import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import {
@@ -148,7 +148,7 @@ export async function combineAndRedeem(params: {
       storage.setJson(STORAGE_KEYS.MINTS, [...mints, tokenMint]);
     }
 
-    await publishProofEvent(
+    await publishProofEventBestEffort(
       nostr,
       signer,
       tokenMint,

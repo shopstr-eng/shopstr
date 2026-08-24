@@ -330,6 +330,42 @@ describe("PayButton Component", () => {
     ]);
   });
 
+  test("keeps the updated wallet state when proof publication fails", async () => {
+    const mockInvoice = "lnbc100n...";
+    const changeProofs = [
+      { id: "00d0a1b24d1c1a53", amount: 20, secret: "change_secret" },
+    ];
+
+    mockCreateMeltQuote.mockResolvedValue({ amount: 100, fee_reserve: 2 });
+    mockGetKeySets.mockResolvedValue([{ id: "00d0a1b24d1c1a53" }]);
+    mockSend.mockResolvedValue({
+      keep: [{ id: "00d0a1b24d1c1a53", amount: 10, secret: "keep_secret" }],
+      send: [{ id: "00d0a1b24d1c1a53", amount: 102, secret: "send_secret" }],
+    });
+    mockMeltProofs.mockResolvedValue({ paid: true, change: changeProofs });
+    (publishProofEvent as jest.Mock).mockRejectedValue(
+      new Error("cache unavailable")
+    );
+
+    renderComponent();
+    fireEvent.click(screen.getByRole("button", { name: /pay/i }));
+    fireEvent.change(await screen.findByLabelText("Lightning invoice"), {
+      target: { value: mockInvoice },
+    });
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Pay" })
+    );
+
+    await waitFor(() => {
+      expect(setCachedCashuProofs).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ secret: "keep_secret" }),
+          expect.objectContaining({ secret: "change_secret" }),
+        ])
+      );
+    });
+  });
+
   test("handles a failed payment flow", async () => {
     const mockInvoice = "lnbc100n...";
     mockCreateMeltQuote.mockResolvedValue({ amount: 100, fee_reserve: 2 });

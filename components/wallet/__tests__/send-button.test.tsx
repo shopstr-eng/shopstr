@@ -229,7 +229,8 @@ describe("SendButton", () => {
       [],
       "out",
       "100",
-      expect.any(Array)
+      expect.any(Array),
+      { throwOnFailure: false }
     );
   });
 

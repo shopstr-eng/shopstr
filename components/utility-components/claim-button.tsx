@@ -23,10 +23,10 @@ import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
   getCachedCashuProofs,
   getLocalStorageData,
-  publishProofEvent,
   publishWalletEvent,
   setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEventBestEffort } from "@/utils/cashu/wallet-recovery";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -521,7 +521,8 @@ export default function ClaimButton({
         const freshProofs = await wallet!.receive(proofs, {
           privkey: cashuPrivkey,
         });
-        await publishProofEvent(
+        setCachedCashuProofs([...tokens, ...freshProofs]);
+        await publishProofEventBestEffort(
           nostr!,
           signer!,
           tokenMint,
@@ -529,7 +530,6 @@ export default function ClaimButton({
           "in",
           tokenAmount.toString()
         );
-        setCachedCashuProofs([...tokens, ...freshProofs]);
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           storage.setJson(STORAGE_KEYS.MINTS, updatedMints);
@@ -579,7 +579,9 @@ export default function ClaimButton({
           setIsRedeeming(false);
           return;
         }
-        await publishProofEvent(
+        const tokenArray = [...tokens, ...uniqueProofs];
+        setCachedCashuProofs(tokenArray);
+        await publishProofEventBestEffort(
           nostr!,
           signer!,
           tokenMint,
@@ -587,8 +589,6 @@ export default function ClaimButton({
           "in",
           tokenAmount.toString()
         );
-        const tokenArray = [...tokens, ...uniqueProofs];
-        setCachedCashuProofs(tokenArray);
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           storage.setJson(STORAGE_KEYS.MINTS, updatedMints);

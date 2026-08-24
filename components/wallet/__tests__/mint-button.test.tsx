@@ -120,7 +120,10 @@ describe("MintButton Component", () => {
     mockGetLocalStorageData.mockReturnValue(mockLocalStorage);
     mockGetStoredMints.mockReturnValue(mockLocalStorage.mints);
     mockToDataURL.mockResolvedValue("data:image/png;base64,mock-qr-code");
-    mockPublishProofEvent.mockResolvedValue(undefined);
+    mockPublishProofEvent.mockResolvedValue({
+      published: true,
+      queued: false,
+    });
     mockSetCachedCashuProofs.mockReturnValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText: jest.fn().mockResolvedValue(undefined) },
@@ -218,6 +221,29 @@ describe("MintButton Component", () => {
       expect(mockSetCachedCashuProofs).toHaveBeenCalledWith(mockProofs);
       expect(screen.getByText("Payment confirmed!")).toBeVisible();
     });
+  });
+
+  it("does not finalize a mint when proofs cannot be published or queued", async () => {
+    mockCreateMintQuote.mockResolvedValue({
+      request: "lnbc1...",
+      quote: "durability_hash",
+    });
+    mockCheckMintQuote.mockResolvedValueOnce({ state: "PAID" });
+    mockMintProofs.mockResolvedValue([{ id: "proof1" }]);
+    mockPublishProofEvent.mockRejectedValue(new Error("storage unavailable"));
+
+    renderComponent();
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
+    fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
+      target: { value: "100" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("failure-modal")).toBeVisible();
+    });
+    expect(screen.queryByText("Payment confirmed!")).not.toBeInTheDocument();
   });
 
   it("should handle payment timeout", async () => {

@@ -423,7 +423,9 @@ describe("ReceiveButton", () => {
       "https://testmint.com",
       [freshProof],
       "in",
-      "10"
+      "10",
+      undefined,
+      { throwOnFailure: false }
     );
   });
 

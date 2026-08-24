@@ -208,7 +208,7 @@ const MintButton = () => {
         );
         if (proofs && proofs.length > 0) {
           creditProofsToLocalWallet(proofs, invoiceAmount, 3);
-          await publishProofEventBestEffort(
+          const proofPersistence = await publishProofEventBestEffort(
             nostr!,
             signer!,
             mints[0]!,
@@ -216,6 +216,9 @@ const MintButton = () => {
             "in",
             invoiceAmount.toString()
           );
+          if (!proofPersistence.published && !proofPersistence.queued) {
+            throw new Error("Cashu proofs could not be published or queued");
+          }
           markMintQuoteClaimed(hash);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);

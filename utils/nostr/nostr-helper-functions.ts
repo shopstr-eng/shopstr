@@ -486,8 +486,12 @@ export async function publishProofEvent(
   direction: "in" | "out",
   amount: string,
   deletedEventsArray?: string[],
-  options: { queueOnFailure?: boolean } = {}
-) {
+  options: { queueOnFailure?: boolean; throwOnFailure?: boolean } = {}
+): Promise<{
+  published: boolean;
+  queued: boolean;
+  event?: NostrEvent;
+}> {
   try {
     const userPubkey = await signer?.getPubKey?.();
 
@@ -523,26 +527,29 @@ export async function publishProofEvent(
       signedEvent && signedEvent.id ? signedEvent.id : "",
       deletedEventsArray
     );
-    return signedEvent;
+    return { published: true, queued: false, event: signedEvent };
   } catch (error) {
+    let queued = false;
     if (
       options.queueOnFailure !== false &&
-      direction === "in" &&
-      proofs.length > 0
+      (proofs.length > 0 || (deletedEventsArray?.length ?? 0) > 0)
     ) {
-      await queuePendingCashuProofPublish(signer, {
-        mint,
-        proofs,
-        direction,
-        amount,
-        deletedEventsArray,
-        lastErrorMessage:
-          error instanceof Error ? error.message : String(error),
-      }).catch((queueError) =>
-        console.warn("Failed to queue Cashu proof publish retry:", queueError)
-      );
+      try {
+        queued = await queuePendingCashuProofPublish(signer, {
+          mint,
+          proofs,
+          direction,
+          amount,
+          deletedEventsArray,
+          lastErrorMessage:
+            error instanceof Error ? error.message : String(error),
+        });
+      } catch (queueError) {
+        console.warn("Failed to queue Cashu proof publish retry:", queueError);
+      }
     }
-    throw error;
+    if (options.throwOnFailure !== false) throw error;
+    return { published: false, queued };
   }
 }
 
@@ -1003,7 +1010,10 @@ const writePendingCashuProofPublishes = (
     return;
   }
 
-  storage.setJson(STORAGE_KEYS.PENDING_CASHU_PROOF_PUBLISHES, pendingPublishes);
+  storage.setItem(
+    STORAGE_KEYS.PENDING_CASHU_PROOF_PUBLISHES,
+    JSON.stringify(pendingPublishes)
+  );
 };
 
 export const getPendingCashuProofPublishes = () =>
@@ -1026,11 +1036,16 @@ export async function queuePendingCashuProofPublish(
     deletedEventsArray?: string[];
     lastErrorMessage?: string;
   }
-) {
-  if (typeof window === "undefined" || proofs.length === 0) return;
+): Promise<boolean> {
+  if (
+    typeof window === "undefined" ||
+    (proofs.length === 0 && (deletedEventsArray?.length ?? 0) === 0)
+  ) {
+    return false;
+  }
 
   const proofKeys = proofs.map(getProofKey).filter(Boolean) as string[];
-  if (proofKeys.length === 0) return;
+  if (proofs.length > 0 && proofKeys.length === 0) return false;
 
   const userPubkey = await signer.getPubKey();
   const encryptedProofs = await signer.encrypt(
@@ -1038,11 +1053,15 @@ export async function queuePendingCashuProofPublish(
     JSON.stringify(proofs)
   );
   const pendingPublishes = readPendingCashuProofPublishes();
+  const deletedEventIds = deletedEventsArray ?? [];
   const existingIndex = pendingPublishes.findIndex(
     (publish) =>
       publish.mint === mint &&
       publish.direction === direction &&
-      publish.proofKeys.some((proofKey) => proofKeys.includes(proofKey))
+      (publish.proofKeys.some((proofKey) => proofKeys.includes(proofKey)) ||
+        (publish.deletedEventsArray ?? []).some((eventId) =>
+          deletedEventIds.includes(eventId)
+        ))
   );
 
   const nextPublish: PendingCashuProofPublish = {
@@ -1072,6 +1091,7 @@ export async function queuePendingCashuProofPublish(
   }
 
   writePendingCashuProofPublishes(pendingPublishes);
+  return true;
 }
 
 export async function retryPendingCashuProofPublishes(
@@ -1100,12 +1120,16 @@ export async function retryPendingCashuProofPublishes(
         Array.isArray(parsedProofs) ? parsedProofs.filter(isCashuProofLike) : []
       );
 
-      if (proofs.length === 0) {
+      const hasDeletedEvents =
+        (pendingPublish.deletedEventsArray?.length ?? 0) > 0;
+      if (proofs.length === 0 && !hasDeletedEvents) {
         result.recovered++;
         continue;
       }
 
-      setCachedCashuProofs([...getCachedCashuProofs(), ...proofs]);
+      if (proofs.length > 0) {
+        setCachedCashuProofs([...getCachedCashuProofs(), ...proofs]);
+      }
       await publishProofEvent(
         nostr,
         signer,

@@ -25,9 +25,9 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   getCachedCashuProofs,
   getLocalStorageData,
-  publishProofEvent,
   setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEventBestEffort } from "@/utils/cashu/wallet-recovery";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 import {
   Mint as CashuMint,
@@ -155,7 +155,8 @@ const SendButton = () => {
         { type: 2, amount: numSats, date: Math.floor(Date.now() / 1000) },
         ...history,
       ]);
-      await publishProofEvent(
+      setCachedCashuProofs(proofArray);
+      await publishProofEventBestEffort(
         nostr!,
         signer!,
         mints[0]!,
@@ -164,7 +165,6 @@ const SendButton = () => {
         sendTotal.toString(),
         deletedEventIds
       );
-      setCachedCashuProofs(proofArray);
     } catch {
       setSendFailed(true);
     }
