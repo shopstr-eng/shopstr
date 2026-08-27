@@ -2,6 +2,9 @@ const applyRateLimitMock = jest.fn();
 const verifyNip98RequestMock = jest.fn();
 const registerHodlEscrowOrderMock = jest.fn();
 const fetchProductByIdFromDbMock = jest.fn();
+const fetchProductByDTagAndPubkeyMock = jest.fn();
+const validateDiscountCodeMock = jest.fn();
+const getSatoshiValueMock = jest.fn();
 const createHoldInvoiceMock = jest.fn();
 const getHodlInvoiceProviderMock = jest.fn();
 
@@ -29,7 +32,25 @@ jest.mock("@/utils/db/db-service", () => {
       registerHodlEscrowOrderMock(...args),
     fetchProductByIdFromDb: (...args: unknown[]) =>
       fetchProductByIdFromDbMock(...args),
+    fetchProductByDTagAndPubkey: (...args: unknown[]) =>
+      fetchProductByDTagAndPubkeyMock(...args),
+    validateDiscountCode: (...args: unknown[]) =>
+      validateDiscountCodeMock(...args),
   };
+});
+
+// Exchange-rate lookup used by the server-side re-pricing for non-sats
+// listings. Sats-denominated fixtures never reach it.
+jest.mock("@getalby/lightning-tools", () => ({
+  getSatoshiValue: (...args: unknown[]) => getSatoshiValueMock(...args),
+}));
+
+// Pulled in transitively by listing-resolution -> mint-retry-service. Only the
+// error classes are referenced at module load; nothing here is exercised.
+jest.mock("@cashu/cashu-ts", () => {
+  class HttpResponseError extends Error {}
+  class RateLimitError extends Error {}
+  return { HttpResponseError, RateLimitError };
 });
 
 jest.mock("@/utils/lightning/hodl-invoice-provider-registry", () => ({
@@ -49,7 +70,51 @@ const ARBITER_PUBKEY = "a".repeat(64);
 const PRODUCT_ID = "d".repeat(64);
 const INVOICE = "lnbc420n1pjexample";
 
-const validBody = { productId: PRODUCT_ID, amountSats: 42 };
+/**
+ * A listing event the real parser accepts. Priced in sats so the server-side
+ * re-pricing is fully deterministic and the client amount must match exactly.
+ */
+function makeProductEvent(
+  overrides: {
+    priceTag?: string[];
+    currency?: string;
+    extraTags?: string[][];
+  } = {}
+) {
+  const priceTag = overrides.priceTag ?? [
+    "price",
+    "42",
+    overrides.currency ?? "sats",
+  ];
+  return {
+    id: PRODUCT_ID,
+    pubkey: SELLER_PUBKEY,
+    created_at: 1,
+    kind: 30402,
+    content: "",
+    sig: "sig",
+    tags: [
+      ["title", "Escrow listing"],
+      ["d", "hodl-listing-d"],
+      priceTag,
+      ...(overrides.extraTags ?? []),
+    ],
+  };
+}
+
+/** Points both the id lookup and the d-tag re-resolution at one event. */
+function setListing(event: unknown) {
+  fetchProductByIdFromDbMock.mockResolvedValue(event);
+  fetchProductByDTagAndPubkeyMock.mockResolvedValue(event);
+}
+
+// amountSats matches makeProductEvent()'s 42-sat price; formType is always
+// present in a real checkout (the mint-quote call would 400 without it).
+const validBody = {
+  productId: PRODUCT_ID,
+  amountSats: 42,
+  formType: "contact" as const,
+};
 
 function createResponse() {
   return {
@@ -95,15 +160,12 @@ describe("/api/db/register-hodl-order", () => {
       ok: true,
       pubkey: BUYER_PUBKEY,
     });
-    fetchProductByIdFromDbMock.mockResolvedValue({
-      id: PRODUCT_ID,
-      pubkey: SELLER_PUBKEY,
-      kind: 30402,
-      tags: [],
-      content: "",
-      created_at: 1,
-      sig: "sig",
+    setListing(makeProductEvent());
+    validateDiscountCodeMock.mockResolvedValue({
+      valid: true,
+      discount_percentage: 10,
     });
+    getSatoshiValueMock.mockResolvedValue(0);
     createHoldInvoiceMock.mockImplementation(
       async ({ paymentHash }: { paymentHash: string }) => ({
         invoice: INVOICE,
@@ -435,6 +497,22 @@ describe("/api/db/register-hodl-order", () => {
     ["a fractional amount", { productId: PRODUCT_ID, amountSats: 1.5 }],
     ["a string amount", { productId: PRODUCT_ID, amountSats: "42" }],
     ["a missing amount", { productId: PRODUCT_ID }],
+    [
+      "an unknown form type",
+      { productId: PRODUCT_ID, amountSats: 42, formType: "bogus" },
+    ],
+    [
+      "a zero bulk tier",
+      { productId: PRODUCT_ID, amountSats: 42, selectedBulkOption: 0 },
+    ],
+    [
+      "a fractional bulk tier",
+      { productId: PRODUCT_ID, amountSats: 42, selectedBulkOption: 1.5 },
+    ],
+    [
+      "a blank discount code",
+      { productId: PRODUCT_ID, amountSats: 42, discountCode: "   " },
+    ],
     ["an array body", []],
     ["a null body", null],
   ])("rejects %s", async (_label, body) => {
@@ -445,5 +523,286 @@ describe("/api/db/register-hodl-order", () => {
     expect(res.statusCode).toBe(400);
     expect(createHoldInvoiceMock).not.toHaveBeenCalled();
     expect(registerHodlEscrowOrderMock).not.toHaveBeenCalled();
+  });
+
+  describe("server-side amount enforcement", () => {
+    it("registers when the client amount matches the authoritative price", async () => {
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(201);
+      // Re-priced from the listing, not taken on the buyer's word.
+      expect(fetchProductByDTagAndPubkeyMock).toHaveBeenCalledWith(
+        "hodl-listing-d",
+        SELLER_PUBKEY,
+        { rethrow: true }
+      );
+      expect(createHoldInvoiceMock).toHaveBeenCalledWith(
+        expect.objectContaining({ amountSats: 42 })
+      );
+    });
+
+    it("rejects a tampered amount and creates no invoice or row", async () => {
+      const res = createResponse();
+
+      await handler(
+        createRequest({ ...validBody, amountSats: 41 }),
+        res as any
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toEqual({
+        error: "Amount does not match the current listing price",
+      });
+      expect(createHoldInvoiceMock).not.toHaveBeenCalled();
+      expect(registerHodlEscrowOrderMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects a 1-sat amount against an expensive listing", async () => {
+      setListing(makeProductEvent({ priceTag: ["price", "100000", "sats"] }));
+      const res = createResponse();
+
+      await handler(createRequest({ ...validBody, amountSats: 1 }), res as any);
+
+      expect(res.statusCode).toBe(400);
+      expect(createHoldInvoiceMock).not.toHaveBeenCalled();
+      expect(registerHodlEscrowOrderMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects an inflated amount against a cheap listing", async () => {
+      setListing(makeProductEvent({ priceTag: ["price", "10", "sats"] }));
+      const res = createResponse();
+
+      await handler(
+        createRequest({ ...validBody, amountSats: 1_000_000 }),
+        res as any
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(createHoldInvoiceMock).not.toHaveBeenCalled();
+      expect(registerHodlEscrowOrderMock).not.toHaveBeenCalled();
+    });
+
+    it("cannot be bypassed by calling the route directly without a price quote", async () => {
+      // No mint-quote round trip, just a hand-rolled body with a chosen
+      // amount. The enforcement runs regardless of how the request was formed.
+      setListing(makeProductEvent({ priceTag: ["price", "5000", "sats"] }));
+      const res = createResponse();
+
+      await handler(
+        createRequest({
+          productId: PRODUCT_ID,
+          amountSats: 3,
+          formType: "contact",
+        }),
+        res as any
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(createHoldInvoiceMock).not.toHaveBeenCalled();
+      expect(registerHodlEscrowOrderMock).not.toHaveBeenCalled();
+    });
+
+    it("applies the same discount math the checkout quote uses", async () => {
+      setListing(makeProductEvent({ priceTag: ["price", "100", "sats"] }));
+      validateDiscountCodeMock.mockResolvedValue({
+        valid: true,
+        discount_percentage: 10,
+      });
+
+      const accepted = createResponse();
+      await handler(
+        createRequest({
+          ...validBody,
+          amountSats: 90,
+          discountCode: "SAVE10",
+        }),
+        accepted as any
+      );
+
+      expect(accepted.statusCode).toBe(201);
+      expect(validateDiscountCodeMock).toHaveBeenCalledWith(
+        "SAVE10",
+        SELLER_PUBKEY,
+        { rethrow: true }
+      );
+      expect(createHoldInvoiceMock).toHaveBeenCalledWith(
+        expect.objectContaining({ amountSats: 90 })
+      );
+
+      // The undiscounted amount no longer matches once a valid code is applied.
+      jest.clearAllMocks();
+      applyRateLimitMock.mockReturnValue(true);
+      verifyNip98RequestMock.mockResolvedValue({
+        ok: true,
+        pubkey: BUYER_PUBKEY,
+      });
+      setListing(makeProductEvent({ priceTag: ["price", "100", "sats"] }));
+      validateDiscountCodeMock.mockResolvedValue({
+        valid: true,
+        discount_percentage: 10,
+      });
+      getHodlInvoiceProviderMock.mockReturnValue({
+        createHoldInvoice: createHoldInvoiceMock,
+      });
+
+      const rejected = createResponse();
+      await handler(
+        createRequest({
+          ...validBody,
+          amountSats: 100,
+          discountCode: "SAVE10",
+        }),
+        rejected as any
+      );
+
+      expect(rejected.statusCode).toBe(400);
+      expect(createHoldInvoiceMock).not.toHaveBeenCalled();
+    });
+
+    it("prices the selected bulk tier, not the base price", async () => {
+      setListing(
+        makeProductEvent({
+          priceTag: ["price", "100", "sats"],
+          extraTags: [["bulk", "3", "250"]],
+        })
+      );
+
+      const accepted = createResponse();
+      await handler(
+        createRequest({ ...validBody, amountSats: 250, selectedBulkOption: 3 }),
+        accepted as any
+      );
+
+      expect(accepted.statusCode).toBe(201);
+      expect(createHoldInvoiceMock).toHaveBeenCalledWith(
+        expect.objectContaining({ amountSats: 250 })
+      );
+
+      jest.clearAllMocks();
+      applyRateLimitMock.mockReturnValue(true);
+      verifyNip98RequestMock.mockResolvedValue({
+        ok: true,
+        pubkey: BUYER_PUBKEY,
+      });
+      setListing(
+        makeProductEvent({
+          priceTag: ["price", "100", "sats"],
+          extraTags: [["bulk", "3", "250"]],
+        })
+      );
+      getHodlInvoiceProviderMock.mockReturnValue({
+        createHoldInvoice: createHoldInvoiceMock,
+      });
+
+      const rejected = createResponse();
+      await handler(
+        createRequest({ ...validBody, amountSats: 100, selectedBulkOption: 3 }),
+        rejected as any
+      );
+
+      expect(rejected.statusCode).toBe(400);
+      expect(createHoldInvoiceMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid discount code before any invoice exists", async () => {
+      setListing(makeProductEvent({ priceTag: ["price", "100", "sats"] }));
+      validateDiscountCodeMock.mockResolvedValue({ valid: false });
+      const res = createResponse();
+
+      await handler(
+        createRequest({
+          ...validBody,
+          amountSats: 90,
+          discountCode: "NOPE",
+        }),
+        res as any
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toEqual({ error: "Invalid discount code" });
+      expect(createHoldInvoiceMock).not.toHaveBeenCalled();
+    });
+
+    describe("fiat-denominated listings", () => {
+      const usdListing = () =>
+        makeProductEvent({ priceTag: ["price", "10", "USD"] });
+
+      it("accepts an exact match to the fresh server conversion", async () => {
+        setListing(usdListing());
+        getSatoshiValueMock.mockResolvedValue(20000);
+        const res = createResponse();
+
+        await handler(
+          createRequest({ ...validBody, amountSats: 20000 }),
+          res as any
+        );
+
+        expect(res.statusCode).toBe(201);
+        expect(getSatoshiValueMock).toHaveBeenCalledWith({
+          amount: 10,
+          currency: "USD",
+        });
+      });
+
+      it("tolerates exchange-rate drift within max(2 sats, 1%)", async () => {
+        setListing(usdListing());
+        getSatoshiValueMock.mockResolvedValue(20000);
+        const res = createResponse();
+
+        // 150 sats below a 20000-sat conversion — inside the 200-sat band.
+        await handler(
+          createRequest({ ...validBody, amountSats: 19850 }),
+          res as any
+        );
+
+        expect(res.statusCode).toBe(201);
+      });
+
+      it("rejects drift beyond the tolerance band", async () => {
+        setListing(usdListing());
+        getSatoshiValueMock.mockResolvedValue(20000);
+        const res = createResponse();
+
+        // 500 sats off — outside the 200-sat band.
+        await handler(
+          createRequest({ ...validBody, amountSats: 19500 }),
+          res as any
+        );
+
+        expect(res.statusCode).toBe(400);
+        expect(createHoldInvoiceMock).not.toHaveBeenCalled();
+        expect(registerHodlEscrowOrderMock).not.toHaveBeenCalled();
+      });
+    });
+
+    it("re-prices the latest listing event, not a stale one", async () => {
+      fetchProductByIdFromDbMock.mockResolvedValue(
+        makeProductEvent({ priceTag: ["price", "42", "sats"] })
+      );
+      // The d-tag re-resolution finds a newer, more expensive event.
+      fetchProductByDTagAndPubkeyMock.mockResolvedValue(
+        makeProductEvent({ priceTag: ["price", "999", "sats"] })
+      );
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(400);
+      expect(createHoldInvoiceMock).not.toHaveBeenCalled();
+    });
+
+    it("re-prices before generating a preimage or invoice", async () => {
+      setListing(makeProductEvent({ priceTag: ["price", "500", "sats"] }));
+      const res = createResponse();
+
+      await handler(createRequest({ ...validBody, amountSats: 5 }), res as any);
+
+      expect(res.statusCode).toBe(400);
+      // The order of operations matters: nothing downstream of validation ran.
+      expect(createHoldInvoiceMock).not.toHaveBeenCalled();
+      expect(registerHodlEscrowOrderMock).not.toHaveBeenCalled();
+    });
   });
 });

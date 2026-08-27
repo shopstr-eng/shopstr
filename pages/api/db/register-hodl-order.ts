@@ -14,6 +14,12 @@ import {
   fetchProductByIdFromDb,
   registerHodlEscrowOrder,
 } from "@/utils/db/db-service";
+import {
+  assertClientAmountMatchesAuthoritative,
+  resolveListingOrderAmount,
+} from "@/utils/payments/listing-order-amount";
+import { PricingValidationError } from "@/utils/payments/listing-pricing";
+import { ListingNotFoundError } from "@/utils/payments/listing-resolution";
 
 const RATE_LIMIT = { limit: 30, windowMs: 60 * 1000 };
 const HEX_32_BYTE = /^[0-9a-f]{64}$/i;
@@ -23,8 +29,9 @@ const PREIMAGE_BYTES = 32;
 // instead of guessing at whatever backend happens to be installed.
 const INVOICE_EXPIRY_SECONDS = 60 * 60;
 
-// The buyer supplies which listing and how much; nothing else. Every field
-// the commitment binds an identity to is derived server-side:
+// The buyer supplies which listing, how much, and which price-affecting
+// selections were made; nothing else. Every field the commitment binds an
+// identity to is derived server-side:
 //   buyer   — the NIP-98 signature on this request
 //   seller  — the signer of the listing event
 //   arbiter — ARBITER_NOSTR_PUBKEY
@@ -32,16 +39,43 @@ const INVOICE_EXPIRY_SECONDS = 60 * 60;
 // A body naming any of those is either a stale client or an attempt to choose
 // one, so unknown keys are rejected rather than ignored: silently dropping
 // `arbiterNostrPubkey` would hand back a 201 for a row the caller did not ask
-// for. The amount is the buyer's own money to lock, and the seller sees the
-// invoice amount before parting with goods, so it is safe to take on their
-// word.
+// for.
+//
+// `amountSats` is NOT taken on the buyer's word. It is an untrusted claim: the
+// handler re-prices the listing from `productId` plus the selection fields
+// below — through the same server-side pricing path `/api/listing/mint-quote`
+// uses — and rejects the request before any invoice exists if the claim does
+// not match. The selection fields exist only to feed that recomputation; they
+// are the same inputs the checkout mint-quote call already sends.
 type HodlOrderRequestBody = {
   /** Nostr event id of the listing (kind 30402), 32 bytes of hex. */
   productId: string;
   amountSats: number;
+  formType?: "shipping" | "contact";
+  selectedSize?: string;
+  selectedVolume?: string;
+  selectedWeight?: string;
+  selectedBulkOption?: number;
+  discountCode?: string;
 };
 
-const ALLOWED_BODY_KEYS = new Set(["productId", "amountSats"]);
+const ALLOWED_BODY_KEYS = new Set([
+  "productId",
+  "amountSats",
+  "formType",
+  "selectedSize",
+  "selectedVolume",
+  "selectedWeight",
+  "selectedBulkOption",
+  "discountCode",
+]);
+
+/** An optional body field that, when present, must be a non-empty string. */
+function readOptionalString(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || value.trim() === "") return null;
+  return value;
+}
 
 function parseRequestBody(body: unknown): HodlOrderRequestBody | null {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
@@ -51,7 +85,7 @@ function parseRequestBody(body: unknown): HodlOrderRequestBody | null {
     if (!ALLOWED_BODY_KEYS.has(key)) return null;
   }
 
-  const value = body as Partial<HodlOrderRequestBody>;
+  const value = body as Record<string, unknown>;
   if (
     typeof value.productId !== "string" ||
     !HEX_32_BYTE.test(value.productId)
@@ -66,9 +100,47 @@ function parseRequestBody(body: unknown): HodlOrderRequestBody | null {
     return null;
   }
 
+  if (
+    value.formType !== undefined &&
+    value.formType !== "shipping" &&
+    value.formType !== "contact"
+  ) {
+    return null;
+  }
+
+  const selectedSize = readOptionalString(value.selectedSize);
+  const selectedVolume = readOptionalString(value.selectedVolume);
+  const selectedWeight = readOptionalString(value.selectedWeight);
+  const discountCode = readOptionalString(value.discountCode);
+  if (
+    selectedSize === null ||
+    selectedVolume === null ||
+    selectedWeight === null ||
+    discountCode === null
+  ) {
+    return null;
+  }
+
+  if (
+    value.selectedBulkOption !== undefined &&
+    (typeof value.selectedBulkOption !== "number" ||
+      !Number.isSafeInteger(value.selectedBulkOption) ||
+      value.selectedBulkOption < 1)
+  ) {
+    return null;
+  }
+
   return {
     productId: value.productId.toLowerCase(),
     amountSats: value.amountSats,
+    ...(value.formType !== undefined && { formType: value.formType }),
+    ...(selectedSize !== undefined && { selectedSize }),
+    ...(selectedVolume !== undefined && { selectedVolume }),
+    ...(selectedWeight !== undefined && { selectedWeight }),
+    ...(value.selectedBulkOption !== undefined && {
+      selectedBulkOption: value.selectedBulkOption,
+    }),
+    ...(discountCode !== undefined && { discountCode }),
   };
 }
 
@@ -124,6 +196,30 @@ async function resolveSellerFromListing(
   }
 
   return { ok: true, sellerNostrPubkey: listing.pubkey.toLowerCase() };
+}
+
+/**
+ * Maps a failure from the server-side re-pricing step to a response, using the
+ * wording this route already uses elsewhere. {@link PricingValidationError}
+ * carries a safe, user-facing message — a bad selection, an invalid discount,
+ * or the amount mismatch itself — so it is returned as-is. Every other error
+ * is treated as internal and its message is never sent to the client.
+ */
+function respondForPricingError(res: NextApiResponse, error: unknown) {
+  if (error instanceof PricingValidationError) {
+    return res.status(400).json({ error: error.message });
+  }
+  if (error instanceof ListingNotFoundError) {
+    return res.status(404).json({ error: "Listing not found" });
+  }
+  if (error instanceof DatabaseUnavailableError) {
+    return res.status(503).json({
+      error: DATABASE_UNAVAILABLE_RESPONSE.error,
+      reason: DATABASE_UNAVAILABLE_RESPONSE.reason,
+    });
+  }
+  console.error("Failed to re-price hodl escrow order:", error);
+  return res.status(500).json({ error: "Failed to price the escrow order" });
 }
 
 export default async function handler(
@@ -192,6 +288,30 @@ export default async function handler(
     return res
       .status(400)
       .json({ error: "Escrow requires a distinct buyer, seller, and arbiter" });
+  }
+
+  // amountSats is the buyer's claim, not an input we act on. Re-price the
+  // listing here — through the same server-side path `/api/listing/mint-quote`
+  // uses — and reject before any invoice exists if the claim does not match.
+  // This runs regardless of how the request was formed, so a caller that skips
+  // the checkout UI and posts an arbitrary amount is rejected exactly like one
+  // that tampered with the UI's value.
+  try {
+    const authoritative = await resolveListingOrderAmount(body.productId, {
+      formType: body.formType,
+      selectedSize: body.selectedSize,
+      selectedVolume: body.selectedVolume,
+      selectedWeight: body.selectedWeight,
+      selectedBulkOption: body.selectedBulkOption,
+      discountCode: body.discountCode,
+    });
+    assertClientAmountMatchesAuthoritative({
+      requestedAmountSats: body.amountSats,
+      authoritativeAmountSats: authoritative.amountSats,
+      currency: authoritative.pricing.currency,
+    });
+  } catch (error) {
+    return respondForPricingError(res, error);
   }
 
   // 32 CSPRNG bytes, generated server-side and never sent anywhere. This is

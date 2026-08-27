@@ -1,19 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getSatoshiValue } from "@getalby/lightning-tools";
 import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
-import { validateDiscountCode } from "@/utils/db/db-service";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
-import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
-import {
-  computeListingPricing,
-  parseSelectedBulkOption,
-  PricingValidationError,
-} from "@/utils/payments/listing-pricing";
 import type { ListingOrderFormType } from "@/utils/payments/listing-pricing";
-import {
-  resolveLatestListing,
-  respondWithQuoteRouteError,
-} from "@/utils/payments/listing-resolution";
+import { resolveListingOrderAmount } from "@/utils/payments/listing-order-amount";
+import { respondWithQuoteRouteError } from "@/utils/payments/listing-resolution";
 import { applyRateLimit } from "@/utils/rate-limit";
 import { getTrustedMintUrl } from "@/utils/cashu/trusted-mints";
 
@@ -29,20 +19,6 @@ type MintQuoteRequest = {
   discountCode?: string;
   priceOnly?: boolean;
 };
-
-async function convertListingTotalToSats(total: number, currency: string) {
-  const normalizedCurrency = currency.toLowerCase();
-  if (normalizedCurrency === "sats" || normalizedCurrency === "sat") {
-    return toCashuMintAmountSats(total);
-  }
-
-  const sats = await getSatoshiValue({
-    amount: total,
-    currency,
-  });
-
-  return toCashuMintAmountSats(sats);
-}
 
 export default async function handler(
   req: NextApiRequest,
@@ -74,34 +50,16 @@ export default async function handler(
   }
 
   try {
-    const product = await resolveLatestListing(productId);
-
-    let discountPercentage = 0;
-    if (discountCode?.trim()) {
-      const discountResult = await validateDiscountCode(
+    const { pricing, amountSats: amount } = await resolveListingOrderAmount(
+      productId,
+      {
+        formType: formType ?? undefined,
+        selectedSize,
+        selectedVolume,
+        selectedWeight,
+        selectedBulkOption,
         discountCode,
-        product.pubkey,
-        { rethrow: true }
-      );
-
-      if (!discountResult.valid || !discountResult.discount_percentage) {
-        throw new PricingValidationError("Invalid discount code");
       }
-
-      discountPercentage = discountResult.discount_percentage;
-    }
-
-    const pricing = computeListingPricing(product, {
-      formType,
-      selectedSize,
-      selectedVolume,
-      selectedWeight,
-      selectedBulkOption: parseSelectedBulkOption(selectedBulkOption),
-      discountPercentage,
-    });
-    const amount = await convertListingTotalToSats(
-      pricing.total,
-      pricing.currency
     );
     const mint = getTrustedMintUrl();
 

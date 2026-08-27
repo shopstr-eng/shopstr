@@ -76,20 +76,52 @@ export type HodlRequestError = Error & {
 };
 
 /**
+ * The price-affecting selections for a listing order. These are forwarded to
+ * the escrow route so it can recompute the authoritative amount server-side
+ * and reject an `amountSats` that does not match — the same inputs the
+ * checkout mint-quote call already sends.
+ */
+export type HodlOrderPricingInputs = {
+  formType?: "shipping" | "contact" | null;
+  selectedSize?: string;
+  selectedVolume?: string;
+  selectedWeight?: string;
+  selectedBulkOption?: number;
+  discountCode?: string;
+};
+
+/**
  * Registers a hold-invoice escrow order and returns the invoice to pay.
  *
  * The signer's identity *is* the buyer — the route reads it off the NIP-98
- * signature and there is no field to supply it. `amountSats` should come from
- * a server-validated price quote, not from a number computed in the browser:
- * this route does no option or discount validation of its own.
+ * signature and there is no field to supply it. `amountSats` is treated by the
+ * route as an untrusted claim: it re-prices the listing from the forwarded
+ * selection inputs and rejects the request if the two do not match, so the
+ * amount still cannot be chosen in the browser.
  */
 export async function registerHodlOrder(
   signer: NostrSigner,
-  params: { productId: string; amountSats: number }
+  params: { productId: string; amountSats: number } & HodlOrderPricingInputs
 ): Promise<RegisteredHodlOrder> {
   const body = JSON.stringify({
     productId: params.productId,
     amountSats: params.amountSats,
+    ...(params.formType != null && { formType: params.formType }),
+    ...(params.selectedSize !== undefined && {
+      selectedSize: params.selectedSize,
+    }),
+    ...(params.selectedVolume !== undefined && {
+      selectedVolume: params.selectedVolume,
+    }),
+    ...(params.selectedWeight !== undefined && {
+      selectedWeight: params.selectedWeight,
+    }),
+    ...(params.selectedBulkOption !== undefined && {
+      selectedBulkOption: params.selectedBulkOption,
+    }),
+    ...(params.discountCode !== undefined && {
+      discountCode: params.discountCode,
+    }),
   });
   const path = "/api/db/register-hodl-order";
   const url = `${window.location.origin}${path}`;
