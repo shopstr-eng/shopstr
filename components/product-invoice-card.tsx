@@ -1211,10 +1211,10 @@ export default function ProductInvoiceCard({
       setIsHodlCheckout(true);
       hodlPollRef.current = { cancelled: false };
 
-      // register-hodl-order takes the amount on the buyer's word and does no
-      // option or discount validation of its own, so the amount escrowed is
-      // repriced server-side first — the same guard the Cashu path applies
-      // before spending from the buyer's wallet.
+      // register-hodl-order treats amountSats as an untrusted claim: it
+      // re-prices the listing from the same selection inputs the mint-quote
+      // call uses and rejects a mismatch. Repricing here as well keeps the
+      // displayed-price tolerance check that guards against a stale listing.
       const priceQuote = await requestListingPriceQuote();
       const serverAmount = toCashuMintAmountSats(priceQuote.amount);
       assertServerAmountWithinTolerance(serverAmount, displayedAmount);
@@ -1222,7 +1222,16 @@ export default function ProductInvoiceCard({
 
       const { invoice: holdInvoice, paymentHash } = await registerHodlOrder(
         signer,
-        { productId: productData.id, amountSats: serverAmount }
+        {
+          productId: productData.id,
+          amountSats: serverAmount,
+          formType,
+          selectedSize,
+          selectedVolume,
+          selectedWeight,
+          selectedBulkOption,
+          discountCode,
+        }
       );
 
       setInvoice(holdInvoice);
