@@ -4,6 +4,24 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   finalizeAndSendNostrEvent: jest.fn().mockResolvedValue({ id: "event-id" }),
 }));
 
+// The wrap/unwrap crypto itself is exercised for real in
+// hodl-escrow-gift-wrap.test.ts. Here the transport is stubbed so these tests
+// stay about what this module hands it and what it does with the result.
+jest.mock("@/utils/nostr/gift-wrap", () => ({
+  createGiftWrapEvent: jest
+    .fn()
+    .mockImplementation(async (innerContent: string) => ({
+      id: "wrap-id",
+      kind: 1059,
+      pubkey: "ephemeral-wrap-pubkey",
+      created_at: 10,
+      tags: [["p", "arbiter-pubkey"]],
+      content: innerContent,
+      sig: "wrap-sig",
+    })),
+  sendGiftWrappedMessageEvent: jest.fn().mockResolvedValue(undefined),
+}));
+
 const verifyEventMock = jest.fn().mockReturnValue(true);
 jest.mock("nostr-tools", () => ({
   ...jest.requireActual("nostr-tools"),
@@ -11,6 +29,11 @@ jest.mock("nostr-tools", () => ({
 }));
 
 import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions";
+import {
+  createGiftWrapEvent,
+  sendGiftWrappedMessageEvent,
+} from "@/utils/nostr/gift-wrap";
+import { HODL_ESCROW_GIFT_WRAP_KIND } from "@/utils/nostr/hodl-escrow-gift-wrap";
 import {
   HODL_CONFIRM_EVENT_KIND,
   HODL_RELEASE_EVENT_KIND,
@@ -99,18 +122,22 @@ describe("createHodlConfirmEventTemplate", () => {
     expect(template.created_at).toBe(1234);
   });
 
-  it("carries an optional free-text note as the content", () => {
+  // This event stays world-readable so the settle path can authorize it, so
+  // the only safe amount of free text on it is none.
+  it("has no free-text content, and no parameter that could supply any", () => {
     const template = createHodlConfirmEventTemplate({
       paymentHash: PAYMENT_HASH,
-      note: "package arrived, thanks",
     });
-    expect(template.content).toBe("package arrived, thanks");
+    expect(template.content).toBe("");
+    expect(
+      "note" in
+        (createHodlConfirmEventTemplate as unknown as Record<string, unknown>)
+    ).toBe(false);
   });
 
   it("never emits a p tag or any tag naming a buyer", () => {
     const template = createHodlConfirmEventTemplate({
       paymentHash: PAYMENT_HASH,
-      note: "note",
     });
     const flattened = JSON.stringify(template.tags);
 
@@ -166,7 +193,6 @@ describe("publishHodlConfirmEvent", () => {
 
     await publishHodlConfirmEvent({
       paymentHash: PAYMENT_HASH,
-      note: "received",
       nostr,
       signer,
     });
@@ -179,7 +205,7 @@ describe("publishHodlConfirmEvent", () => {
     expect(calledSigner).toBe(signer);
     expect(calledNostr).toBe(nostr);
     expect(eventTemplate.kind).toBe(HODL_CONFIRM_EVENT_KIND);
-    expect(eventTemplate.content).toBe("received");
+    expect(eventTemplate.content).toBe("");
     expect(eventTemplate.tags).toEqual([["d", PAYMENT_HASH]]);
     expect(options).toEqual({
       waitForRelayPublish: true,
@@ -187,7 +213,7 @@ describe("publishHodlConfirmEvent", () => {
     });
   });
 
-  it("publishes an empty note when none is given", async () => {
+  it("publishes empty content, always", async () => {
     await publishHodlConfirmEvent({
       paymentHash: PAYMENT_HASH,
       nostr: {} as any,
@@ -225,7 +251,6 @@ describe("parseHodlConfirmEvent", () => {
     expect(parsed).toEqual({
       orderId: PAYMENT_HASH,
       authorPubkey: "signer-pubkey",
-      note: "arrived",
       createdAt: 4242,
     });
   });
@@ -239,11 +264,8 @@ describe("parseHodlConfirmEvent", () => {
     expect(Object.keys(parsed)).toEqual([
       "orderId",
       "authorPubkey",
-      "note",
       "createdAt",
     ]);
-    // Field *names* only: `note` is author-written free text and may contain
-    // any word at all, so it is the shape of the result that is under test.
     const keys = Object.keys(parsed).join(",").toLowerCase();
     for (const forbidden of ["buyer", "verified", "authorized", "trusted"]) {
       expect(keys).not.toContain(forbidden);
@@ -274,11 +296,17 @@ describe("parseHodlConfirmEvent", () => {
     expect(parsed?.orderId).toBe(PAYMENT_HASH);
   });
 
-  it("returns an empty note when the content is empty", () => {
+  // Content on a public confirmation can only be attacker-supplied text, so
+  // the parsed result deliberately has nowhere to put it.
+  it("never surfaces the event content, forged or otherwise", () => {
     const parsed = parseHodlConfirmEvent(
-      mkConfirmEvent({ content: "", tags: [["d", PAYMENT_HASH]] })
+      mkConfirmEvent({
+        content: "call me on 555-0100",
+        tags: [["d", PAYMENT_HASH]],
+      })
     );
-    expect(parsed?.note).toBe("");
+    expect(parsed).not.toBeNull();
+    expect(JSON.stringify(parsed)).not.toContain("555-0100");
   });
 
   it("rejects an event of the wrong kind", () => {
@@ -356,7 +384,6 @@ describe("parseHodlConfirmEvent", () => {
   it("round-trips a template built by createHodlConfirmEventTemplate", () => {
     const template = createHodlConfirmEventTemplate({
       paymentHash: PAYMENT_HASH,
-      note: "ok",
       createdAt: 999,
     });
     const parsed = parseHodlConfirmEvent(
@@ -369,7 +396,6 @@ describe("parseHodlConfirmEvent", () => {
     expect(parsed).toEqual({
       orderId: PAYMENT_HASH,
       authorPubkey: "signer",
-      note: "ok",
       createdAt: 999,
     });
   });
@@ -380,7 +406,6 @@ describe("createHodlReleaseEventTemplate", () => {
     const template = createHodlReleaseEventTemplate({
       paymentHash: PAYMENT_HASH,
       decision: "release:seller",
-      reasoning: "tracking shows delivery",
       createdAt: 555,
     });
 
@@ -389,7 +414,7 @@ describe("createHodlReleaseEventTemplate", () => {
       ["d", PAYMENT_HASH],
       ["decision", "release:seller"],
     ]);
-    expect(template.content).toBe("tracking shows delivery");
+    expect(template.content).toBe("");
     expect(template.created_at).toBe(555);
   });
 
@@ -419,7 +444,9 @@ describe("createHodlReleaseEventTemplate", () => {
     expect(template.tags.some((tag) => tag[0] === "p")).toBe(false);
   });
 
-  it("defaults reasoning to empty content", () => {
+  // The arbiter's account of somebody's dispute has no business on a public
+  // event, so the ruling carries the decision tag and nothing else.
+  it("has no free-text content, and no parameter that could supply any", () => {
     const template = createHodlReleaseEventTemplate({
       paymentHash: PAYMENT_HASH,
       decision: "release:buyer",
@@ -458,7 +485,6 @@ describe("publishHodlReleaseEvent", () => {
     await publishHodlReleaseEvent({
       paymentHash: PAYMENT_HASH,
       decision: "release:buyer",
-      reasoning: "no proof of shipment",
       buyerPubkey: "buyer-pubkey",
       sellerPubkey: "seller-pubkey",
       nostr,
@@ -472,7 +498,7 @@ describe("publishHodlReleaseEvent", () => {
     expect(calledSigner).toBe(signer);
     expect(calledNostr).toBe(nostr);
     expect(eventTemplate.kind).toBe(HODL_RELEASE_EVENT_KIND);
-    expect(eventTemplate.content).toBe("no proof of shipment");
+    expect(eventTemplate.content).toBe("");
     expect(eventTemplate.tags).toEqual([
       ["d", PAYMENT_HASH],
       ["decision", "release:buyer"],
@@ -499,7 +525,7 @@ describe("publishHodlReleaseEvent", () => {
 });
 
 describe("parseHodlReleaseEvent", () => {
-  it("returns the order id, decision, author pubkey and reasoning", () => {
+  it("returns the order id, decision, author pubkey and timestamp", () => {
     const parsed = parseHodlReleaseEvent(
       mkReleaseEvent({
         pubkey: "signer-pubkey",
@@ -512,13 +538,15 @@ describe("parseHodlReleaseEvent", () => {
       })
     );
 
+    // Content on a public ruling can only be attacker-supplied text; the
+    // parsed result deliberately has nowhere to put it.
     expect(parsed).toEqual({
       orderId: PAYMENT_HASH,
       decision: "release:buyer",
       authorPubkey: "signer-pubkey",
-      reasoning: "buyer never received it",
       createdAt: 777,
     });
+    expect(JSON.stringify(parsed)).not.toContain("buyer never received it");
   });
 
   it("exposes the signer only as authorPubkey, never as a trusted arbiter", () => {
@@ -536,11 +564,8 @@ describe("parseHodlReleaseEvent", () => {
       "orderId",
       "decision",
       "authorPubkey",
-      "reasoning",
       "createdAt",
     ]);
-    // Field *names* only: `reasoning` is arbiter-written free text and may say
-    // anything, so it is the shape of the result that must not imply trust.
     const keys = Object.keys(parsed).join(",").toLowerCase();
     expect(keys).not.toContain("arbiter");
     expect(keys).not.toContain("authorized");
@@ -623,7 +648,6 @@ describe("parseHodlReleaseEvent", () => {
     const template = createHodlReleaseEventTemplate({
       paymentHash: PAYMENT_HASH,
       decision: "release:seller",
-      reasoning: "delivered",
       createdAt: 321,
     });
     const parsed = parseHodlReleaseEvent(
@@ -637,7 +661,6 @@ describe("parseHodlReleaseEvent", () => {
       orderId: PAYMENT_HASH,
       decision: "release:seller",
       authorPubkey: "signer",
-      reasoning: "delivered",
       createdAt: 321,
     });
   });
@@ -689,7 +712,6 @@ describe("fetchHodlConfirmEvents", () => {
       {
         orderId: PAYMENT_HASH,
         authorPubkey: "author-a",
-        note: "got it",
         createdAt: 100,
       },
     ]);
@@ -717,7 +739,7 @@ describe("fetchHodlConfirmEvents", () => {
     });
 
     expect(results).toHaveLength(1);
-    expect(results[0]!.note).toBe("new");
+    expect(results[0]!.createdAt).toBe(200);
   });
 
   it("does not let a later event from another author hide an earlier one", async () => {
@@ -986,34 +1008,75 @@ describe("publishHodlDisputeEvent", () => {
     jest.clearAllMocks();
   });
 
-  it("signs and sends a kind 30410 event with the expected tags", async () => {
+  // Real 32-byte hex: the rumor is hashed with getEventHash, which rejects an
+  // event whose pubkey is not a well-formed key.
+  const ARBITER_HEX = "1a".repeat(32);
+  const DISPUTER_HEX = "2b".repeat(32);
+
+  it("gift wraps the dispute to the arbiter instead of publishing it in the clear", async () => {
     const nostr = {} as any;
     const signer = {} as any;
 
     await publishHodlDisputeEvent({
       paymentHash: PAYMENT_HASH,
-      arbiterPubkey: "arbiter-pubkey",
+      arbiterPubkey: ARBITER_HEX,
+      disputerPubkey: DISPUTER_HEX,
       description: "no tracking info provided",
       nostr,
       signer,
     });
 
-    expect(finalizeAndSendNostrEvent).toHaveBeenCalledTimes(1);
-    const [calledSigner, calledNostr, eventTemplate, options] = (
-      finalizeAndSendNostrEvent as jest.Mock
+    // Nothing signed and published in the open. This is the whole point:
+    // a plaintext kind 30410 is a permanent public record that this pubkey
+    // is fighting over this payment hash.
+    expect(finalizeAndSendNostrEvent).not.toHaveBeenCalled();
+
+    expect(createGiftWrapEvent).toHaveBeenCalledTimes(1);
+    const [innerContent, recipientPubkey, options] = (
+      createGiftWrapEvent as jest.Mock
     ).mock.calls[0]!;
 
-    expect(calledSigner).toBe(signer);
-    expect(calledNostr).toBe(nostr);
-    expect(eventTemplate.kind).toBe(HODL_DISPUTE_EVENT_KIND);
-    expect(eventTemplate.content).toBe("no tracking info provided");
-    expect(eventTemplate.tags).toEqual([
+    expect(recipientPubkey).toBe(ARBITER_HEX);
+    expect(options.signer).toBe(signer);
+
+    // The rumor is the real kind 30410, unsigned, carried inside the seal.
+    const rumor = JSON.parse(innerContent);
+    expect(rumor.kind).toBe(HODL_DISPUTE_EVENT_KIND);
+    expect(rumor.pubkey).toBe(DISPUTER_HEX);
+    expect(rumor.content).toBe("no tracking info provided");
+    expect(rumor.tags).toEqual([
       ["d", PAYMENT_HASH],
-      ["p", "arbiter-pubkey"],
+      ["p", ARBITER_HEX],
     ]);
+    expect(rumor.sig).toBeUndefined();
+    expect(typeof rumor.id).toBe("string");
+  });
+
+  it("sends the wrap durably and waits for relays", async () => {
+    const nostr = {} as any;
+    const signer = {} as any;
+
+    await publishHodlDisputeEvent({
+      paymentHash: PAYMENT_HASH,
+      arbiterPubkey: ARBITER_HEX,
+      disputerPubkey: DISPUTER_HEX,
+      nostr,
+      signer,
+    });
+
+    expect(sendGiftWrappedMessageEvent).toHaveBeenCalledTimes(1);
+    const [calledNostr, wrap, calledSigner, options] = (
+      sendGiftWrappedMessageEvent as jest.Mock
+    ).mock.calls[0]!;
+
+    expect(calledNostr).toBe(nostr);
+    expect(calledSigner).toBe(signer);
+    expect(wrap.kind).toBe(HODL_ESCROW_GIFT_WRAP_KIND);
+    // Kind 1059 is cacheable, unlike 30408/30409, and a dispute is the one
+    // message here nobody but its author can re-send.
     expect(options).toEqual({
       waitForRelayPublish: true,
-      requireDurableCache: false,
+      requireDurableCache: true,
     });
   });
 
@@ -1021,12 +1084,27 @@ describe("publishHodlDisputeEvent", () => {
     await expect(
       publishHodlDisputeEvent({
         paymentHash: "beef",
-        arbiterPubkey: "arbiter-pubkey",
+        arbiterPubkey: ARBITER_HEX,
+        disputerPubkey: DISPUTER_HEX,
         nostr: {} as any,
         signer: {} as any,
       })
     ).rejects.toThrow(/32 bytes of hex/);
-    expect(finalizeAndSendNostrEvent).not.toHaveBeenCalled();
+    expect(createGiftWrapEvent).not.toHaveBeenCalled();
+    expect(sendGiftWrappedMessageEvent).not.toHaveBeenCalled();
+  });
+
+  it("refuses to attribute a rumor to nobody", async () => {
+    await expect(
+      publishHodlDisputeEvent({
+        paymentHash: PAYMENT_HASH,
+        arbiterPubkey: ARBITER_HEX,
+        disputerPubkey: "",
+        nostr: {} as any,
+        signer: {} as any,
+      })
+    ).rejects.toThrow(/disputerPubkey is required/);
+    expect(sendGiftWrappedMessageEvent).not.toHaveBeenCalled();
   });
 });
 
@@ -1216,7 +1294,6 @@ describe("fetchHodlReleaseEvents", () => {
         orderId: PAYMENT_HASH,
         decision: "release:seller",
         authorPubkey: "arbiter-a",
-        reasoning: "delivery confirmed by tracking",
         createdAt: 100,
       },
     ]);
@@ -1334,54 +1411,108 @@ describe("fetchHodlDisputeEvents", () => {
     verifyEventMock.mockReturnValue(true);
   });
 
+  const ARBITER = "arbiter-pubkey";
+
   const mkNostr = (events: NostrEvent[]) => ({
     fetch: jest.fn().mockResolvedValue(events),
   });
 
-  it("queries relays by kind and the arbiter's pubkey", async () => {
+  // The stub decryptor treats the ciphertext as its own plaintext, so a wrap
+  // is built by nesting plain JSON. What the real NIP-44 layer does with
+  // those bytes is covered in hodl-escrow-gift-wrap.test.ts.
+  const decryptor = { decrypt: async (_pubkey: string, text: string) => text };
+
+  const mkWrap = (params: {
+    author: string;
+    createdAt?: number;
+    tags: string[][];
+    content?: string;
+    recipient?: string;
+    sealPubkey?: string;
+  }): NostrEvent => {
+    const rumor = {
+      id: "rumor-id",
+      pubkey: params.author,
+      created_at: params.createdAt ?? 100,
+      kind: HODL_DISPUTE_EVENT_KIND,
+      tags: params.tags,
+      content: params.content ?? "",
+    };
+    const seal = {
+      id: "seal-id",
+      // Defaults to the rumor's author, which is the honest case; a test that
+      // wants a mismatch overrides it.
+      pubkey: params.sealPubkey ?? params.author,
+      created_at: 5,
+      kind: 13,
+      tags: [],
+      content: JSON.stringify(rumor),
+      sig: "seal-sig",
+    };
+    return {
+      id: "wrap-id",
+      pubkey: "ephemeral-wrap-pubkey",
+      created_at: 7,
+      kind: HODL_ESCROW_GIFT_WRAP_KIND,
+      tags: [["p", params.recipient ?? ARBITER]],
+      content: JSON.stringify(seal),
+      sig: "wrap-sig",
+    } as unknown as NostrEvent;
+  };
+
+  it("queries relays for gift wraps addressed to the arbiter, not for plaintext disputes", async () => {
     const nostr = mkNostr([]);
 
     await fetchHodlDisputeEvents({
       nostr: nostr as any,
-      arbiterPubkey: "arbiter-pubkey",
+      arbiterPubkey: ARBITER,
+      decryptor,
       timeoutMs: 3000,
     });
 
     expect(nostr.fetch).toHaveBeenCalledWith(
-      [{ kinds: [HODL_DISPUTE_EVENT_KIND], "#p": ["arbiter-pubkey"] }],
+      [
+        {
+          kinds: [HODL_ESCROW_GIFT_WRAP_KIND],
+          "#p": [ARBITER],
+          limit: expect.any(Number),
+        },
+      ],
       undefined,
       undefined,
       3000
     );
+    // The old plaintext kind is never asked for again.
+    const [[filters]] = nostr.fetch.mock.calls;
+    expect(filters[0].kinds).not.toContain(HODL_DISPUTE_EVENT_KIND);
   });
 
   it("is read-only discovery: forged and garbage entries are returned without erroring", async () => {
     // Nothing here is a trust decision — this proves the function does not
-    // gate its result on any of these being genuine.
+    // gate its result on any of these being genuine. Anyone can gift wrap a
+    // dispute rumor to a published arbiter pubkey.
     const nostr = mkNostr([
-      // Well-formed, but signed by a total stranger and tagging an arbiter
-      // pubkey it has no relationship to.
-      mkDisputeEvent({
-        pubkey: "forger-pubkey",
-        created_at: 100,
+      mkWrap({
+        author: "forger-pubkey",
+        createdAt: 100,
         content: "fabricated complaint",
         tags: [
           ["d", PAYMENT_HASH],
-          ["p", "arbiter-pubkey"],
+          ["p", ARBITER],
         ],
       }),
       // Garbage: no d tag at all.
-      mkDisputeEvent({
-        pubkey: "garbage-pubkey",
-        tags: [["p", "arbiter-pubkey"]],
+      mkWrap({
+        author: "garbage-pubkey",
+        tags: [["p", ARBITER]],
       }),
       // A forged role tag claiming to be the buyer's dispute.
-      mkDisputeEvent({
-        pubkey: "another-forger",
-        created_at: 200,
+      mkWrap({
+        author: "another-forger",
+        createdAt: 200,
         tags: [
           ["d", OTHER_PAYMENT_HASH],
-          ["p", "arbiter-pubkey"],
+          ["p", ARBITER],
           ["role", "buyer"],
         ],
       }),
@@ -1389,38 +1520,119 @@ describe("fetchHodlDisputeEvents", () => {
 
     const results = await fetchHodlDisputeEvents({
       nostr: nostr as any,
-      arbiterPubkey: "arbiter-pubkey",
+      arbiterPubkey: ARBITER,
+      decryptor,
     });
 
-    // The malformed (no d tag) event is dropped by parseHodlDisputeEvent, but
-    // the two well-formed-though-forged events pass straight through: this
-    // function does not check who published them or whether they belong to a
-    // real order. That is left to a later authorization step.
+    // The malformed (no d tag) rumor is dropped by parseHodlDisputeEvent, but
+    // the two well-formed-though-forged ones pass straight through: this
+    // function does not check who sealed them or whether they belong to a
+    // real order. That is left to evaluateHodlDisputeActionability.
     expect(results).toHaveLength(2);
     expect(results.map((r) => r.authorPubkey).sort()).toEqual([
       "another-forger",
       "forger-pubkey",
     ]);
+    expect(results.some((r) => r.description === "fabricated complaint")).toBe(
+      true
+    );
   });
 
-  it("drops events whose signature does not verify", async () => {
+  it("drops a wrap whose seal signature does not verify", async () => {
     verifyEventMock.mockReturnValue(false);
     const nostr = mkNostr([
-      mkDisputeEvent({
-        pubkey: "author-a",
+      mkWrap({
+        author: "author-a",
         tags: [
           ["d", PAYMENT_HASH],
-          ["p", "arbiter-pubkey"],
+          ["p", ARBITER],
         ],
       }),
     ]);
 
     const results = await fetchHodlDisputeEvents({
       nostr: nostr as any,
-      arbiterPubkey: "arbiter-pubkey",
+      arbiterPubkey: ARBITER,
+      decryptor,
     });
 
     expect(results).toEqual([]);
+  });
+
+  it("drops a rumor attributed to someone other than the key that sealed it", async () => {
+    // The rumor is unsigned, so without the pubkey binding a sender could
+    // seal a complaint and pin it on the counterparty.
+    const nostr = mkNostr([
+      mkWrap({
+        author: "claimed-victim",
+        sealPubkey: "actual-sender",
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["p", ARBITER],
+        ],
+      }),
+    ]);
+
+    const results = await fetchHodlDisputeEvents({
+      nostr: nostr as any,
+      arbiterPubkey: ARBITER,
+      decryptor,
+    });
+
+    expect(results).toEqual([]);
+  });
+
+  it("drops a wrap that was addressed to somebody else", async () => {
+    const nostr = mkNostr([
+      mkWrap({
+        author: "author-a",
+        recipient: "some-other-pubkey",
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["p", ARBITER],
+        ],
+      }),
+    ]);
+
+    const results = await fetchHodlDisputeEvents({
+      nostr: nostr as any,
+      arbiterPubkey: ARBITER,
+      decryptor,
+    });
+
+    expect(results).toEqual([]);
+  });
+
+  it("survives a wrap this key cannot decrypt without losing the rest", async () => {
+    const failing = {
+      ...mkWrap({ author: "x", tags: [] }),
+      id: "undecryptable",
+    };
+    const nostr = mkNostr([
+      failing,
+      mkWrap({
+        author: "author-a",
+        createdAt: 100,
+        tags: [
+          ["d", PAYMENT_HASH],
+          ["p", ARBITER],
+        ],
+      }),
+    ]);
+    const pickyDecryptor = {
+      decrypt: async (_pubkey: string, text: string) => {
+        if (text.includes('"pubkey":"x"')) throw new Error("cannot decrypt");
+        return text;
+      },
+    };
+
+    const results = await fetchHodlDisputeEvents({
+      nostr: nostr as any,
+      arbiterPubkey: ARBITER,
+      decryptor: pickyDecryptor,
+    });
+
+    expect(results.map((r) => r.authorPubkey)).toEqual(["author-a"]);
   });
 
   it("returns nothing and does not query for a missing arbiter pubkey", async () => {
@@ -1429,6 +1641,7 @@ describe("fetchHodlDisputeEvents", () => {
     const results = await fetchHodlDisputeEvents({
       nostr: nostr as any,
       arbiterPubkey: "",
+      decryptor,
     });
 
     expect(results).toEqual([]);
@@ -1441,7 +1654,8 @@ describe("fetchHodlDisputeEvents", () => {
     await expect(
       fetchHodlDisputeEvents({
         nostr: nostr as any,
-        arbiterPubkey: "arbiter-pubkey",
+        arbiterPubkey: ARBITER,
+        decryptor,
       })
     ).rejects.toMatchObject({
       name: "HodlRelayUnavailableError",
@@ -1455,34 +1669,36 @@ describe("fetchHodlDisputeEvents", () => {
     await expect(
       fetchHodlDisputeEvents({
         nostr: nostr as any,
-        arbiterPubkey: "arbiter-pubkey",
+        arbiterPubkey: ARBITER,
+        decryptor,
       })
     ).resolves.toEqual([]);
   });
 
   it("sorts newest first", async () => {
     const nostr = mkNostr([
-      mkDisputeEvent({
-        pubkey: "author-a",
-        created_at: 100,
+      mkWrap({
+        author: "author-a",
+        createdAt: 100,
         tags: [
           ["d", PAYMENT_HASH],
-          ["p", "arbiter-pubkey"],
+          ["p", ARBITER],
         ],
       }),
-      mkDisputeEvent({
-        pubkey: "author-b",
-        created_at: 300,
+      mkWrap({
+        author: "author-b",
+        createdAt: 300,
         tags: [
           ["d", OTHER_PAYMENT_HASH],
-          ["p", "arbiter-pubkey"],
+          ["p", ARBITER],
         ],
       }),
     ]);
 
     const results = await fetchHodlDisputeEvents({
       nostr: nostr as any,
-      arbiterPubkey: "arbiter-pubkey",
+      arbiterPubkey: ARBITER,
+      decryptor,
     });
 
     expect(results.map((r) => r.createdAt)).toEqual([300, 100]);
