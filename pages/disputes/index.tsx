@@ -103,7 +103,10 @@ function DisputesDashboard() {
   }, [isArbiter, nostr, signer, arbiterPubkey, userPubkey]);
 
   useEffect(() => {
-    if (!isArbiter || !nostr || !arbiterPubkey) {
+    // The signer is now load-bearing rather than incidental: hodl disputes
+    // arrive as NIP-59 gift wraps addressed to the arbiter, so without a key
+    // to decrypt them there is nothing to list.
+    if (!isArbiter || !nostr || !arbiterPubkey || !signer) {
       return;
     }
 
@@ -112,7 +115,14 @@ function DisputesDashboard() {
     const load = async () => {
       setIsLoadingHodl(true);
       try {
-        const parsed = await fetchHodlDisputeEvents({ nostr, arbiterPubkey });
+        const parsed = await fetchHodlDisputeEvents({
+          nostr,
+          arbiterPubkey,
+          // The arbiter's own signer is the decryptor. Being able to open a
+          // wrap says only that it was addressed here — the server still
+          // decides, on its own, whether any of these may move money.
+          decryptor: signer,
+        });
         if (cancelled) return;
         setHodlDisputes(parsed);
         setHodlLoadError(null);
@@ -138,7 +148,7 @@ function DisputesDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [isArbiter, nostr, arbiterPubkey]);
+  }, [isArbiter, nostr, arbiterPubkey, signer]);
 
   const handleRuled = (orderId: string) => {
     setDisputes((prev) => prev.filter((d) => d.orderId !== orderId));
@@ -216,9 +226,11 @@ function DisputesDashboard() {
       <h1 className="mb-2 text-2xl font-bold">Lightning Escrow Disputes</h1>
       <p className="mb-6 text-sm text-gray-500">
         Hold-invoice escrow. Ruling here settles or cancels the invoice
-        directly, moving the sats immediately. Anyone can publish a dispute
-        naming this arbiter, so treat each row as a claim — the server rejects
-        rulings on orders these keys are not party to.
+        directly, moving the sats immediately. These disputes reach you as
+        NIP-59 gift wraps and are decrypted locally with your key — nothing
+        below is readable on a relay. Anyone can still address a wrap to this
+        arbiter, so treat each row as a claim: the server rejects rulings on
+        orders these keys are not party to.
       </p>
       {isLoadingHodl ? (
         <Spinner size="lg" />

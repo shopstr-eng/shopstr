@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useState } from "react";
-import { Button, Spinner } from "@heroui/react";
+import { Button, Spinner, Textarea } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   NostrContext,
@@ -46,7 +46,7 @@ export default function HodlOrderActions({
   paymentHash,
   isSale,
 }: HodlOrderActionsProps) {
-  const { signer } = useContext(SignerContext);
+  const { signer, pubkey: userPubkey } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
   const [status, setStatus] = useState<HodlEscrowOrderStatus | null>(null);
@@ -58,6 +58,7 @@ export default function HodlOrderActions({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [disputeReason, setDisputeReason] = useState("");
 
   const arbiterPubkey = getClientArbiterNostrPubkey();
 
@@ -153,17 +154,25 @@ export default function HodlOrderActions({
     setActionError(null);
     setNotice(null);
     try {
-      if (!signer || !nostr) throw new Error("Signer not available.");
+      if (!signer || !nostr || !userPubkey) {
+        throw new Error("Signer not available.");
+      }
       if (!arbiterPubkey) throw new Error("No arbiter is configured.");
 
+      // The reason travels inside the NIP-59 wrap, never on a public event —
+      // publishHodlDisputeEvent gift wraps the whole dispute to the arbiter,
+      // so what reaches relays says nothing about this order or this user.
       await publishHodlDisputeEvent({
         paymentHash,
         arbiterPubkey,
+        disputerPubkey: userPubkey,
+        description: disputeReason.trim(),
         nostr,
         signer,
       });
 
       setPendingAction(null);
+      setDisputeReason("");
       setNotice(
         "Dispute raised. The arbiter can now review this order and release the funds either way."
       );
@@ -291,7 +300,17 @@ export default function HodlOrderActions({
         onCancel={() => {
           if (!isSubmitting) setPendingAction(null);
         }}
-      />
+      >
+        <Textarea
+          label="What went wrong?"
+          placeholder="Describe the problem for the arbiter."
+          value={disputeReason}
+          onValueChange={setDisputeReason}
+          isDisabled={isSubmitting}
+          minRows={3}
+          description="Encrypted to the arbiter with NIP-59. Relays only see an anonymous gift wrap — not this text, not the order, not your key."
+        />
+      </ConfirmationModal>
     </div>
   );
 }
