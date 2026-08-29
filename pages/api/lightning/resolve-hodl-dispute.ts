@@ -23,6 +23,10 @@ import {
   type HodlDisputeActionability,
 } from "@/utils/nostr/hodl-dispute-actionability";
 import {
+  getServerArbiterGiftWrapDecryptor,
+  HodlArbiterKeyUnavailableError,
+} from "@/utils/nostr/server-hodl-arbiter-decryptor";
+import {
   getHodlInvoiceProvider,
   HodlInvoiceProviderUnavailableError,
 } from "@/utils/lightning/hodl-invoice-provider-registry";
@@ -221,6 +225,17 @@ const UNAVAILABLE_RESPONSES = {
       "Could not reach relays to check for a dispute on this order. Please try again.",
     reason: "relay_unavailable" as const,
   },
+  // Disputes are NIP-59 gift wraps addressed to the arbiter, so without
+  // ARBITER_NOSTR_PRIVKEY this server cannot read one even when relays are
+  // healthy. A misconfiguration, not a verdict: falling through to the
+  // `no_actionable_dispute` 403 would tell an arbiter that the dispute they
+  // are looking at on their own dashboard does not exist.
+  arbiterKey: {
+    status: 503 as const,
+    error:
+      "Escrow dispute resolution is not configured on this server. Please try again later.",
+    reason: "arbiter_key_unavailable" as const,
+  },
 };
 
 // Any 64-character hex run that is not this order's payment hash. In a file
@@ -278,7 +293,16 @@ type DisputeGateOutcome =
  * `no_accepted_at` is a seller disputing an order whose funds were never
  * held; neither is grounds for refusing to look at the rest of the list.
  *
+ * Disputes reach relays as NIP-59 gift wraps, so this now decrypts before it
+ * can validate. That changes what the gate reads, not what it decides:
+ * unwrapping proves only that the arbiter's key could open the wrap and that
+ * some key sealed the rumor inside it, and every judgement below still rests
+ * on evaluateHodlDisputeActionability comparing that author against the
+ * commitment row. Decryption is not authorization.
+ *
  * @throws {HodlRelayUnavailableError} relays could not be reached.
+ * @throws {HodlArbiterKeyUnavailableError} the arbiter's key is not
+ * configured, so no wrap could be opened.
  * @throws {DatabaseUnavailableError} the commitment row could not be read.
  * @throws {HodlDisputeActionabilityError} with reason `no_such_order` only.
  */
@@ -287,15 +311,20 @@ async function requireActionableDispute(
 ): Promise<DisputeGateOutcome> {
   const { paymentHash, arbiterNostrPubkey } = release;
 
+  // Built before the fetch so a missing key fails as "we could not check"
+  // rather than as an empty candidate list.
+  const decryptor = getServerArbiterGiftWrapDecryptor();
+
   // The arbiter comes from the commitment row by way of the authorized
   // release, never from the request — the same anchor the ruling itself was
-  // just checked against.
+  // just checked against, and now also the key the wraps are opened with.
   let candidates: ParsedHodlDisputeEvent[];
   const nostr = createServerNostrManager();
   try {
     candidates = await fetchHodlDisputeEvents({
       nostr,
       arbiterPubkey: arbiterNostrPubkey,
+      decryptor,
       timeoutMs: RELAY_TIMEOUT_MS,
     });
   } finally {
@@ -655,6 +684,10 @@ export default async function handler(
     // saying no dispute exists.
     if (error instanceof HodlRelayUnavailableError) {
       const { status, ...body } = UNAVAILABLE_RESPONSES.disputeRelay;
+      return res.status(status).json(body);
+    }
+    if (error instanceof HodlArbiterKeyUnavailableError) {
+      const { status, ...body } = UNAVAILABLE_RESPONSES.arbiterKey;
       return res.status(status).json(body);
     }
     if (error instanceof DatabaseUnavailableError) {

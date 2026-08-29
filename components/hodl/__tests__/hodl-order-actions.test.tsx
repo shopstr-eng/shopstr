@@ -45,6 +45,24 @@ jest.mock("@heroui/react", () => {
         children
       ),
     Spinner: () => React.createElement("div", null, "Loading"),
+    Textarea: ({
+      label,
+      value,
+      onValueChange,
+      isDisabled,
+    }: {
+      label: string;
+      value: string;
+      onValueChange: (next: string) => void;
+      isDisabled?: boolean;
+    }) =>
+      React.createElement("textarea", {
+        "aria-label": label,
+        value,
+        disabled: isDisabled,
+        onChange: (event: { target: { value: string } }) =>
+          onValueChange(event.target.value),
+      }),
   };
 });
 
@@ -54,12 +72,14 @@ jest.mock("@/components/utility-components/confirmation-modal", () => {
     isOpen,
     title,
     confirmText,
+    children,
     onConfirm,
     onCancel,
   }: {
     isOpen: boolean;
     title: string;
     confirmText: string;
+    children?: any;
     onConfirm: () => void;
     onCancel: () => void;
   }) {
@@ -68,6 +88,7 @@ jest.mock("@/components/utility-components/confirmation-modal", () => {
       "div",
       { role: "dialog" },
       React.createElement("h2", null, title),
+      children,
       React.createElement(
         "button",
         { type: "button", onClick: onConfirm },
@@ -233,7 +254,39 @@ describe("HodlOrderActions", () => {
         expect.objectContaining({
           paymentHash: PAYMENT_HASH,
           arbiterPubkey: ARBITER_PUBKEY,
+          // The rumor is unsigned, so the publisher has to be told whose
+          // event it is; it comes from the signed-in identity, never a prop.
+          disputerPubkey: "1".repeat(64),
         })
+      )
+    );
+  });
+
+  // The reason exists at all because it is now safe to write one: it goes
+  // inside the NIP-59 wrap rather than onto a public relay event.
+  it("sends the typed reason to the arbiter with the dispute", async () => {
+    renderActions();
+    fireEvent.click(await screen.findByText("Raise Dispute"));
+    fireEvent.change(screen.getByLabelText("What went wrong?"), {
+      target: { value: "  box arrived empty  " },
+    });
+    fireEvent.click(screen.getByText("Raise Dispute (confirm)"));
+
+    await waitFor(() =>
+      expect(mockPublishHodlDisputeEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ description: "box arrived empty" })
+      )
+    );
+  });
+
+  it("still raises a dispute when no reason is given", async () => {
+    renderActions();
+    fireEvent.click(await screen.findByText("Raise Dispute"));
+    fireEvent.click(screen.getByText("Raise Dispute (confirm)"));
+
+    await waitFor(() =>
+      expect(mockPublishHodlDisputeEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ description: "" })
       )
     );
   });

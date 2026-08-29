@@ -7,6 +7,14 @@ import {
 } from "@/utils/nostr/nostr-manager";
 import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { finalizeAndSendNostrEvent } from "@/utils/nostr/nostr-helper-functions";
+import { sendGiftWrappedMessageEvent } from "@/utils/nostr/gift-wrap";
+import {
+  HODL_ESCROW_GIFT_WRAP_KIND,
+  MAX_GIFT_WRAP_CANDIDATES,
+  unwrapHodlEscrowRumors,
+  wrapHodlEscrowRumor,
+  type GiftWrapDecryptor,
+} from "@/utils/nostr/hodl-escrow-gift-wrap";
 
 // NOTE: 30408 and 30409 are the next two unassigned slots in the
 // parameterized-replaceable range after DISPUTE_EVENT_KIND (30407), continuing
@@ -43,8 +51,6 @@ export interface ParsedHodlConfirmEvent {
    * creation — which does not exist yet, and is not this module's job.
    */
   authorPubkey: string;
-  /** Optional free-text note from the signer. May be empty. */
-  note: string;
   createdAt: number;
 }
 
@@ -67,8 +73,6 @@ export interface ParsedHodlReleaseEvent {
    * a configured arbiter key.
    */
   authorPubkey: string;
-  /** The arbiter's human-readable reasoning. May be empty. */
-  reasoning: string;
   createdAt: number;
 }
 
@@ -188,19 +192,23 @@ async function fetchHodlEvents(params: {
  *
  * There is no `status` tag either — the existence of the event is the
  * confirmation. That keeps the parameterized-replaceable semantics honest:
- * republishing under the same `d` tag can only refresh the note, never
- * retract the confirmation into some "unconfirmed" state.
+ * republishing under the same `d` tag can only re-assert the confirmation,
+ * never retract it into some "unconfirmed" state.
+ *
+ * The content is always empty, and there is no parameter that could fill it.
+ * This event is world-readable — it has to be, because settle-hodl-invoice.ts
+ * reads it off relays and authorizes it against the order's committed buyer —
+ * so anything written here is published in the clear next to the payment hash
+ * and the buyer's own pubkey. Nothing about a confirmation needs saying in
+ * public; the settle path reads the `d` tag and the signature and nothing
+ * else. A note that a buyer genuinely wants the seller to see belongs in the
+ * gift-wrapped order DM thread the two of them already share.
  */
 export function createHodlConfirmEventTemplate(params: {
   paymentHash: string;
-  note?: string;
   createdAt?: number;
 }): EventTemplate {
-  const {
-    paymentHash,
-    note = "",
-    createdAt = Math.floor(Date.now() / 1000),
-  } = params;
+  const { paymentHash, createdAt = Math.floor(Date.now() / 1000) } = params;
 
   const orderId = normalizeOrderId(paymentHash);
   if (!orderId) {
@@ -212,7 +220,7 @@ export function createHodlConfirmEventTemplate(params: {
   return {
     kind: HODL_CONFIRM_EVENT_KIND,
     tags: [["d", orderId]],
-    content: note,
+    content: "",
     created_at: createdAt,
   };
 }
@@ -226,16 +234,12 @@ export function createHodlConfirmEventTemplate(params: {
 // until they are added to the cache policy; it does not block the publish.)
 export async function publishHodlConfirmEvent(params: {
   paymentHash: string;
-  note?: string;
   nostr: NostrManager;
   signer: NostrSigner;
 }): Promise<void> {
-  const { paymentHash, note, nostr, signer } = params;
+  const { paymentHash, nostr, signer } = params;
 
-  const event = createHodlConfirmEventTemplate({
-    paymentHash,
-    ...(note === undefined ? {} : { note }),
-  });
+  const event = createHodlConfirmEventTemplate({ paymentHash });
 
   await finalizeAndSendNostrEvent(signer, nostr, event, {
     waitForRelayPublish: true,
@@ -265,7 +269,6 @@ export function parseHodlConfirmEvent(
   return {
     orderId,
     authorPubkey: event.pubkey,
-    note: typeof event.content === "string" ? event.content : "",
     createdAt: event.created_at,
   };
 }
@@ -282,11 +285,18 @@ export function parseHodlConfirmEvent(
  * marker and {@link parseHodlReleaseEvent} deliberately does not return them,
  * because they are author-controlled strings: an event tagging a pubkey as
  * "buyer" is only that author's claim about who the buyer is.
+ *
+ * The content is always empty, and there is no parameter that could fill it.
+ * Like the confirmation, this event has to stay world-readable so
+ * resolve-hodl-dispute.ts can authorize it against the order's committed
+ * arbiter — which means free-text reasoning written here would publish the
+ * arbiter's account of somebody's dispute in the clear, next to the payment
+ * hash and both parties' pubkeys. The `decision` tag is the whole of what the
+ * server needs, and it is the whole of what this event says.
  */
 export function createHodlReleaseEventTemplate(params: {
   paymentHash: string;
   decision: HodlReleaseDecision;
-  reasoning?: string;
   buyerPubkey?: string;
   sellerPubkey?: string;
   createdAt?: number;
@@ -294,7 +304,6 @@ export function createHodlReleaseEventTemplate(params: {
   const {
     paymentHash,
     decision,
-    reasoning = "",
     buyerPubkey,
     sellerPubkey,
     createdAt = Math.floor(Date.now() / 1000),
@@ -322,7 +331,7 @@ export function createHodlReleaseEventTemplate(params: {
   return {
     kind: HODL_RELEASE_EVENT_KIND,
     tags,
-    content: reasoning,
+    content: "",
     created_at: createdAt,
   };
 }
@@ -332,26 +341,17 @@ export function createHodlReleaseEventTemplate(params: {
 export async function publishHodlReleaseEvent(params: {
   paymentHash: string;
   decision: HodlReleaseDecision;
-  reasoning?: string;
   buyerPubkey?: string;
   sellerPubkey?: string;
   nostr: NostrManager;
   signer: NostrSigner;
 }): Promise<void> {
-  const {
-    paymentHash,
-    decision,
-    reasoning,
-    buyerPubkey,
-    sellerPubkey,
-    nostr,
-    signer,
-  } = params;
+  const { paymentHash, decision, buyerPubkey, sellerPubkey, nostr, signer } =
+    params;
 
   const event = createHodlReleaseEventTemplate({
     paymentHash,
     decision,
-    ...(reasoning === undefined ? {} : { reasoning }),
     ...(buyerPubkey === undefined ? {} : { buyerPubkey }),
     ...(sellerPubkey === undefined ? {} : { sellerPubkey }),
   });
@@ -393,7 +393,6 @@ export function parseHodlReleaseEvent(
     orderId,
     decision: decision as HodlReleaseDecision,
     authorPubkey: event.pubkey,
-    reasoning: typeof event.content === "string" ? event.content : "",
     createdAt: event.created_at,
   };
 }
@@ -469,27 +468,74 @@ export function createHodlDisputeEventTemplate(params: {
   };
 }
 
-// Publishes a dispute. Same relay-only storage tradeoff as
-// publishHodlConfirmEvent above: kind 30410 is not in CACHEABLE_EVENT_KINDS,
-// so this waits for the relay publish rather than firing and forgetting.
+/**
+ * Publishes a dispute as a NIP-59 gift wrap addressed to the arbiter.
+ *
+ * The kind 30410 built above is never signed and never published in the
+ * clear. It becomes the *rumor* inside a kind 13 seal inside a kind 1059
+ * wrap, so what reaches relays is one event from a throwaway key with a `p`
+ * tag for the arbiter and an opaque NIP-44 blob. The payment hash, the
+ * disputing party's identity and the free-text reason are all inside that
+ * blob.
+ *
+ * That matters because the plaintext version was a permanent public record
+ * that a specific pubkey was fighting over a specific hold invoice. Both
+ * halves of that are linkable: the payment hash is on the buyer's and
+ * seller's own order DM, and the author pubkey is their Nostr identity. The
+ * only parties who need to read a dispute are the arbiter — who is the
+ * recipient — and the resolve endpoint, which reads it with the arbiter's own
+ * key (see server-hodl-arbiter-decryptor.ts). Nobody else has any business
+ * knowing the order was disputed at all.
+ *
+ * The seal is signed with the disputer's real identity key, so unwrapping
+ * yields a pubkey backed by a signature rather than a bare claim. That is the
+ * same standard of proof the public event's own signature gave, and it is
+ * still only a starting point: evaluateHodlDisputeActionability decides
+ * whether that key is a party to the order, and this function is not a
+ * substitute for it.
+ *
+ * Unlike the confirm and release publishes, this one requires a durable
+ * cache: kind 1059 IS in CACHEABLE_EVENT_KINDS, so a wrap that misses relays
+ * is still recoverable, and a dispute is the one message in this flow whose
+ * loss cannot be retried by anyone but the person who raised it.
+ */
 export async function publishHodlDisputeEvent(params: {
   paymentHash: string;
   arbiterPubkey: string;
+  disputerPubkey: string;
   description?: string;
   nostr: NostrManager;
   signer: NostrSigner;
 }): Promise<void> {
-  const { paymentHash, arbiterPubkey, description, nostr, signer } = params;
+  const {
+    paymentHash,
+    arbiterPubkey,
+    disputerPubkey,
+    description,
+    nostr,
+    signer,
+  } = params;
 
-  const event = createHodlDisputeEventTemplate({
+  if (typeof disputerPubkey !== "string" || disputerPubkey.length === 0) {
+    throw new Error("disputerPubkey is required to publish a dispute event");
+  }
+
+  const template = createHodlDisputeEventTemplate({
     paymentHash,
     arbiterPubkey,
     ...(description === undefined ? {} : { description }),
   });
 
-  await finalizeAndSendNostrEvent(signer, nostr, event, {
+  const giftWrap = await wrapHodlEscrowRumor({
+    template,
+    authorPubkey: disputerPubkey,
+    recipientPubkey: arbiterPubkey,
+    signer,
+  });
+
+  await sendGiftWrappedMessageEvent(nostr, giftWrap, signer, {
     waitForRelayPublish: true,
-    requireDurableCache: false,
+    requireDurableCache: true,
   });
 }
 
@@ -523,17 +569,23 @@ export function parseHodlDisputeEvent(
 }
 
 /**
- * Fetches every well-formed dispute event relays hold for an arbiter.
+ * Fetches every well-formed dispute rumor relays hold for an arbiter, by
+ * unwrapping the gift wraps addressed to them.
  *
- * This is read-only discovery for the arbiter's own dashboard, not
- * authorization, and nothing here decides anything about money: the results
- * may include garbage or forged entries — anyone can publish a kind 30410
- * event tagging any arbiter pubkey they like — and it is entirely expected
- * for this to return them without erroring. A caller that wants to act on a
- * dispute must still authorize the party raising it against the order's
- * committed buyer/seller, the same way {@link fetchHodlConfirmEvents}'
- * results require {@link authorizeHodlConfirmEventForOrder} before anything
- * downstream may trust them.
+ * `decryptor` is a required parameter with no default, and that is the point:
+ * disputes are NIP-59 wraps now, so a caller that cannot decrypt them cannot
+ * read them, and there is no code path that quietly falls back to reading a
+ * plaintext dispute off a relay. The arbiter's browser passes its signer; the
+ * resolve endpoint passes an adapter over ARBITER_NOSTR_PRIVKEY.
+ *
+ * This is read-only discovery, not authorization, and nothing here decides
+ * anything about money. Decrypting a wrap proves only that it was addressed
+ * to this key, and the seal signature proves only who sealed it — anyone may
+ * gift wrap a dispute rumor to the arbiter for any payment hash they have
+ * seen, and it is entirely expected for this to return such entries without
+ * erroring. A caller that wants to act on a dispute must still put the
+ * author through {@link evaluateHodlDisputeActionability} against the order's
+ * committed buyer/seller, exactly as before.
  *
  * @throws {HodlRelayUnavailableError} when relays could not be reached. An
  * empty array means relays answered and held nothing.
@@ -541,9 +593,10 @@ export function parseHodlDisputeEvent(
 export async function fetchHodlDisputeEvents(params: {
   nostr: NostrManager;
   arbiterPubkey: string;
+  decryptor: GiftWrapDecryptor;
   timeoutMs?: number;
 }): Promise<ParsedHodlDisputeEvent[]> {
-  const { nostr, arbiterPubkey, timeoutMs } = params;
+  const { nostr, arbiterPubkey, decryptor, timeoutMs } = params;
 
   if (typeof arbiterPubkey !== "string" || arbiterPubkey.length === 0) {
     return [];
@@ -551,16 +604,32 @@ export async function fetchHodlDisputeEvents(params: {
 
   const events = await fetchHodlEvents({
     nostr,
-    filter: { kinds: [HODL_DISPUTE_EVENT_KIND], "#p": [arbiterPubkey] },
+    // `limit` bounds the decrypt work a stranger can force: a `#p` filter on
+    // a published pubkey is open to the world, and every candidate costs a
+    // NIP-44 attempt. unwrapHodlEscrowRumors sorts newest-first before it
+    // applies its own cap, so old junk cannot crowd out a live dispute.
+    filter: {
+      kinds: [HODL_ESCROW_GIFT_WRAP_KIND],
+      "#p": [arbiterPubkey],
+      limit: MAX_GIFT_WRAP_CANDIDATES,
+    },
     timeoutMs,
     description: "look up disputes for this arbiter",
   });
 
-  const disputes: ParsedHodlDisputeEvent[] = [];
-  for (const event of events) {
-    if (!verifyEvent(event)) continue;
+  const rumors = await unwrapHodlEscrowRumors({
+    events,
+    recipientPubkey: arbiterPubkey,
+    decryptor,
+  });
 
-    const parsed = parseHodlDisputeEvent(event);
+  const disputes: ParsedHodlDisputeEvent[] = [];
+  for (const rumor of rumors) {
+    // No verifyEvent here, and none is missing: a rumor is unsigned by
+    // design. Its author was established by the seal signature that
+    // unwrapHodlEscrowRumors verified, plus the rumor.pubkey === seal.pubkey
+    // check that binds the two together.
+    const parsed = parseHodlDisputeEvent(rumor);
     if (!parsed) continue;
 
     disputes.push(parsed);

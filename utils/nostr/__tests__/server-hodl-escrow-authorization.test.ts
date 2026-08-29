@@ -35,7 +35,6 @@ const mkConfirm = (
 ): ParsedHodlConfirmEvent => ({
   orderId: PAYMENT_HASH,
   authorPubkey: BUYER,
-  note: "received",
   createdAt: 1700,
   ...overrides,
 });
@@ -46,7 +45,6 @@ const mkRelease = (
   orderId: PAYMENT_HASH,
   decision: "release:seller",
   authorPubkey: ARBITER,
-  reasoning: "goods delivered",
   createdAt: 1800,
   ...overrides,
 });

@@ -156,7 +156,6 @@ function releaseEvent(
     orderId: PAYMENT_HASH,
     decision: "release:seller",
     authorPubkey: ARBITER_PUBKEY,
-    reasoning: "tracking shows delivery",
     createdAt: 1_700_000_000,
     ...overrides,
   };
@@ -214,15 +213,32 @@ function loggedOutput(spy: jest.SpyInstance): string {
     .join("\n");
 }
 
+// Disputes reach relays as NIP-59 gift wraps addressed to the arbiter, so
+// the handler now builds a decryptor from the arbiter's own key before it can
+// look for one. The key is real (the decryptor validates its shape) but never
+// used here: fetchHodlDisputeEvents itself is mocked above, so what these
+// tests exercise is the gate's logic, exactly as before.
+const ARBITER_NOSTR_PRIVKEY = "3c".repeat(32);
+const originalArbiterPrivkey = process.env.ARBITER_NOSTR_PRIVKEY;
+
 describe("/api/lightning/resolve-hodl-dispute", () => {
   let consoleErrorSpy: jest.SpyInstance;
   let consoleLogSpy: jest.SpyInstance;
   let consoleWarnSpy: jest.SpyInstance;
   let callOrder: string[];
 
+  afterAll(() => {
+    if (originalArbiterPrivkey === undefined) {
+      delete process.env.ARBITER_NOSTR_PRIVKEY;
+    } else {
+      process.env.ARBITER_NOSTR_PRIVKEY = originalArbiterPrivkey;
+    }
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     callOrder = [];
+    process.env.ARBITER_NOSTR_PRIVKEY = ARBITER_NOSTR_PRIVKEY;
 
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     consoleLogSpy = jest.spyOn(console, "log").mockImplementation(() => {});
@@ -687,6 +703,7 @@ describe("/api/lightning/resolve-hodl-dispute", () => {
       // The arbiter comes from the commitment row, never from the request.
       expect(Object.keys(args).sort()).toEqual([
         "arbiterPubkey",
+        "decryptor",
         "nostr",
         "timeoutMs",
       ]);
@@ -940,6 +957,45 @@ describe("/api/lightning/resolve-hodl-dispute", () => {
       expectNothingMoved();
       // Both managers closed even though the second fetch threw.
       expect(nostrCloseMock).toHaveBeenCalledTimes(2);
+    });
+
+    // Disputes are NIP-59 wraps addressed to the arbiter, so a server without
+    // the arbiter's key cannot read one even when relays are healthy. Same
+    // discipline as the outage above: a misconfiguration must not come back
+    // as "nobody disputed this order".
+    it("returns 503, not 403, when the arbiter's key is not configured", async () => {
+      delete process.env.ARBITER_NOSTR_PRIVKEY;
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(503);
+      expect(res.jsonBody).toEqual({
+        error:
+          "Escrow dispute resolution is not configured on this server. Please try again later.",
+        reason: "arbiter_key_unavailable",
+      });
+      expect(JSON.stringify(res.jsonBody)).not.toContain(
+        "no_actionable_dispute"
+      );
+      // Nothing was even looked up: the key is built before the fetch.
+      expect(fetchHodlDisputeEventsMock).not.toHaveBeenCalled();
+      expectNothingMoved();
+    });
+
+    it("never puts the arbiter's key in a log line when it is malformed", async () => {
+      process.env.ARBITER_NOSTR_PRIVKEY = "nsec1-this-is-not-valid";
+      const res = createResponse();
+
+      await handler(createRequest(), res as any);
+
+      expect(res.statusCode).toBe(503);
+      for (const spy of [consoleErrorSpy, consoleLogSpy, consoleWarnSpy]) {
+        for (const call of spy.mock.calls) {
+          expect(JSON.stringify(call)).not.toContain("this-is-not-valid");
+        }
+      }
+      expectNothingMoved();
     });
 
     it("returns 503 when the dispute context read hits a database outage", async () => {

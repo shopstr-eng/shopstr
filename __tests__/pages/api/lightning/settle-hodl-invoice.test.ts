@@ -107,7 +107,6 @@ function confirmEvent(
   return {
     orderId: PAYMENT_HASH,
     authorPubkey: BUYER_PUBKEY,
-    note: "received, thanks",
     createdAt: 1_700_000_000,
     ...overrides,
   };
