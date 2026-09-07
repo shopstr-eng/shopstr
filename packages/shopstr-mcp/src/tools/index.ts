@@ -13,7 +13,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { wrapWithAudit } from "../audit-log.js";
-import { InFlightRateLimiter, wrapWithRateLimit } from "../rate-limiter.js";
+import {
+  type InFlightRateLimiter,
+  wrapWithRateLimit,
+} from "../rate-limiter.js";
 import type { CoreToolContext } from "./utils/context.js";
 import {
   getProductDetailsInputSchema,
@@ -47,10 +50,9 @@ const UNTRUSTED_CONTENT_NOTE =
 
 export function registerCoreTools(
   server: McpServer,
-  context: CoreToolContext
+  context: CoreToolContext,
+  rateLimiter: InFlightRateLimiter
 ): void {
-  const rateLimiter = new InFlightRateLimiter(context.maxConcurrentRequests);
-
   server.registerTool(
     "search_products",
     {
