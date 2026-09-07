@@ -1,3 +1,4 @@
+import HodlOrderDetails from "./hodl-order-details";
 import { useCallback, useContext, useEffect, useState } from "react";
 import { Button, Spinner, Textarea } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -11,7 +12,6 @@ import {
   publishHodlDisputeEvent,
 } from "@/utils/nostr/hodl-escrow-records";
 import {
-  getClientArbiterNostrPubkey,
   getHodlOrderStatus,
   settleHodlInvoice,
   type HodlEscrowOrderStatus,
@@ -26,6 +26,7 @@ interface HodlOrderActionsProps {
   paymentHash: string;
   /** True when the viewer is the seller on this order. */
   isSale: boolean;
+  shipment?: string;
 }
 
 type PendingAction = "confirm" | "dispute" | null;
@@ -42,14 +43,12 @@ type PendingAction = "confirm" | "dispute" | null;
  * the DM records what was true at checkout, and everything interesting about an
  * escrow order happens afterwards.
  */
-export default function HodlOrderActions({
-  paymentHash,
-  isSale,
-}: HodlOrderActionsProps) {
+function OrderActions({ paymentHash, isSale }: HodlOrderActionsProps) {
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
   const [status, setStatus] = useState<HodlEscrowOrderStatus | null>(null);
+  const [payoutStatus, setPayoutStatus] = useState<string | null>(null);
   const [role, setRole] = useState<HodlOrderRole | null>(null);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -60,7 +59,7 @@ export default function HodlOrderActions({
   const [notice, setNotice] = useState<string | null>(null);
   const [disputeReason, setDisputeReason] = useState("");
 
-  const arbiterPubkey = getClientArbiterNostrPubkey();
+  const [arbiterPubkey, setArbiterPubkey] = useState<string | null>(null);
 
   const refreshStatus = useCallback(async () => {
     // No signer means the status route cannot be called at all — it is
@@ -74,6 +73,8 @@ export default function HodlOrderActions({
       const result = await getHodlOrderStatus(signer, paymentHash);
       setStatus(result.status);
       setRole(result.role);
+      setArbiterPubkey(result.arbiterPubkey ?? null);
+      setPayoutStatus(result.payoutStatus ?? null);
       setStatusError(null);
     } catch (error) {
       // A 404 here is the ordinary case for an order that was never
@@ -100,7 +101,9 @@ export default function HodlOrderActions({
       if (!isActive) return;
     };
     load();
+    const timer = setInterval(load, 30_000);
     return () => {
+      clearInterval(timer);
       isActive = false;
     };
   }, [refreshStatus]);
@@ -139,7 +142,7 @@ export default function HodlOrderActions({
       // confirmed, which is the normal state of an escrow order in transit.
       if ((error as HodlRequestError).reason === "no_confirmation") {
         setNotice(
-          "The buyer has not confirmed receipt yet. The sats stay locked until they do."
+          "The buyer has not confirmed receipt yet. The funds remain held until release or Lightning expiry."
         );
       } else {
         setActionError(error instanceof Error ? error.message : String(error));
@@ -174,7 +177,9 @@ export default function HodlOrderActions({
       setPendingAction(null);
       setDisputeReason("");
       setNotice(
-        "Dispute raised. The arbiter can now review this order and release the funds either way."
+        role === "seller"
+          ? "Dispute raised. The arbiter can review it now, but the seller waiting period applies before funds can be released unless the buyer also raises a dispute."
+          : "Dispute raised. The arbiter can now review this order and release the funds either way."
       );
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
@@ -201,16 +206,20 @@ export default function HodlOrderActions({
   if (status === "settled") {
     return (
       <span className="text-green-600 dark:text-green-400">
-        {isSale ? "Payment Released" : "Payment Sent"}
+        {isSale
+          ? payoutStatus === "paid"
+            ? "Seller Paid"
+            : payoutStatus === "abandoned"
+              ? "Payout needs support"
+              : "Seller payout pending"
+          : "Escrow Released"}
       </span>
     );
   }
 
   if (status === "cancelled") {
     return (
-      <span className="text-gray-600 dark:text-gray-400">
-        {isSale ? "Escrow Cancelled" : "Refunded"}
-      </span>
+      <span className="text-gray-600 dark:text-gray-400">Escrow Cancelled</span>
     );
   }
 
@@ -279,7 +288,7 @@ export default function HodlOrderActions({
       <ConfirmationModal
         isOpen={pendingAction === "confirm"}
         title="Confirm Receipt"
-        message="Release the escrowed sats to the seller? Do this only once you have the order in hand — it pays out immediately and cannot be undone."
+        message="Release the escrowed sats to the seller? Do this only once you have the order in hand — this releases the funds and starts the seller payout. The release cannot be undone."
         confirmText="Confirm Receipt"
         isDangerous
         isLoading={isSubmitting}
@@ -311,6 +320,15 @@ export default function HodlOrderActions({
           description="Encrypted to the arbiter with NIP-59. Relays only see an anonymous gift wrap — not this text, not the order, not your key."
         />
       </ConfirmationModal>
+    </div>
+  );
+}
+
+export default function HodlOrderActions(props: HodlOrderActionsProps) {
+  return (
+    <div className="flex flex-col gap-2">
+      <HodlOrderDetails paymentHash={props.paymentHash} />
+      <OrderActions {...props} />
     </div>
   );
 }

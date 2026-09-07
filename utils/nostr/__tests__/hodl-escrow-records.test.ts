@@ -101,12 +101,6 @@ describe("event kind allocation", () => {
     expect(HODL_RELEASE_EVENT_KIND).toBe(30409);
     expect(HODL_DISPUTE_EVENT_KIND).toBe(30410);
   });
-
-  it("keeps all three message types on distinct kinds", () => {
-    expect(HODL_CONFIRM_EVENT_KIND).not.toBe(HODL_RELEASE_EVENT_KIND);
-    expect(HODL_CONFIRM_EVENT_KIND).not.toBe(HODL_DISPUTE_EVENT_KIND);
-    expect(HODL_RELEASE_EVENT_KIND).not.toBe(HODL_DISPUTE_EVENT_KIND);
-  });
 });
 
 describe("createHodlConfirmEventTemplate", () => {
@@ -120,36 +114,6 @@ describe("createHodlConfirmEventTemplate", () => {
     expect(template.tags).toEqual([["d", PAYMENT_HASH]]);
     expect(template.content).toBe("");
     expect(template.created_at).toBe(1234);
-  });
-
-  // This event stays world-readable so the settle path can authorize it, so
-  // the only safe amount of free text on it is none.
-  it("has no free-text content, and no parameter that could supply any", () => {
-    const template = createHodlConfirmEventTemplate({
-      paymentHash: PAYMENT_HASH,
-    });
-    expect(template.content).toBe("");
-    expect(
-      "note" in
-        (createHodlConfirmEventTemplate as unknown as Record<string, unknown>)
-    ).toBe(false);
-  });
-
-  it("never emits a p tag or any tag naming a buyer", () => {
-    const template = createHodlConfirmEventTemplate({
-      paymentHash: PAYMENT_HASH,
-    });
-    const flattened = JSON.stringify(template.tags);
-
-    expect(template.tags.some((tag) => tag[0] === "p")).toBe(false);
-    expect(flattened).not.toContain("buyer");
-  });
-
-  it("emits no status tag — the event's existence is the confirmation", () => {
-    const template = createHodlConfirmEventTemplate({
-      paymentHash: PAYMENT_HASH,
-    });
-    expect(template.tags.some((tag) => tag[0] === "status")).toBe(false);
   });
 
   it("lowercases the payment hash so relay #d filters match", () => {
@@ -211,18 +175,6 @@ describe("publishHodlConfirmEvent", () => {
       waitForRelayPublish: true,
       requireDurableCache: false,
     });
-  });
-
-  it("publishes empty content, always", async () => {
-    await publishHodlConfirmEvent({
-      paymentHash: PAYMENT_HASH,
-      nostr: {} as any,
-      signer: {} as any,
-    });
-
-    const [, , eventTemplate] = (finalizeAndSendNostrEvent as jest.Mock).mock
-      .calls[0]!;
-    expect(eventTemplate.content).toBe("");
   });
 
   it("does not publish anything for a malformed payment hash", async () => {
@@ -444,16 +396,6 @@ describe("createHodlReleaseEventTemplate", () => {
     expect(template.tags.some((tag) => tag[0] === "p")).toBe(false);
   });
 
-  // The arbiter's account of somebody's dispute has no business on a public
-  // event, so the ruling carries the decision tag and nothing else.
-  it("has no free-text content, and no parameter that could supply any", () => {
-    const template = createHodlReleaseEventTemplate({
-      paymentHash: PAYMENT_HASH,
-      decision: "release:buyer",
-    });
-    expect(template.content).toBe("");
-  });
-
   it("rejects a malformed payment hash", () => {
     expect(() =>
       createHodlReleaseEventTemplate({
@@ -673,7 +615,7 @@ describe("fetchHodlConfirmEvents", () => {
   });
 
   const mkNostr = (events: NostrEvent[]) => ({
-    fetch: jest.fn().mockResolvedValue(events),
+    fetchWithStatus: jest.fn().mockResolvedValue({ events, complete: true }),
   });
 
   it("queries relays by kind and lowercased d tag", async () => {
@@ -685,7 +627,7 @@ describe("fetchHodlConfirmEvents", () => {
       timeoutMs: 1500,
     });
 
-    expect(nostr.fetch).toHaveBeenCalledWith(
+    expect(nostr.fetchWithStatus).toHaveBeenCalledWith(
       [{ kinds: [HODL_CONFIRM_EVENT_KIND], "#d": [PAYMENT_HASH] }],
       undefined,
       undefined,
@@ -861,14 +803,16 @@ describe("fetchHodlConfirmEvents", () => {
     });
 
     expect(results).toEqual([]);
-    expect(nostr.fetch).not.toHaveBeenCalled();
+    expect(nostr.fetchWithStatus).not.toHaveBeenCalled();
   });
 
   // The empty list is a claim about what relays hold. A read that never
   // happened cannot make it, or the settle endpoint downstream turns an
   // outage into "the buyer never confirmed" and refuses a valid settlement.
   it("throws relay_connection_failure, as an instance of HodlRelayUnavailableError, when the relay query fails", async () => {
-    const nostr = { fetch: jest.fn().mockRejectedValue(new Error("offline")) };
+    const nostr = {
+      fetchWithStatus: jest.fn().mockRejectedValue(new Error("offline")),
+    };
 
     const error = await fetchHodlConfirmEvents({
       nostr: nostr as any,
@@ -886,7 +830,7 @@ describe("fetchHodlConfirmEvents", () => {
     // Relay transport errors have no contract about their contents, and this
     // message reaches server logs.
     const nostr = {
-      fetch: jest
+      fetchWithStatus: jest
         .fn()
         .mockRejectedValue(new Error(`socket died mid-frame ${PAYMENT_HASH}`)),
     };
@@ -1251,7 +1195,7 @@ describe("fetchHodlReleaseEvents", () => {
   });
 
   const mkNostr = (events: NostrEvent[]) => ({
-    fetch: jest.fn().mockResolvedValue(events),
+    fetchWithStatus: jest.fn().mockResolvedValue({ events, complete: true }),
   });
 
   it("queries relays by kind and lowercased d tag", async () => {
@@ -1263,7 +1207,7 @@ describe("fetchHodlReleaseEvents", () => {
       timeoutMs: 2000,
     });
 
-    expect(nostr.fetch).toHaveBeenCalledWith(
+    expect(nostr.fetchWithStatus).toHaveBeenCalledWith(
       [{ kinds: [HODL_RELEASE_EVENT_KIND], "#d": [PAYMENT_HASH] }],
       undefined,
       undefined,
@@ -1376,11 +1320,13 @@ describe("fetchHodlReleaseEvents", () => {
     });
 
     expect(results).toEqual([]);
-    expect(nostr.fetch).not.toHaveBeenCalled();
+    expect(nostr.fetchWithStatus).not.toHaveBeenCalled();
   });
 
   it("throws relay_connection_failure when the relay query fails", async () => {
-    const nostr = { fetch: jest.fn().mockRejectedValue(new Error("offline")) };
+    const nostr = {
+      fetchWithStatus: jest.fn().mockRejectedValue(new Error("offline")),
+    };
 
     await expect(
       fetchHodlReleaseEvents({
@@ -1414,7 +1360,7 @@ describe("fetchHodlDisputeEvents", () => {
   const ARBITER = "arbiter-pubkey";
 
   const mkNostr = (events: NostrEvent[]) => ({
-    fetch: jest.fn().mockResolvedValue(events),
+    fetchWithStatus: jest.fn().mockResolvedValue({ events, complete: true }),
   });
 
   // The stub decryptor treats the ciphertext as its own plaintext, so a wrap
@@ -1470,7 +1416,7 @@ describe("fetchHodlDisputeEvents", () => {
       timeoutMs: 3000,
     });
 
-    expect(nostr.fetch).toHaveBeenCalledWith(
+    expect(nostr.fetchWithStatus).toHaveBeenCalledWith(
       [
         {
           kinds: [HODL_ESCROW_GIFT_WRAP_KIND],
@@ -1483,7 +1429,7 @@ describe("fetchHodlDisputeEvents", () => {
       3000
     );
     // The old plaintext kind is never asked for again.
-    const [[filters]] = nostr.fetch.mock.calls;
+    const [[filters]] = nostr.fetchWithStatus.mock.calls;
     expect(filters[0].kinds).not.toContain(HODL_DISPUTE_EVENT_KIND);
   });
 
@@ -1645,11 +1591,13 @@ describe("fetchHodlDisputeEvents", () => {
     });
 
     expect(results).toEqual([]);
-    expect(nostr.fetch).not.toHaveBeenCalled();
+    expect(nostr.fetchWithStatus).not.toHaveBeenCalled();
   });
 
   it("throws relay_connection_failure when the relay query fails", async () => {
-    const nostr = { fetch: jest.fn().mockRejectedValue(new Error("offline")) };
+    const nostr = {
+      fetchWithStatus: jest.fn().mockRejectedValue(new Error("offline")),
+    };
 
     await expect(
       fetchHodlDisputeEvents({

@@ -18,6 +18,10 @@ jest.mock("pg", () => ({
   })),
 }));
 
+import {
+  encryptHodlValue,
+  decryptHodlValue,
+} from "@/utils/lightning/hodl-storage";
 import * as dbService from "../db-service";
 
 const ARBITER_PUBKEY = "a".repeat(64);
@@ -103,14 +107,18 @@ describe("hodl escrow order commitments", () => {
     expect(sql).not.toMatch(/DO UPDATE/i);
     expect(values).toEqual([
       PAYMENT_HASH,
-      PREIMAGE,
+      expect.stringMatching(/^v1:/),
       registration.buyerNostrPubkey,
       registration.sellerNostrPubkey,
       ARBITER_PUBKEY,
       registration.invoice,
       registration.amountSats,
       registration.expiresAt,
+      null,
     ]);
+    expect(decryptHodlValue(values[1], PAYMENT_HASH, "preimage")).toBe(
+      PREIMAGE
+    );
     expect(releaseMock).toHaveBeenCalled();
   });
 
@@ -338,7 +346,9 @@ describe("hodl escrow order commitments", () => {
     it("returns the stored preimage", async () => {
       queryMock.mockResolvedValueOnce({
         rowCount: 1,
-        rows: [{ preimage: PREIMAGE }],
+        rows: [
+          { preimage: encryptHodlValue(PREIMAGE, PAYMENT_HASH, "preimage") },
+        ],
       });
 
       await expect(

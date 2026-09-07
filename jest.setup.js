@@ -196,3 +196,6 @@ jest.mock(
   },
   { virtual: true }
 );
+
+// Test-only key. Production must supply a separate random key.
+process.env.HODL_ESCROW_ENCRYPTION_KEY = "11".repeat(32);

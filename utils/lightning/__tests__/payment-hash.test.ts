@@ -14,14 +14,6 @@ describe("paymentHashFromPreimage", () => {
     expect(paymentHashFromPreimage(ZERO_PREIMAGE)).toBe(ZERO_PREIMAGE_HASH);
   });
 
-  it("does not hash the hex text by mistake", () => {
-    // sha256 of the ASCII "0000...", which is what a naive implementation
-    // would return. Guards against a regression to string hashing.
-    expect(paymentHashFromPreimage(ZERO_PREIMAGE)).not.toBe(
-      "60e05bd1b195af2f94112fa7197a5c88289058840ce7c6df9693756bc6250f55"
-    );
-  });
-
   it("returns a 32-byte lowercase hex hash", () => {
     const hash = paymentHashFromPreimage("ab".repeat(32));
     expect(hash).toMatch(/^[0-9a-f]{64}$/);

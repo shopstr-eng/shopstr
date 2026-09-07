@@ -1,3 +1,4 @@
+import { getHodlPayoutStatus } from "@/utils/db/hodl-payout-store";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { applyRateLimit } from "@/utils/rate-limit";
 import { verifyNip98Request } from "@/utils/nostr/nip98-auth";
@@ -18,6 +19,8 @@ const HEX_32_BYTE = /^[0-9a-f]{64}$/i;
 export type HodlOrderStatusResponse = {
   status: HodlEscrowOrderStatus;
   role: "buyer" | "seller";
+  payoutStatus?: string | null;
+  arbiterPubkey: string;
 };
 
 /**
@@ -38,6 +41,7 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  res.setHeader("Cache-Control", "private, no-store");
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -122,6 +126,19 @@ export default async function handler(
     return res.status(404).json({ error: "No such escrow order" });
   }
 
-  const body: HodlOrderStatusResponse = { status, role };
-  return res.status(200).json(body);
+  try {
+    const body: HodlOrderStatusResponse = {
+      status,
+      role,
+      arbiterPubkey: parties!.arbiterNostrPubkey,
+      ...(status === "settled"
+        ? { payoutStatus: await getHodlPayoutStatus(normalizedHash) }
+        : {}),
+    };
+    return res.status(200).json(body);
+  } catch {
+    return res
+      .status(503)
+      .json({ error: "Payout status temporarily unavailable" });
+  }
 }

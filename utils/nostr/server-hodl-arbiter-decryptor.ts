@@ -1,4 +1,4 @@
-import { nip19, nip44 } from "nostr-tools";
+import { getPublicKey, nip19, nip44 } from "nostr-tools";
 import { hexToBytes } from "@noble/hashes/utils.js";
 import type { GiftWrapDecryptor } from "@/utils/nostr/hodl-escrow-gift-wrap";
 
@@ -101,12 +101,28 @@ export function createArbiterGiftWrapDecryptor(
  * @throws {HodlArbiterKeyUnavailableError} when ARBITER_NOSTR_PRIVKEY is
  * unset or malformed. The message names the variable and never its value.
  */
-export function getServerArbiterGiftWrapDecryptor(): GiftWrapDecryptor {
+export function getServerArbiterGiftWrapDecryptor(
+  expectedPubkey?: string
+): GiftWrapDecryptor {
   const configured = process.env.ARBITER_NOSTR_PRIVKEY;
   if (typeof configured !== "string" || configured.trim().length === 0) {
     throw new HodlArbiterKeyUnavailableError(
       "ARBITER_NOSTR_PRIVKEY is not configured, so gift-wrapped disputes cannot be read"
     );
+  }
+  if (expectedPubkey) {
+    let pubkey: string;
+    try {
+      pubkey = getPublicKey(toPrivkeyBytes(configured.trim()));
+    } catch {
+      throw new HodlArbiterKeyUnavailableError(
+        "Arbiter private key is invalid"
+      );
+    }
+    if (pubkey !== expectedPubkey.toLowerCase())
+      throw new HodlArbiterKeyUnavailableError(
+        "The configured key cannot read this order's committed arbiter disputes"
+      );
   }
   return createArbiterGiftWrapDecryptor(configured);
 }

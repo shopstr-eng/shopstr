@@ -1,3 +1,7 @@
+import {
+  serializeHodlCheckout,
+  type HodlFulfillment,
+} from "./hodl-order-details";
 import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
 import type { HodlEscrowOrderStatus } from "@/utils/db/db-service";
@@ -19,20 +23,21 @@ export type HodlOrderRole = "buyer" | "seller";
 export type HodlOrderStatusResult = {
   status: HodlEscrowOrderStatus;
   role: HodlOrderRole;
+  payoutStatus?: string | null;
+  arbiterPubkey?: string;
 };
 
 export type RegisteredHodlOrder = {
   invoice: string;
   paymentHash: string;
+  reused?: boolean;
 };
 
 /**
  * Whether to offer hold-invoice escrow at checkout.
  *
  * Follows the P2PK precedent (`isP2pkEscrowFeatureEnabled`): opt-in, off by
- * default. That matters more here than there — the only provider currently
- * implemented hands out invoices no wallet can pay, so an unflagged deployment
- * would show buyers a payment method that cannot complete.
+ * default. Enable only after configuring a real provider and encrypted storage.
  *
  * `process.env.NEXT_PUBLIC_HODL_ESCROW_ENABLED` is written out in full because
  * Next.js inlines these at build time by literal match; a computed key reads as
@@ -75,6 +80,33 @@ export type HodlRequestError = Error & {
   remainingSeconds?: number;
 };
 
+/** Sign exactly the bytes sent; private reads never use the browser cache. */
+async function signedHodlRequest(
+  signer: NostrSigner,
+  path: string,
+  method: "GET" | "POST",
+  fallback: string,
+  body?: string
+): Promise<Response> {
+  const authorization = await createNip98AuthorizationHeader(
+    signer,
+    `${window.location.origin}${path}`,
+    method,
+    body
+  );
+  const response = await fetch(path, {
+    method,
+    headers: {
+      Authorization: authorization,
+      ...(body !== undefined && { "Content-Type": "application/json" }),
+    },
+    cache: "no-store",
+    ...(body !== undefined && { body }),
+  });
+  if (!response.ok) throw await readError(response, fallback);
+  return response;
+}
+
 /**
  * The price-affecting selections for a listing order. These are forwarded to
  * the escrow route so it can recompute the authoritative amount server-side
@@ -82,12 +114,15 @@ export type HodlRequestError = Error & {
  * checkout mint-quote call already sends.
  */
 export type HodlOrderPricingInputs = {
+  checkoutId?: string;
+  quantity?: number;
   formType?: "shipping" | "contact" | null;
   selectedSize?: string;
   selectedVolume?: string;
   selectedWeight?: string;
   selectedBulkOption?: number;
   discountCode?: string;
+  fulfillment?: HodlFulfillment;
 };
 
 /**
@@ -105,47 +140,35 @@ export async function registerHodlOrder(
 ): Promise<RegisteredHodlOrder> {
   const body = JSON.stringify({
     productId: params.productId,
+    ...(params.quantity !== undefined && { quantity: params.quantity }),
+    checkoutId: params.checkoutId ?? (await getCheckoutId(signer, params)),
+    ...(params.fulfillment && { fulfillment: params.fulfillment }),
     amountSats: params.amountSats,
     ...(params.formType != null && { formType: params.formType }),
-    ...(params.selectedSize !== undefined && {
-      selectedSize: params.selectedSize,
+    ...(params.selectedSize?.trim() && {
+      selectedSize: params.selectedSize.trim(),
     }),
-    ...(params.selectedVolume !== undefined && {
-      selectedVolume: params.selectedVolume,
+    ...(params.selectedVolume?.trim() && {
+      selectedVolume: params.selectedVolume.trim(),
     }),
-    ...(params.selectedWeight !== undefined && {
-      selectedWeight: params.selectedWeight,
+    ...(params.selectedWeight?.trim() && {
+      selectedWeight: params.selectedWeight.trim(),
     }),
     ...(params.selectedBulkOption !== undefined && {
       selectedBulkOption: params.selectedBulkOption,
     }),
-    ...(params.discountCode !== undefined && {
-      discountCode: params.discountCode,
+    ...(params.discountCode?.trim() && {
+      discountCode: params.discountCode.trim(),
     }),
   });
-  const path = "/api/db/register-hodl-order";
-  const url = `${window.location.origin}${path}`;
-  const authorization = await createNip98AuthorizationHeader(
+  const response = await signedHodlRequest(
     signer,
-    url,
+    "/api/db/register-hodl-order",
     "POST",
+    "Failed to create the escrow invoice",
     body
   );
-
-  const response = await fetch(path, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: authorization,
-    },
-    body,
-  });
-
-  if (!response.ok) {
-    throw await readError(response, "Failed to create the escrow invoice");
-  }
-
-  return (await response.json()) as RegisteredHodlOrder;
+  return response.json();
 }
 
 /**
@@ -164,27 +187,17 @@ export async function getHodlOrderStatus(
   const path = `/api/lightning/hodl-order-status?paymentHash=${encodeURIComponent(
     paymentHash
   )}`;
-  const url = `${window.location.origin}${path}`;
-  const authorization = await createNip98AuthorizationHeader(
+  const response = await signedHodlRequest(
     signer,
-    url,
-    "GET"
+    path,
+    "GET",
+    "Failed to read the escrow order status"
   );
-
-  const response = await fetch(path, {
-    method: "GET",
-    headers: { Authorization: authorization },
-  });
-
-  if (!response.ok) {
-    throw await readError(response, "Failed to read the escrow order status");
-  }
-
-  return (await response.json()) as HodlOrderStatusResult;
+  return response.json();
 }
 
 /**
- * Settles the hold invoice, paying the seller.
+ * Settles the hold invoice and starts the durable seller payout.
  *
  * No authorization header, by design: the route decides using the buyer's
  * signed confirmation event fetched from relays, not using who sent the
@@ -220,4 +233,108 @@ export async function resolveHodlDispute(paymentHash: string): Promise<void> {
   if (!response.ok) {
     throw await readError(response, "Failed to resolve the dispute");
   }
+}
+
+export async function updateHodlOrderFulfillment(
+  signer: NostrSigner,
+  paymentHash: string,
+  fulfillment: import("./hodl-fulfillment").HodlFulfillmentUpdate
+) {
+  const path = "/api/lightning/hodl-order";
+  const body = JSON.stringify({ paymentHash, fulfillment });
+  await signedHodlRequest(signer, path, "POST", "Could not update order", body);
+}
+
+export async function getHodlOrder(
+  signer: NostrSigner,
+  paymentHash: string
+): Promise<import("@/utils/db/hodl-order-store").StoredHodlOrder> {
+  const path = `/api/lightning/hodl-order?paymentHash=${encodeURIComponent(paymentHash)}`;
+  const response = await signedHodlRequest(
+    signer,
+    path,
+    "GET",
+    "Could not refresh order details"
+  );
+  return (await response.json()).order;
+}
+export async function reconcileHodlPayout(
+  signer: NostrSigner,
+  paymentHash: string
+) {
+  const path = "/api/lightning/hodl-payout-reconcile",
+    body = JSON.stringify({ paymentHash });
+  const response = await signedHodlRequest(
+    signer,
+    path,
+    "POST",
+    "Could not reconcile seller payout",
+    body
+  );
+  return response.json();
+}
+
+async function checkoutStorageKey(
+  signer: NostrSigner,
+  params: unknown,
+  legacy = false
+) {
+  const {
+    amountSats: _amount,
+    checkoutId: _id,
+    ...stable
+  } = params as Record<string, unknown>;
+  const bytes = new TextEncoder().encode(
+    legacy ? JSON.stringify(stable) : serializeHodlCheckout(stable)
+  );
+  const digest = Array.from(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))
+  )
+    .map((n) => n.toString(16).padStart(2, "0"))
+    .join("");
+  return `hodl-checkout:${await signer.getPubKey()}:${digest}`;
+}
+async function getCheckoutId(
+  signer: NostrSigner,
+  params: unknown,
+  reset = false
+) {
+  const key = await checkoutStorageKey(signer, params);
+  const legacyKey = await checkoutStorageKey(signer, params, true);
+  const save = () => {
+    const id = reset
+      ? crypto.randomUUID()
+      : (localStorage.getItem(key) ??
+        localStorage.getItem(legacyKey) ??
+        crypto.randomUUID());
+    localStorage.setItem(key, id);
+    localStorage.setItem(legacyKey, id);
+    return id;
+  };
+  // Use the browser's cross-tab lock instead of inventing a localStorage mutex.
+  // Older browsers without Web Locks retain single-tab retry behavior.
+  return navigator.locks ? navigator.locks.request(key, save) : save();
+}
+export async function quoteHodlCheckout(
+  signer: NostrSigner,
+  params: { productId: string } & HodlOrderPricingInputs
+): Promise<number> {
+  const path = "/api/lightning/hodl-quote",
+    body = JSON.stringify(params);
+  const response = await signedHodlRequest(
+    signer,
+    path,
+    "POST",
+    "Could not price escrow checkout",
+    body
+  );
+  return (await response.json()).amountSats;
+}
+
+/** Only call after the buyer explicitly chooses a separate new purchase. */
+export async function startNewHodlCheckout(
+  signer: NostrSigner,
+  params: unknown
+) {
+  await getCheckoutId(signer, params, true);
 }

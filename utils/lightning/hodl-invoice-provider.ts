@@ -1,17 +1,4 @@
-/**
- * Provider-agnostic contract for BOLT-11 hold (HODL) invoices.
- *
- * A hold invoice locks the payer's HTLC without settling it: the payment sits
- * in `accepted` until someone reveals the preimage (`settleInvoice`) or the
- * HTLC is released back to the payer (`cancelInvoice`). That "paid but not
- * yet claimed" window is what makes hold invoices usable as escrow.
- *
- * NOTE: no real Lightning backend implements this yet. Which node/service
- * backs it (LND, CLN, LNbits, …) is still an open decision; this interface
- * exists so that choice can be made later and dropped in behind the same
- * four methods with no changes elsewhere. The only implementation today is
- * {@link file://./mock-hodl-invoice-provider.ts}, for local dev and tests.
- */
+/** Hold-invoice operations backed by LND. Authorization belongs in the API layer. */
 
 /**
  * Lifecycle of a hold invoice.
@@ -88,6 +75,9 @@ export interface CreateHoldInvoiceResult {
 
 export interface LookupInvoiceResult {
   status: HodlInvoiceStatus;
+  acceptedAt?: number;
+  holdExpiryHeight?: number;
+  observedBlockHeight?: number;
   /**
    * Preimage, once revealed by settlement. Absent in every non-`settled`
    * state — this is the field that proves a settle actually happened.
@@ -104,6 +94,7 @@ export interface LookupInvoiceResult {
  * order belongs in a separate layer above this one.
  */
 export interface HodlInvoiceProvider {
+  getNodeInfo?(): Promise<{ blockHeight: number; synced: boolean }>;
   /**
    * Create an invoice locked to `paymentHash`, in the `open` state. Nothing
    * is held until the payer pays it.
@@ -116,7 +107,7 @@ export interface HodlInvoiceProvider {
   lookupInvoice(paymentHash: string): Promise<LookupInvoiceResult>;
 
   /**
-   * Reveal `preimage` to settle the held HTLC, releasing funds to the seller.
+   * Reveal `preimage` to settle the held HTLC, releasing funds to the receiving node. Seller payout is a separate operation.
    * The provider derives the payment hash from the preimage, so possession of
    * the preimage is the only thing this call requires.
    *
