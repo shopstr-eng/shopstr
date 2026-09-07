@@ -293,7 +293,11 @@ describe("the production dispute path, end to end", () => {
 
     // 2. retrieve + 3. decrypt — what pages/disputes/index.tsx and
     // requireActionableDispute both do, differing only in whose key they use.
-    const nostr = { fetch: jest.fn().mockResolvedValue([published]) };
+    const nostr = {
+      fetchWithStatus: jest
+        .fn()
+        .mockResolvedValue({ events: [published], complete: true }),
+    };
     const disputes = await fetchHodlDisputeEvents({
       nostr: nostr as never,
       arbiterPubkey: arbiter.pubkey,
@@ -334,7 +338,11 @@ describe("the production dispute path, end to end", () => {
     const [, published] = (sendGiftWrappedMessageEvent as jest.Mock).mock
       .calls[0]!;
     const disputes = await fetchHodlDisputeEvents({
-      nostr: { fetch: jest.fn().mockResolvedValue([published]) } as never,
+      nostr: {
+        fetchWithStatus: jest
+          .fn()
+          .mockResolvedValue({ events: [published], complete: true }),
+      } as never,
       arbiterPubkey: arbiter.pubkey,
       decryptor: signerFor(arbiter),
     });
@@ -349,4 +357,82 @@ describe("the production dispute path, end to end", () => {
       "createdAt",
     ]);
   });
+});
+
+it("retains a genuine dispute behind unrelated recent gift wraps", async () => {
+  const realDispute = await wrapDispute();
+  const spamKey = generateSecretKey();
+  const spam = Array.from({ length: 500 }, (_, i) =>
+    finalizeEvent(
+      {
+        kind: 1059,
+        tags: [["p", arbiter.pubkey]],
+        content: `unrelated-${i}`,
+        created_at: Math.floor(Date.now() / 1000),
+      },
+      spamKey
+    )
+  );
+  const nostr = {
+    fetchWithStatus: jest
+      .fn()
+      .mockResolvedValueOnce({ events: [realDispute, ...spam], complete: true })
+      .mockResolvedValue({ events: [], complete: true }),
+  };
+  const result = await fetchHodlDisputeEvents({
+    nostr: nostr as never,
+    arbiterPubkey: arbiter.pubkey,
+    decryptor: signerFor(arbiter),
+  });
+  expect(result.some((event) => event.orderId === PAYMENT_HASH)).toBe(true);
+});
+
+it("reports a relay timeout as unavailable, not an empty successful read", async () => {
+  const { NostrManager } = await import("@/utils/nostr/nostr-manager");
+  const { fetchHodlConfirmEvents } =
+    await import("@/utils/nostr/hodl-escrow-records");
+  const manager = new NostrManager([]);
+  jest
+    .spyOn(manager, "subscribe")
+    .mockResolvedValue({ close: async () => {} } as never);
+  try {
+    await expect(
+      fetchHodlConfirmEvents({
+        nostr: manager,
+        paymentHash: PAYMENT_HASH,
+        timeoutMs: 10,
+      })
+    ).rejects.toThrow();
+  } finally {
+    manager.close();
+  }
+});
+
+it("pages past a full recent page to recover an older encrypted dispute", async () => {
+  const realDispute = await wrapDispute();
+  const recent = Array.from({ length: 500 }, (_, i) =>
+    finalizeEvent(
+      {
+        kind: 1059,
+        created_at: realDispute.created_at + 1 + i,
+        tags: [["p", arbiter.pubkey]],
+        content: "unrelated",
+      },
+      generateSecretKey()
+    )
+  );
+  const fetchWithStatus = jest
+    .fn()
+    .mockResolvedValueOnce({ events: recent, complete: true })
+    .mockResolvedValueOnce({
+      events: [recent[0], realDispute],
+      complete: true,
+    });
+  const result = await fetchHodlDisputeEvents({
+    nostr: { fetchWithStatus } as never,
+    arbiterPubkey: arbiter.pubkey,
+    decryptor: signerFor(arbiter),
+  });
+  expect(result.some((event) => event.orderId === PAYMENT_HASH)).toBe(true);
+  expect(fetchWithStatus.mock.calls[1][0][0].until).toBe(recent[0]!.created_at);
 });

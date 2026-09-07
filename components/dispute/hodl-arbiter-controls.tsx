@@ -49,6 +49,7 @@ export default function HodlArbiterControls({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [resolved, setResolved] = useState(false);
 
   const arbiterPubkey = process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY;
   // Second gate. The page already redirects non-arbiters; this makes the
@@ -75,6 +76,7 @@ export default function HodlArbiterControls({
       });
       await resolveHodlDispute(paymentHash);
 
+      setResolved(true);
       onResolved(pendingDecision);
       setPendingDecision(null);
     } catch (err) {
@@ -89,7 +91,7 @@ export default function HodlArbiterControls({
         setNotice(
           `This dispute cannot be ruled on for another ${formatRemaining(
             requestError.remainingSeconds
-          )}. The ruling has been published and can be applied once the window closes.`
+          )}. The ruling has been published. The server will retry it automatically after the waiting period, while the Lightning hold remains active.`
         );
         setPendingDecision(null);
       } else {
@@ -99,6 +101,8 @@ export default function HodlArbiterControls({
       setIsSubmitting(false);
     }
   };
+
+  if (resolved) return <p>Ruling applied. The order status is refreshing.</p>;
 
   const decisionLabel =
     pendingDecision === "release:buyer" ? "the buyer" : "the seller";
@@ -128,7 +132,7 @@ export default function HodlArbiterControls({
       <ConfirmationModal
         isOpen={pendingDecision !== null}
         title="Confirm Ruling"
-        message={`Release the escrowed sats to ${decisionLabel}? This settles escrow order "${paymentHash}" (dispute: "${description}") and cannot be undone.`}
+        message={`Release the escrowed sats to ${decisionLabel}? This applies the ruling to escrow order "${paymentHash}" (dispute: "${description}") and cannot be undone.`}
         confirmText="Confirm Ruling"
         isDangerous
         isLoading={isSubmitting}

@@ -1,3 +1,4 @@
+jest.mock("../hodl-order-details", () => () => null);
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import HodlOrderActions from "../hodl-order-actions";
 import {
@@ -129,6 +130,7 @@ describe("HodlOrderActions", () => {
     mockGetClientArbiterNostrPubkey.mockReturnValue(ARBITER_PUBKEY);
     mockGetHodlOrderStatus.mockResolvedValue({
       status: "accepted",
+      arbiterPubkey: ARBITER_PUBKEY,
       role: "buyer",
     });
     mockPublishHodlConfirmEvent.mockResolvedValue(undefined);
@@ -157,6 +159,7 @@ describe("HodlOrderActions", () => {
   it("offers the seller Collect on the same order", async () => {
     mockGetHodlOrderStatus.mockResolvedValue({
       status: "accepted",
+      arbiterPubkey: ARBITER_PUBKEY,
       role: "seller",
     });
     renderActions({ isSale: true });
@@ -194,6 +197,7 @@ describe("HodlOrderActions", () => {
   it("collects immediately, with no confirmation prompt", async () => {
     mockGetHodlOrderStatus.mockResolvedValue({
       status: "accepted",
+      arbiterPubkey: ARBITER_PUBKEY,
       role: "seller",
     });
     renderActions({ isSale: true });
@@ -207,6 +211,7 @@ describe("HodlOrderActions", () => {
   it("tells the seller the buyer has not confirmed yet, instead of showing an error", async () => {
     mockGetHodlOrderStatus.mockResolvedValue({
       status: "accepted",
+      arbiterPubkey: ARBITER_PUBKEY,
       role: "seller",
     });
     mockSettleHodlInvoice.mockRejectedValue(
@@ -230,6 +235,7 @@ describe("HodlOrderActions", () => {
   it("still surfaces a genuine settle failure to the seller", async () => {
     mockGetHodlOrderStatus.mockResolvedValue({
       status: "accepted",
+      arbiterPubkey: ARBITER_PUBKEY,
       role: "seller",
     });
     mockSettleHodlInvoice.mockRejectedValue(
@@ -294,6 +300,7 @@ describe("HodlOrderActions", () => {
   it("offers the seller a dispute too", async () => {
     mockGetHodlOrderStatus.mockResolvedValue({
       status: "accepted",
+      arbiterPubkey: ARBITER_PUBKEY,
       role: "seller",
     });
     renderActions({ isSale: true });
@@ -302,7 +309,10 @@ describe("HodlOrderActions", () => {
   });
 
   it("hides the dispute button when no arbiter is configured", async () => {
-    mockGetClientArbiterNostrPubkey.mockReturnValue(null);
+    mockGetHodlOrderStatus.mockResolvedValue({
+      status: "accepted",
+      role: "buyer",
+    });
     renderActions();
 
     expect(await screen.findByText("Confirm Receipt")).toBeInTheDocument();
@@ -323,27 +333,29 @@ describe("HodlOrderActions", () => {
     expect(screen.queryByText("Raise Dispute")).toBeNull();
   });
 
-  it("shows a settled order as paid, from each side's point of view", async () => {
+  it("distinguishes escrow settlement from an unconfirmed seller payout", async () => {
     mockGetHodlOrderStatus.mockResolvedValue({
       status: "settled",
       role: "buyer",
     });
     const { unmount } = renderActions();
-    expect(await screen.findByText("Payment Sent")).toBeInTheDocument();
+    expect(await screen.findByText("Escrow Released")).toBeInTheDocument();
     unmount();
 
     renderActions({ isSale: true });
-    expect(await screen.findByText("Payment Released")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Seller payout pending")
+    ).toBeInTheDocument();
   });
 
-  it("shows a cancelled order as refunded to the buyer", async () => {
+  it("does not claim a refund based on cancellation status alone", async () => {
     mockGetHodlOrderStatus.mockResolvedValue({
       status: "cancelled",
       role: "buyer",
     });
     renderActions();
 
-    expect(await screen.findByText("Refunded")).toBeInTheDocument();
+    expect(await screen.findByText("Escrow Cancelled")).toBeInTheDocument();
     expect(screen.queryByText("Confirm Receipt")).toBeNull();
   });
 

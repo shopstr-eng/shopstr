@@ -79,6 +79,16 @@ describe("getServerArbiterGiftWrapDecryptor", () => {
     }
   });
 
+  it("refuses a key rotated away from the order's committed arbiter", () => {
+    process.env.ARBITER_NOSTR_PRIVKEY = arbiterHex;
+    expect(() => getServerArbiterGiftWrapDecryptor(senderPubkey)).toThrow(
+      HodlArbiterKeyUnavailableError
+    );
+    expect(() =>
+      getServerArbiterGiftWrapDecryptor(arbiterPubkey)
+    ).not.toThrow();
+  });
+
   it("builds a working decryptor from the environment", async () => {
     process.env.ARBITER_NOSTR_PRIVKEY = arbiterHex;
 

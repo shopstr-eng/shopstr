@@ -1,5 +1,9 @@
 "use client";
 
+import { hodlDisplayStatus } from "@/utils/lightning/hodl-fulfillment";
+import { updateHodlOrderFulfillment } from "@/utils/lightning/hodl-order-client";
+
+import { useHodlOrders } from "@/utils/hooks/use-hodl-orders";
 import { useEffect, useState, useContext, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { nip19 } from "nostr-tools";
@@ -89,7 +93,7 @@ interface OrderData {
   amount: number;
   timestamp: number;
   status: string;
-  messageEvent: NostrMessageEvent;
+  messageEvent?: NostrMessageEvent;
   address?: string;
   pickupLocation?: string;
   selectedSize?: string;
@@ -98,6 +102,9 @@ interface OrderData {
   selectedBulkOption?: number;
   paymentToken?: string;
   hodlPaymentHash?: string;
+  tracking?: string;
+  carrier?: string;
+  eta?: string;
   paymentMethod?: string;
   productTitle?: string;
   quantity?: number;
@@ -142,6 +149,7 @@ const OrdersDashboard = ({
   const [showShippingModal, setShowShippingModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderData | null>(null);
   const [isSendingShipping, setIsSendingShipping] = useState(false);
+  const [fulfillmentError, setFulfillmentError] = useState("");
 
   const randomNpubForSenderRef = useRef<string>("");
   const randomNsecForSenderRef = useRef<string>("");
@@ -192,6 +200,10 @@ const OrdersDashboard = ({
     npub: userNPub,
   } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
+  const { orders: savedHodlOrders, error: hodlOrdersError } = useHodlOrders(
+    signer,
+    userPubkey
+  );
   const reviewsContext = useContext(ReviewsContext);
 
   const {
@@ -304,7 +316,7 @@ const OrdersDashboard = ({
       if (!chatsContext || chatsContext.isLoading) return;
 
       const orderIdSet = new Set<string>();
-      for (const entry of chatsContext.chatsMap) {
+      for (const entry of chatsContext?.chatsMap ?? []) {
         const chat = entry[1] as NostrMessageEvent[];
         for (const messageEvent of chat) {
           const tagsMap = new Map(
@@ -349,13 +361,15 @@ const OrdersDashboard = ({
 
   useEffect(() => {
     async function loadOrders() {
-      if (!chatsContext || chatsContext.isLoading) {
+      if (
+        (!chatsContext || chatsContext.isLoading) &&
+        savedHodlOrders.length === 0
+      )
         return;
-      }
 
       const ordersList: OrderData[] = [];
 
-      for (const entry of chatsContext.chatsMap) {
+      for (const entry of chatsContext?.chatsMap ?? []) {
         const chat = entry[1] as NostrMessageEvent[];
 
         for (const messageEvent of chat) {
@@ -649,7 +663,53 @@ const OrdersDashboard = ({
         }
       }
 
-      const consolidatedOrders = Array.from(consolidatedOrdersMap.values());
+      // Bind HODL display data to the snapshot that was priced and saved before payment.
+      // A relay message alone cannot prove an invoice belongs to the claimed product.
+      const savedHashes = new Set(
+        savedHodlOrders.map((order) => order.paymentHash)
+      );
+      const consolidatedOrders = Array.from(
+        consolidatedOrdersMap.values()
+      ).filter(
+        (order) =>
+          !order.hodlPaymentHash || !savedHashes.has(order.hodlPaymentHash)
+      );
+      for (const saved of savedHodlOrders) {
+        const details = saved.details;
+        consolidatedOrders.push({
+          orderId: saved.paymentHash,
+          orderTag: saved.paymentHash,
+          orderGroupKey: saved.paymentHash,
+          statusLookupKeys: [saved.paymentHash],
+          buyerPubkey: saved.buyerPubkey,
+          sellerPubkey: saved.sellerPubkey,
+          productAddress: details?.productAddress ?? "",
+          productTitle: details?.productTitle ?? "Lightning escrow order",
+          amount: saved.amountSats,
+          quantity: details?.quantity ?? 1,
+          currency: "sats",
+          timestamp: saved.createdAt,
+          status: hodlDisplayStatus(saved.status, saved.fulfillmentStatus),
+          tracking: saved.fulfillmentUpdates?.tracking,
+          carrier: saved.fulfillmentUpdates?.carrier,
+          eta: saved.fulfillmentUpdates?.eta,
+          hodlPaymentHash: saved.paymentHash,
+          paymentMethod: "hodl",
+          isSale: saved.sellerPubkey === userPubkey,
+          selectedSize: details?.selectedSize,
+          selectedVolume: details?.selectedVolume,
+          selectedWeight: details?.selectedWeight,
+          selectedBulkOption: details?.selectedBulkOption,
+          address: [
+            saved.fulfillmentUpdates?.address ?? details?.fulfillment?.address,
+            details?.fulfillment?.contact,
+            details?.fulfillment?.additionalInfo,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+          pickupLocation: details?.fulfillment?.pickupLocation,
+        });
+      }
       const localEscrowRecords = await getStoredBuyerP2pkEscrowRecords(signer);
       for (const escrowRecord of localEscrowRecords) {
         const order = consolidatedOrders.find(
@@ -667,7 +727,7 @@ const OrdersDashboard = ({
 
       const returnRequestOrderIds = new Set<string>();
       const returnRequestTypes = new Map<string, string>();
-      for (const entry of chatsContext.chatsMap) {
+      for (const entry of chatsContext?.chatsMap ?? []) {
         const chat = entry[1] as NostrMessageEvent[];
         for (const messageEvent of chat) {
           const tagsMap = new Map(
@@ -715,7 +775,13 @@ const OrdersDashboard = ({
         pending: 1,
       };
       for (const order of consolidatedOrders) {
-        if (order.status && order.orderId && signer) {
+        if (
+          order.status &&
+          order.orderId &&
+          signer &&
+          order.messageEvent &&
+          !order.hodlPaymentHash
+        ) {
           const statusPersistKey = `${order.orderId}:${
             order.messageEvent?.id ?? ""
           }:${order.status}`;
@@ -769,7 +835,16 @@ const OrdersDashboard = ({
     }
 
     loadOrders();
-  }, [chatsContext, productContext, cachedStatuses, signer]);
+  }, [
+    chatsContext,
+    productContext,
+    cachedStatuses,
+    signer,
+    savedHodlOrders,
+    userPubkey,
+    sellerOnly,
+    buyerOnly,
+  ]);
 
   const convertToSats = (amount: number, currency: string): number => {
     const curr = currency?.toLowerCase() || "sats";
@@ -908,6 +983,7 @@ const OrdersDashboard = ({
   const handleOpenShippingModal = (order: OrderData) => {
     setSelectedOrder(order);
     shippingReset();
+    setFulfillmentError("");
     setShowShippingModal(true);
   };
 
@@ -921,6 +997,7 @@ const OrdersDashboard = ({
     if (!selectedOrder || !signer || !nostr) return;
 
     setIsSendingShipping(true);
+    setFulfillmentError("");
 
     try {
       const decodedRandomPubkeyForSender = nip19.decode(
@@ -936,9 +1013,15 @@ const OrdersDashboard = ({
         randomNsecForReceiverRef.current
       );
 
-      const daysToAdd = parseInt(data["Delivery Time"]!);
+      const deliveryDelay = Number(data["Delivery Time"]);
+      if (!Number.isFinite(deliveryDelay) || deliveryDelay < 0)
+        throw new Error("Delivery estimate must be zero or more.");
       const currentTimestamp = Math.floor(Date.now() / 1000);
-      const futureTimestamp = currentTimestamp + daysToAdd * 24 * 60 * 60;
+      const futureTimestamp =
+        currentTimestamp +
+        Math.round(
+          deliveryDelay * (selectedOrder.hodlPaymentHash ? 60 : 24 * 60 * 60)
+        );
 
       const humanReadableDate = new Date(
         futureTimestamp * 1000
@@ -951,6 +1034,33 @@ const OrdersDashboard = ({
 
       const shippingCarrier = data["Shipping Carrier"];
       const trackingNumber = data["Tracking Number"];
+      if (selectedOrder.hodlPaymentHash) {
+        await updateHodlOrderFulfillment(
+          signer,
+          selectedOrder.hodlPaymentHash,
+          {
+            status: "shipped",
+            tracking: trackingNumber,
+            carrier: shippingCarrier,
+            eta: String(futureTimestamp),
+          }
+        );
+        setOrders((previous) =>
+          previous.map((order) =>
+            order.orderId === selectedOrder.orderId
+              ? {
+                  ...order,
+                  status: "shipped",
+                  tracking: trackingNumber,
+                  carrier: shippingCarrier,
+                  eta: String(futureTimestamp),
+                }
+              : order
+          )
+        );
+        handleCloseShippingModal();
+        return;
+      }
       const message =
         "Your order from " +
         userNPub +
@@ -1030,7 +1140,11 @@ const OrdersDashboard = ({
 
       handleCloseShippingModal();
     } catch (error) {
-      console.error("Error sending shipping info:", error);
+      setFulfillmentError(
+        error instanceof Error
+          ? error.message
+          : "Shipping update failed. Please retry."
+      );
     } finally {
       setIsSendingShipping(false);
     }
@@ -1311,6 +1425,7 @@ const OrdersDashboard = ({
 
   const handleOpenAddressChangeModal = (order: OrderData) => {
     setAddressChangeOrder(order);
+    setFulfillmentError("");
     setShowAddressChangeModal(true);
   };
 
@@ -1320,11 +1435,29 @@ const OrdersDashboard = ({
   };
 
   const onAddressChangeSubmit = async (newAddress: string) => {
-    if (!addressChangeOrder || !signer || !nostr) return;
+    if (!addressChangeOrder || !signer || !nostr) return false;
 
     setIsSendingAddressChange(true);
+    setFulfillmentError("");
 
     try {
+      if (addressChangeOrder.hodlPaymentHash) {
+        await updateHodlOrderFulfillment(
+          signer,
+          addressChangeOrder.hodlPaymentHash,
+          { address: newAddress }
+        );
+        setOrders((previous) =>
+          previous.map((order) =>
+            order.orderId === addressChangeOrder.orderId
+              ? { ...order, address: newAddress }
+              : order
+          )
+        );
+        handleCloseAddressChangeModal();
+        return true;
+      }
+
       const decodedRandomPubkeyForSender = nip19.decode(
         randomNpubForSenderRef.current
       );
@@ -1390,14 +1523,20 @@ const OrdersDashboard = ({
       );
 
       handleCloseAddressChangeModal();
+      return true;
     } catch (error) {
-      console.error("Error sending address change:", error);
+      setFulfillmentError(
+        error instanceof Error
+          ? error.message
+          : "Address update failed. Please retry."
+      );
+      return false;
     } finally {
       setIsSendingAddressChange(false);
     }
   };
 
-  if (isLoading || !chatsContext || chatsContext.isLoading) {
+  if (isLoading && !hodlOrdersError) {
     return (
       <div className="flex h-[66vh] items-center justify-center">
         <ShopstrSpinner />
@@ -1408,6 +1547,11 @@ const OrdersDashboard = ({
   return (
     <div className="bg-light-bg dark:bg-dark-bg max-w-[98vw] min-w-0 px-4 py-4 sm:py-6">
       <div className="mx-auto w-full max-w-full min-w-0">
+        {hodlOrdersError && (
+          <p role="alert" className="mb-4 text-red-500">
+            {hodlOrdersError}
+          </p>
+        )}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-light-text dark:text-dark-text text-3xl font-bold">
             {sellerOnly
@@ -1572,9 +1716,9 @@ const OrdersDashboard = ({
                   </tr>
                 ) : (
                   orders.map((order) => {
-                    const isNewOrder = chatsContext.newOrderIds.has(
-                      order.messageEvent.id
-                    );
+                    const isNewOrder =
+                      order.messageEvent &&
+                      chatsContext?.newOrderIds.has(order.messageEvent.id);
                     return (
                       <tr
                         key={order.orderId}
@@ -1678,14 +1822,17 @@ const OrdersDashboard = ({
                             >
                               {order.status}
                             </span>
-                            {order.isSale && order.status === "pending" && (
-                              <button
-                                onClick={() => handleOpenShippingModal(order)}
-                                className="text-shopstr-purple-light hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow cursor-pointer text-left text-xs underline"
-                              >
-                                Send Shipping Update
-                              </button>
-                            )}
+                            {order.isSale &&
+                              (order.hodlPaymentHash
+                                ? order.status === "confirmed"
+                                : order.status === "pending") && (
+                                <button
+                                  onClick={() => handleOpenShippingModal(order)}
+                                  className="text-shopstr-purple-light hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow cursor-pointer text-left text-xs underline"
+                                >
+                                  Send Shipping Update
+                                </button>
+                              )}
                             {order.hasReturnRequest && order.isSale && (
                               <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700 dark:bg-orange-900 dark:text-orange-300">
                                 {(order.returnRequestType || "return")
@@ -1712,16 +1859,21 @@ const OrdersDashboard = ({
                             >
                               {order.address || "N/A"}
                             </div>
-                            {order.address && !order.isSale && (
-                              <button
-                                onClick={() =>
-                                  handleOpenAddressChangeModal(order)
-                                }
-                                className="text-shopstr-purple-light hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow cursor-pointer text-left text-xs underline"
-                              >
-                                Change Address
-                              </button>
-                            )}
+                            {order.address &&
+                              !order.isSale &&
+                              (!order.hodlPaymentHash ||
+                                ["pending", "confirmed"].includes(
+                                  order.status
+                                )) && (
+                                <button
+                                  onClick={() =>
+                                    handleOpenAddressChangeModal(order)
+                                  }
+                                  className="text-shopstr-purple-light hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow cursor-pointer text-left text-xs underline"
+                                >
+                                  Change Address
+                                </button>
+                              )}
                           </div>
                         </td>
                         <td className="text-light-text dark:text-dark-text max-w-xs px-4 py-4 text-sm">
@@ -1753,6 +1905,11 @@ const OrdersDashboard = ({
                             <HodlOrderActions
                               paymentHash={order.hodlPaymentHash}
                               isSale={!!order.isSale}
+                              shipment={
+                                order.tracking
+                                  ? `${order.carrier ?? ""}: ${order.tracking}`
+                                  : undefined
+                              }
                             />
                           ) : order.paymentToken &&
                             (order.subject !== "order-receipt" ||
@@ -1852,6 +2009,11 @@ const OrdersDashboard = ({
             Enter Shipping Details
           </ModalHeader>
           <form onSubmit={handleShippingSubmit(onShippingSubmit)}>
+            {fulfillmentError && (
+              <p role="alert" className="px-6 text-red-500">
+                {fulfillmentError}
+              </p>
+            )}
             <ModalBody>
               <Controller
                 name="Delivery Time"
@@ -1870,8 +2032,14 @@ const OrdersDashboard = ({
                   return (
                     <Input
                       autoFocus
-                      label="Expected Delivery Time (days)"
-                      placeholder="e.g. 3"
+                      label={
+                        selectedOrder?.hodlPaymentHash
+                          ? "Expected Delivery Time (minutes)"
+                          : "Expected Delivery Time (days)"
+                      }
+                      placeholder={
+                        selectedOrder?.hodlPaymentHash ? "e.g. 30" : "e.g. 3"
+                      }
                       variant="bordered"
                       isInvalid={isErrored}
                       errorMessage={errorMessage}
@@ -2208,6 +2376,7 @@ const OrdersDashboard = ({
         orderId={addressChangeOrder?.orderId}
         productTitle={addressChangeOrder?.productTitle}
         currentAddress={addressChangeOrder?.address}
+        error={fulfillmentError}
       />
       <FailureModal
         bodyText={failureText}

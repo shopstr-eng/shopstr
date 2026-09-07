@@ -147,14 +147,6 @@ export class HodlRelayUnavailableError extends Error {
  * the request's own payment hash as a secret to redact — so an interpolated
  * identifier would arrive as `[redacted]` and buy nothing anyway.
  *
- * Note what this does *not* catch. `NostrManager.fetch` resolves with whatever
- * events arrived when its aggregate timeout fires (see the abort listener in
- * utils/nostr/nostr-manager.ts), so a slow relay that never answers is
- * reported here as a successful empty read, not as a failure. What rejects is
- * a read that could not be started or run at all — the connection-refused and
- * subscription-setup cases. Narrowing that gap means teaching `fetch` to
- * distinguish "every relay timed out" from "every relay answered nothing",
- * which is a change to the shared manager and not to this module.
  */
 async function fetchHodlEvents(params: {
   nostr: NostrManager;
@@ -165,7 +157,14 @@ async function fetchHodlEvents(params: {
   const { nostr, filter, timeoutMs, description } = params;
 
   try {
-    return await nostr.fetch([filter], undefined, undefined, timeoutMs);
+    const result = await nostr.fetchWithStatus(
+      [filter],
+      undefined,
+      undefined,
+      timeoutMs
+    );
+    if (!result.complete) throw new Error("Incomplete relay lookup");
+    return result.events;
   } catch {
     // The underlying error is deliberately not chained on: it comes from relay
     // transport code that has no contract about what it puts in a message, and
@@ -602,26 +601,62 @@ export async function fetchHodlDisputeEvents(params: {
     return [];
   }
 
-  const events = await fetchHodlEvents({
-    nostr,
-    // `limit` bounds the decrypt work a stranger can force: a `#p` filter on
-    // a published pubkey is open to the world, and every candidate costs a
-    // NIP-44 attempt. unwrapHodlEscrowRumors sorts newest-first before it
-    // applies its own cap, so old junk cannot crowd out a live dispute.
-    filter: {
-      kinds: [HODL_ESCROW_GIFT_WRAP_KIND],
-      "#p": [arbiterPubkey],
-      limit: MAX_GIFT_WRAP_CANDIDATES,
-    },
-    timeoutMs,
-    description: "look up disputes for this arbiter",
-  });
-
-  const rumors = await unwrapHodlEscrowRumors({
-    events,
-    recipientPubkey: arbiterPubkey,
-    decryptor,
-  });
+  // Page backwards; unrelated recent messages must not hide an older dispute.
+  // Keep the boundary second in the next page because timestamps are not unique.
+  const rumors: NostrEvent[] = [];
+  const seen = new Set<string>();
+  let until: number | undefined;
+  let limit = MAX_GIFT_WRAP_CANDIDATES;
+  const deadline = Date.now() + (timeoutMs ?? 30_000);
+  for (;;) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0 || seen.size > 10_000) {
+      throw new HodlRelayUnavailableError({
+        reason: "relay_connection_failure",
+        message: "Dispute lookup could not be completed. Please retry.",
+      });
+    }
+    const events = await fetchHodlEvents({
+      nostr,
+      filter: {
+        kinds: [HODL_ESCROW_GIFT_WRAP_KIND],
+        "#p": [arbiterPubkey],
+        limit,
+        ...(until === undefined ? {} : { until }),
+      },
+      timeoutMs: remaining,
+      description: "look up disputes for this arbiter",
+    });
+    const fresh = events.filter((event) => !seen.has(event.id));
+    for (const event of fresh) seen.add(event.id);
+    rumors.push(
+      ...(await unwrapHodlEscrowRumors({
+        events: fresh,
+        recipientPubkey: arbiterPubkey,
+        decryptor,
+        maxCandidates: fresh.length,
+      }))
+    );
+    if (events.length < limit) break;
+    const oldest = Math.min(...events.map((event) => event.created_at));
+    if (!Number.isFinite(oldest) || (until !== undefined && oldest > until)) {
+      throw new HodlRelayUnavailableError({
+        reason: "relay_connection_failure",
+        message: "Relay returned an invalid dispute page",
+      });
+    }
+    if (oldest === until || fresh.length === 0) {
+      if (limit >= 10_000)
+        throw new HodlRelayUnavailableError({
+          reason: "relay_connection_failure",
+          message: "Relay dispute page is too large",
+        });
+      limit *= 2;
+    } else {
+      until = oldest;
+      limit = MAX_GIFT_WRAP_CANDIDATES;
+    }
+  }
 
   const disputes: ParsedHodlDisputeEvent[] = [];
   for (const rumor of rumors) {

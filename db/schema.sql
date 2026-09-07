@@ -222,7 +222,9 @@ CREATE TABLE IF NOT EXISTS hodl_escrow_orders (
     -- an API response. Exactly one read path in db-service selects this
     -- column -- getHodlEscrowSettlementSecret -- and its only caller passes
     -- the value straight to the Lightning provider's settleInvoice.
+    -- Versioned AES-256-GCM ciphertext, using HODL_ESCROW_ENCRYPTION_KEY.
     preimage TEXT NOT NULL,
+    order_details TEXT,
     -- The NIP-98-authenticated caller, never a client-submitted field.
     buyer_nostr_pubkey TEXT NOT NULL,
     -- The listing event's signer.
@@ -267,22 +269,27 @@ CREATE INDEX IF NOT EXISTS idx_hodl_escrow_orders_seller ON hodl_escrow_orders(s
 -- would leave a paid invoice that no record mentions, and the next retry
 -- would fetch a second invoice and pay the seller twice out of platform
 -- funds. Stored first, every retry has something to check against.
-CREATE TABLE IF NOT EXISTS hodl_escrow_payouts (
+
+      ALTER TABLE hodl_escrow_orders ADD COLUMN IF NOT EXISTS fulfillment_updates TEXT;
+      ALTER TABLE hodl_escrow_orders ADD COLUMN IF NOT EXISTS fulfillment_status TEXT;
+      ALTER TABLE hodl_escrow_orders ADD COLUMN IF NOT EXISTS hold_expiry_height BIGINT;
+      ALTER TABLE hodl_escrow_orders ADD COLUMN IF NOT EXISTS observed_block_height BIGINT;
+      ALTER TABLE hodl_escrow_orders ADD COLUMN IF NOT EXISTS deadline_observed_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS hodl_checkout_requests (
+        buyer_pubkey TEXT NOT NULL, checkout_id TEXT NOT NULL,
+        request_digest TEXT NOT NULL, response JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY(buyer_pubkey,checkout_id)
+      );
+      CREATE TABLE IF NOT EXISTS hodl_escrow_payouts (
     -- The settled order this payout belongs to. Deliberately not a foreign
     -- key: a payout row records money owed, and it has to stay findable even
     -- if the commitment row it came from is ever removed.
     payment_hash TEXT PRIMARY KEY,
-    -- The seller's BOLT-11 payout invoice. NULL means no invoice has been
-    -- fetched yet, which is the one state in which fetching a fresh one is
-    -- safe. Cleared back to NULL only after a status check has CONFIRMED the
-    -- stored invoice both unpaid and expired -- never because it merely looks
-    -- old.
+    -- Stored before sending and never replaced; LND tracks payment by its hash.
     payout_invoice TEXT,
-    -- LUD-21 verify URL from the same LNURL-pay response, stored alongside
-    -- the invoice because it is the only thing that can answer "was this
-    -- actually paid?" later. NULL when the seller's provider offers no verify
-    -- endpoint, in which case the payout's status can never be confirmed and
-    -- the row stays pending for a human to reconcile.
+    -- Legacy column retained for existing deployments; never trusted as payment proof.
     payout_invoice_verify_url TEXT,
     -- pending   -- an invoice may be stored and a payment may be in flight;
     --              the real outcome is not known. The only non-terminal state
@@ -297,14 +304,7 @@ CREATE TABLE IF NOT EXISTS hodl_escrow_payouts (
     attempt_count INTEGER NOT NULL DEFAULT 0,
     -- Why the last attempt did not deliver, for whoever reconciles this row.
     last_error TEXT,
-    -- Lease held by the attempt currently working this payout. Two concurrent
-    -- retries cannot both hold it: the claim runs SELECT ... FOR UPDATE, the
-    -- same row-locking discipline as updateHodlEscrowOrderStatusIfAdvancing.
-    --
-    -- TIMESTAMPTZ, not TIMESTAMP, for the reason spelled out on
-    -- hodl_escrow_orders.accepted_at: this column is compared against
-    -- CURRENT_TIMESTAMP, so a zone-less value would skew the lease by the
-    -- reading process's UTC offset.
+    -- Last send attempt time. Worker exclusion uses a PostgreSQL session advisory lock.
     claimed_at TIMESTAMPTZ,
     invoice_stored_at TIMESTAMPTZ,
     paid_at TIMESTAMPTZ,

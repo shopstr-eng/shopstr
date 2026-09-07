@@ -1,3 +1,13 @@
+import {
+  PAYMENT_HASH,
+  PREIMAGE,
+  createRequest,
+  createResponse,
+  loggedOutput,
+  testAuthorizedSettlement,
+  testPreimagePrivacy,
+} from "@/test-utils/hodl-settlement-contract";
+import { getPublicKey } from "nostr-tools";
 const applyRateLimitMock = jest.fn();
 const fetchHodlReleaseEventsMock = jest.fn();
 const fetchHodlDisputeEventsMock = jest.fn();
@@ -107,16 +117,11 @@ const disputeRelayOutage = () =>
     reason: "relay_connection_failure",
     message: "Could not reach relays to look up disputes for this arbiter",
   });
-
-const PAYMENT_HASH = "b".repeat(64);
 const OTHER_PAYMENT_HASH = "c".repeat(64);
 const BUYER_PUBKEY = "1".repeat(64);
 const SELLER_PUBKEY = "2".repeat(64);
-const ARBITER_PUBKEY = "a".repeat(64);
+const ARBITER_PUBKEY = getPublicKey(new Uint8Array(32).fill(0x3c));
 const IMPOSTOR_PUBKEY = "e".repeat(64);
-
-/** Distinctive on purpose: every leak assertion greps output for this string. */
-const PREIMAGE = "abad1dea".repeat(8);
 
 const ORDER_PARTIES = {
   paymentHash: PAYMENT_HASH,
@@ -170,47 +175,6 @@ function candidatesWithGenuineArbiterEvent(
     releaseEvent({ authorPubkey: "d".repeat(64), createdAt: 1_700_000_500 }),
     releaseEvent({ decision }),
   ];
-}
-
-function createResponse() {
-  return {
-    statusCode: 200,
-    jsonBody: undefined as unknown,
-    headers: {} as Record<string, unknown>,
-    status(code: number) {
-      this.statusCode = code;
-      return this;
-    },
-    json(payload: unknown) {
-      this.jsonBody = payload;
-      return this;
-    },
-    setHeader(name: string, value: unknown) {
-      this.headers[name] = value;
-      return this;
-    },
-  };
-}
-
-function createRequest(body: unknown = { paymentHash: PAYMENT_HASH }) {
-  return { method: "POST", headers: {}, body } as any;
-}
-
-/** Everything the handler wrote anywhere, as one searchable string. */
-function loggedOutput(spy: jest.SpyInstance): string {
-  return spy.mock.calls
-    .map((call) =>
-      call
-        .map((arg: unknown) =>
-          arg instanceof Error
-            ? `${arg.name}: ${arg.message}\n${arg.stack ?? ""}`
-            : typeof arg === "string"
-              ? arg
-              : JSON.stringify(arg)
-        )
-        .join(" ")
-    )
-    .join("\n");
 }
 
 // Disputes reach relays as NIP-59 gift wraps addressed to the arbiter, so
@@ -325,99 +289,6 @@ describe("/api/lightning/resolve-hodl-dispute", () => {
       // Two lookups, two relay managers, both closed: the ruling fetch and
       // the dispute fetch each open and dispose of their own.
       expect(nostrCloseMock).toHaveBeenCalledTimes(2);
-    });
-
-    it("marks the order settled only after the provider call resolves", async () => {
-      let releaseSettle: (() => void) | undefined;
-      let signalStarted: (() => void) | undefined;
-      const settleStarted = new Promise<void>((resolve) => {
-        signalStarted = resolve;
-      });
-      settleInvoiceMock.mockImplementation(
-        () =>
-          new Promise<void>((resolve) => {
-            callOrder.push("settleInvoice:started");
-            releaseSettle = () => {
-              callOrder.push("settleInvoice:resolved");
-              resolve();
-            };
-            signalStarted!();
-          })
-      );
-
-      const res = createResponse();
-      const pending = handler(createRequest(), res as any);
-      await settleStarted;
-
-      expect(settleInvoiceMock).toHaveBeenCalledTimes(1);
-      expect(markHodlEscrowOrderSettledMock).not.toHaveBeenCalled();
-
-      releaseSettle!();
-      await pending;
-
-      expect(markHodlEscrowOrderSettledMock).toHaveBeenCalledTimes(1);
-      expect(callOrder).toEqual([
-        "readSecret",
-        "settleInvoice:started",
-        "settleInvoice:resolved",
-        "markSettled",
-      ]);
-      expect(res.statusCode).toBe(200);
-    });
-
-    it("leaves the status untouched when the provider throws", async () => {
-      settleInvoiceMock.mockRejectedValue(
-        new HodlInvoiceError(
-          "invalid_state_transition",
-          'Cannot settle an invoice in state "open"'
-        )
-      );
-      const res = createResponse();
-
-      await handler(createRequest(), res as any);
-
-      expect(res.statusCode).toBe(502);
-      expect(res.jsonBody).toEqual({ error: "Failed to settle hold invoice" });
-      expect(markHodlEscrowOrderSettledMock).not.toHaveBeenCalled();
-      expectNoPreimageLeak(res);
-    });
-
-    it("reports a failure when the invoice settled but the row could not be updated", async () => {
-      markHodlEscrowOrderSettledMock.mockRejectedValue(new Error("db down"));
-      const res = createResponse();
-
-      await handler(createRequest(), res as any);
-
-      expect(settleInvoiceMock).toHaveBeenCalledTimes(1);
-      expect(res.statusCode).toBe(500);
-      expect(res.jsonBody).toEqual({
-        error: "Invoice settled but the order could not be updated",
-      });
-      expectNoPreimageLeak(res);
-    });
-
-    it("reports a failure when the row vanished before it could be marked settled", async () => {
-      markHodlEscrowOrderSettledMock.mockResolvedValue("not-found");
-      const res = createResponse();
-
-      await handler(createRequest(), res as any);
-
-      expect(res.statusCode).toBe(500);
-      expect(res.jsonBody).toEqual({
-        error: "Invoice settled but the order could not be updated",
-      });
-    });
-
-    it("does not settle when the stored secret is missing", async () => {
-      getHodlEscrowSettlementSecretMock.mockResolvedValue(null);
-      const res = createResponse();
-
-      await handler(createRequest(), res as any);
-
-      expect(res.statusCode).toBe(500);
-      expect(res.jsonBody).toEqual({ error: "Failed to settle escrow order" });
-      expect(settleInvoiceMock).not.toHaveBeenCalled();
-      expect(markHodlEscrowOrderSettledMock).not.toHaveBeenCalled();
     });
   });
 
@@ -1052,89 +923,63 @@ describe("/api/lightning/resolve-hodl-dispute", () => {
   });
 
   describe("preimage confidentiality", () => {
-    it("keeps the preimage out of a provider error that quotes it verbatim", async () => {
-      settleInvoiceMock.mockRejectedValue(
-        new Error(
-          `settle failed: POST /v2/invoices/settle {"preimage":"${PREIMAGE}"}`
-        )
-      );
-      const res = createResponse();
-
-      await handler(createRequest(), res as any);
-
-      expect(res.statusCode).toBe(502);
-      expectNoPreimageLeak(res);
-      expect(loggedOutput(consoleErrorSpy)).toContain("[redacted]");
-      expect(loggedOutput(consoleErrorSpy)).toContain("settle failed");
-    });
-
-    it.each([
-      ["a successful settle", () => {}],
+    testPreimagePrivacy(
+      handler,
       [
-        "an unauthorized settle",
-        () => {
-          fetchHodlReleaseEventsMock.mockResolvedValue([
-            releaseEvent({ authorPubkey: IMPOSTOR_PUBKEY }),
-          ]);
-        },
+        ["a successful settle", () => {}],
+        [
+          "an unauthorized settle",
+          () => {
+            fetchHodlReleaseEventsMock.mockResolvedValue([
+              releaseEvent({ authorPubkey: IMPOSTOR_PUBKEY }),
+            ]);
+          },
+        ],
+        [
+          "a successful cancel",
+          () => {
+            fetchHodlReleaseEventsMock.mockResolvedValue(
+              candidatesWithGenuineArbiterEvent("release:buyer")
+            );
+          },
+        ],
+        [
+          "a missing order",
+          () => {
+            getHodlEscrowOrderPartiesMock.mockResolvedValue(null);
+          },
+        ],
+        [
+          "a relay lookup failure",
+          () => {
+            fetchHodlReleaseEventsMock.mockRejectedValue(
+              new Error("relays down")
+            );
+          },
+        ],
+        [
+          "a provider failure",
+          () => {
+            settleInvoiceMock.mockRejectedValue(new Error(`boom ${PREIMAGE}`));
+          },
+        ],
+        [
+          "a status update failure",
+          () => {
+            markHodlEscrowOrderSettledMock.mockRejectedValue(
+              new Error(`db down ${PREIMAGE}`)
+            );
+          },
+        ],
+        [
+          "an invalid request",
+          () => {
+            // handled below by the body argument
+          },
+        ],
       ],
-      [
-        "a successful cancel",
-        () => {
-          fetchHodlReleaseEventsMock.mockResolvedValue(
-            candidatesWithGenuineArbiterEvent("release:buyer")
-          );
-        },
-      ],
-      [
-        "a missing order",
-        () => {
-          getHodlEscrowOrderPartiesMock.mockResolvedValue(null);
-        },
-      ],
-      [
-        "a relay lookup failure",
-        () => {
-          fetchHodlReleaseEventsMock.mockRejectedValue(
-            new Error("relays down")
-          );
-        },
-      ],
-      [
-        "a provider failure",
-        () => {
-          settleInvoiceMock.mockRejectedValue(new Error(`boom ${PREIMAGE}`));
-        },
-      ],
-      [
-        "a status update failure",
-        () => {
-          markHodlEscrowOrderSettledMock.mockRejectedValue(
-            new Error(`db down ${PREIMAGE}`)
-          );
-        },
-      ],
-      [
-        "an invalid request",
-        () => {
-          // handled below by the body argument
-        },
-      ],
-    ])("never leaks the preimage on %s", async (label, arrange) => {
-      arrange();
-      const res = createResponse();
-
-      await handler(
-        createRequest(
-          label === "an invalid request"
-            ? { paymentHash: PAYMENT_HASH, preimage: PREIMAGE }
-            : { paymentHash: PAYMENT_HASH }
-        ),
-        res as any
-      );
-
-      expectNoPreimageLeak(res);
-    });
+      expectNoPreimageLeak
+    );
   });
 
   describe("request validation", () => {
@@ -1261,19 +1106,6 @@ describe("/api/lightning/resolve-hodl-dispute", () => {
       expect(nostrCloseMock).toHaveBeenCalledTimes(1);
     });
 
-    // The regression this was written for: a relay outage used to surface as
-    // an empty candidate list, which authorizes to `no_release_event` — the
-    // same 403 an arbiter gets when no ruling was ever published.
-    it("does not report an unreachable relay as a missing ruling", async () => {
-      fetchHodlReleaseEventsMock.mockRejectedValue(relayOutage());
-      const res = createResponse();
-
-      await handler(createRequest(), res as any);
-
-      expect(res.statusCode).not.toBe(403);
-      expect(JSON.stringify(res.jsonBody)).not.toContain("no_release_event");
-    });
-
     it("returns 503, not 500, when the order lookup hits a database outage", async () => {
       getHodlEscrowOrderPartiesMock.mockRejectedValue(
         new DatabaseUnavailableError("Failed to load hodl escrow order parties")
@@ -1314,27 +1146,6 @@ describe("/api/lightning/resolve-hodl-dispute", () => {
       expect(cancelInvoiceMock).not.toHaveBeenCalled();
     });
 
-    it("returns 503 when the pre-settle secret read hits a database outage", async () => {
-      getHodlEscrowSettlementSecretMock.mockRejectedValue(
-        new DatabaseUnavailableError(
-          "Failed to load the hodl escrow settlement secret"
-        )
-      );
-      const res = createResponse();
-
-      await handler(createRequest(), res as any);
-
-      expect(res.statusCode).toBe(503);
-      expect(res.jsonBody).toEqual({
-        error: "Service temporarily unavailable. Please try again.",
-        reason: "database_unavailable",
-      });
-      // Safe to advertise a retry precisely because no money moved.
-      expect(settleInvoiceMock).not.toHaveBeenCalled();
-      expect(markHodlEscrowOrderSettledMock).not.toHaveBeenCalled();
-      expectNoPreimageLeak(res);
-    });
-
     // The two DB failures that must NOT invite a retry: the HTLC has already
     // resolved, so a row disagreeing with the Lightning node needs a human.
     it("still returns 500 when the post-settle status write fails", async () => {
@@ -1372,4 +1183,14 @@ describe("/api/lightning/resolve-hodl-dispute", () => {
       expect(JSON.stringify(res.jsonBody)).not.toContain("try again");
     });
   });
+
+  testAuthorizedSettlement(() => ({
+    handler,
+    getHodlEscrowSettlementSecretMock,
+    markHodlEscrowOrderSettledMock,
+    settleInvoiceMock,
+    callOrder,
+    expectNoPreimageLeak,
+    consoleErrorSpy,
+  }));
 });

@@ -414,6 +414,125 @@ describe("db-service helpers", () => {
 
   const maybeItTc = process.env.RUN_TESTCONTAINERS === "1" ? test : test.skip;
 
+  maybeItTc("concurrent cold starts initialize one fresh schema", async () => {
+    await withIsolatedDatabase(async (databaseUrl) => {
+      const previousUrl = process.env.DATABASE_URL;
+      const previousAutoInit = process.env.SHOPSTR_DB_AUTO_INIT_IN_TESTS;
+      process.env.DATABASE_URL = databaseUrl;
+      process.env.SHOPSTR_DB_AUTO_INIT_IN_TESTS = "1";
+      const instances: DbServiceModule[] = [];
+      try {
+        // Separate module instances reproduce API and instrumentation bundles.
+        for (let i = 0; i < 4; i++) {
+          jest.resetModules();
+          jest.unmock("pg");
+          instances.push(await import("../db-service"));
+        }
+        const pools = await Promise.all(
+          instances.map((instance) => instance.getInitializedDbPool())
+        );
+        for (const pool of pools) {
+          const result = await pool.query(
+            "SELECT count(*) FROM hodl_escrow_orders"
+          );
+          expect(result.rows[0].count).toBe("0");
+        }
+      } finally {
+        await Promise.all(instances.map((instance) => instance.closeDbPool()));
+        restoreEnv("DATABASE_URL", previousUrl);
+        restoreEnv("SHOPSTR_DB_AUTO_INIT_IN_TESTS", previousAutoInit);
+      }
+    });
+  });
+
+  maybeItTc(
+    "HODL: encrypted orders, durable payout recovery and concurrent workers",
+    async () => {
+      const previous = process.env.ARBITER_NOSTR_PUBKEY;
+      process.env.ARBITER_NOSTR_PUBKEY = "a".repeat(64);
+      try {
+        await withPostgresDbService(async (db) => {
+          const hash = "b".repeat(64);
+          const preimage = "c".repeat(64);
+          const buyer = "1".repeat(64),
+            seller = "2".repeat(64);
+          const details = {
+            productId: "listing",
+            productAddress: `30402:${seller}:item`,
+            productTitle: "Test item",
+            fulfillment: { address: "Private shipping address" },
+          };
+          await db.registerHodlEscrowOrder({
+            paymentHash: hash,
+            preimage,
+            buyerNostrPubkey: buyer,
+            sellerNostrPubkey: seller,
+            invoice: "test-invoice",
+            amountSats: 42,
+            expiresAt: new Date(Date.now() + 3600000),
+            details,
+          });
+          const pool = await db.getInitializedDbPool();
+          const raw = (
+            await pool.query(
+              "SELECT preimage, order_details FROM hodl_escrow_orders WHERE payment_hash=$1",
+              [hash]
+            )
+          ).rows[0];
+          expect(raw.preimage).toMatch(/^v1:/);
+          expect(raw.preimage).not.toContain(preimage);
+          expect(raw.order_details).not.toContain("Private shipping address");
+          expect(await db.getHodlEscrowSettlementSecret(hash)).toBe(preimage);
+          const { listHodlOrders } = await import("../hodl-order-store");
+          expect((await listHodlOrders(buyer))[0]?.details).toEqual(details);
+          expect((await listHodlOrders(seller))[0]?.details).toEqual(details);
+          expect(await listHodlOrders("3".repeat(64))).toEqual([]);
+          await db.updateHodlEscrowOrderStatusIfAdvancing(hash, "settled");
+          const { withHodlPayout, listOwedHodlPayouts } =
+            await import("../hodl-payout-store");
+          expect(await listOwedHodlPayouts()).toContain(hash);
+          await withHodlPayout(hash, async (row) => {
+            expect(row?.orderStatus).toBe("settled");
+            const competing = jest.fn();
+            expect(await withHodlPayout(hash, competing)).toBeNull();
+            expect(competing).not.toHaveBeenCalled();
+            await row!.saveInvoice("immutable-invoice");
+            // A different connection sees this write before the worker sends money.
+            expect(
+              (
+                await pool.query(
+                  "SELECT payout_invoice FROM hodl_escrow_payouts WHERE payment_hash=$1",
+                  [hash]
+                )
+              ).rows[0]?.payout_invoice
+            ).toBe("immutable-invoice");
+          });
+          await expect(
+            withHodlPayout(hash, async (row) => {
+              expect(row!.invoice).toBe("immutable-invoice");
+              await row!.saveInvoice("replacement");
+            })
+          ).rejects.toThrow("already recorded");
+          await withHodlPayout(hash, async (row) => {
+            await row!.finish("paid", null);
+            await row!.finish("failed", "late stale failure");
+          });
+          expect(
+            (
+              await pool.query(
+                "SELECT status FROM hodl_escrow_payouts WHERE payment_hash=$1",
+                [hash]
+              )
+            ).rows[0]?.status
+          ).toBe("paid");
+          expect(await listOwedHodlPayouts()).not.toContain(hash);
+        });
+      } finally {
+        restoreEnv("ARBITER_NOSTR_PUBKEY", previous);
+      }
+    }
+  );
+
   maybeItTc("testcontainers: initialize + failed publish flow", async () => {
     await withPostgresTestContainer(async (databaseUrl) => {
       const prev = process.env.DATABASE_URL;
@@ -3775,6 +3894,16 @@ describe("db-service helpers", () => {
             // The legacy row's stamp still denotes the instant it always did,
             // now readable without depending on the reader's zone.
             expect(context?.acceptedAt?.toISOString()).toBe(expectedInstantIso);
+            const encrypted = await (
+              await db.getInitializedDbPool()
+            ).query(
+              "SELECT preimage FROM hodl_escrow_orders WHERE payment_hash=$1",
+              [paymentHash]
+            );
+            expect(encrypted.rows[0]?.preimage).toMatch(/^v1:/);
+            expect(await db.getHodlEscrowSettlementSecret(paymentHash)).toBe(
+              "c".repeat(64)
+            );
 
             const pool = db.getDbPool();
             const client = await pool.connect();
