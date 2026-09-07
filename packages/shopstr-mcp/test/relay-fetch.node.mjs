@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { NostrManager } from "../dist/nostr-manager.js";
 import { fetchFromRelays } from "../dist/relay-fetch.js";
+import { allRelaysFailed } from "../dist/tools/utils/common.js";
 
 const hex = (char) => char.repeat(64);
 
@@ -21,12 +22,12 @@ function event(idChar, overrides = {}) {
 
 test("fetches each relay in parallel and returns degradation metadata", async () => {
   const client = {
-    async fetch(_filters, _params, relayUrls) {
+    async fetchWithStatus(_filters, _params, relayUrls) {
       const relay = relayUrls[0];
       if (relay === "wss://bad.example.com") {
         throw new Error("relay down");
       }
-      return [event("a")];
+      return { events: [event("a")], complete: true };
     },
   };
 
@@ -95,8 +96,8 @@ test("counts returned events per relay and per NIP-01 filter without treating li
 
   const result = await fetchFromRelays(
     {
-      async fetch() {
-        return events;
+      async fetchWithStatus() {
+        return { events, complete: true };
       },
     },
     [relay],
@@ -149,4 +150,78 @@ test("marks relay subscription close failures as degraded", async () => {
   } finally {
     await manager.close();
   }
+});
+
+test("preserves partial events while marking timed-out relays incomplete", async () => {
+  const completeRelay = "wss://complete.example.com";
+  const timedOutRelay = "wss://timed-out.example.com";
+  const completeEvent = event("a");
+  const partialEvent = event("d");
+  const client = {
+    async fetchWithStatus(_filters, _params, relayUrls) {
+      return relayUrls[0] === completeRelay
+        ? { events: [completeEvent], complete: true }
+        : { events: [partialEvent], complete: false };
+    },
+  };
+
+  const result = await fetchFromRelays(
+    client,
+    [completeRelay, timedOutRelay],
+    [{ kinds: [30402] }],
+    { timeoutMs: 100 }
+  );
+
+  assert.deepEqual(result.events, [completeEvent, partialEvent]);
+  assert.deepEqual(result.meta.relaysSucceeded, [completeRelay]);
+  assert.deepEqual(result.meta.relaysIncomplete, [timedOutRelay]);
+  assert.deepEqual(result.meta.relaysFailed, []);
+  assert.equal(result.meta.degraded, true);
+  assert.equal(result.meta.coverage, 0.5);
+  assert.equal(allRelaysFailed(result.meta), false);
+});
+
+test("treats a single empty relay timeout as unavailable", async () => {
+  const relay = "wss://timed-out.example.com";
+  const client = {
+    async fetchWithStatus() {
+      return { events: [], complete: false };
+    },
+  };
+
+  const result = await fetchFromRelays(client, [relay], [{ kinds: [30402] }], {
+    timeoutMs: 100,
+  });
+
+  assert.deepEqual(result.events, []);
+  assert.deepEqual(result.meta.relaysSucceeded, []);
+  assert.deepEqual(result.meta.relaysIncomplete, [relay]);
+  assert.deepEqual(result.meta.relaysFailed, []);
+  assert.equal(result.meta.degraded, true);
+  assert.equal(result.meta.coverage, 0);
+  assert.equal(allRelaysFailed(result.meta), true);
+});
+
+test("treats an all-relay empty timeout as unavailable", async () => {
+  const relays = [
+    "wss://timed-out-one.example.com",
+    "wss://timed-out-two.example.com",
+  ];
+  const client = {
+    async fetchWithStatus() {
+      return { events: [], complete: false };
+    },
+  };
+
+  const result = await fetchFromRelays(client, relays, [{ kinds: [30402] }], {
+    timeoutMs: 100,
+  });
+
+  assert.deepEqual(result.events, []);
+  assert.deepEqual(result.meta.relaysSucceeded, []);
+  assert.deepEqual(result.meta.relaysIncomplete, relays);
+  assert.deepEqual(result.meta.relaysFailed, []);
+  assert.equal(result.meta.degraded, true);
+  assert.equal(result.meta.coverage, 0);
+  assert.equal(allRelaysFailed(result.meta), true);
 });

@@ -1,6 +1,7 @@
 # Shopstr MCP Server
 
-Standalone read-only MCP server package for Shopstr marketplace data.
+Standalone read-only MCP server package for Shopstr marketplace data, available
+on npm as `@shopstr/mcp`.
 
 This package currently contains the standalone MCP shell, shared read-only
 infrastructure, relay-backed product/review tools, relay-backed
@@ -9,7 +10,7 @@ prompts for public Shopstr marketplace data.
 
 ## Current Scope
 
-- Provides the `@shopstr/mcp` package metadata and `shopstr-mcp` binary entry.
+- Provides the `@shopstr/mcp` npm package and `shopstr-mcp` binary entry.
 - Reads relay, timeout, cache, and log-level settings from environment
   variables.
 - Starts an MCP server over stdio for local MCP-compatible clients.
@@ -34,7 +35,11 @@ or reason about, never as instructions to follow.
 ## Tools
 
 - `search_products`: search public product listings by keyword, category,
-  location, currency, price range, cursor pagination, and sort order. Price
+  location, currency, price range, cursor pagination, and sort order. When
+  NIP-50 search relays are configured, keyword searches query them in parallel
+  with the normal relay scan on every page (including cursor pages); NIP-50
+  matches are tagged `matchedVia: "nip50"` and get a small guaranteed result
+  share, plus any response capacity left unused by normal relay matches. Price
   filters and `price_asc`/`price_desc` sorting require `currency`.
   Category searches are pushed down to relays with `#t` when possible, then
   checked again client-side with a broad fallback if no category-tagged results
@@ -103,8 +108,10 @@ structured image objects, `productType`, `productFormat`, `visibility`
 embedded `shipping`, and subscription tags as fallback data when present.
 
 Tool responses include relay degradation metadata in `_meta`, including queried
-relays, successful relays, failed relays, coverage, response time, hints, and
-truncation flags when response budgeting applies.
+relays, successful relays, incomplete relays, failed relays, coverage, response
+time, hints, and truncation flags when response budgeting applies. A timed-out
+relay is listed in `relaysIncomplete`, does not count toward coverage, and may
+still contribute events received before its timeout.
 
 ## Resources
 
@@ -164,12 +171,63 @@ or process manager should provide.
   invalid.
 - `SHOPSTR_MCP_CATEGORY_CACHE_TTL_MS`: sampled `get_categories` cache TTL in
   milliseconds. Defaults to 24 hours.
+- `SHOPSTR_MCP_NIP05_CACHE_TTL_MS`: NIP-05 verification cache TTL in
+  milliseconds. Defaults to 24 hours.
 - `SHOPSTR_MCP_CACHE_MAX_ENTRIES`: maximum in-memory cache entries before
   oldest-entry eviction. Defaults to 5000.
 - `SHOPSTR_MCP_MAX_CONCURRENT_REQUESTS`: maximum concurrent relay-backed tool
   calls before new calls return a retryable `RATE_LIMITED` error. Defaults to 10.
 
 Invalid or missing values fall back to safe defaults.
+
+## Using with Claude Desktop (or any MCP client)
+
+Install/run the npm package by adding this to your MCP client's config
+(`claude_desktop_config.json` on Claude Desktop):
+
+```json
+{
+  "mcpServers": {
+    "shopstr": {
+      "command": "npx",
+      "args": ["-y", "@shopstr/mcp@0.1.0"],
+      "env": {
+        "SHOPSTR_MCP_RELAYS": "wss://nos.lol,wss://relay.damus.io,wss://purplepag.es",
+        "SHOPSTR_MCP_LOG_LEVEL": "info"
+      }
+    }
+  }
+}
+```
+
+`npx -y @shopstr/mcp@0.1.0` downloads and runs the pinned published package on
+demand, so there is no separate install step. Update the version deliberately
+when adopting a new release.
+
+NIP-50 keyword-search relays are disabled by default because queries are shared
+with those third parties. To opt in, add
+`SHOPSTR_MCP_NIP50_SEARCH_RELAYS` to `env` with a comma-separated relay list.
+
+**For local development**, building from a repository checkout instead of the
+published package, point directly at the built entry point:
+
+```json
+{
+  "mcpServers": {
+    "shopstr-local": {
+      "command": "node",
+      "args": ["/absolute/path/to/shopstr/packages/shopstr-mcp/dist/index.js"],
+      "env": {
+        "SHOPSTR_MCP_RELAYS": "wss://relay.example1.com,wss://relay.example2.com",
+        "SHOPSTR_MCP_LOG_LEVEL": "info"
+      }
+    }
+  }
+}
+```
+
+Run `npm run build` in `packages/shopstr-mcp/` first so `dist/index.js`
+exists, then restart Claude Desktop to pick up the config change.
 
 ## Read-Only Model
 

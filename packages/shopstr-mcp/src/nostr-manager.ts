@@ -2,7 +2,6 @@ import { SimplePool, verifyEvent } from "nostr-tools";
 import type { SubscribeManyParams, SubCloser } from "nostr-tools/abstract-pool";
 
 import type { Logger } from "./logger.js";
-import { TimeoutError } from "./timeout.js";
 import type { NostrEvent, NostrFilter } from "./types.js";
 
 export type NostrRelay = {
@@ -32,8 +31,14 @@ export type FetchOptions = {
   timeoutMs?: number;
 };
 
+export type NostrFetchResult = {
+  events: NostrEvent[];
+  complete: boolean;
+};
+
 const DEFAULT_KEEP_ALIVE_MS = 5 * 60 * 1000;
 const DEFAULT_GC_INTERVAL_MS = 5 * 60 * 1000;
+const DEFAULT_CONNECTION_TIMEOUT_MS = 4_000;
 const DEFAULT_FETCH_TIMEOUT_MS = 60_000;
 
 export class NostrManager {
@@ -44,7 +49,7 @@ export class NostrManager {
       "keepAliveTime" | "gcInterval" | "readable" | "writable"
     >
   > & {
-    connectionTimeout?: number;
+    connectionTimeout: number;
     logger?: Pick<Logger, "warn">;
   };
   private readonly relays: NostrRelay[] = [];
@@ -57,9 +62,8 @@ export class NostrManager {
       gcInterval: params.gcInterval ?? DEFAULT_GC_INTERVAL_MS,
       readable: params.readable ?? true,
       writable: params.writable ?? false,
-      ...(params.connectionTimeout !== undefined && {
-        connectionTimeout: params.connectionTimeout,
-      }),
+      connectionTimeout:
+        params.connectionTimeout ?? DEFAULT_CONNECTION_TIMEOUT_MS,
       ...(params.logger !== undefined && {
         logger: params.logger,
       }),
@@ -174,7 +178,9 @@ export class NostrManager {
     for (const relay of relays) {
       relay.activeSubs.push(sub);
     }
-    await this.keepAlive(relays);
+    this.keepAlive(relays).catch((error) => {
+      this.logRelayWarning("Relay keep-alive failed", "batch", error);
+    });
     return sub;
   }
 
@@ -184,13 +190,28 @@ export class NostrManager {
     relayUrls?: string[],
     options: FetchOptions = {}
   ): Promise<NostrEvent[]> {
+    const result = await this.fetchWithStatus(
+      filters,
+      params,
+      relayUrls,
+      options
+    );
+    return result.events;
+  }
+
+  public async fetchWithStatus(
+    filters: NostrFilter[],
+    params: SubscribeManyParams = {},
+    relayUrls?: string[],
+    options: FetchOptions = {}
+  ): Promise<NostrFetchResult> {
     const timeoutMs = options.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
     const fetchedEvents: NostrEvent[] = [];
     let sub: NostrSub | undefined;
     let settled = false;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-    return await new Promise<NostrEvent[]>((resolve, reject) => {
+    return await new Promise<NostrFetchResult>((resolve, reject) => {
       const cleanup = async (): Promise<void> => {
         if (timeoutId) clearTimeout(timeoutId);
         if (sub) await sub.close();
@@ -202,9 +223,7 @@ export class NostrManager {
       };
 
       timeoutId = setTimeout(() => {
-        settle(() =>
-          reject(new TimeoutError("Relay fetch timed out", timeoutMs))
-        );
+        settle(() => resolve({ events: fetchedEvents, complete: false }));
       }, timeoutMs);
 
       const originalOnevent = params.onevent;
@@ -229,7 +248,7 @@ export class NostrManager {
               );
               return;
             }
-            settle(() => resolve(fetchedEvents));
+            settle(() => resolve({ events: fetchedEvents, complete: true }));
           });
         },
         onclose: (reasons) => {
@@ -259,11 +278,16 @@ export class NostrManager {
   ): void {
     if (this.relays.some((relay) => relay.url === relayUrl)) return;
 
-    let relayPromise = this.pool.ensureRelay(relayUrl, params);
+    const relayParams = {
+      connectionTimeout:
+        params.connectionTimeout ?? this.params.connectionTimeout,
+    };
+
+    let relayPromise = this.pool.ensureRelay(relayUrl, relayParams);
     relayPromise.catch(() => undefined);
 
     const ensureRelaySafely = (): typeof relayPromise => {
-      relayPromise = this.pool.ensureRelay(relayUrl, params);
+      relayPromise = this.pool.ensureRelay(relayUrl, relayParams);
       relayPromise.catch(() => undefined);
       return relayPromise;
     };

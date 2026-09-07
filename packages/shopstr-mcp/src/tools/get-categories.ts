@@ -57,6 +57,7 @@ export async function handleGetCategories(
   let relayMeta: RelayFetchMeta = {
     relaysQueried: [],
     relaysSucceeded: [],
+    relaysIncomplete: [],
     relaysFailed: [],
     degraded: false,
     coverage: 1,

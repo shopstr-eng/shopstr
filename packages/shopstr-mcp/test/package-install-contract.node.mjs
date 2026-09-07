@@ -33,3 +33,14 @@ test("pins the MCP nostr-tools version exactly across manifests and lockfile", (
 test("keeps the MCP Node engine aligned with the repository runtime", () => {
   assert.equal(mcpPackage.engines.node, rootPackage.engines.node);
 });
+
+test("keeps MCP package metadata aligned with the lockfile", () => {
+  const expectedPackageName =
+    process.env.SHOPSTR_MCP_EXPECTED_PACKAGE_NAME ?? "@shopstr/mcp";
+
+  assert.equal(mcpPackage.name, expectedPackageName);
+  assert.equal(mcpLockfile.name, mcpPackage.name);
+  assert.equal(mcpLockfile.packages[""].name, mcpPackage.name);
+  assert.equal(mcpLockfile.version, mcpPackage.version);
+  assert.equal(mcpLockfile.packages[""].version, mcpPackage.version);
+});
