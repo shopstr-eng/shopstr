@@ -1,3 +1,5 @@
+import { useHodlOrders } from "@/utils/hooks/use-hodl-orders";
+import HodlOrderDetails from "@/components/hodl/hodl-order-details";
 import { useContext, useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { Card, CardBody, CardHeader, Divider, Spinner } from "@heroui/react";
@@ -41,6 +43,12 @@ function DisputesDashboard() {
   const arbiterPubkey = process.env.NEXT_PUBLIC_ARBITER_NOSTR_PUBKEY;
   const isArbiter = !!arbiterPubkey && userPubkey === arbiterPubkey;
 
+  const { orders: hodlOrders, error: hodlOrdersError } = useHodlOrders(
+    isArbiter ? signer : null,
+    isArbiter ? userPubkey : null,
+    true
+  );
+  const [showHodlHistory, setShowHodlHistory] = useState(false);
   const [disputes, setDisputes] = useState<DisputeRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -112,8 +120,8 @@ function DisputesDashboard() {
 
     let cancelled = false;
 
+    let timer: ReturnType<typeof setTimeout>;
     const load = async () => {
-      setIsLoadingHodl(true);
       try {
         const parsed = await fetchHodlDisputeEvents({
           nostr,
@@ -140,13 +148,17 @@ function DisputesDashboard() {
         );
         setHodlDisputes([]);
       } finally {
-        if (!cancelled) setIsLoadingHodl(false);
+        if (!cancelled) {
+          setIsLoadingHodl(false);
+          timer = setTimeout(load, 30000);
+        }
       }
     };
 
     load();
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [isArbiter, nostr, arbiterPubkey, signer]);
 
@@ -155,7 +167,8 @@ function DisputesDashboard() {
   };
 
   const handleHodlResolved = (orderId: string) => {
-    setHodlDisputes((prev) => prev.filter((d) => d.orderId !== orderId));
+    // Durable order status, refreshed below, controls history after resolution.
+    void orderId;
   };
 
   if (!isAuthStateResolved || !isArbiter) {
@@ -223,14 +236,33 @@ function DisputesDashboard() {
 
       <Divider className="my-10" />
 
+      <section
+        className="mb-8 flex flex-col gap-3"
+        aria-label="Seller payout support"
+      >
+        <h2 className="text-xl font-bold">Seller payouts needing attention</h2>
+        {hodlOrdersError && <p className="text-red-500">{hodlOrdersError}</p>}
+        {hodlOrders
+          .filter(
+            (order) =>
+              order.status === "settled" && order.payoutStatus !== "paid"
+          )
+          .map((order) => (
+            <div key={order.paymentHash} className="rounded-lg border p-3">
+              <HodlOrderDetails paymentHash={order.paymentHash} showParties />
+            </div>
+          ))}
+        {!hodlOrdersError &&
+          !hodlOrders.some(
+            (order) =>
+              order.status === "settled" && order.payoutStatus !== "paid"
+          ) && <p>No unpaid seller payouts in the loaded orders.</p>}
+      </section>
       <h1 className="mb-2 text-2xl font-bold">Lightning Escrow Disputes</h1>
       <p className="mb-6 text-sm text-gray-500">
-        Hold-invoice escrow. Ruling here settles or cancels the invoice
-        directly, moving the sats immediately. These disputes reach you as
-        NIP-59 gift wraps and are decrypted locally with your key — nothing
-        below is readable on a relay. Anyone can still address a wrap to this
-        arbiter, so treat each row as a claim: the server rejects rulings on
-        orders these keys are not party to.
+        Review private Lightning escrow disputes. Release to buyer returns the
+        held payment. Release to seller settles escrow and starts the seller's
+        payout.
       </p>
       {isLoadingHodl ? (
         <Spinner size="lg" />
@@ -240,39 +272,75 @@ function DisputesDashboard() {
         <div>No open Lightning escrow disputes.</div>
       ) : (
         <div className="flex flex-col gap-4">
-          {hodlDisputes.map((dispute) => (
-            <Card key={dispute.orderId}>
-              <CardHeader className="flex flex-col items-start gap-1">
-                {/* The d tag is the hold invoice's payment hash — the same
+          <label className="flex gap-2">
+            <input
+              type="checkbox"
+              checked={showHodlHistory}
+              onChange={(e) => setShowHodlHistory(e.target.checked)}
+            />{" "}
+            Show resolved disputes
+          </label>
+          {hodlOrdersError && <p className="text-red-500">{hodlOrdersError}</p>}
+          {hodlDisputes
+            .filter((dispute) => {
+              const order = hodlOrders.find(
+                (o) => o.paymentHash === dispute.orderId
+              );
+              return (
+                showHodlHistory ||
+                !order ||
+                !["settled", "cancelled"].includes(order.status)
+              );
+            })
+            .map((dispute) => (
+              <Card key={dispute.orderId}>
+                <CardHeader className="flex flex-col items-start gap-1">
+                  {/* The d tag is the hold invoice's payment hash — the same
                     identifier the buyer and seller see on their order. */}
-                <div className="font-semibold break-all">
-                  Payment hash: {dispute.orderId}
-                </div>
-                <div className="text-sm text-gray-500">
-                  Raised {new Date(dispute.createdAt * 1000).toLocaleString()}
-                </div>
-              </CardHeader>
-              <Divider />
-              <CardBody className="flex flex-col gap-2">
-                <div>
-                  <span className="font-semibold">Reason: </span>
-                  {dispute.description || "(none given)"}
-                </div>
-                {/* Deliberately labelled "raised by" and not "buyer"/"seller":
+                  <div className="font-semibold break-all">
+                    Payment hash: {dispute.orderId}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    Raised {new Date(dispute.createdAt * 1000).toLocaleString()}
+                  </div>
+                </CardHeader>
+                <Divider />
+                <CardBody className="flex flex-col gap-2">
+                  <div>
+                    <span className="font-semibold">Reason: </span>
+                    {dispute.description || "(none given)"}
+                  </div>
+                  {/* Deliberately labelled "raised by" and not "buyer"/"seller":
                     kind 30410 carries no role, and the event author is only a
                     claim until the server checks it against the order row. */}
-                <div className="text-sm break-all">
-                  <span className="font-semibold">Raised by: </span>
-                  {dispute.authorPubkey}
-                </div>
-                <HodlArbiterControls
-                  paymentHash={dispute.orderId}
-                  description={dispute.description}
-                  onResolved={() => handleHodlResolved(dispute.orderId)}
-                />
-              </CardBody>
-            </Card>
-          ))}
+                  <div className="text-sm break-all">
+                    <span className="font-semibold">Raised by: </span>
+                    {dispute.authorPubkey}
+                  </div>
+                  <HodlOrderDetails paymentHash={dispute.orderId} showParties />
+                  {hodlOrders.some(
+                    (o) =>
+                      o.paymentHash === dispute.orderId &&
+                      o.status === "accepted" &&
+                      o.arbiterPubkey === userPubkey &&
+                      [o.buyerPubkey, o.sellerPubkey].includes(
+                        dispute.authorPubkey
+                      )
+                  ) ? (
+                    <HodlArbiterControls
+                      paymentHash={dispute.orderId}
+                      description={dispute.description}
+                      onResolved={() => handleHodlResolved(dispute.orderId)}
+                    />
+                  ) : (
+                    <p>
+                      Ruling controls are available only for a verified party’s
+                      dispute on an active held order.
+                    </p>
+                  )}
+                </CardBody>
+              </Card>
+            ))}
         </div>
       )}
     </div>

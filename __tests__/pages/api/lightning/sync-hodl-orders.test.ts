@@ -1,3 +1,6 @@
+jest.mock("@/utils/lightning/hodl-seller-payout", () => ({
+  reconcileHodlPayouts: jest.fn().mockResolvedValue(undefined),
+}));
 const applyRateLimitMock = jest.fn();
 const syncAllPendingHodlOrdersMock = jest.fn();
 const getHodlInvoiceProviderMock = jest.fn();

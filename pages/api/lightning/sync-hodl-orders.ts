@@ -1,3 +1,5 @@
+import { reconcileHodlDecisions } from "@/utils/lightning/hodl-recovery";
+import { reconcileHodlPayouts } from "@/utils/lightning/hodl-seller-payout";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { timingSafeEqual } from "crypto";
 import { applyRateLimit } from "@/utils/rate-limit";
@@ -24,25 +26,7 @@ function isAuthorizedCron(req: NextApiRequest): boolean {
   return timingSafeEqual(presented, expected);
 }
 
-/**
- * Sweeps every non-terminal escrow order and reconciles it against the
- * Lightning backend.
- *
- * `open → accepted` is written nowhere else, and `accepted_at` is stamped in
- * that same transition — which the seller dispute timeout is measured from. So
- * without something calling this on a schedule, a seller dispute can never
- * become actionable.
- *
- * {@link syncHodlOrderStatus} runs inline on `hodl-order-status`, which covers
- * any order a party is actively watching. This route exists for the rest: a
- * buyer who closed the tab after paying, or an order whose parties are both
- * offline.
- *
- * Guarded by a shared secret rather than NIP-98 because the caller is a
- * scheduler, not a person — there is no Nostr identity to sign with. Requires
- * `CRON_SECRET`; with it unset the route refuses everything rather than
- * defaulting open.
- */
+/** Authenticated scheduled recovery for hosts that cannot keep a worker running. */
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -71,6 +55,10 @@ export default async function handler(
   let outcomes;
   try {
     outcomes = await syncAllPendingHodlOrders();
+    await Promise.all([
+      reconcileHodlPayouts(),
+      reconcileHodlDecisions(outcomes),
+    ]);
   } catch (error) {
     // Per-order failures are already caught and logged inside the sweep, so
     // reaching here means the batch itself could not be started — listing the

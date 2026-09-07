@@ -1,3 +1,4 @@
+import { getHodlPolicy, holdTiming } from "./hodl-policy";
 import {
   CreateHoldInvoiceParams,
   CreateHoldInvoiceResult,
@@ -7,36 +8,9 @@ import {
   HodlInvoiceStatus,
   LookupInvoiceResult,
 } from "./hodl-invoice-provider";
-import type {
-  HodlInvoiceSubscription,
-  HodlInvoiceSubscriptionHandlers,
-  HodlInvoiceSubscriptionProvider,
-} from "./hodl-invoice-subscription";
 import { normalizePaymentHash, paymentHashFromPreimage } from "./payment-hash";
 
-/**
- * {@link HodlInvoiceProvider} backed by a real LND node over gRPC.
- *
- * Speaks to LND's `invoicesrpc.Invoices` service: `AddHoldInvoice`,
- * `LookupInvoiceV2`, `SettleInvoice`, `CancelInvoice`, and — via the optional
- * {@link file://./hodl-invoice-subscription.ts} capability —
- * `SubscribeSingleInvoice`. The connection setup
- * (TLS from `LND_TLS_CERT_HEX`, macaroon from `LND_INVOICE_MACAROON_HEX`,
- * `GRPC_SSL_CIPHER_SUITES=HIGH+ECDSA`, LND's documented proto-loader options)
- * is the pattern proven by `scripts/lnd-test-connection.mjs`.
- *
- * Everything LND returns is translated down into the narrow shapes the
- * interface already defines, so swapping this in for
- * {@link file://./mock-hodl-invoice-provider.ts} requires no changes anywhere
- * else. In particular this class deliberately does NOT widen the contract:
- * `lookupInvoice` returns only `status` and (once settled) `preimage`, and the
- * rich LND invoice — `add_index`, `settle_index`, `amt_paid_msat`, `htlcs` —
- * stops here.
- *
- * Like the interface and the mock, this performs no identity checks: anyone
- * holding the preimage can settle, anyone holding the payment hash can cancel.
- * Authorization lives in a layer above.
- */
+/** LND invoice RPCs; authorization is enforced by the API handlers. */
 
 /** Injection seam. Mirrors the generated grpc-js client for the four calls
  *  used here, so tests can supply a fake and never load `@grpc/grpc-js`. */
@@ -61,34 +35,12 @@ export interface LndInvoicesClient {
     options: LndCallOptions,
     callback: LndCallback<Record<string, never>>
   ): void;
-  /**
-   * Server-streaming, so unlike the four unary calls it returns a stream
-   * instead of taking a callback, and carries no deadline — the whole point
-   * is that it stays open.
-   *
-   * Optional so that every fake client written against the unary methods
-   * stays a valid `LndInvoicesClient`; `subscribeToInvoice` checks for it and
-   * fails loudly rather than calling undefined.
-   */
-  SubscribeSingleInvoice?(
-    request: SubscribeSingleInvoiceRequest
-  ): LndInvoiceStream;
+  GetInfo?(
+    request: Record<string, never>,
+    options: LndCallOptions,
+    callback: LndCallback<{ block_height?: number; synced_to_chain?: boolean }>
+  ): void;
   close?(): void;
-}
-
-/**
- * The slice of grpc-js's `ClientReadableStream` this provider uses.
- *
- * `cancel()` rather than `destroy()`: cancelling tells the server to stop
- * sending, which is what releases the subscription on LND's side. It also
- * makes the stream emit a CANCELLED error, which the subscription swallows
- * because it asked for it.
- */
-export interface LndInvoiceStream {
-  on(event: "data", listener: (invoice: LndInvoiceResponse) => void): void;
-  on(event: "error", listener: (error: LndGrpcError) => void): void;
-  on(event: "end", listener: () => void): void;
-  cancel(): void;
 }
 
 export interface LndCallOptions {
@@ -110,6 +62,7 @@ interface AddHoldInvoiceRequest {
   hash: Uint8Array;
   value: number;
   expiry: number;
+  cltv_expiry: number;
   memo?: string;
 }
 
@@ -126,16 +79,6 @@ interface CancelInvoiceRequest {
 }
 
 /**
- * Note the field is `r_hash`, not `payment_hash` — `invoices.proto` spells
- * this one differently from `CancelInvoiceMsg`, and `keepCase: true` means
- * the proto's own spelling is what the client expects. Getting it wrong
- * yields a subscription to the all-zero hash rather than an error.
- */
-interface SubscribeSingleInvoiceRequest {
-  r_hash: Uint8Array;
-}
-
-/**
  * Only the fields this provider reads. `add_index` is typed `string | number`
  * on purpose — see {@link parseLndInteger}.
  */
@@ -146,6 +89,7 @@ interface AddHoldInvoiceResponse {
 }
 
 interface LndInvoiceResponse {
+  htlcs?: Parameters<typeof holdTiming>[0];
   state?: string;
   r_hash?: Uint8Array;
   r_preimage?: Uint8Array;
@@ -163,8 +107,7 @@ export interface LndHodlInvoiceProviderOptions {
   defaultExpirySeconds?: number;
 }
 
-/** Matches the mock's default, so switching backends does not silently
- *  change how long unpaid invoices stay payable. */
+/** Lifetime of an unpaid invoice; accepted HTLCs have separate block deadlines. */
 const DEFAULT_EXPIRY_SECONDS = 3600;
 const DEFAULT_CALL_TIMEOUT_MS = 15_000;
 
@@ -183,22 +126,7 @@ const GRPC_STATUS_NOT_FOUND = 5;
 
 const HEX_32_BYTE_RUN = /\b[0-9a-f]{64}\b/gi;
 
-/**
- * LND's `Invoice.InvoiceState` enum → our status strings.
- *
- * Two traps encoded here, both observed against a live node rather than
- * assumed:
- *  1. LND spells it `CANCELED` (one L); this codebase's interface uses
- *     `cancelled` (two). Mapping through an explicit table is what keeps that
- *     divergence from turning into a status that matches nothing downstream.
- *  2. `ACCEPTED` is the state escrow actually depends on — a paid-but-held
- *     HTLC. It is not an error or a transient, and must not collapse to
- *     `open`.
- *
- * `enums: String` in the loader options is what makes these arrive as names
- * rather than integers. If someone drops that option, every lookup starts
- * throwing here instead of silently mapping the wrong state.
- */
+// Preserve ACCEPTED (held) separately from OPEN; LND spells CANCELED with one L.
 const INVOICE_STATE_TO_STATUS: Readonly<Record<string, HodlInvoiceStatus>> = {
   OPEN: "open",
   ACCEPTED: "accepted",
@@ -206,27 +134,8 @@ const INVOICE_STATE_TO_STATUS: Readonly<Record<string, HodlInvoiceStatus>> = {
   CANCELED: "cancelled",
 };
 
-/**
- * LND error `details` → our typed codes.
- *
- * Matching on the message text rather than the gRPC status code is not
- * sloppiness, it is forced: LND returns status 2 (`UNKNOWN`) for nearly every
- * semantic failure in this API. Verified against a live node:
- *
- *   duplicate payment hash    → 2 UNKNOWN  "invoice with payment hash already exists"
- *   settle an unpaid invoice  → 2 UNKNOWN  "invoice still open"
- *   settle a cancelled one    → 2 UNKNOWN  "invoice already canceled"
- *   cancel a settled one      → 2 UNKNOWN  "invoice already settled"
- *   settle/cancel unknown     → 2 UNKNOWN  "unable to locate invoice"
- *   lookup unknown            → 5 NOT_FOUND "unable to locate invoice"
- *
- * So branching on `code` alone would fold "already settled" together with
- * "TLS handshake failed". The status code is still honoured for `NOT_FOUND`,
- * which LND does use correctly on the lookup path.
- *
- * `message` is our own prose in every case: LND's text is matched against but
- * never forwarded, so nothing this table produces can echo request data.
- */
+// LND uses UNKNOWN for multiple semantic errors, so match known details.
+// Return our own messages; never forward raw node errors containing secrets.
 const ERROR_SIGNATURES: ReadonlyArray<{
   pattern: RegExp;
   code: HodlInvoiceErrorCode;
@@ -274,20 +183,7 @@ const ERROR_SIGNATURES: ReadonlyArray<{
   },
 ];
 
-/**
- * Infrastructure failure: the node was unreachable, rejected our credentials,
- * timed out, or answered with something this provider could not interpret.
- *
- * Deliberately NOT a {@link HodlInvoiceError}. That type's `code` union
- * enumerates conditions the *caller* caused and can act on, and every existing
- * consumer already treats an unrecognised throw from a provider method as a
- * retryable 502 while mapping `HodlInvoiceError` to a 4xx. Reporting "LND is
- * down" as a caller error would invert that: it would tell a buyer their
- * request was malformed and stop the retry that would have succeeded.
- *
- * `message` is always redacted via {@link describeGrpcFailure} before it gets
- * here, so this error is safe to log.
- */
+/** Node/transport failure, distinct from invalid invoice requests. Messages are redacted. */
 export class LndProviderError extends Error {
   /** gRPC status code, when the failure came back from a call. */
   public readonly grpcCode?: number;
@@ -299,23 +195,7 @@ export class LndProviderError extends Error {
   }
 }
 
-/**
- * Renders a gRPC failure as a log-safe string.
- *
- * Same discipline as `describeFailure` in the settle/dispute API routes, and
- * for a sharper reason here: this module is the one place that handles a raw
- * preimage, and an LND error can quote the request it failed on. The rules:
- *
- *  1. The message is rebuilt from `code` and `details`/`message` only. The
- *     error object is never passed through, so a preimage hanging off a
- *     `cause`, a stack frame, or a metadata trailer cannot ride along.
- *  2. Every 64-hex run other than `allowedHash` is replaced. Redacting by
- *     shape rather than by comparing against the secret covers the case that
- *     matters most — an error that quotes a value this scope never held.
- *
- * @param allowedHash Payment hash that may appear in the clear. Omit on paths
- * where no hash is safe to echo.
- */
+// Rebuild errors from scalar fields and redact every 32-byte hex value except the allowed hash.
 export function describeGrpcFailure(
   error: unknown,
   allowedHash?: string
@@ -338,21 +218,7 @@ export function describeGrpcFailure(
   );
 }
 
-/**
- * Reads a 64-bit LND field that arrives as a decimal string.
- *
- * `longs: String` in the loader options means `add_index`, `value`,
- * `settle_index`, `amt_paid_msat` and friends come back as `"7"`, not `7` —
- * confirmed against a live node. The failure mode this guards is quiet:
- * `add_index > 0` on the string `"7"` happens to work, `"10" < "9"` does not,
- * and `record.add_index + 1` yields `"71"`. So every such field is parsed
- * explicitly instead of being trusted to coerce.
- *
- * Accepts a number too, so the provider keeps working if the loader options
- * are ever changed to `longs: Number`.
- *
- * @returns The value as a safe integer, or `undefined` if absent or malformed.
- */
+/** Decode LND int64 strings without unsafe integer coercion. */
 export function parseLndInteger(value: unknown): number | undefined {
   if (typeof value === "number") {
     return Number.isSafeInteger(value) ? value : undefined;
@@ -362,9 +228,7 @@ export function parseLndInteger(value: unknown): number | undefined {
   return Number.isSafeInteger(parsed) ? parsed : undefined;
 }
 
-export class LndHodlInvoiceProvider
-  implements HodlInvoiceProvider, HodlInvoiceSubscriptionProvider
-{
+export class LndHodlInvoiceProvider implements HodlInvoiceProvider {
   private readonly callTimeoutMs: number;
   private readonly defaultExpirySeconds: number;
   private readonly clientFactory: () => Promise<LndInvoicesClient>;
@@ -392,12 +256,8 @@ export class LndHodlInvoiceProvider
     const { amountSats, memo, expirySeconds } = params;
     const paymentHash = normalizePaymentHash(params.paymentHash);
 
-    // Validated here rather than left to LND, because LND does not agree with
-    // the mock about what is valid: `AddHoldInvoice` with `value: 0` succeeds
-    // and yields an open-amount invoice any payer can satisfy for 1 sat. On an
-    // escrow order that is a silent underpayment, so a zero or fractional
-    // amount has to be rejected before the call, exactly as the mock does.
-    if (!Number.isInteger(amountSats) || amountSats <= 0) {
+    // LND accepts zero-amount invoices, which would allow escrow underpayment.
+    if (!Number.isSafeInteger(amountSats) || amountSats <= 0) {
       throw new HodlInvoiceError(
         "invalid_amount",
         "amountSats must be a positive integer number of satoshis"
@@ -421,6 +281,7 @@ export class LndHodlInvoiceProvider
             hash: hexToBytes(paymentHash),
             value: amountSats,
             expiry: expirySeconds ?? this.defaultExpirySeconds,
+            cltv_expiry: getHodlPolicy().cltvDelta,
             ...(memo === undefined ? {} : { memo }),
           },
           options,
@@ -469,25 +330,44 @@ export class LndHodlInvoiceProvider
 
     const status = readInvoiceStatus(invoice, normalized);
 
-    // Gated on both the state and a non-empty buffer. LND returns `r_preimage`
-    // as 32 zero-length bytes until settlement — observed as `""` while
-    // ACCEPTED — so keying off presence alone would surface an empty-string
-    // preimage, which reads as "revealed" to any caller doing a truthiness or
-    // `"preimage" in result` check. Absent in every non-settled state, exactly
-    // like the mock.
+    // Do not expose an absent preimage before settlement.
     const preimage =
       status === "settled" ? bytesToHex(invoice.r_preimage) : undefined;
 
+    const timing = holdTiming(invoice.htlcs ?? []);
+    const info = timing.holdExpiryHeight ? await this.getNodeInfo() : undefined;
+    if (info && !info.synced) throw new Error("Lightning node is not synced");
     return {
+      ...timing,
+      ...(info ? { observedBlockHeight: info.blockHeight } : {}),
       status,
       ...(preimage === undefined || preimage.length === 0 ? {} : { preimage }),
     };
   }
 
+  async getNodeInfo(): Promise<{ blockHeight: number; synced: boolean }> {
+    const info = await this.call<{
+      block_height?: number;
+      synced_to_chain?: boolean;
+    }>(
+      "GetInfo",
+      (client, options, callback) => {
+        if (!client.GetInfo)
+          throw new LndProviderError("LND GetInfo is unavailable");
+        client.GetInfo({}, options, callback);
+      },
+      ""
+    );
+    if (!Number.isSafeInteger(info.block_height) || info.block_height! < 0)
+      throw new LndProviderError("Invalid LND block height");
+    return {
+      blockHeight: info.block_height!,
+      synced: info.synced_to_chain === true,
+    };
+  }
+
   async settleInvoice(preimage: string): Promise<void> {
-    // Deriving the hash from the preimage mirrors the mock: possession of the
-    // secret is the only thing this call requires. It also gives the redactor
-    // one hash it may safely echo, while the preimage itself stays redacted.
+    // Validate the secret and derive the only hash safe to include in errors.
     const paymentHash = paymentHashFromPreimage(preimage);
 
     // LND is natively idempotent here: settling an already-SETTLED invoice
@@ -523,100 +403,6 @@ export class LndHodlInvoiceProvider
         ),
       normalized
     );
-  }
-
-  /**
-   * Opens LND's `SubscribeSingleInvoice` stream for one invoice.
-   *
-   * LND sends the invoice's *current* state as the first message and then one
-   * message per transition, so a subscriber that was offline learns what it
-   * missed from that first message rather than needing a separate catch-up
-   * lookup.
-   *
-   * Failures are reported two different ways on purpose. Anything that stops
-   * the stream from opening at all rejects the returned promise, because the
-   * caller has no handle to close and nothing was subscribed. Anything after
-   * that — a dropped connection, an uninterpretable message — goes to
-   * `handlers.onError`, because by then the caller does hold a subscription
-   * and has to decide whether to close it.
-   *
-   * There is no reconnect here. A subscription is a fast path layered over
-   * polling, and a provider that silently reconnected would hide from its
-   * caller that the fast path lapsed, along with any transition that happened
-   * meanwhile.
-   */
-  async subscribeToInvoice(
-    paymentHash: string,
-    handlers: HodlInvoiceSubscriptionHandlers
-  ): Promise<HodlInvoiceSubscription> {
-    const normalized = normalizePaymentHash(paymentHash);
-    const client = await this.getClient();
-
-    if (typeof client.SubscribeSingleInvoice !== "function") {
-      throw new LndProviderError(
-        "The LND client does not expose SubscribeSingleInvoice; check that " +
-          "invoices.proto was loaded"
-      );
-    }
-
-    let stream: LndInvoiceStream;
-    try {
-      stream = client.SubscribeSingleInvoice({
-        r_hash: hexToBytes(normalized),
-      });
-    } catch (error) {
-      throw translateGrpcError(error, "SubscribeSingleInvoice", normalized);
-    }
-
-    // Set by close(), and by `end`. Every handler checks it first so that
-    // cancelling inside a handler cannot produce one more callback after the
-    // caller believed it was done — including the CANCELLED error grpc-js
-    // raises in response to our own cancel().
-    let closed = false;
-
-    stream.on("data", (invoice) => {
-      if (closed) return;
-      let status: HodlInvoiceStatus;
-      try {
-        status = readInvoiceStatus(invoice, normalized);
-      } catch (error) {
-        // A message for the wrong invoice, or a state this build cannot map.
-        // Reported rather than thrown: throwing here would escape into
-        // grpc-js's emitter as an uncaught exception.
-        handlers.onError(error);
-        return;
-      }
-      try {
-        handlers.onStatus(status);
-      } catch (error) {
-        handlers.onError(error);
-      }
-    });
-
-    stream.on("error", (error) => {
-      if (closed) return;
-      handlers.onError(
-        translateGrpcError(error, "SubscribeSingleInvoice", normalized)
-      );
-    });
-
-    stream.on("end", () => {
-      if (closed) return;
-      closed = true;
-      handlers.onClose();
-    });
-
-    return {
-      close: () => {
-        if (closed) return;
-        closed = true;
-        try {
-          stream.cancel();
-        } catch {
-          // Already torn down by the transport; nothing left to release.
-        }
-      },
-    };
   }
 
   /** Releases the gRPC channel. Not part of the interface. */
@@ -731,19 +517,7 @@ function translateGrpcError(
   );
 }
 
-/**
- * Reads the status out of an LND invoice message, rejecting anything that
- * cannot be trusted.
- *
- * Shared by `lookupInvoice` and `subscribeToInvoice` so the two paths cannot
- * drift: both check that the invoice is the one that was asked for — a
- * mixed-up hash would report someone else's escrow as settled — and both
- * refuse an unrecognised state rather than mapping it to a guess, since
- * guessing `open` invites cancelling funds that are actually held and
- * guessing `settled` releases an order nobody paid.
- *
- * @param expectedHash The payment hash this message must belong to.
- */
+/** Reject mismatched hashes and unknown states instead of guessing payment status. */
 function readInvoiceStatus(
   invoice: LndInvoiceResponse | undefined,
   expectedHash: string
@@ -802,40 +576,13 @@ function decodeHexEnv(name: string): Buffer {
   return Buffer.from(raw, "hex");
 }
 
-/**
- * Unwraps a dynamically imported CommonJS module.
- *
- * Both gRPC packages are CommonJS. Node's ESM loader synthesizes a `default`
- * that is `module.exports`, but a CommonJS-targeted transform (Jest here, and
- * potentially a server bundler) hands back a namespace whose named exports are
- * the API and whose `default` is undefined. Destructuring `{ default: grpc }`
- * therefore works under plain `node` — which is why
- * `scripts/lnd-test-connection.mjs` never hit this — and yields `undefined`
- * under Jest, surfacing as "Cannot read properties of undefined (reading
- * 'loadSync')" at the first call rather than at import.
- *
- * Preferring `default` when present and falling back to the namespace covers
- * both worlds.
- */
+/** Support both native ESM and CommonJS-transformed imports of the gRPC libraries. */
 function interopRequire<T>(module: T): T {
   const candidate = (module as T & { default?: T }).default;
   return candidate ?? module;
 }
 
-/**
- * Builds the real gRPC client, following the setup proven by
- * `scripts/lnd-test-connection.mjs`.
- *
- * `@grpc/grpc-js` and `@grpc/proto-loader` are imported dynamically so that
- * merely importing this module does not pull a native-ish server-only
- * dependency into a bundle or a jsdom test environment. Tests inject a fake
- * client and never reach this function.
- *
- * A stale or corrupted `LND_TLS_CERT_HEX` surfaces as gRPC's
- * "self-signed certificate" — which means "the pinned cert is not the one the
- * node presents", not "self-signed certs are unsupported". Compare
- * fingerprints against the node before suspecting anything else.
- */
+/** Load server-only gRPC dependencies lazily and pin TLS to the configured node certificate. */
 async function createLndInvoicesClient(): Promise<LndInvoicesClient> {
   // LND's tls.cert is ECDSA; LND's own docs require announcing this cipher
   // suite or the handshake fails. Set before credentials are constructed.
@@ -866,6 +613,12 @@ async function createLndInvoicesClient(): Promise<LndInvoicesClient> {
   const descriptor = grpc.loadPackageDefinition(
     packageDefinition
   ) as unknown as {
+    lnrpc: {
+      Lightning: new (
+        address: string,
+        credentials: ReturnType<typeof grpc.credentials.createSsl>
+      ) => LndInvoicesClient;
+    };
     invoicesrpc: {
       Invoices: new (
         address: string,
@@ -883,5 +636,13 @@ async function createLndInvoicesClient(): Promise<LndInvoicesClient> {
     })
   );
 
-  return new descriptor.invoicesrpc.Invoices(host, credentials);
+  const invoices = new descriptor.invoicesrpc.Invoices(host, credentials);
+  const lightning = new descriptor.lnrpc.Lightning(host, credentials);
+  invoices.GetInfo = lightning.GetInfo!.bind(lightning);
+  const close = invoices.close?.bind(invoices);
+  invoices.close = () => {
+    close?.();
+    lightning.close?.();
+  };
+  return invoices;
 }

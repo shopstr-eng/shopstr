@@ -7,7 +7,7 @@
  * run in CI with no Polar node present.
  *
  * The response shapes mirror the fields captured live via
- * `scripts/lnd-payment-test.mjs` against a real Polar node: `status` as one
+ * `utils/lightning/__tests__/hodl-regtest.test.ts` against a real Polar node: `status` as one
  * of the `PaymentStatus` enum names (`enums: String` in the loader options),
  * `payment_hash`/`payment_preimage` as hex strings on `lnrpc.Payment`, and
  * `failure_reason` as a `PaymentFailureReason` enum name.

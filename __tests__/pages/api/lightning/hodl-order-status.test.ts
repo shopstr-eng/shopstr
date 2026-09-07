@@ -1,3 +1,6 @@
+jest.mock("@/utils/db/hodl-payout-store", () => ({
+  getHodlPayoutStatus: async () => "pending",
+}));
 const applyRateLimitMock = jest.fn();
 const verifyNip98RequestMock = jest.fn();
 const getHodlEscrowOrderPartiesMock = jest.fn();
@@ -155,7 +158,11 @@ describe("/api/lightning/hodl-order-status", () => {
     await handler(createRequest(), res as any);
 
     expect(res.statusCode).toBe(200);
-    expect(res.jsonBody).toEqual({ status: "accepted", role: "buyer" });
+    expect(res.jsonBody).toEqual({
+      status: "accepted",
+      role: "buyer",
+      arbiterPubkey: ARBITER_PUBKEY,
+    });
   });
 
   it("reports the seller's role when the seller asks", async () => {
@@ -168,7 +175,11 @@ describe("/api/lightning/hodl-order-status", () => {
     await handler(createRequest(), res as any);
 
     expect(res.statusCode).toBe(200);
-    expect(res.jsonBody).toEqual({ status: "accepted", role: "seller" });
+    expect(res.jsonBody).toEqual({
+      status: "accepted",
+      role: "seller",
+      arbiterPubkey: ARBITER_PUBKEY,
+    });
   });
 
   it("syncs the order before reporting, so reading a status also advances it", async () => {
@@ -176,7 +187,11 @@ describe("/api/lightning/hodl-order-status", () => {
     await handler(createRequest(), res as any);
 
     expect(syncHodlOrderStatusMock).toHaveBeenCalledWith(PAYMENT_HASH);
-    expect(res.jsonBody).toEqual({ status: "accepted", role: "buyer" });
+    expect(res.jsonBody).toEqual({
+      status: "accepted",
+      role: "buyer",
+      arbiterPubkey: ARBITER_PUBKEY,
+    });
   });
 
   it("normalizes an uppercase payment hash before looking it up", async () => {
@@ -300,6 +315,6 @@ describe("/api/lightning/hodl-order-status", () => {
     await handler(createRequest(), res as any);
 
     expect(JSON.stringify(res.jsonBody)).not.toContain(SELLER_PUBKEY);
-    expect(JSON.stringify(res.jsonBody)).not.toContain(ARBITER_PUBKEY);
+    expect(JSON.stringify(res.jsonBody)).toContain(ARBITER_PUBKEY);
   });
 });

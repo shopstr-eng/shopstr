@@ -1,3 +1,6 @@
+jest.mock("@/utils/lightning/hodl-checkout-readiness", () => ({
+  assertHodlCheckoutReady: jest.fn().mockResolvedValue(undefined),
+}));
 const applyRateLimitMock = jest.fn();
 const verifyNip98RequestMock = jest.fn();
 const registerHodlEscrowOrderMock = jest.fn();
@@ -118,6 +121,7 @@ const validBody = {
 
 function createResponse() {
   return {
+    setHeader: jest.fn(),
     statusCode: 200,
     jsonBody: undefined as unknown,
     status(code: number) {
@@ -176,6 +180,15 @@ describe("/api/db/register-hodl-order", () => {
       createHoldInvoice: createHoldInvoiceMock,
     });
     registerHodlEscrowOrderMock.mockResolvedValue("created");
+  });
+
+  it("accepts the empty optional selections emitted by CheckoutCard", async () => {
+    const res = createResponse();
+    await handler(
+      createRequest({ ...validBody, selectedVolume: "", selectedWeight: "" }),
+      res as any
+    );
+    expect(res.statusCode).toBe(201);
   });
 
   afterAll(() => {

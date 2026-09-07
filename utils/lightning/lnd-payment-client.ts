@@ -4,26 +4,8 @@ import {
 } from "./lnd-hodl-invoice-provider";
 import { normalizePaymentHash } from "./payment-hash";
 
-/**
- * Sends and tracks outbound Lightning payments over LND's `routerrpc.Router`
- * service — `SendPaymentV2` and `TrackPaymentV2` — so that
- * {@link file://./hodl-seller-payout.ts} has a real payer instead of the
- * `HodlSellerPayoutPayerUnavailableError` stub it started with.
- *
- * The connection setup (TLS from `LND_TLS_CERT_HEX`, `GRPC_SSL_CIPHER_SUITES`,
- * LND's documented proto-loader options) mirrors
- * {@link file://./lnd-hodl-invoice-provider.ts} exactly; only the macaroon and
- * the service differ. Credentials come from `LND_PAYMENT_MACAROON_HEX`, a
- * macaroon scoped to only `SendPaymentV2` and `TrackPaymentV2` — deliberately
- * not the invoice macaroon, since receiving and sending are different
- * capabilities and should not share a credential.
- *
- * `SendPaymentV2` is called with `payment_request` and `fee_limit_sat` only.
- * Confirmed live against a Polar node (`scripts/lnd-payment-test.mjs`) that
- * LND decodes the invoice server-side — `dest`/`amt`/`payment_hash` are never
- * extracted client-side, and a macaroon scoped to just these two methods (no
- * `DecodePayReq`) is sufficient.
- */
+// Uses a separate macaroon scoped to SendPaymentV2 and TrackPaymentV2.
+// LND decodes the payout invoice; no DecodePayReq permission is needed.
 
 /** Injection seam mirroring the generated grpc-js Router client. */
 export interface LndRouterClient {
@@ -61,14 +43,7 @@ interface LndPaymentUpdate {
   failure_reason?: string;
 }
 
-/**
- * What a `SendPaymentV2`/`TrackPaymentV2` stream resolved to.
- *
- * `unknown` is not an error — the stream ended (or was cut off) without ever
- * reaching `SUCCEEDED`/`FAILED`. Payers must treat that the same as
- * {@link file://./hodl-seller-payout.ts}'s `PayoutInvoiceStatus.unknown`:
- * a third answer, not a coin flip between success and failure.
- */
+/** A closed or timed-out stream is unknown, never proof that a payment failed. */
 export type LndPaymentOutcome =
   | { status: "succeeded"; paymentHash: string; preimage: string }
   | { status: "failed"; paymentHash?: string; failureReason: string }
@@ -108,15 +83,7 @@ export class LndPaymentError extends Error {
   }
 }
 
-/**
- * Raised only for missing/malformed configuration (`LND_PAYMENT_MACAROON_HEX`
- * and friends) — a certainty that nothing was dialled out, as opposed to
- * {@link LndPaymentError} which can mean a send genuinely reached the wire.
- * Callers that need to tell "no payer configured" apart from "payment
- * attempted and failed" (as `hodl-seller-payout.ts` does, mapping this to
- * {@link file://./hodl-seller-payout.ts}'s `HodlSellerPayoutPayerUnavailableError`)
- * should check for this type specifically.
- */
+/** Missing/invalid configuration: no payment RPC was attempted. */
 export class LndPaymentConfigError extends Error {
   constructor(message: string) {
     super(message);
@@ -142,14 +109,7 @@ export class LndPaymentClient {
     }
   }
 
-  /**
-   * Sends a payment for a bolt11 invoice and waits for a terminal outcome.
-   *
-   * No hash is known ahead of the call — `payment_request` is the only
-   * identifier supplied — so nothing is exempted from redaction on the error
-   * path here; a stream error can only ever surface `[redacted]` in place of
-   * any 64-hex run.
-   */
+  /** Send the invoice and await a terminal outcome, redacting all secret-looking error values. */
   async sendPayment(params: {
     paymentRequest: string;
     feeLimitSat: number;
@@ -220,13 +180,7 @@ export class LndPaymentClient {
     return this.clientPromise;
   }
 
-  /**
-   * Consumes a payment stream until a terminal status, the stream ends, or it
-   * times out — all three resolve, never reject, since none of them is a
-   * failure to communicate with the node. Only a stream `error` event (or a
-   * throw from the fake/client itself) rejects, and always via
-   * {@link translatePaymentError} so nothing raw escapes.
-   */
+  /** A terminal update, stream end or timeout resolves; transport errors reject with redaction. */
   private consumeStream(
     stream: LndPaymentStream,
     method: string,
@@ -326,14 +280,7 @@ function interopRequire<T>(module: T): T {
   return candidate ?? module;
 }
 
-/**
- * Builds the real gRPC Router client, following the setup proven live by
- * `scripts/lnd-payment-test.mjs`: TLS + a metadata-generator macaroon
- * credential, `routerrpc.Router` off `router.proto` (which imports
- * `lightning.proto` for the streamed `Payment` type).
- *
- * Tests inject a fake client and never reach this function.
- */
+/** Create the TLS-pinned Router client with its restricted payment macaroon. */
 async function createLndRouterClient(): Promise<LndRouterClient> {
   process.env.GRPC_SSL_CIPHER_SUITES ??= "HIGH+ECDSA";
 
