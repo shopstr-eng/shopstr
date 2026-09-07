@@ -13,6 +13,7 @@ import {
   profileNameToSlug,
 } from "../db-service";
 import type { NostrEvent } from "../../types/types";
+import { Invoice } from "@getalby/lightning-tools";
 
 type DbServiceModule = typeof import("../db-service");
 
@@ -452,7 +453,11 @@ describe("db-service helpers", () => {
       process.env.ARBITER_NOSTR_PUBKEY = "a".repeat(64);
       try {
         await withPostgresDbService(async (db) => {
-          const hash = "b".repeat(64);
+          // Real LND regtest invoice for the preimage below (42 sats, 1h expiry).
+          const invoice =
+            "lnbcrt420n1p4f7xrlpp5ct6gp4xa4869y2uld4vsqytrdkgy4n87t8cjl8tx5q3pcf2cuw3qdpa2d5x7urnw3ezq5r0wd6xwun92dg5cgrfde6x2emjv96xjmmwypnxj7r5w4ex2cqzzsxqrrsssp5u323smey4fwja6hqy95s6rm0v34723xn4pehy6xmms2k23scafts9qxpqysgqcyzxln02gfscmenuguuqrkgy2wdarwrt3r0ywscaglxynqcnhk8407fsz8tlc6fzzlgtmazcnmr94j2sdxu2uvhtpw6dxcju7cz4k0gpjsevae";
+          const decoded = new Invoice({ pr: invoice });
+          const hash = decoded.paymentHash;
           const preimage = "c".repeat(64);
           const buyer = "1".repeat(64),
             seller = "2".repeat(64);
@@ -467,9 +472,9 @@ describe("db-service helpers", () => {
             preimage,
             buyerNostrPubkey: buyer,
             sellerNostrPubkey: seller,
-            invoice: "test-invoice",
-            amountSats: 42,
-            expiresAt: new Date(Date.now() + 3600000),
+            invoice,
+            amountSats: decoded.satoshi,
+            expiresAt: new Date((decoded.timestamp + 3600) * 1000),
             details,
           });
           const pool = await db.getInitializedDbPool();
@@ -484,7 +489,13 @@ describe("db-service helpers", () => {
           expect(raw.order_details).not.toContain("Private shipping address");
           expect(await db.getHodlEscrowSettlementSecret(hash)).toBe(preimage);
           const { listHodlOrders } = await import("../hodl-order-store");
-          expect((await listHodlOrders(buyer))[0]?.details).toEqual(details);
+          expect((await listHodlOrders(buyer))[0]).toMatchObject({
+            details,
+            invoice,
+            amountSats: 42,
+            createdAt: decoded.timestamp,
+            expiresAt: decoded.timestamp + 3600,
+          });
           expect((await listHodlOrders(seller))[0]?.details).toEqual(details);
           expect(await listHodlOrders("3".repeat(64))).toEqual([]);
           await db.updateHodlEscrowOrderStatusIfAdvancing(hash, "settled");
