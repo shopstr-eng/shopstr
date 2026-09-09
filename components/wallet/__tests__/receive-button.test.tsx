@@ -20,8 +20,11 @@ import {
   Wallet as CashuWallet,
 } from "@cashu/cashu-ts";
 import {
+  getCachedCashuProofs,
+  getLocalStorageData,
   publishProofEvent,
   publishWalletEvent,
+  setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 import {
@@ -32,9 +35,11 @@ import {
 jest.setTimeout(15000);
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
-  ...jest.requireActual("@/utils/nostr/nostr-helper-functions"),
+  getCachedCashuProofs: jest.fn(),
+  getLocalStorageData: jest.fn(),
   publishProofEvent: jest.fn(),
   publishWalletEvent: jest.fn(),
+  setCachedCashuProofs: jest.fn(),
 }));
 jest.mock("@cashu/cashu-ts", () => ({
   ...jest.requireActual("@cashu/cashu-ts"),
@@ -141,11 +146,13 @@ jest.mock("@heroicons/react/24/outline", () => ({
   InformationCircleIcon: () => <div data-testid="info-icon" />,
 }));
 
-// No more mocks needed for getLocalStorageData as we use StorageManager now
+const mockGetLocalStorageData = getLocalStorageData as jest.Mock;
+const mockGetCachedCashuProofs = getCachedCashuProofs as jest.Mock;
 const mockGetDecodedToken = getDecodedToken as jest.Mock;
 const mockGetTokenMetadata = getTokenMetadata as jest.Mock;
 const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const mockPublishWalletEvent = publishWalletEvent as jest.Mock;
+const mockSetCachedCashuProofs = setCachedCashuProofs as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
 const mockParseP2PKProofSet = parseP2PKProofSet as jest.Mock;
 const mockCheckMintP2pkSupport = checkMintP2pkSupport as jest.Mock;
@@ -201,10 +208,16 @@ const VALID_TOKEN =
 describe("ReceiveButton", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    window.localStorage.clear();
-    jest.spyOn(Storage.prototype, "setItem");
+    Storage.prototype.setItem = jest.fn();
+    mockGetCachedCashuProofs.mockReturnValue([]);
+    mockGetLocalStorageData.mockReturnValue({
+      mints: [],
+      tokens: [],
+      history: [],
+    });
     mockPublishProofEvent.mockResolvedValue(undefined);
     mockPublishWalletEvent.mockResolvedValue(undefined);
+    mockSetCachedCashuProofs.mockReturnValue(undefined);
     mockParseP2PKProofSet.mockReturnValue({ p2pk: null });
     mockCheckMintP2pkSupport.mockResolvedValue({ supported: true });
     mockGetTokenMetadata.mockReturnValue({
@@ -337,6 +350,7 @@ describe("ReceiveButton", () => {
 
     const successModal = await screen.findByText("Token successfully claimed!");
     expect(successModal).toBeInTheDocument();
+    expect(mockSetCachedCashuProofs).toHaveBeenCalledWith(mockProofs);
 
     const closeButton = screen.getByRole("button", { name: /close/i });
     fireEvent.click(closeButton);
@@ -401,21 +415,17 @@ describe("ReceiveButton", () => {
       })
     );
     expect(checkProofsStates).not.toHaveBeenCalled();
-    expect(Storage.prototype.setItem).toHaveBeenCalledWith(
-      "tokens",
-      JSON.stringify([freshProof])
-    );
-    expect(Storage.prototype.setItem).not.toHaveBeenCalledWith(
-      "tokens",
-      JSON.stringify([lockedProof])
-    );
+    expect(mockSetCachedCashuProofs).toHaveBeenCalledWith([freshProof]);
+    expect(mockSetCachedCashuProofs).not.toHaveBeenCalledWith([lockedProof]);
     expect(mockPublishProofEvent).toHaveBeenCalledWith(
       mockNostr,
       mockSigner,
       "https://testmint.com",
       [freshProof],
       "in",
-      "10"
+      "10",
+      undefined,
+      { throwOnFailure: false }
     );
   });
 
@@ -470,9 +480,12 @@ describe("ReceiveButton", () => {
       secret: "secret",
       C: "C1",
     };
-    window.localStorage.setItem("tokens", JSON.stringify([mockProof]));
-    window.localStorage.setItem("mints", JSON.stringify([]));
-    window.localStorage.setItem("history", JSON.stringify([]));
+    mockGetCachedCashuProofs.mockReturnValue([mockProof]);
+    mockGetLocalStorageData.mockReturnValue({
+      mints: [],
+      tokens: [],
+      history: [],
+    });
     mockGetDecodedToken.mockReturnValue({
       mint: "https://testmint.com",
       proofs: [mockProof],

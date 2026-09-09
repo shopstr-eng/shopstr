@@ -58,6 +58,7 @@ import {
 } from "@/utils/cashu/pending-mint-operations";
 import {
   recoverProofsToBuyerWallet,
+  publishProofEventBestEffort,
   withDeadline,
   isTimeoutError,
 } from "@/utils/cashu/wallet-recovery";
@@ -67,8 +68,9 @@ import {
 } from "@/utils/cashu/p2pk-escrow-records";
 import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
-  publishProofEvent,
+  setCachedCashuProofs,
   getSavedAddresses,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
@@ -146,7 +148,8 @@ export default function ProductInvoiceCard({
   discountPercentage?: number;
   originalPrice?: number;
 }) {
-  const { mints, tokens } = getLocalStorageData();
+  const { mints } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
   const {
     pubkey: userPubkey,
     npub: userNPub,
@@ -1939,9 +1942,9 @@ export default function ProductInvoiceCard({
       const wallet = new CashuWallet(mint);
       await wallet.loadMint();
       const mintKeySetIds = await wallet.keyChain.getKeysets();
-      const { tokens: currentTokens, history: currentHistory } =
-        getLocalStorageData();
-      const filteredProofs = (currentTokens as Proof[]).filter((p: Proof) =>
+      const { history: currentHistory } = getLocalStorageData();
+      const currentTokens = getCachedCashuProofs();
+      const filteredProofs = currentTokens.filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
       const deletedEventIds = [
@@ -1972,7 +1975,7 @@ export default function ProductInvoiceCard({
         data.shippingCountry ? data.shippingCountry : undefined,
         data.additionalInfo ? data.additionalInfo : undefined
       );
-      const remainingProofs = (currentTokens as Proof[]).filter(
+      const remainingProofs = currentTokens.filter(
         (p: Proof) =>
           !mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
@@ -1982,7 +1985,6 @@ export default function ProductInvoiceCard({
       } else {
         proofArray = [...remainingProofs];
       }
-      storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
       storage.setJson(STORAGE_KEYS.HISTORY, [
         {
           type: 5,
@@ -1991,7 +1993,8 @@ export default function ProductInvoiceCard({
         },
         ...currentHistory,
       ]);
-      await publishProofEvent(
+      setCachedCashuProofs(proofArray);
+      await publishProofEventBestEffort(
         nostr!,
         signer!,
         mints[0]!,

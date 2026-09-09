@@ -57,6 +57,7 @@ import {
   getDefaultMint,
   getDefaultRelays,
   getLatestLocalContactListEvent,
+  getPendingCashuProofPublishes,
   getLocalStorageData,
   getLocalUserProfileKey,
   isProfileContentPopulated,
@@ -1062,9 +1063,10 @@ describe("getLocalStorageData", () => {
     expect(data.blossomServers).toEqual([getDefaultBlossomServer()]);
   });
 
-  it("initialises tokens to [] in localStorage when the key is absent", () => {
-    getLocalStorageData();
-    expect(localStorage.getItem("tokens")).toBe("[]");
+  it("keeps tokens out of localStorage when the key is absent", () => {
+    const data = getLocalStorageData();
+    expect(data.tokens).toEqual([]);
+    expect(localStorage.getItem("tokens")).toBeNull();
   });
 
   it("initialises history to [] in localStorage when the key is absent", () => {
@@ -1447,6 +1449,14 @@ describe("LogOut", () => {
     expect(localStorage.getItem("npub")).toBeNull();
     expect(localStorage.getItem("signIn")).toBeNull();
     expect(localStorage.getItem("chats")).toBeNull();
+  });
+
+  it("removes queued Cashu proof publishes", () => {
+    localStorage.setItem("shopstr.pendingProofPublishes", "[]");
+
+    LogOut();
+
+    expect(localStorage.getItem("shopstr.pendingProofPublishes")).toBeNull();
   });
 
   it("dispatches a storage event on window", () => {
@@ -3071,7 +3081,7 @@ describe("publishProofEvent", () => {
     expect(signedKinds).toContain(7376);
   });
 
-  it("returns silently on any inner error", async () => {
+  it("rejects when proof publishing cannot access the signer", async () => {
     const signer = {
       getPubKey: jest.fn().mockRejectedValue(new Error("Signer unavailable")),
       encrypt: jest.fn(),
@@ -3081,7 +3091,67 @@ describe("publishProofEvent", () => {
 
     await expect(
       publishProofEvent(nostr as any, signer as any, mint, proofs, "in", "100")
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow("Signer unavailable");
+  });
+
+  it("durably queues an outbound proof update when publishing fails", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn() };
+    (cacheEventToDatabase as jest.Mock).mockRejectedValueOnce(
+      new Error("cache unavailable")
+    );
+
+    const result = await publishProofEvent(
+      nostr as any,
+      signer as any,
+      mint,
+      proofs,
+      "out",
+      "100",
+      ["old-proof-event-id"],
+      { throwOnFailure: false }
+    );
+
+    expect(result).toMatchObject({ published: false, queued: true });
+    expect(getPendingCashuProofPublishes()).toEqual([
+      expect.objectContaining({
+        mint,
+        direction: "out",
+        deletedEventsArray: ["old-proof-event-id"],
+      }),
+    ]);
+  });
+
+  it("reports when neither publishing nor encrypted queuing succeeds", async () => {
+    const signer = makeSigner();
+    const nostr = { publish: jest.fn() };
+    (cacheEventToDatabase as jest.Mock).mockRejectedValueOnce(
+      new Error("cache unavailable")
+    );
+    const setItemSpy = jest
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation((key) => {
+        if (key === "shopstr.pendingProofPublishes") {
+          throw new Error("storage unavailable");
+        }
+      });
+
+    try {
+      await expect(
+        publishProofEvent(
+          nostr as any,
+          signer as any,
+          mint,
+          proofs,
+          "in",
+          "100",
+          undefined,
+          { throwOnFailure: false }
+        )
+      ).resolves.toMatchObject({ published: false, queued: false });
+    } finally {
+      setItemSpy.mockRestore();
+    }
   });
 });
 

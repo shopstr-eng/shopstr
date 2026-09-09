@@ -13,9 +13,10 @@ import {
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import {
-  getStoredMints,
+  getCachedCashuProofs,
   getLocalStorageData,
   publishProofEvent,
+  setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 
@@ -24,9 +25,10 @@ jest.mock("next-themes", () => ({
 }));
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
-  getStoredMints: jest.fn(),
+  getCachedCashuProofs: jest.fn(),
   getLocalStorageData: jest.fn(),
   publishProofEvent: jest.fn(),
+  setCachedCashuProofs: jest.fn(),
 }));
 
 jest.mock("../../utility-components/display-monetary-info", () => ({
@@ -121,17 +123,14 @@ describe("PayButton Component", () => {
     jest.clearAllMocks();
     localStorageMock.clear();
 
-    localStorageMock.setItem("tokens", JSON.stringify(initialTokens));
     localStorageMock.setItem("history", JSON.stringify([]));
+    (getCachedCashuProofs as jest.Mock).mockReturnValue(initialTokens);
 
     (getLocalStorageData as jest.Mock).mockImplementation(() => ({
       mints: ["https://legend.lnbits.com/cashu/api/v1/4gr9XkQ8ez543F4L6f5UqA"],
-      tokens: JSON.parse(localStorageMock.getItem("tokens") || "[]"),
+      tokens: [],
       history: JSON.parse(localStorageMock.getItem("history") || "[]"),
     }));
-    (getStoredMints as jest.Mock).mockReturnValue([
-      "https://legend.lnbits.com/cashu/api/v1/4gr9XkQ8ez543F4L6f5UqA",
-    ]);
   });
 
   test("renders the pay button initially", () => {
@@ -291,7 +290,7 @@ describe("PayButton Component", () => {
       expect(mockMeltProofs).toHaveBeenCalled();
     });
 
-    expect(JSON.parse(localStorageMock.getItem("tokens") || "[]")).toEqual(
+    expect(setCachedCashuProofs).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ id: "different_keyset" }),
         expect.objectContaining({ amount: 10 }), // keep proof
@@ -326,9 +325,45 @@ describe("PayButton Component", () => {
       expect(mockMeltProofs).toHaveBeenCalled();
     });
 
-    expect(JSON.parse(localStorageMock.getItem("tokens") || "[]")).toEqual([
+    expect(setCachedCashuProofs).toHaveBeenCalledWith([
       { id: "different_keyset", amount: 50, secret: "other_secret" },
     ]);
+  });
+
+  test("keeps the updated wallet state when proof publication fails", async () => {
+    const mockInvoice = "lnbc100n...";
+    const changeProofs = [
+      { id: "00d0a1b24d1c1a53", amount: 20, secret: "change_secret" },
+    ];
+
+    mockCreateMeltQuote.mockResolvedValue({ amount: 100, fee_reserve: 2 });
+    mockGetKeySets.mockResolvedValue([{ id: "00d0a1b24d1c1a53" }]);
+    mockSend.mockResolvedValue({
+      keep: [{ id: "00d0a1b24d1c1a53", amount: 10, secret: "keep_secret" }],
+      send: [{ id: "00d0a1b24d1c1a53", amount: 102, secret: "send_secret" }],
+    });
+    mockMeltProofs.mockResolvedValue({ paid: true, change: changeProofs });
+    (publishProofEvent as jest.Mock).mockRejectedValue(
+      new Error("cache unavailable")
+    );
+
+    renderComponent();
+    fireEvent.click(screen.getByRole("button", { name: /pay/i }));
+    fireEvent.change(await screen.findByLabelText("Lightning invoice"), {
+      target: { value: mockInvoice },
+    });
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Pay" })
+    );
+
+    await waitFor(() => {
+      expect(setCachedCashuProofs).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ secret: "keep_secret" }),
+          expect.objectContaining({ secret: "change_secret" }),
+        ])
+      );
+    });
   });
 
   test("handles a failed payment flow", async () => {
@@ -358,9 +393,7 @@ describe("PayButton Component", () => {
 
     expect(screen.getByText(/No routes could be found/)).toBeVisible();
     expect(publishProofEvent).not.toHaveBeenCalled();
-    expect(localStorageMock.getItem("tokens")).toBe(
-      JSON.stringify(initialTokens)
-    );
+    expect(setCachedCashuProofs).not.toHaveBeenCalled();
   });
 
   test("closes payment failed modal", async () => {

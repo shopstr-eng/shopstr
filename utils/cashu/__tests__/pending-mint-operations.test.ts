@@ -208,7 +208,30 @@ describe("recoverPendingMintQuotes", () => {
     expect(wallet.checkMintQuoteBolt11).not.toHaveBeenCalled();
   });
 
-  it("preserves pending record when onProofsClaimed throws", async () => {
+  it("marks quote claimed once proofs are handed to local recovery", async () => {
+    recordPendingMintQuote({
+      quoteId: "q1",
+      mintUrl: "https://m",
+      amount: 100,
+      invoice: "i",
+      status: "paid_unclaimed",
+    });
+    const proofs = [{ id: "k", amount: 100, secret: "s", C: "c" }] as any;
+    const wallet = {
+      checkMintQuoteBolt11: jest.fn().mockResolvedValue({ state: "PAID" }),
+      mintProofsBolt11: jest.fn().mockResolvedValue(proofs),
+    } as any;
+    const result = await recoverPendingMintQuotes({
+      buildWallet: async () => wallet,
+      onProofsClaimed: jest.fn().mockResolvedValue(undefined),
+      logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() } as any,
+    });
+    expect(result.recovered).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(getPendingMintQuotes()).toHaveLength(0);
+  });
+
+  it("preserves pending record when local proof persistence throws", async () => {
     recordPendingMintQuote({
       quoteId: "q1",
       mintUrl: "https://m",
@@ -225,7 +248,7 @@ describe("recoverPendingMintQuotes", () => {
       buildWallet: async () => wallet,
       onProofsClaimed: jest
         .fn()
-        .mockRejectedValue(new Error("nostr publish failed")),
+        .mockRejectedValue(new Error("localStorage quota exceeded")),
       logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() } as any,
     });
     expect(result.recovered).toBe(0);

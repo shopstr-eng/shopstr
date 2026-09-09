@@ -131,9 +131,11 @@ describe("MigrationPromptModal", () => {
     });
     fireEvent.click(upgradeButton);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Migration failed. Please try again with the correct passphrase."
-    );
+    expect(
+      await screen.findByText(
+        "Migration failed. Please try again with the correct passphrase."
+      )
+    ).toBeInTheDocument();
     expect(mockOnSuccess).not.toHaveBeenCalled();
     expect(mockOnClose).not.toHaveBeenCalled();
   });
@@ -150,9 +152,11 @@ describe("MigrationPromptModal", () => {
     });
     fireEvent.click(upgradeButton);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Failed to decrypt with the provided passphrase. Please try again."
-    );
+    expect(
+      await screen.findByText(
+        "Failed to decrypt with the provided passphrase. Please try again."
+      )
+    ).toBeInTheDocument();
   });
 
   it("should call migration handler when Enter key is pressed in the input", () => {
