@@ -5,7 +5,7 @@ const TIMESTAMP = 1757295520;
 
 describe("formatTimestampParts", () => {
   it("returns both parts for locales that omit the comma separator", () => {
-    // tr-TR renders "08.09.2026 01:38:40"; the previous comma-split
+    // tr-TR renders "08.09.2025 07:08:40"; the previous comma-split
     // implementation produced `undefined` here and threw on `.trim()`.
     const [dateString, timeString] = formatTimestampParts(TIMESTAMP, "tr-TR");
 
@@ -18,7 +18,7 @@ describe("formatTimestampParts", () => {
     expect(() => formatTimestampParts(TIMESTAMP, "tr-TR")).not.toThrow();
   });
 
-  it("still splits locales that do use a comma separator", () => {
+  it("returns separate parts for locales whose combined form uses a comma", () => {
     const [dateString, timeString] = formatTimestampParts(TIMESTAMP, "en-US");
 
     expect(dateString).not.toContain(",");
