@@ -3924,6 +3924,88 @@ describe("blossomUploadImages", () => {
       expect.objectContaining({ id: "signed-upload-event" })
     );
   });
+
+  it("falls over to the next server when the first upload fails", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockImplementation(async (url: any) => {
+      if (String(url).includes("dead.example")) {
+        return { ok: false, status: 502, text: async () => "bad gateway" };
+      }
+      return makeSuccessResponse({ url: "https://live.example/abc" });
+    });
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://dead.example",
+      "https://live.example",
+    ]);
+
+    expect(result).toContainEqual(["url", "https://live.example/abc"]);
+
+    const attempted = (global.fetch as jest.Mock).mock.calls.map(([u]) =>
+      String(u)
+    );
+    expect(attempted).toContain("https://dead.example/upload");
+    expect(attempted).toContain("https://live.example/upload");
+  });
+
+  it("reports every server that failed when none accept the upload", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: async () => "server error",
+    });
+
+    await expect(
+      blossomUploadImages(makeImageFile(), signer as any, [
+        "https://one.example",
+        "https://two.example",
+      ])
+    ).rejects.toThrow(/one\.example[\s\S]*two\.example/);
+  });
+
+  it("keeps a successful upload when mirroring to another server fails", async () => {
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockImplementation(async (url: any) => {
+      if (String(url).includes("/mirror")) {
+        return { ok: false, status: 500, text: async () => "mirror down" };
+      }
+      return makeSuccessResponse({ url: "https://primary.example/abc" });
+    });
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://primary.example",
+      "https://mirror.example",
+    ]);
+
+    expect(result).toContainEqual(["url", "https://primary.example/abc"]);
+    expect(consoleWarnSpy).toHaveBeenCalled();
+    consoleWarnSpy.mockRestore();
+  });
+
+  it("does not mirror back to the server that accepted the upload", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockImplementation(async (url: any) => {
+      if (String(url).includes("dead.example")) {
+        return { ok: false, status: 502, text: async () => "bad gateway" };
+      }
+      return makeSuccessResponse({ url: "https://live.example/abc" });
+    });
+
+    await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://dead.example",
+      "https://live.example",
+    ]);
+
+    const mirrored = (global.fetch as jest.Mock).mock.calls
+      .map(([u]) => String(u))
+      .filter((u) => u.includes("/mirror"));
+
+    expect(mirrored).not.toContain("https://live.example/mirror");
+  });
 });
 
 describe("followUser", () => {
