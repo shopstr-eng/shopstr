@@ -722,12 +722,76 @@ export async function blossomUploadImages(
     );
   }
 
+  const buildTagsFromResponse = (
+    response: any,
+    server: string
+  ): string[][] | null => {
+    // Normalize Blossom responses across top-level and NIP-94 tag formats so uploads always yield a usable URL and metadata.
+    let currentResponseUrl = response.url;
+    let responseType = response.type;
+    let responseSha256 = response.sha256;
+    let responseSize = response.size;
+
+    if (response.nip94_event && response.nip94_event.tags) {
+      const findTag = (tagName: string) => {
+        const tag = response.nip94_event.tags.find(
+          (t: string[]) => t[0] === tagName
+        );
+        return tag ? tag[1] : undefined;
+      };
+      currentResponseUrl = currentResponseUrl || findTag("url");
+      responseSha256 = responseSha256 || findTag("ox") || findTag("x");
+      responseSize = responseSize || findTag("size");
+      responseType = responseType || findTag("m");
+    }
+
+    if (!currentResponseUrl && responseSha256) {
+      currentResponseUrl = new URL(`/${responseSha256}`, server).toString();
+    }
+
+    if (!currentResponseUrl) {
+      console.error("Blossom upload response missing media URL", {
+        server,
+        responseType,
+        responseSha256,
+        responseSize,
+        hasNip94Tags: Boolean(response.nip94_event?.tags),
+        response,
+      });
+      return null;
+    }
+
+    const builtTags: string[][] = [["url", currentResponseUrl]];
+
+    if (responseSha256) {
+      builtTags.push(["x", responseSha256], ["ox", responseSha256]);
+    }
+
+    if (
+      responseSize !== undefined &&
+      responseSize !== null &&
+      responseSize !== ""
+    ) {
+      builtTags.push(["size", responseSize.toString()]);
+    }
+
+    if (responseType) {
+      builtTags.push(["m", responseType]);
+    }
+
+    return builtTags;
+  };
+
   let tags: string[][] = [];
   let responseUrl: string = "";
-  for (let i = 0; i < validServers.length; i++) {
-    const server = validServers[i];
+  let uploadedServer: string | null = null;
+  const uploadFailures: string[] = [];
 
-    if (i == 0) {
+  // Try each configured server in order rather than only the first, so a single
+  // unreachable or misconfigured server does not fail the whole upload when the
+  // user has other servers available.
+  for (const server of validServers) {
+    try {
       const url = new URL("/upload", server);
 
       const res = await fetch(url, {
@@ -741,70 +805,42 @@ export async function blossomUploadImages(
 
       if (!res.ok) {
         const errorText = await res.text().catch(() => "Unknown server error");
-        throw new Error(`Upload failed (${res.status}): ${errorText}`);
+        throw new Error(`upload failed (${res.status}): ${errorText}`);
       }
 
-      const response = await res.json();
-      // Normalize Blossom responses across top-level and NIP-94 tag formats so uploads always yield a usable URL and metadata.
-      let currentResponseUrl = response.url;
-      let responseType = response.type;
-      let responseSha256 = response.sha256;
-      let responseSize = response.size;
-
-      if (response.nip94_event && response.nip94_event.tags) {
-        const findTag = (tagName: string) => {
-          const tag = response.nip94_event.tags.find(
-            (t: string[]) => t[0] === tagName
-          );
-          return tag ? tag[1] : undefined;
-        };
-        currentResponseUrl = currentResponseUrl || findTag("url");
-        responseSha256 = responseSha256 || findTag("ox") || findTag("x");
-        responseSize = responseSize || findTag("size");
-        responseType = responseType || findTag("m");
+      const builtTags = buildTagsFromResponse(await res.json(), server);
+      if (!builtTags) {
+        throw new Error("server didn't provide a media URL");
       }
 
-      if (!currentResponseUrl && responseSha256) {
-        currentResponseUrl = new URL(`/${responseSha256}`, server).toString();
-      }
+      tags = builtTags;
+      responseUrl = builtTags[0]![1]!;
+      uploadedServer = server;
+      break;
+    } catch (error) {
+      uploadFailures.push(
+        `${server}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
 
-      responseUrl = currentResponseUrl || "";
+  if (!uploadedServer) {
+    throw new Error(
+      `Upload failed on all ${validServers.length} configured media server${
+        validServers.length === 1 ? "" : "s"
+      }. ${uploadFailures.join("; ")}`
+    );
+  }
 
-      if (!responseUrl) {
-        console.error("Blossom upload response missing media URL", {
-          server,
-          responseType,
-          responseSha256,
-          responseSize,
-          hasNip94Tags: Boolean(response.nip94_event?.tags),
-          response,
-        });
-        throw new Error(
-          "Server successfully responded but didn't provide a media URL. Check your configured server URL."
-        );
-      }
+  // Mirroring is best effort: the upload already succeeded, so a mirror failure
+  // must not discard a working URL.
+  for (const server of validServers) {
+    if (server === uploadedServer) continue;
 
-      tags = [["url", responseUrl]];
-
-      if (responseSha256) {
-        tags.push(["x", responseSha256], ["ox", responseSha256]);
-      }
-
-      if (
-        responseSize !== undefined &&
-        responseSize !== null &&
-        responseSize !== ""
-      ) {
-        tags.push(["size", responseSize.toString()]);
-      }
-
-      if (responseType) {
-        tags.push(["m", responseType]);
-      }
-    } else {
+    try {
       const url = new URL("/mirror", server);
 
-      await fetch(url, {
+      const res = await fetch(url, {
         method: "PUT",
         body: JSON.stringify({
           url: responseUrl,
@@ -814,6 +850,12 @@ export async function blossomUploadImages(
           "content-type": image.type,
         },
       });
+
+      if (!res.ok) {
+        console.warn(`Blossom mirror failed on ${server} (${res.status})`);
+      }
+    } catch (error) {
+      console.warn(`Blossom mirror failed on ${server}`, error);
     }
   }
   // Cache blossom upload event to database

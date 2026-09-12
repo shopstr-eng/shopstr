@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 import { FileUploaderButton } from "../file-uploader";
@@ -129,5 +129,27 @@ describe("FileUploaderButton", () => {
     expect(
       screen.getByText("Please enter a valid image URL starting with https://.")
     ).toBeInTheDocument();
+  });
+
+  test("says sign-in is required instead of blaming the media server", async () => {
+    // Without a SignerContext provider the component sees isLoggedIn === false,
+    // which is the state a signed-out user is in.
+    const onUpload = jest.fn();
+    const { container } = render(
+      <FileUploaderButton imgCallbackOnUpload={onUpload}>
+        Upload Banner
+      </FileUploaderButton>
+    );
+
+    const fileInput = container.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+    const file = new File(["img"], "banner.png", { type: "image/png" });
+    fireEvent.change(fileInput, { target: { files: [file] } });
+
+    expect(
+      await screen.findByText("You must be signed in to upload images.")
+    ).toBeInTheDocument();
+    await waitFor(() => expect(onUpload).not.toHaveBeenCalled());
   });
 });

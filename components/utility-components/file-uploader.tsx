@@ -237,6 +237,13 @@ export const FileUploaderButton = ({
         return [];
       }
 
+      // Check before any decoding/compression work: without a signer the upload
+      // cannot be authorized, and the old code silently skipped the upload and
+      // then blamed the media server for the missing URL.
+      if (!isLoggedIn) {
+        throw new Error("You must be signed in to upload images.");
+      }
+
       if (
         imageFiles.some(
           (imgFile) =>
@@ -278,7 +285,7 @@ export const FileUploaderButton = ({
       );
 
       let responses: any[] = [];
-      if (isLoggedIn) {
+      {
         // Upload with bounded concurrency and track progress by completed count.
         let uploadedCount = 0;
         responses = await withConcurrency(
