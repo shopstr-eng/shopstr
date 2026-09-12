@@ -1,9 +1,12 @@
+import type { HodlOrderDetails } from "../lightning/hodl-order-details";
+import { encryptHodlValue, decryptHodlValue } from "../lightning/hodl-storage";
 import { Pool, PoolClient } from "pg";
 import { NostrEvent } from "../types/types";
 import {
   pickPreferredReplaceableEvent,
   selectPreferredReplaceableEvent,
 } from "../nostr/replaceable-events";
+import { getConfiguredArbiterNostrPubkey } from "../nostr/arbiter-pubkey";
 import { findListingBySlug } from "../url-slugs";
 
 let pool: Pool | null = null;
@@ -238,7 +241,7 @@ async function ensureTablesInitialized(): Promise<void> {
   await initializeTablesPromise;
 }
 
-async function getInitializedDbPool(): Promise<Pool> {
+export async function getInitializedDbPool(): Promise<Pool> {
   if (shouldAutoInitializeTables()) {
     await ensureTablesInitialized();
   }
@@ -251,9 +254,14 @@ async function initializeTables(): Promise<void> {
 
   const dbPool = getDbPool();
   let client;
+  let discardClient = false;
 
   try {
     client = await dbPool.connect();
+    // API routes and instrumentation have separate module instances. PostgreSQL
+    // CREATE TABLE IF NOT EXISTS still races on catalog entries across sessions.
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(606, 0)");
 
     await client.query(`
       -- Products table (kind 30402 - listings)
@@ -482,6 +490,72 @@ async function initializeTables(): Promise<void> {
       -- Migration for tables created before invoice_order_id existed.
       ALTER TABLE p2pk_escrow_orders ADD COLUMN IF NOT EXISTS invoice_order_id TEXT;
 
+      -- Hold-invoice escrow order commitments. Written whole at order
+      -- creation and never overwritten; db/schema.sql documents why each
+      -- column is server-derived rather than client-supplied.
+      CREATE TABLE IF NOT EXISTS hodl_escrow_orders (
+          payment_hash TEXT PRIMARY KEY,
+          preimage TEXT NOT NULL,
+          order_details TEXT,
+          buyer_nostr_pubkey TEXT NOT NULL,
+          seller_nostr_pubkey TEXT NOT NULL,
+          arbiter_nostr_pubkey TEXT NOT NULL,
+          invoice TEXT NOT NULL,
+          amount_sats BIGINT NOT NULL CHECK (amount_sats > 0),
+          status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'accepted', 'settled', 'cancelled')),
+          -- TIMESTAMPTZ because this is timeout arithmetic input, not a
+          -- display value; see the column comment in db/schema.sql.
+          accepted_at TIMESTAMPTZ,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          expires_at TIMESTAMP NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_hodl_escrow_orders_buyer ON hodl_escrow_orders(buyer_nostr_pubkey);
+      CREATE INDEX IF NOT EXISTS idx_hodl_escrow_orders_seller ON hodl_escrow_orders(seller_nostr_pubkey);
+
+      -- Migration for tables created before accepted_at existed.
+      ALTER TABLE hodl_escrow_orders ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
+      ALTER TABLE hodl_escrow_orders ADD COLUMN IF NOT EXISTS order_details TEXT;
+      ALTER TABLE hodl_escrow_orders ADD COLUMN IF NOT EXISTS fulfillment_updates TEXT;
+      ALTER TABLE hodl_escrow_orders ADD COLUMN IF NOT EXISTS fulfillment_status TEXT;
+      ALTER TABLE hodl_escrow_orders ADD COLUMN IF NOT EXISTS hold_expiry_height BIGINT;
+      ALTER TABLE hodl_escrow_orders ADD COLUMN IF NOT EXISTS observed_block_height BIGINT;
+      ALTER TABLE hodl_escrow_orders ADD COLUMN IF NOT EXISTS deadline_observed_at TIMESTAMPTZ;
+
+
+      -- Seller payouts owed after a hold invoice settles. One row per order,
+      -- keyed on the same payment hash; db/schema.sql documents why the
+      -- invoice is written before it is paid and why every timestamp here is
+      -- TIMESTAMPTZ.
+      CREATE TABLE IF NOT EXISTS hodl_checkout_requests (
+        buyer_pubkey TEXT NOT NULL, checkout_id TEXT NOT NULL,
+        request_digest TEXT NOT NULL, response JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY(buyer_pubkey,checkout_id)
+      );
+      CREATE TABLE IF NOT EXISTS hodl_escrow_payouts (
+          payment_hash TEXT PRIMARY KEY,
+          payout_invoice TEXT,
+          payout_invoice_verify_url TEXT,
+          status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'failed', 'abandoned')),
+          attempt_count INTEGER NOT NULL DEFAULT 0,
+          last_error TEXT,
+          -- Lease held by the attempt currently working this payout. Compared
+          -- against CURRENT_TIMESTAMP, so TIMESTAMPTZ for the same reason as
+          -- hodl_escrow_orders.accepted_at: this is arithmetic input.
+          claimed_at TIMESTAMPTZ,
+          invoice_stored_at TIMESTAMPTZ,
+          paid_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- The reconciliation query: every payout that owes a seller money and
+      -- has not delivered it.
+      CREATE INDEX IF NOT EXISTS idx_hodl_escrow_payouts_attention
+        ON hodl_escrow_payouts(status)
+        WHERE status IN ('failed', 'abandoned');
+
       -- Shop slugs table (storefront URL slugs)
       CREATE TABLE IF NOT EXISTS shop_slugs (
           pubkey TEXT PRIMARY KEY,
@@ -543,15 +617,74 @@ async function initializeTables(): Promise<void> {
       END $$;
     `);
 
-    await ensureFailedRelayPublishesTable(client);
+    // Migration: hodl_escrow_orders.accepted_at was first shipped as a plain
+    // TIMESTAMP, which stores wall-clock digits with no zone. Left that way it
+    // skews evaluateHodlDisputeActionability's timeout by the reading process's
+    // UTC offset, so convert in place on any database that already has the old
+    // type. Guarded rather than unconditional: ALTER COLUMN ... TYPE rewrites
+    // the table under an ACCESS EXCLUSIVE lock, and this runs on every cold
+    // start.
+    //
+    // No USING clause on purpose. Existing values were written by
+    // CURRENT_TIMESTAMP, which Postgres coerced from timestamptz down to
+    // timestamp using the session TimeZone; the default conversion reads them
+    // back with that same session TimeZone, which is the only interpretation
+    // that reproduces the instant actually intended. An explicit
+    // `AT TIME ZONE 'UTC'` would be wrong wherever that zone is not UTC.
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'hodl_escrow_orders'
+            AND column_name = 'accepted_at'
+            AND data_type = 'timestamp without time zone'
+        ) THEN
+          ALTER TABLE hodl_escrow_orders
+            ALTER COLUMN accepted_at TYPE TIMESTAMPTZ;
+        END IF;
+      END $$;
+    `);
 
+    await ensureFailedRelayPublishesTable(client);
+    await client.query("COMMIT");
+
+    // Upgrade plaintext secrets in bounded batches; CAS protects concurrent startup.
+    if (process.env.HODL_ESCROW_ENCRYPTION_KEY) {
+      for (;;) {
+        const legacy = await client.query<{
+          payment_hash: string;
+          preimage: string;
+        }>(
+          "SELECT payment_hash, preimage FROM hodl_escrow_orders WHERE preimage ~ '^[0-9a-fA-F]{64}$' LIMIT 100"
+        );
+        if (!legacy.rows.length) break;
+        for (const row of legacy.rows) {
+          await client.query(
+            "UPDATE hodl_escrow_orders SET preimage = $2 WHERE payment_hash = $1 AND preimage = $3",
+            [
+              row.payment_hash,
+              encryptHodlValue(row.preimage, row.payment_hash, "preimage"),
+              row.preimage,
+            ]
+          );
+        }
+      }
+    }
     tablesInitialized = true;
   } catch (error) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        discardClient = true;
+      }
+    }
     console.error("Failed to initialize tables:", error);
     throw error;
   } finally {
     if (client) {
-      client.release();
+      client.release(discardClient);
     }
   }
 }
@@ -1738,6 +1871,623 @@ export async function recordP2pkEscrowRuling(
     throw error;
   } finally {
     client.release();
+  }
+}
+
+/**
+ * The commitment written when a Lightning (hold-invoice) escrow order is
+ * created.
+ *
+ * There is no `arbiterNostrPubkey` field on purpose: the arbiter is resolved
+ * from configuration inside {@link registerHodlEscrowOrder}, so no caller —
+ * now or later — can pick which arbiter a row is bound to.
+ */
+export type HodlEscrowOrderRegistration = {
+  /** sha256 of `preimage`, 32 bytes of hex. Primary key. */
+  paymentHash: string;
+  /**
+   * The settlement secret, stored so the arbiter can settle later. Read
+   * back by exactly one function, {@link getHodlEscrowSettlementSecret},
+   * which exists only to feed the provider's settleInvoice; no other query
+   * in this module selects this column.
+   */
+  preimage: string;
+  /** From the NIP-98-authenticated request, never from a request body. */
+  buyerNostrPubkey: string;
+  /** From the listing event's signer, never from a request body. */
+  sellerNostrPubkey: string;
+  invoice: string;
+  amountSats: number;
+  expiresAt: Date;
+  details?: HodlOrderDetails;
+};
+
+/**
+ * Raised when a hodl escrow commitment is refused before it is attempted,
+ * because the arbiter identity is missing or a caller tried to supply one.
+ * Distinct from a database failure: nothing was written and nothing was tried.
+ */
+export class HodlEscrowArbiterConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "HodlEscrowArbiterConfigError";
+  }
+}
+
+/**
+ * The fields compared to decide whether a second write of the same payment
+ * hash describes the same order.
+ *
+ * Excludes `preimage` (never read back), `created_at`/`expires_at`
+ * (wall-clock, so two writes of an identical order legitimately differ), and
+ * `status` (mutates after creation). `invoice` is included and pins the
+ * terms: a BOLT-11 payment request encodes its own amount and expiry, so two
+ * equal invoice strings cannot disagree about them.
+ */
+type HodlEscrowOrderIdentityRow = {
+  payment_hash: string;
+  buyer_nostr_pubkey: string;
+  seller_nostr_pubkey: string;
+  arbiter_nostr_pubkey: string;
+  invoice: string;
+  amount_sats: string | number;
+};
+
+/**
+ * Writes the single commitment row for a hold-invoice escrow order.
+ *
+ * First-write-wins: `ON CONFLICT DO NOTHING` means an existing row is never
+ * overwritten. Re-writing an identical order reports `existing`, so a retry
+ * is a no-op; a write that disagrees with the stored row reports `conflict`,
+ * which the caller must surface as an error rather than assume its own view
+ * of the order won.
+ *
+ * Callers must have created the hold invoice already. This row is the record
+ * of an invoice that exists, so a row must never appear for one that does not.
+ *
+ * @throws {HodlEscrowArbiterConfigError} if the arbiter pubkey is
+ * unconfigured, or if `registration` carries an arbiter pubkey of its own.
+ */
+export async function registerHodlEscrowOrder(
+  registration: HodlEscrowOrderRegistration,
+  transactionClient?: PoolClient
+): Promise<"created" | "existing" | "conflict"> {
+  const arbiterNostrPubkey = getConfiguredArbiterNostrPubkey();
+  if (!arbiterNostrPubkey) {
+    throw new HodlEscrowArbiterConfigError(
+      "Arbiter Nostr pubkey is not configured; refusing to write a hodl escrow commitment"
+    );
+  }
+
+  // The type has no arbiter field, so this can only fire on an object that
+  // smuggled one past the compiler — a request body spread into the
+  // registration, say. Rejecting beats ignoring: the caller would otherwise
+  // get a success for a row bound to an arbiter it did not ask for.
+  const suppliedArbiter = (registration as { arbiterNostrPubkey?: unknown })
+    .arbiterNostrPubkey;
+  if (suppliedArbiter !== undefined) {
+    throw new HodlEscrowArbiterConfigError(
+      "Hodl escrow arbiter pubkey comes from configuration and cannot be supplied by the caller"
+    );
+  }
+
+  const paymentHash = registration.paymentHash.toLowerCase();
+  const buyerNostrPubkey = registration.buyerNostrPubkey.toLowerCase();
+  const sellerNostrPubkey = registration.sellerNostrPubkey.toLowerCase();
+
+  const client =
+    transactionClient ?? (await (await getInitializedDbPool()).connect());
+
+  try {
+    // Every column is populated by this one statement: there is no moment at
+    // which a row exists without the preimage that settles it, or without the
+    // parties it binds.
+    const inserted = await client.query(
+      `INSERT INTO hodl_escrow_orders (
+         payment_hash,
+         preimage,
+         buyer_nostr_pubkey,
+         seller_nostr_pubkey,
+         arbiter_nostr_pubkey,
+         invoice,
+         amount_sats,
+         status,
+         expires_at,
+         order_details
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'open', $8, $9)
+       ON CONFLICT (payment_hash) DO NOTHING
+       RETURNING payment_hash`,
+      [
+        paymentHash,
+        encryptHodlValue(registration.preimage, paymentHash, "preimage"),
+        buyerNostrPubkey,
+        sellerNostrPubkey,
+        arbiterNostrPubkey,
+        registration.invoice,
+        registration.amountSats,
+        registration.expiresAt,
+        registration.details
+          ? encryptHodlValue(
+              JSON.stringify(registration.details),
+              paymentHash,
+              "order"
+            )
+          : null,
+      ]
+    );
+    if ((inserted.rowCount ?? 0) > 0) return "created";
+
+    // Note the column list: the preimage is not selected here, so it cannot
+    // reach a caller by way of an equality check.
+    const existing = await client.query<HodlEscrowOrderIdentityRow>(
+      `SELECT payment_hash,
+              buyer_nostr_pubkey,
+              seller_nostr_pubkey,
+              arbiter_nostr_pubkey,
+              invoice,
+              amount_sats
+       FROM hodl_escrow_orders
+       WHERE payment_hash = $1`,
+      [paymentHash]
+    );
+    const row = existing.rows[0];
+    // A row that vanished between the two statements is a conflict, not a
+    // reason to retry into a race.
+    if (!row) return "conflict";
+
+    const matches =
+      row.payment_hash === paymentHash &&
+      row.buyer_nostr_pubkey === buyerNostrPubkey &&
+      row.seller_nostr_pubkey === sellerNostrPubkey &&
+      row.arbiter_nostr_pubkey === arbiterNostrPubkey &&
+      row.invoice === registration.invoice &&
+      Number(row.amount_sats) === registration.amountSats;
+    return matches ? "existing" : "conflict";
+  } finally {
+    if (!transactionClient) client.release();
+  }
+}
+
+/**
+ * The identities a hold-invoice escrow order was bound to when it was created.
+ *
+ * No preimage field, and the query below does not select that column. Deciding
+ * whether an event's author is a party to an order needs to know who the
+ * parties are; it never needs the secret that settles the invoice.
+ */
+export type HodlEscrowOrderParties = {
+  paymentHash: string;
+  buyerNostrPubkey: string;
+  sellerNostrPubkey: string;
+  arbiterNostrPubkey: string;
+};
+
+type HodlEscrowOrderPartiesRow = Pick<
+  HodlEscrowOrderIdentityRow,
+  | "payment_hash"
+  | "buyer_nostr_pubkey"
+  | "seller_nostr_pubkey"
+  | "arbiter_nostr_pubkey"
+>;
+
+/**
+ * Loads the parties committed to a payment hash, or null when no commitment
+ * row exists.
+ *
+ * Null means "no order was ever registered under this payment hash". That is a
+ * refusal, not an absent constraint: an unregistered payment hash has no
+ * buyer and no arbiter, so nothing can be authorized against it.
+ *
+ * @throws {DatabaseUnavailableError} when the read could not be performed, so
+ * that "we asked and there is no such order" (null, a 404/403 downstream) can
+ * never be confused with "we could not ask" (a 503, retry).
+ */
+export async function getHodlEscrowOrderParties(
+  paymentHash: string
+): Promise<HodlEscrowOrderParties | null> {
+  const normalizedHash = paymentHash.toLowerCase();
+  let client;
+
+  try {
+    const dbPool = await getInitializedDbPool();
+    client = await dbPool.connect();
+    // Column list is exhaustive on purpose — no SELECT * anywhere near a table
+    // that holds a settlement secret.
+    const result = await client.query<HodlEscrowOrderPartiesRow>(
+      `SELECT payment_hash,
+              buyer_nostr_pubkey,
+              seller_nostr_pubkey,
+              arbiter_nostr_pubkey
+       FROM hodl_escrow_orders
+       WHERE payment_hash = $1`,
+      [normalizedHash]
+    );
+
+    const row = result.rows[0];
+    if (!row) return null;
+
+    return {
+      paymentHash: row.payment_hash,
+      buyerNostrPubkey: row.buyer_nostr_pubkey,
+      sellerNostrPubkey: row.seller_nostr_pubkey,
+      arbiterNostrPubkey: row.arbiter_nostr_pubkey,
+    };
+  } catch (error) {
+    console.error("Failed to load hodl escrow order parties:", error);
+    throw new DatabaseUnavailableError(
+      "Failed to load hodl escrow order parties"
+    );
+  } finally {
+    if (client) client.release();
+  }
+}
+
+/**
+ * Reads the settlement secret for an order.
+ *
+ * This is the one read path in this module that selects `preimage`, and it
+ * exists solely so the settle endpoint can hand the secret straight to
+ * {@link HodlInvoiceProvider.settleInvoice}. The value it returns releases
+ * money: it must never be written to a response body, a log line, or an error
+ * message, and it must never be returned to a caller that has not first
+ * authorized the settlement against the order's committed buyer.
+ *
+ * Deliberately NOT folded into {@link getHodlEscrowOrderParties}. Authorizing
+ * an event needs the parties and never the secret, so the call that decides
+ * *whether* to settle cannot come back holding the means to do it.
+ *
+ * @returns the preimage, or null when no commitment row exists.
+ *
+ * @throws {DatabaseUnavailableError} when the read could not be performed.
+ * This read happens *before* the provider is asked to settle, so nothing has
+ * moved when it fails and a retry is the correct advice — unlike the status
+ * write that follows a successful settle, which must never be reported as
+ * retryable.
+ */
+export async function getHodlEscrowSettlementSecret(
+  paymentHash: string
+): Promise<string | null> {
+  const normalizedHash = paymentHash.toLowerCase();
+  let client;
+
+  try {
+    const dbPool = await getInitializedDbPool();
+    client = await dbPool.connect();
+    const result = await client.query<{ preimage: string }>(
+      `SELECT preimage
+       FROM hodl_escrow_orders
+       WHERE payment_hash = $1`,
+      [normalizedHash]
+    );
+
+    const row = result.rows[0];
+    if (!row || typeof row.preimage !== "string" || row.preimage.length === 0) {
+      return null;
+    }
+    return decryptHodlValue(row.preimage, normalizedHash, "preimage");
+  } catch {
+    // The only read in this module that selects `preimage`, and so the only
+    // one whose driver error can quote the secret back — a failed query is
+    // exactly the case where the row it could not read ends up in the message.
+    // Nothing about the caught error is logged or chained onto the throw; the
+    // thrown message below is a constant. Callers that want a diagnosable log
+    // line have one, via the redacting `describeFailure` in the escrow routes.
+    throw new DatabaseUnavailableError(
+      "Failed to load the hodl escrow settlement secret"
+    );
+  } finally {
+    if (client) client.release();
+  }
+}
+
+/**
+ * Records that an order's hold invoice has been settled.
+ *
+ * Call this only *after* the provider's settle succeeded. The row is a record
+ * of what the Lightning node did, so the write is unconditional on the current
+ * status rather than guarded by a state machine: once the HTLC is settled the
+ * funds are gone, and a row still reading `accepted` would be a lie that a
+ * later cancel path might act on.
+ *
+ * @returns "not-found" when no row matched, so the caller can surface a
+ * settled invoice whose commitment has vanished instead of reporting success.
+ *
+ * Deliberately NOT wrapped in {@link DatabaseUnavailableError}, unlike the
+ * reads above. By the time this runs the HTLC has settled and the money is
+ * gone; a failure here is a row that disagrees with the Lightning node, which
+ * needs a human, not the "temporarily unavailable, please try again" that a
+ * 503 promises. The raw error propagates and the caller reports a 500.
+ */
+export async function markHodlEscrowOrderSettled(
+  paymentHash: string
+): Promise<"settled" | "not-found"> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    const result = await client.query(
+      `UPDATE hodl_escrow_orders
+       SET status = 'settled'
+       WHERE payment_hash = $1`,
+      [paymentHash.toLowerCase()]
+    );
+    return (result.rowCount ?? 0) > 0 ? "settled" : "not-found";
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Records that an order's hold invoice has been cancelled, returning funds to
+ * the buyer. Same "call only after the provider confirms" contract as
+ * {@link markHodlEscrowOrderSettled}, and the same unconditional write: the
+ * row records what the Lightning node did, not what state it thinks it was
+ * transitioning from.
+ *
+ * @returns "not-found" when no row matched, so the caller can surface a
+ * cancelled invoice whose commitment has vanished instead of reporting
+ * success.
+ *
+ * Deliberately NOT wrapped in {@link DatabaseUnavailableError}, for the same
+ * reason as {@link markHodlEscrowOrderSettled}: the HTLC has already been
+ * cancelled when this runs, so a failure is an inconsistency to investigate
+ * rather than an outage to retry through.
+ */
+export async function markHodlEscrowOrderCancelled(
+  paymentHash: string
+): Promise<"cancelled" | "not-found"> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    const result = await client.query(
+      `UPDATE hodl_escrow_orders
+       SET status = 'cancelled'
+       WHERE payment_hash = $1`,
+      [paymentHash.toLowerCase()]
+    );
+    return (result.rowCount ?? 0) > 0 ? "cancelled" : "not-found";
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * The lifecycle states a hold-invoice escrow order's `status` column can
+ * hold. Kept local to this module rather than imported from
+ * utils/lightning/hodl-invoice-provider.ts, on the same reasoning as the rest
+ * of this file's hodl escrow section: nothing here reaches into the
+ * Lightning provider layer.
+ */
+export type HodlEscrowOrderStatus =
+  "open" | "accepted" | "settled" | "cancelled";
+
+/**
+ * Reads the current status of a hold-invoice escrow order.
+ *
+ * @returns null when no commitment row exists.
+ *
+ * @throws {DatabaseUnavailableError} when the read could not be performed, so
+ * an outage cannot pass for "this order has no status".
+ */
+export async function getHodlEscrowOrderStatus(
+  paymentHash: string
+): Promise<HodlEscrowOrderStatus | null> {
+  const normalizedHash = paymentHash.toLowerCase();
+  let client;
+
+  try {
+    const dbPool = await getInitializedDbPool();
+    client = await dbPool.connect();
+    const result = await client.query<{ status: HodlEscrowOrderStatus }>(
+      `SELECT status
+       FROM hodl_escrow_orders
+       WHERE payment_hash = $1`,
+      [normalizedHash]
+    );
+    return result.rows[0]?.status ?? null;
+  } catch (error) {
+    console.error("Failed to load hodl escrow order status:", error);
+    throw new DatabaseUnavailableError(
+      "Failed to load hodl escrow order status"
+    );
+  } finally {
+    if (client) client.release();
+  }
+}
+
+/**
+ * Every status transition {@link updateHodlEscrowOrderStatusIfAdvancing} will
+ * actually write. `settled` and `cancelled` map to an empty set: once a row
+ * reaches either, nothing — including a stale provider read claiming
+ * `open` — can move it anywhere else.
+ */
+const HODL_ADVANCING_TRANSITIONS: Record<
+  HodlEscrowOrderStatus,
+  ReadonlySet<HodlEscrowOrderStatus>
+> = {
+  open: new Set(["accepted", "settled", "cancelled"]),
+  accepted: new Set(["settled", "cancelled"]),
+  settled: new Set(),
+  cancelled: new Set(),
+};
+
+/**
+ * Moves a hold-invoice escrow order's status forward to `newStatus`, or
+ * leaves it untouched if that would not be a forward move.
+ *
+ * This is the one place that enforces the lifecycle's direction. Row-locked
+ * inside a transaction rather than a bare `UPDATE ... WHERE status = ...`, so
+ * that two concurrent syncs reading the same stale row cannot both decide a
+ * transition is legal and race to apply it — the second transaction blocks on
+ * the `FOR UPDATE` lock and re-checks the (by then updated) status before
+ * writing anything.
+ *
+ * @returns the row's status after this call — `newStatus` if the transition
+ * was applied, the unchanged current status if it was not a legal forward
+ * move (including "already `newStatus`"), or "not-found" if no row matched.
+ *
+ * `open` -> `accepted` also stamps `accepted_at` with the current time, in
+ * this same statement rather than a follow-up write: it is the one moment
+ * that transition happens, and folding it into the same UPDATE means there
+ * is never a window where `status = 'accepted'` is visible with
+ * `accepted_at` still null. No other transition touches the column.
+ *
+ * `CURRENT_TIMESTAMP` is itself a `timestamptz`, so against the TIMESTAMPTZ
+ * column it stores the current instant with no narrowing coercion — nothing
+ * here depends on the session's TimeZone setting.
+ */
+export async function updateHodlEscrowOrderStatusIfAdvancing(
+  paymentHash: string,
+  newStatus: HodlEscrowOrderStatus
+): Promise<HodlEscrowOrderStatus | "not-found"> {
+  const normalizedHash = paymentHash.toLowerCase();
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    await client.query("BEGIN");
+    const result = await client.query<{ status: HodlEscrowOrderStatus }>(
+      `SELECT status
+       FROM hodl_escrow_orders
+       WHERE payment_hash = $1
+       FOR UPDATE`,
+      [normalizedHash]
+    );
+    const row = result.rows[0];
+    if (!row) {
+      await client.query("COMMIT");
+      return "not-found";
+    }
+
+    const currentStatus = row.status;
+    if (!HODL_ADVANCING_TRANSITIONS[currentStatus].has(newStatus)) {
+      await client.query("COMMIT");
+      return currentStatus;
+    }
+
+    if (currentStatus === "open" && newStatus === "accepted") {
+      await client.query(
+        `UPDATE hodl_escrow_orders
+         SET status = $2, accepted_at = CURRENT_TIMESTAMP
+         WHERE payment_hash = $1`,
+        [normalizedHash, newStatus]
+      );
+    } else {
+      await client.query(
+        `UPDATE hodl_escrow_orders
+         SET status = $2
+         WHERE payment_hash = $1`,
+        [normalizedHash, newStatus]
+      );
+    }
+    await client.query("COMMIT");
+    return newStatus;
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // Preserve the original database error.
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Payment hashes of every hold-invoice escrow order still in a non-terminal
+ * state (`open` or `accepted`).
+ *
+ * Feeds the batch sync sweep: a row that has already reached `settled` or
+ * `cancelled` never needs to be checked against the provider again, since
+ * {@link updateHodlEscrowOrderStatusIfAdvancing} would refuse to move it
+ * regardless.
+ */
+export async function listPendingHodlEscrowOrderPaymentHashes(): Promise<
+  string[]
+> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    const result = await client.query<{ payment_hash: string }>(
+      `SELECT payment_hash
+       FROM hodl_escrow_orders
+       WHERE status IN ('open', 'accepted')`
+    );
+    return result.rows.map((row) => row.payment_hash);
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * The fields {@link evaluateHodlDisputeActionability} in
+ * utils/nostr/hodl-dispute-actionability.ts needs to tell who filed a
+ * dispute and, if it was the seller, how long the buyer's payment has been
+ * held. No `arbiterNostrPubkey` and no `status` — this is a narrower cut than
+ * {@link HodlEscrowOrderParties} for exactly the one caller that needs
+ * `acceptedAt` alongside the parties.
+ */
+export type HodlEscrowOrderDisputeContext = {
+  buyerNostrPubkey: string;
+  sellerNostrPubkey: string;
+  /**
+   * Null until status first transitions open -> accepted; see the column
+   * comment in db/schema.sql. An absolute instant, because the column is
+   * TIMESTAMPTZ — node-postgres parses the offset the server sends rather
+   * than reinterpreting bare digits in the local zone.
+   */
+  acceptedAt: Date | null;
+};
+
+/**
+ * Loads the parties and acceptance timing committed to a payment hash, or
+ * null when no commitment row exists.
+ *
+ * @throws {DatabaseUnavailableError} when the read could not be performed.
+ * The caller decides whether a dispute is actionable; an outage returning
+ * null here would read as "no such order" and answer that question wrongly.
+ */
+export async function getHodlEscrowOrderDisputeContext(
+  paymentHash: string
+): Promise<HodlEscrowOrderDisputeContext | null> {
+  const normalizedHash = paymentHash.toLowerCase();
+  let client;
+
+  try {
+    const dbPool = await getInitializedDbPool();
+    client = await dbPool.connect();
+    const result = await client.query<{
+      buyer_nostr_pubkey: string;
+      seller_nostr_pubkey: string;
+      accepted_at: Date | null;
+    }>(
+      `SELECT buyer_nostr_pubkey,
+              seller_nostr_pubkey,
+              accepted_at
+       FROM hodl_escrow_orders
+       WHERE payment_hash = $1`,
+      [normalizedHash]
+    );
+
+    const row = result.rows[0];
+    if (!row) return null;
+
+    return {
+      buyerNostrPubkey: row.buyer_nostr_pubkey,
+      sellerNostrPubkey: row.seller_nostr_pubkey,
+      acceptedAt: row.accepted_at,
+    };
+  } catch (error) {
+    console.error("Failed to load hodl escrow dispute context:", error);
+    throw new DatabaseUnavailableError(
+      "Failed to load hodl escrow dispute context"
+    );
+  } finally {
+    if (client) client.release();
   }
 }
 

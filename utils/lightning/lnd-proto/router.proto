@@ -1,0 +1,14 @@
+// Shopstr's subset of LND lnrpc/routerrpc/router.proto. See README.md.
+syntax = "proto3";
+package routerrpc;
+import "lightning.proto";
+
+service Router {
+  rpc SendPaymentV2 (SendPaymentRequest) returns (stream lnrpc.Payment);
+  rpc TrackPaymentV2 (TrackPaymentRequest) returns (stream lnrpc.Payment);
+}
+message SendPaymentRequest {
+  string payment_request = 5;
+  int64 fee_limit_sat = 7;
+}
+message TrackPaymentRequest { bytes payment_hash = 1; }

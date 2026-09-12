@@ -92,6 +92,46 @@ proof secrets, proof `C` values, or wallet event plaintext.
    duplicate or spent token handling remains correct, and no private keys,
    tokens, or proofs appear in console, DB logs, screenshots, or artifacts.
 
+## HODL Escrow: Real LND Testing
+
+Lightning escrow requires `HODL_INVOICE_PROVIDER=lnd`, PostgreSQL, a persistent
+`HODL_ESCROW_ENCRYPTION_KEY`, LND TLS and invoice/payment macaroons, and matching
+Nostr arbiter keys (see `.env.example`). Enable the checkout button with
+`NEXT_PUBLIC_HODL_ESCROW_ENABLED=true`. Buyer, seller and arbiter must be distinct.
+There is no runtime mock provider or fake-payment endpoint.
+
+Use two connected, funded LND nodes on a private Bitcoin regtest network. The
+seller's Lightning address must issue invoices from the receiving test node.
+
+1. Pay a listing's Lightning escrow invoice with the buyer node. Verify LND reports
+   `ACCEPTED`, the payer remains pending, and the order survives a server restart.
+2. Confirm receipt as the buyer. Verify the hold settles, one seller invoice is
+   paid, and repeated confirmation/collection does not produce another payment.
+3. Raise a buyer dispute and resolve it as the configured arbiter in `/disputes`.
+   Releasing to buyer must cancel the held payment without a seller payout.
+4. Test stranger access, forged confirmation/ruling, unavailable relays, and a
+   seller dispute before its four-hour waiting period. These must not release funds.
+5. Interrupt the app after a seller payment, then restart. Recovery must track the
+   recorded payment in LND and record success without creating another invoice.
+6. Disconnect the invoice service. A settled order must retain the seller debt and
+   recover when the service returns. The UI must distinguish release from payout.
+
+Recovery runs on startup and every 30 seconds. Hosts that sleep need scheduled
+`POST /api/lightning/sync-hodl-orders` with `Authorization: Bearer <CRON_SECRET>`.
+
+The opt-in `utils/lightning/__tests__/hodl-regtest.test.ts` exercises real held
+payments, cancellation, seller payout and reconciliation. Set `RUN_LND_REGTEST=1`,
+`LND_REGTEST_PEER_CONTAINER`, and the connection variables above, then run:
+
+```bash
+npm test -- --runInBand utils/lightning/__tests__/hodl-regtest.test.ts
+```
+
+Invoice expiry is the time to **start** payment. Once accepted, LND's HTLC block
+expiry determines how long funds remain held; a four-hour application timer does
+not guarantee that lifetime. Backdating a test row checks the authorization gate
+only. Test actual block expiry separately before enabling a fulfillment workflow.
+
 ## Viewing Coverage Reports
 
 After running `npm run test:coverage`, open the HTML report:
@@ -126,3 +166,74 @@ Coverage is tracked in `coverage/` with:
 - Use realistic event fixtures that preserve actual tag structure
 - Test tag parsing, filtering, and event ordering
 - Mock relay connections for deterministic output
+
+### Durable HODL orders and payouts
+
+Set `HODL_ESCROW_ENCRYPTION_KEY` to a persistent, secret 32-byte hex key before
+registering escrow orders. Preimages and fulfillment snapshots are encrypted
+with AES-256-GCM and bound to their order and purpose. Startup migrates legacy
+plaintext preimages when the key is configured. Retain the key across deployments;
+changing it without migrating existing rows prevents decryption and settlement.
+
+The authenticated `/api/lightning/hodl-orders` endpoint recovers a party's orders
+after closing checkout. A settled escrow remains a seller obligation until its
+payout is confirmed. The LND server scans obligations every 30 seconds; hosts
+that can sleep also need a scheduler calling `POST /api/lightning/sync-hodl-orders`
+with `Authorization: Bearer <CRON_SECRET>`. Monitor unconfirmed and abandoned
+rows in `hodl_escrow_payouts`. An abandoned payout needs manual reconciliation;
+never discard its invoice or assume that a timeout proves it unpaid.
+
+Run `npm run test:integration` for real PostgreSQL migrations, ciphertext
+round trips, and concurrent payout locking. For real Lightning integration,
+`utils/lightning/__tests__/hodl-regtest.test.ts` is opt-in via `RUN_LND_REGTEST=1`.
+Use two funded, connected local regtest LND nodes and a disposable PostgreSQL
+instance. Configure localhost `LND_HOST`, the escrow node's TLS certificate and
+invoice macaroon, a payout macaroon restricted to SendPaymentV2/TrackPaymentV2,
+`DATABASE_URL`, `ARBITER_NOSTR_PUBKEY`, `HODL_INVOICE_PROVIDER=lnd`, and
+`SHOPSTR_DB_AUTO_INIT_IN_TESTS=1`. Set `LND_REGTEST_PEER_CONTAINER` to the payer
+Docker container, whose `lncli --network=regtest` uses its own local credentials.
+Run that test file with Jest `--runInBand`. It verifies accepted/settled/cancelled
+HTLCs, real seller payment, and retry after a lost database acknowledgment.
+Only disposable local test funds may be used.
+
+### HODL launch and recovery checks
+
+HODL runtime requires real LND, PostgreSQL, encrypted storage, matching arbiter
+public/private keys, and an available signed seller profile with a usable Lightning
+address. Checkout reads LND `GetInfo` and LNURL metadata before creating an invoice.
+The invoice macaroon needs `GetInfo` in addition to the four invoice RPCs. This
+preflight cannot guarantee future routing liquidity or seller-address availability.
+
+The default policy offers pickup/contact only. `HODL_HOLD_CLTV_DELTA` defaults to
+80 blocks (accepted range 48–144). `NEXT_PUBLIC_HODL_ALLOW_SHIPPING=true` explicitly
+allows shipped orders, with deadline warnings. Unpaid invoices expire after one
+hour; funded holds expire according to actual HTLC block heights. Resolve at least
+18 blocks before expiry; neither block timing nor delivery duration is guaranteed.
+Seller disputes retain their four-hour wait, measured from LND's last accepted
+HTLC part. Orders with missing or near-expiry hold data cannot be marked shipped.
+
+Buyer invoices can be resumed from Orders. Displayed creation and unpaid-expiry times are decoded
+from BOLT11's timestamp and `x` tag (3600 seconds when absent), independent of
+legacy database timestamp time zones. The expiry of an accepted hold is instead
+determined by LND's HTLC block height.
+
+Retrying the same checkout ID returns the original committed invoice; changing
+its contents is rejected. Cart escrow
+creates one separately priced order per product, including quantity, so partial
+payment is recoverable. Shipping thresholds apply per independent order. Do not
+pay funded cart lines again using another payment method.
+
+Keep the Node recovery worker alive, or run authenticated POST
+`/api/lightning/sync-hodl-orders` with `Authorization: Bearer <CRON_SECRET>` every
+30 seconds on a host with enough execution time. It synchronizes LND status,
+verifies and applies published confirmations/rulings, and reconciles seller payouts.
+Unreachable relays do not authorize a release. A ruling published during a seller
+waiting period is retried after eligibility, provided LND still holds the payment.
+
+Sellers/arbiters can use **Check seller payout** on settled orders. It reconciles
+against LND and the already recorded payout invoice; it never clears an uncertain
+payment or changes its destination. Escalate abandoned payouts with the order hash.
+An operator must establish the recorded payment's terminal outcome before any
+manual compensation. Monitor pending/abandoned payouts, recovery failures, node
+sync, channel liquidity, relay availability and remaining hold blocks. Back up the
+PostgreSQL database together with the encryption key and arbiter identity securely.
