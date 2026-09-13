@@ -657,6 +657,26 @@ export type BlossomUploadResponse = {
   type?: string;
 };
 
+const BLOSSOM_REQUEST_TIMEOUT_MS = 30_000;
+
+function encodeBase64Url(value: string): string {
+  return CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(value))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function fetchBlossom(url: URL, init: RequestInit): Promise<Response> {
+  return newPromiseWithTimeout<Response>(
+    (resolve, reject, signal) => {
+      fetch(url, { ...init, signal }).then(resolve, (error: unknown) =>
+        reject(error instanceof Error ? error : new Error(String(error)))
+      );
+    },
+    { timeout: BLOSSOM_REQUEST_TIMEOUT_MS }
+  );
+}
+
 export async function blossomUploadImages(
   image: File,
   signer: NostrSigner,
@@ -696,9 +716,7 @@ export async function blossomUploadImages(
 
   const signedEvent = await signer!.sign(event);
 
-  const authorization = `Nostr ${CryptoJS.enc.Base64.stringify(
-    CryptoJS.enc.Utf8.parse(JSON.stringify(signedEvent))
-  )}`;
+  const authorization = `Nostr ${encodeBase64Url(JSON.stringify(signedEvent))}`;
 
   const validServers = servers
     .map((s) => {
@@ -794,7 +812,7 @@ export async function blossomUploadImages(
     try {
       const url = new URL("/upload", server);
 
-      const res = await fetch(url, {
+      const res = await fetchBlossom(url, {
         method: "PUT",
         body: image,
         headers: {
@@ -840,14 +858,14 @@ export async function blossomUploadImages(
     try {
       const url = new URL("/mirror", server);
 
-      const res = await fetch(url, {
+      const res = await fetchBlossom(url, {
         method: "PUT",
         body: JSON.stringify({
           url: responseUrl,
         }),
         headers: {
           authorization,
-          "content-type": image.type,
+          "content-type": "application/json",
         },
       });
 

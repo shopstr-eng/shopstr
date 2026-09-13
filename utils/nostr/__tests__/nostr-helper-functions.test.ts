@@ -111,6 +111,8 @@ import {
   buildDeleteCachedEventsProof,
   buildSignedHttpRequestProofTemplate,
 } from "@/utils/nostr/request-auth";
+import type { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
+import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 
 const originalCrypto = globalThis.crypto;
@@ -3688,6 +3690,13 @@ describe("blossomUploadImages", () => {
   beforeEach(() => {
     global.fetch = jest.fn();
     (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(
+      async (fn: Parameters<typeof newPromiseWithTimeout>[0]) => {
+        return new Promise((resolve, reject) =>
+          fn(resolve, reject, new AbortController().signal)
+        );
+      }
+    );
   });
 
   afterEach(() => {
@@ -3782,6 +3791,45 @@ describe("blossomUploadImages", () => {
         ["m", "image/png"],
       ])
     );
+  });
+
+  it("uses a future expiration and unpadded Base64url authorization", async () => {
+    const signer = makeSigner();
+    signer.sign.mockImplementation(async (event: NostrEventTemplate) => ({
+      ...event,
+      id: "signed-upload-event",
+      pubkey: "user-pubkey",
+      // The extra byte makes standard Base64 emit padding, so this test cannot
+      // accidentally accept the non-URL-safe encoder.
+      sig: "sigx",
+    }));
+    (global.fetch as jest.Mock).mockResolvedValue(makeSuccessResponse());
+
+    await blossomUploadImages(
+      makeImageFile(),
+      signer as unknown as NostrSigner,
+      ["https://blossom.example"]
+    );
+
+    const authorization = (global.fetch as jest.Mock).mock.calls[0][1].headers
+      .authorization as string;
+    expect(authorization).toMatch(/^Nostr /);
+
+    const encoded = authorization.slice("Nostr ".length);
+    expect(encoded).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(encoded).not.toMatch(/[+/=]/);
+
+    const standardBase64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = standardBase64.padEnd(
+      Math.ceil(standardBase64.length / 4) * 4,
+      "="
+    );
+    const event = JSON.parse(atob(padded));
+    const expiration = event.tags.find(
+      (tag: string[]) => tag[0] === "expiration"
+    );
+
+    expect(Number(expiration?.[1])).toBeGreaterThan(event.created_at);
   });
 
   it("normalises NIP-94 format: reads url, sha256/ox, size, m from nip94_event.tags when top-level fields are absent", async () => {
@@ -3910,6 +3958,7 @@ describe("blossomUploadImages", () => {
     const mirrorCall = (global.fetch as jest.Mock).mock.calls[1];
     expect(mirrorCall[0].toString()).toBe("https://mirror.example/mirror");
     expect(mirrorCall[1].method).toBe("PUT");
+    expect(mirrorCall[1].headers["content-type"]).toBe("application/json");
   });
 
   it("caches the authorization event after a successful upload", async () => {
@@ -3946,6 +3995,70 @@ describe("blossomUploadImages", () => {
     );
     expect(attempted).toContain("https://dead.example/upload");
     expect(attempted).toContain("https://live.example/upload");
+  });
+
+  it("falls over after a Blossom upload request times out", async () => {
+    const signer = makeSigner();
+    (newPromiseWithTimeout as jest.Mock).mockRejectedValueOnce(
+      new Error("Timeout")
+    );
+    (global.fetch as jest.Mock).mockImplementation(async (url: URL) => {
+      const requestUrl = String(url);
+      if (requestUrl.endsWith("/mirror")) {
+        return { ok: true };
+      }
+      return makeSuccessResponse({
+        url: requestUrl.includes("live.example")
+          ? "https://live.example/abc"
+          : "https://hanging.example/abc",
+      });
+    });
+
+    await expect(
+      blossomUploadImages(makeImageFile(), signer as unknown as NostrSigner, [
+        "https://hanging.example",
+        "https://live.example",
+      ])
+    ).resolves.toContainEqual(["url", "https://live.example/abc"]);
+
+    expect(newPromiseWithTimeout).toHaveBeenNthCalledWith(
+      1,
+      expect.any(Function),
+      { timeout: 30_000 }
+    );
+  });
+
+  it("falls over after a 401 response without reading missing descriptor fields", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockImplementation(async (url: URL) => {
+      const requestUrl = String(url);
+      if (requestUrl === "https://expired.example/upload") {
+        return {
+          ok: false,
+          status: 401,
+          text: async () => '{"error":"expired authorization"}',
+        };
+      }
+      if (requestUrl.endsWith("/mirror")) {
+        return { ok: true };
+      }
+      return makeSuccessResponse({ url: "https://live.example/abc" });
+    });
+
+    await expect(
+      blossomUploadImages(makeImageFile(), signer as unknown as NostrSigner, [
+        "https://expired.example",
+        "https://live.example",
+      ])
+    ).resolves.toContainEqual(["url", "https://live.example/abc"]);
+
+    const uploadAttempts = (global.fetch as jest.Mock).mock.calls
+      .map(([url]) => String(url))
+      .filter((url) => url.endsWith("/upload"));
+    expect(uploadAttempts).toEqual([
+      "https://expired.example/upload",
+      "https://live.example/upload",
+    ]);
   });
 
   it("reports every server that failed when none accept the upload", async () => {
