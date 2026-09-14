@@ -1,4 +1,5 @@
 - [HeroUI version pin](heroui-version-pin.md) — keep @heroui/react on v2.8.10; v3 removes ModalContent/useDisclosure; deploy npm ci installs the lockfile exactly, so stale node_modules hides the break.
+- [Deploy package firewall](deploy-package-firewall.md) — deploy 403s npm versions with critical CVEs (next must be ≥16.3.3, on 16.3.5); after npm install on Replit, scrub package-firewall URLs and restore libc fields in the lockfile before committing.
 - [Zap receipt validation](zap-receipt-validation.md) — purchase flow stays strict (preimage binding); inventory counts min-amount receipts from any client's p-tag; freshness upper bound is now-based, not startTime-based.
 - [Relay connection handling](relay-connection-handling.md) — never cache ensureRelay promises, never await all-relay connects before subscribing, always bound connect timeouts, fetch resolves partial on timeout.
 - [Contact list (kind 3) safety](contact-list-safety.md) — never create a first follow list unless every relay + DB confirm empty (`.every`, not `.some`); kind 3 replaces follows network-wide.
