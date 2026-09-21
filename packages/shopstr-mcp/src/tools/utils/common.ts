@@ -183,6 +183,7 @@ export function emptyRelayMeta(responseTimeMs = 0): RelayFetchMeta {
   return {
     relaysQueried: [],
     relaysSucceeded: [],
+    relaysIncomplete: [],
     relaysFailed: [],
     degraded: false,
     coverage: 1,
@@ -197,12 +198,14 @@ export function combineRelayMetas(
 ): RelayFetchMeta {
   const relaysQueried = new Set<string>();
   const relaysSucceeded = new Set<string>();
+  const relaysIncomplete = new Set<string>();
   const relaysFailed = new Map<string, { url: string; error: string }>();
   let eventCount = 0;
 
   for (const meta of metas) {
     meta.relaysQueried.forEach((relay) => relaysQueried.add(relay));
     meta.relaysSucceeded.forEach((relay) => relaysSucceeded.add(relay));
+    meta.relaysIncomplete.forEach((relay) => relaysIncomplete.add(relay));
     for (const failure of meta.relaysFailed) {
       relaysFailed.set(`${failure.url}:${failure.error}`, failure);
     }
@@ -212,8 +215,10 @@ export function combineRelayMetas(
   return {
     relaysQueried: Array.from(relaysQueried),
     relaysSucceeded: Array.from(relaysSucceeded),
+    relaysIncomplete: Array.from(relaysIncomplete),
     relaysFailed: Array.from(relaysFailed.values()),
-    degraded: Array.from(relaysFailed.values()).length > 0,
+    degraded:
+      Array.from(relaysFailed.values()).length > 0 || relaysIncomplete.size > 0,
     coverage:
       relaysQueried.size === 0 ? 1 : relaysSucceeded.size / relaysQueried.size,
     responseTimeMs,
@@ -222,7 +227,11 @@ export function combineRelayMetas(
 }
 
 export function allRelaysFailed(meta: RelayFetchMeta): boolean {
-  return meta.relaysQueried.length > 0 && meta.relaysSucceeded.length === 0;
+  return (
+    meta.relaysQueried.length > 0 &&
+    meta.relaysSucceeded.length === 0 &&
+    meta.eventCount === 0
+  );
 }
 
 export function createRelayUnavailableResponse(

@@ -4,7 +4,8 @@ import { sortEventsNewestFirst } from "./dedup.js";
 import type { NostrManager } from "./nostr-manager.js";
 import type { NostrEvent, NostrFilter, RelayFetchMeta } from "./types.js";
 
-export type RelayFetchClient = Pick<NostrManager, "fetch">;
+export type RelayFetchClient =
+  Pick<NostrManager, "fetchWithStatus"> | Pick<NostrManager, "fetch">;
 
 export type RelayFetchResult = {
   events: NostrEvent[];
@@ -91,13 +92,19 @@ export async function fetchFromRelays(
   const startedAt = Date.now();
   const settled = await Promise.allSettled(
     relays.map(async (relay) => {
-      const events = await client.fetch(
-        filters,
-        { ...(options.params ?? {}) },
-        [relay],
-        { timeoutMs: options.timeoutMs }
-      );
-      return { relay, events };
+      const params = { ...(options.params ?? {}) };
+      const result =
+        "fetchWithStatus" in client
+          ? await client.fetchWithStatus(filters, params, [relay], {
+              timeoutMs: options.timeoutMs,
+            })
+          : {
+              events: await client.fetch(filters, params, [relay], {
+                timeoutMs: options.timeoutMs,
+              }),
+              complete: true,
+            };
+      return { relay, ...result };
     })
   );
 
@@ -109,12 +116,17 @@ export async function fetchFromRelays(
     Array<number | null>
   > = {};
   const relaysSucceeded: string[] = [];
+  const relaysIncomplete: string[] = [];
   const relaysFailed: Array<{ url: string; error: string }> = [];
 
   settled.forEach((result, index) => {
     const relay = relays[index] ?? "unknown";
     if (result.status === "fulfilled") {
-      relaysSucceeded.push(result.value.relay);
+      if (result.value.complete) {
+        relaysSucceeded.push(result.value.relay);
+      } else {
+        relaysIncomplete.push(result.value.relay);
+      }
       eventCountsByRelay[result.value.relay] = result.value.events.length;
       const matchingEventsByFilter = filters.map((filter) =>
         result.value.events.filter((event) => eventMatchesFilter(event, filter))
@@ -157,8 +169,9 @@ export async function fetchFromRelays(
     meta: {
       relaysQueried: relays,
       relaysSucceeded,
+      relaysIncomplete,
       relaysFailed,
-      degraded: relaysFailed.length > 0,
+      degraded: relaysFailed.length > 0 || relaysIncomplete.length > 0,
       coverage:
         relays.length === 0 ? 0 : relaysSucceeded.length / relays.length,
       responseTimeMs: Date.now() - startedAt,
