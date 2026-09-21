@@ -27,7 +27,8 @@
     "test:integration": "RUN_TESTCONTAINERS=1 jest utils/db/__tests__/db-service.test.ts --runInBand",
     "test:watch": "jest --watch",
     "prepare": "husky",
-    "pre-commit": "node scripts/run-staged-checks.mjs"
+    "pre-commit": "node scripts/run-staged-checks.mjs",
+    "audit:deps": "npm audit --audit-level=high && npm audit --prefix packages/shopstr-mcp --audit-level=high"
   },
   "dependencies": {
     "@braintree/sanitize-url": "7.1.2",
@@ -82,7 +83,6 @@
     "husky": "9.1.7",
     "jest": "30.4.2",
     "jest-environment-jsdom": "30.4.1",
-    "pg-mem": "3.0.14",
     "prettier": "3.9.4",
     "prettier-plugin-tailwindcss": "0.8.0",
     "typescript": "6.0.3"
@@ -91,7 +91,6 @@
     "serialize-javascript": "7.0.5",
     "picomatch": "4.0.4",
     "postcss": "8.5.28",
-    "immutable": "4.3.9",
     "tar-fs": "2.1.4",
     "brace-expansion@>=3.0.0 <6.0.0": "5.0.9",
     "qs": "6.16.0",
