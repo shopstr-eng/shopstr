@@ -5,3 +5,4 @@
 - [Relay connection handling](relay-connection-handling.md) — never cache ensureRelay promises, never await all-relay connects before subscribing, always bound connect timeouts, fetch resolves partial on timeout.
 - [Contact list (kind 3) safety](contact-list-safety.md) — never create a first follow list unless every relay + DB confirm empty (`.every`, not `.some`); kind 3 replaces follows network-wide.
 - [Escrow record keying](escrow-record-keying.md) — p2pk_escrow_orders and the dispute plane are keyed by H(token), never the invoice orderId; any first-write-wins registration must be keyed by something an observer can't predict.
+- [Recovery record safety](recovery-record-safety.md) — localStorage recovery records must be buyer-pubkey-bound (they survive logout), dedupe proofs at mutation time, and read-back-verify before clearing the record.

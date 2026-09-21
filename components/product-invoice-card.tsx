@@ -1585,10 +1585,18 @@ export default function ProductInvoiceCard({
         });
         shouldSendEcashPayout = true;
       } else {
+        if (!userPubkey) {
+          // Checkout is gated on sign-in, so this is unreachable; an
+          // unbound record could never be safely resolved anyway.
+          throw new Error(
+            "Cannot record a pending seller payout without a buyer identity."
+          );
+        }
         const payout = recordPendingSellerLightningPayout({
           orderId,
           mintUrl: tokenMintUrl,
           sellerPubkey: productData.pubkey,
+          buyerPubkey: userPubkey,
           lnurl,
           sellerAmount,
           status: payoutOutcome.status,

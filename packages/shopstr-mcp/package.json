@@ -33,7 +33,8 @@
   "files": [
     "dist",
     ".env.example",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "clean": "node scripts/clean-dist.mjs",

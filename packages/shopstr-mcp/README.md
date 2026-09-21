@@ -24,7 +24,7 @@ prompts for public Shopstr marketplace data.
   `find_and_compare_products`.
 - Provides reusable infrastructure modules for upcoming tools:
   `nostr-manager`, `relay-fetch`, `parse-tags`, `dedup`, `validation`,
-  `errors`, `timeout`, `audit-log`, and `cache`.
+  `errors`, `audit-log`, and `cache`.
 
 ## Content Trust Model
 

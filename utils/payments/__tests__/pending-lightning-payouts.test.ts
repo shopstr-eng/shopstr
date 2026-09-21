@@ -2,8 +2,10 @@
  * @jest-environment jsdom
  */
 import {
+  getPendingSellerLightningPayouts,
   isUnresolvedSellerLightningPayoutError,
   recordPendingSellerLightningPayout,
+  removePendingSellerLightningPayout,
 } from "../pending-lightning-payouts";
 
 const recoverableProof = {
@@ -36,6 +38,7 @@ describe("pending seller Lightning payouts", () => {
         orderId: "order-1",
         mintUrl: "https://mint.example",
         sellerPubkey: "seller-pubkey",
+        buyerPubkey: "buyer-pubkey",
         lnurl: "seller@example.com",
         sellerAmount: 1000,
         status: "unknown",
@@ -54,5 +57,55 @@ describe("pending seller Lightning payouts", () => {
     } finally {
       setItem.mockRestore();
     }
+  });
+
+  it("removes only the matching record when a pending payout is resolved", () => {
+    const base = {
+      orderId: "order-1",
+      mintUrl: "https://mint.example",
+      sellerPubkey: "seller-pubkey",
+      buyerPubkey: "buyer-pubkey",
+      lnurl: "seller@example.com",
+      sellerAmount: 1000,
+      status: "pending" as const,
+      recoverableProofs: [recoverableProof],
+      quarantinedProofs: [quarantinedProof],
+      errorMessage: "pending",
+    };
+    recordPendingSellerLightningPayout({ ...base, meltQuoteId: "quote-a" });
+    recordPendingSellerLightningPayout({
+      ...base,
+      orderId: "order-2",
+      meltQuoteId: "quote-b",
+    });
+
+    removePendingSellerLightningPayout("quote-a");
+
+    const remaining = getPendingSellerLightningPayouts();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.meltQuoteId).toBe("quote-b");
+
+    // Removing an unknown id is a no-op.
+    removePendingSellerLightningPayout("quote-that-does-not-exist");
+    expect(getPendingSellerLightningPayouts()).toHaveLength(1);
+  });
+
+  it("refuses to write a record without a buyer identity", () => {
+    expect(() =>
+      recordPendingSellerLightningPayout({
+        orderId: "order-1",
+        mintUrl: "https://mint.example",
+        sellerPubkey: "seller-pubkey",
+        buyerPubkey: "",
+        lnurl: "seller@example.com",
+        sellerAmount: 1000,
+        status: "pending",
+        meltQuoteId: "quote-a",
+        recoverableProofs: [],
+        quarantinedProofs: [],
+        errorMessage: "pending",
+      })
+    ).toThrow(/buyer identity/);
+    expect(getPendingSellerLightningPayouts()).toHaveLength(0);
   });
 });

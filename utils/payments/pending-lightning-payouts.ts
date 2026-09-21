@@ -6,6 +6,12 @@ export type PendingSellerLightningPayout = {
   orderId: string;
   mintUrl: string;
   sellerPubkey: string;
+  /**
+   * Buyer identity that created the record. Optional only because records
+   * written before this field existed lack it; resolution must never restore
+   * a bound record's proofs while a different account is signed in.
+   */
+  buyerPubkey?: string;
   lnurl: string;
   sellerAmount: number;
   status: "pending" | "unknown";
@@ -19,8 +25,15 @@ export type PendingSellerLightningPayout = {
 
 type PendingSellerLightningPayoutInput = Omit<
   PendingSellerLightningPayout,
-  "createdAt" | "updatedAt"
->;
+  "createdAt" | "updatedAt" | "buyerPubkey"
+> & {
+  /**
+   * Required for every new record — the resolver refuses records it cannot
+   * bind to the signed-in buyer. Only records written before account
+   * binding existed lack it, and those are never resolved through the UI.
+   */
+  buyerPubkey: string;
+};
 
 export function getPendingSellerLightningPayouts(): PendingSellerLightningPayout[] {
   if (typeof window === "undefined") return [];
@@ -36,6 +49,11 @@ export function getPendingSellerLightningPayouts(): PendingSellerLightningPayout
 export function recordPendingSellerLightningPayout(
   input: PendingSellerLightningPayoutInput
 ): PendingSellerLightningPayout {
+  if (!input.buyerPubkey) {
+    throw new Error(
+      "Refusing to record a pending seller payout without a buyer identity."
+    );
+  }
   const existing = getPendingSellerLightningPayouts();
   const previous = existing.find(
     (record) => record.meltQuoteId === input.meltQuoteId
@@ -59,6 +77,17 @@ export function recordPendingSellerLightningPayout(
     );
   }
   return record;
+}
+
+export function removePendingSellerLightningPayout(
+  meltQuoteId: string
+): void {
+  if (typeof window === "undefined") return;
+
+  const remaining = getPendingSellerLightningPayouts().filter(
+    (record) => record.meltQuoteId !== meltQuoteId
+  );
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(remaining));
 }
 
 export class UnresolvedSellerLightningPayoutError extends Error {
