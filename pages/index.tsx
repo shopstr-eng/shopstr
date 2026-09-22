@@ -469,17 +469,19 @@ export default function Landing() {
                     alt="Sign in to Shopstr using Nostr cryptographic keys — dark mode"
                     src="/sign-in-step-dark.png"
                     width={250}
-                    height={180}
-                    loading="lazy"
-                    className="mx-auto hidden rounded-xl dark:flex"
+                    height={437}
+                    removeWrapper
+                    disableSkeleton
+                    className="mx-auto hidden rounded-xl dark:block"
                   />
                   <Image
                     alt="Sign in to Shopstr using Nostr cryptographic keys — light mode"
                     src="/sign-in-step-light.png"
                     width={250}
-                    height={180}
-                    loading="lazy"
-                    className="mx-auto flex rounded-xl dark:hidden"
+                    height={437}
+                    removeWrapper
+                    disableSkeleton
+                    className="mx-auto block rounded-xl dark:hidden"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                 </div>
@@ -498,17 +500,19 @@ export default function Landing() {
                     alt="Set up your Shopstr seller profile on Nostr — dark mode"
                     src="/profile-step-dark.png"
                     width={250}
-                    height={180}
-                    loading="lazy"
-                    className="mx-auto hidden rounded-xl dark:flex"
+                    height={437}
+                    removeWrapper
+                    disableSkeleton
+                    className="mx-auto hidden rounded-xl dark:block"
                   />
                   <Image
                     alt="Set up your Shopstr seller profile on Nostr — light mode"
                     src="/profile-step-light.png"
                     width={250}
-                    height={180}
-                    loading="lazy"
-                    className="mx-auto flex rounded-xl dark:hidden"
+                    height={437}
+                    removeWrapper
+                    disableSkeleton
+                    className="mx-auto block rounded-xl dark:hidden"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                 </div>
@@ -527,17 +531,19 @@ export default function Landing() {
                     alt="Create and publish a Bitcoin product listing on Shopstr — dark mode"
                     src="/listing-step-dark.png"
                     width={250}
-                    height={180}
-                    loading="lazy"
-                    className="mx-auto hidden rounded-xl dark:flex"
+                    height={437}
+                    removeWrapper
+                    disableSkeleton
+                    className="mx-auto hidden rounded-xl dark:block"
                   />
                   <Image
                     alt="Create and publish a Bitcoin product listing on Shopstr — light mode"
                     src="/listing-step-light.png"
                     width={250}
-                    height={180}
-                    loading="lazy"
-                    className="mx-auto flex rounded-xl dark:hidden"
+                    height={437}
+                    removeWrapper
+                    disableSkeleton
+                    className="mx-auto block rounded-xl dark:hidden"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                 </div>
@@ -556,17 +562,19 @@ export default function Landing() {
                     alt="Complete a Bitcoin Lightning Network payment on Shopstr — dark mode"
                     src="/payment-step-dark.png"
                     width={250}
-                    height={180}
-                    loading="lazy"
-                    className="mx-auto hidden rounded-xl dark:flex"
+                    height={437}
+                    removeWrapper
+                    disableSkeleton
+                    className="mx-auto hidden rounded-xl dark:block"
                   />
                   <Image
                     alt="Complete a Bitcoin Lightning Network payment on Shopstr — light mode"
                     src="/payment-step-light.png"
                     width={250}
-                    height={180}
-                    loading="lazy"
-                    className="mx-auto flex rounded-xl dark:hidden"
+                    height={437}
+                    removeWrapper
+                    disableSkeleton
+                    className="mx-auto block rounded-xl dark:hidden"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                 </div>
