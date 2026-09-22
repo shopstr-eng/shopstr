@@ -1056,7 +1056,7 @@ describe("fetch-service NIP-50 search helpers", () => {
 
     await fetchNip50ProductSearch(
       nostr as unknown as NostrManager,
-      ["wss://relay.damus.io", "relay.nostr.band/", "wss://nos.lol"],
+      ["wss://relay.damus.io", "relay.plebeian.market/", "wss://nos.lol"],
       "coffee"
     );
 
@@ -1078,9 +1078,9 @@ describe("fetch-service NIP-50 search helpers", () => {
     await fetchNip50ProductSearch(
       nostr as unknown as NostrManager,
       [
-        "relay.noswhere.com/",
-        "wss://relay.noswhere.com",
-        "wss://search.nos.today/",
+        "relay.plebeian.market/",
+        "wss://relay.plebeian.market",
+        "wss://relay.ditto.pub/",
         "wss://relay.damus.io",
       ],
       "coffee"
