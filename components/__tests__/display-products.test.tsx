@@ -338,6 +338,49 @@ describe("DisplayProducts search filtering", () => {
     });
   });
 
+  it("keeps regular relay listings searchable when NIP-50 relays fail", async () => {
+    const listing = {
+      id: "regular-relay-coffee",
+      pubkey: "seller-pubkey",
+      created_at: 10,
+      kind: 30402,
+      tags: [
+        ["d", "regular-relay-coffee"],
+        ["title", "Regular Relay Coffee Beans"],
+        ["price", "12", "USD"],
+        ["image", "https://example.com/coffee.png"],
+      ],
+      content: "Fresh coffee beans",
+      sig: "relay-sig",
+    } as NostrEvent;
+    const nostr = {
+      fetch: jest.fn().mockRejectedValue(new Error("Search relay unavailable")),
+    };
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+
+    renderDisplayProducts({ nostr, productEvents: [listing] });
+
+    await waitFor(() => {
+      expectNip50RelayFetches(nostr.fetch, {
+        kinds: [30402],
+        search: "coffee",
+      });
+      expect(consoleWarnSpy).toHaveBeenCalledTimes(
+        DEFAULT_NIP50_SEARCH_RELAYS.length + 1
+      );
+      expect(
+        screen.getByText("Regular Relay Coffee Beans")
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("No products found...")
+      ).not.toBeInTheDocument();
+    });
+
+    consoleWarnSpy.mockRestore();
+  });
+
   it("passes trusted report moderation signals to product cards", async () => {
     const productEvent = {
       id: "local-product-1",
