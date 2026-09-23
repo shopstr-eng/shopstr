@@ -572,6 +572,14 @@ describe("fetch-service NIP-50 search helpers", () => {
     mockRelayInfoSupport();
   });
 
+  it("uses the curated marketplace NIP-50 relay defaults", () => {
+    expect(DEFAULT_NIP50_SEARCH_RELAYS).toEqual([
+      "wss://relay.ditto.pub",
+      "wss://relay.plebeian.market",
+      "wss://relay.gulugulu.moe",
+    ]);
+  });
+
   it("builds NIP-50 search filters only for marketplace listings", () => {
     expect(
       buildNip50ProductSearchFilters("  cold   brew  ", {
