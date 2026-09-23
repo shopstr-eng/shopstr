@@ -470,6 +470,8 @@ export default function Landing() {
                     src="/sign-in-step-dark.png"
                     width={250}
                     height={437}
+                    as="img"
+                    loading="lazy"
                     removeWrapper
                     disableSkeleton
                     className="mx-auto hidden rounded-xl dark:block"
@@ -479,6 +481,8 @@ export default function Landing() {
                     src="/sign-in-step-light.png"
                     width={250}
                     height={437}
+                    as="img"
+                    loading="lazy"
                     removeWrapper
                     disableSkeleton
                     className="mx-auto block rounded-xl dark:hidden"
@@ -501,6 +505,8 @@ export default function Landing() {
                     src="/profile-step-dark.png"
                     width={250}
                     height={437}
+                    as="img"
+                    loading="lazy"
                     removeWrapper
                     disableSkeleton
                     className="mx-auto hidden rounded-xl dark:block"
@@ -510,6 +516,8 @@ export default function Landing() {
                     src="/profile-step-light.png"
                     width={250}
                     height={437}
+                    as="img"
+                    loading="lazy"
                     removeWrapper
                     disableSkeleton
                     className="mx-auto block rounded-xl dark:hidden"
@@ -532,6 +540,8 @@ export default function Landing() {
                     src="/listing-step-dark.png"
                     width={250}
                     height={437}
+                    as="img"
+                    loading="lazy"
                     removeWrapper
                     disableSkeleton
                     className="mx-auto hidden rounded-xl dark:block"
@@ -541,6 +551,8 @@ export default function Landing() {
                     src="/listing-step-light.png"
                     width={250}
                     height={437}
+                    as="img"
+                    loading="lazy"
                     removeWrapper
                     disableSkeleton
                     className="mx-auto block rounded-xl dark:hidden"
@@ -563,6 +575,8 @@ export default function Landing() {
                     src="/payment-step-dark.png"
                     width={250}
                     height={437}
+                    as="img"
+                    loading="lazy"
                     removeWrapper
                     disableSkeleton
                     className="mx-auto hidden rounded-xl dark:block"
@@ -572,6 +586,8 @@ export default function Landing() {
                     src="/payment-step-light.png"
                     width={250}
                     height={437}
+                    as="img"
+                    loading="lazy"
                     removeWrapper
                     disableSkeleton
                     className="mx-auto block rounded-xl dark:hidden"
