@@ -25,6 +25,7 @@ export const STORAGE_KEYS = {
   HISTORY: "history",
   WOT: "wot",
   PENDING_MINT_QUOTES: "shopstr.pendingMintQuotes",
+  PENDING_CASHU_PROOF_PUBLISHES: "shopstr.pendingProofPublishes",
   P2PK_ESCROW_RECORDS: "shopstr.p2pkEscrowRecords",
   P2PK_ESCROW_RECORDS_ENCRYPTED: "shopstr.p2pkEscrowRecords.encrypted",
 

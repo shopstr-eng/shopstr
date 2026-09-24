@@ -23,9 +23,11 @@ import {
 } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
-  getStoredMints,
-  publishProofEvent,
+  getCachedCashuProofs,
+  getLocalStorageData,
+  setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEventBestEffort } from "@/utils/cashu/wallet-recovery";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 import {
   Mint as CashuMint,
@@ -54,9 +56,8 @@ const SendButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const mints = getStoredMints();
-  const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
-  const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []);
+  const { mints, history } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
 
   const {
     handleSubmit: handleSendSubmit,
@@ -150,12 +151,12 @@ const SendButton = () => {
       } else {
         proofArray = [...remainingProofs];
       }
-      storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
       storage.setJson(STORAGE_KEYS.HISTORY, [
         { type: 2, amount: numSats, date: Math.floor(Date.now() / 1000) },
         ...history,
       ]);
-      await publishProofEvent(
+      setCachedCashuProofs(proofArray);
+      await publishProofEventBestEffort(
         nostr!,
         signer!,
         mints[0]!,
