@@ -1,7 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { finalizeEvent } from "nostr-tools";
 
 import { NostrManager } from "../dist/nostr-manager.js";
+
+const privateKey = new Uint8Array(32).fill(1);
+
+function signedEvent(content) {
+  return finalizeEvent(
+    {
+      kind: 30402,
+      created_at: 1,
+      tags: [],
+      content,
+    },
+    privateKey
+  );
+}
 
 test("gc timer does not keep the Node.js process alive", async () => {
   const manager = new NostrManager([], { gcInterval: 60_000 });
@@ -159,6 +174,96 @@ test("gc continues after a relay disconnect failure", async () => {
     assert.deepEqual(warnings[0].data, {
       relay: "wss://bad-relay.example.com",
       error: "already closed",
+    });
+  } finally {
+    await manager.close();
+  }
+});
+
+function createFetchManager() {
+  const manager = new NostrManager([], { gcInterval: 60_000 });
+  let subscriptionParams;
+
+  manager.pool = {
+    async ensureRelay() {
+      return { close() {} };
+    },
+    subscribeMap(_requests, params) {
+      subscriptionParams = params;
+      return { close() {} };
+    },
+  };
+  manager.addRelay("wss://relay.example.com");
+
+  return {
+    manager,
+    getSubscriptionParams() {
+      return subscriptionParams;
+    },
+  };
+}
+
+test("fetchWithStatus marks an EOSE response complete", async () => {
+  const { manager, getSubscriptionParams } = createFetchManager();
+  const completeEvent = signedEvent("complete-event");
+
+  try {
+    const fetchPromise = manager.fetchWithStatus(
+      [{ kinds: [30402] }],
+      {},
+      ["wss://relay.example.com"],
+      { timeoutMs: 100 }
+    );
+    await Promise.resolve();
+
+    const params = getSubscriptionParams();
+    params.onevent(completeEvent);
+    params.oneose();
+
+    assert.deepEqual(await fetchPromise, {
+      events: [completeEvent],
+      complete: true,
+    });
+  } finally {
+    await manager.close();
+  }
+});
+
+test("fetchWithStatus marks an empty timeout incomplete", async () => {
+  const { manager } = createFetchManager();
+
+  try {
+    assert.deepEqual(
+      await manager.fetchWithStatus(
+        [{ kinds: [30402] }],
+        {},
+        ["wss://relay.example.com"],
+        { timeoutMs: 5 }
+      ),
+      { events: [], complete: false }
+    );
+  } finally {
+    await manager.close();
+  }
+});
+
+test("fetchWithStatus preserves partial events on timeout", async () => {
+  const { manager, getSubscriptionParams } = createFetchManager();
+  const partialEvent = signedEvent("partial-event");
+
+  try {
+    const fetchPromise = manager.fetchWithStatus(
+      [{ kinds: [30402] }],
+      {},
+      ["wss://relay.example.com"],
+      { timeoutMs: 10 }
+    );
+    await Promise.resolve();
+    getSubscriptionParams().onevent(partialEvent);
+
+    assert.deepEqual(await fetchPromise, {
+      events: [partialEvent],
+      complete: false,
     });
   } finally {
     await manager.close();

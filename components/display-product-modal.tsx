@@ -29,6 +29,7 @@ import parseTags, {
 import { ProductContext } from "@/utils/context/context";
 import { getListingSlug } from "@/utils/url-slugs";
 import { NostrEvent } from "@/utils/types/types";
+import { formatTimestampParts } from "@/utils/date-display";
 
 interface ProductModalProps {
   productData: ProductData;
@@ -50,17 +51,13 @@ export default function DisplayProductModal({
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
+  const [createdDate, createdTime] = formatTimestampParts(
+    productData.createdAt
+  );
+
   const isExpired = productData.expiration
     ? Date.now() / 1000 > productData.expiration
     : false;
-
-  const displayDate = (timestamp: number): [string, string] => {
-    if (timestamp == 0 || !timestamp) return ["", ""];
-    const d = new Date(timestamp * 1000);
-    const dateString = d.toLocaleString().split(",")[0]!.trim();
-    const timeString = d.toLocaleString().split(",")[1]!.trim();
-    return [dateString, timeString];
-  };
 
   const handleShare = async () => {
     const allParsed = productEventContext.productEvents
@@ -185,12 +182,8 @@ export default function DisplayProductModal({
               </Chip>
               <CompactCategories categories={productData.categories} />
               <div>
-                <p className="text-md">
-                  {displayDate(productData.createdAt)[0]}
-                </p>
-                <p className="text-md">
-                  {displayDate(productData.createdAt)[1]}
-                </p>
+                <p className="text-md">{createdDate}</p>
+                <p className="text-md">{createdTime}</p>
               </div>
             </div>
             <Divider />

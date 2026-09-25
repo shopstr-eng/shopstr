@@ -115,6 +115,7 @@ export type RelayFailure = {
 export type RelayFetchMeta = {
   relaysQueried: string[];
   relaysSucceeded: string[];
+  relaysIncomplete: string[];
   relaysFailed: RelayFailure[];
   degraded: boolean;
   coverage: number;

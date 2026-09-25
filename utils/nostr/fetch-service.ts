@@ -92,12 +92,9 @@ let nip58BadgeHydrationStates = new WeakMap<
 >();
 let nip58BadgeHydrationEpoch = 0;
 export const DEFAULT_NIP50_SEARCH_RELAYS = [
-  "wss://relay.nostr.band",
-  "wss://nostr.wine",
-  "wss://relay.noswhere.com",
-  "wss://search.nos.today",
-  "wss://antiprimal.net",
   "wss://relay.ditto.pub",
+  "wss://relay.plebeian.market",
+  "wss://relay.gulugulu.moe",
 ];
 
 interface Nip50RelaySupportCacheEntry {
