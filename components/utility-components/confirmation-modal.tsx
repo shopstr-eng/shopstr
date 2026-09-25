@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   Modal,
   ModalContent,
@@ -17,6 +18,8 @@ interface ConfirmationModalProps {
   cancelText?: string;
   isDangerous?: boolean;
   isLoading?: boolean;
+  /** Optional extra content rendered under the message, e.g. an input. */
+  children?: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -29,6 +32,7 @@ export default function ConfirmationModal({
   cancelText = "Cancel",
   isDangerous = false,
   isLoading = false,
+  children,
   onConfirm,
   onCancel,
 }: ConfirmationModalProps) {
@@ -60,6 +64,7 @@ export default function ConfirmationModal({
           <div className="flex items-center justify-center text-center">
             {message}
           </div>
+          {children}
         </ModalBody>
         <ModalFooter>
           <Button

@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 
-import withPWAInit from "@ducanh2912/next-pwa";
+import withPWAInit, {
+  runtimeCaching as defaultRuntimeCaching,
+} from "@ducanh2912/next-pwa";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -9,51 +11,29 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const withPWA = withPWAInit({
   dest: "public",
   register: true,
-  skipWaiting: true,
   sw: "service-worker.js",
   disable: process.env.NODE_ENV === "development",
-  runtimeCaching: [
-    {
-      urlPattern: /^https:\/\/.*\.(png|jpg|jpeg|svg|gif|ico|css|js)$/,
-      handler: "CacheFirst",
-      options: {
-        cacheName: "static-assets",
-        expiration: {
-          maxEntries: 200,
-          maxAgeSeconds: 7 * 24 * 60 * 60,
-        },
+  workboxOptions: {
+    skipWaiting: true,
+    runtimeCaching: [
+      {
+        // Authenticated escrow responses contain private fulfillment details.
+        // Workbox can cache responses regardless of HTTP Cache-Control.
+        urlPattern:
+          /^https?:\/\/[^/]+\/api\/lightning\/hodl-(?:orders|order-status|order|payout-reconcile)(?:\?|$)/,
+        handler: "NetworkOnly",
       },
-    },
-    {
-      urlPattern: /^https:\/\/.*\/api\/.*/,
-      handler: "NetworkFirst",
-      options: {
-        cacheName: "api-cache",
-        networkTimeoutSeconds: 10,
-        expiration: {
-          maxEntries: 50,
-          maxAgeSeconds: 24 * 60 * 60,
-        },
-      },
-    },
-    {
-      urlPattern: /^https?.*/,
-      handler: "NetworkFirst",
-      options: {
-        cacheName: "general-cache",
-        networkTimeoutSeconds: 15,
-        expiration: {
-          maxEntries: 100,
-          maxAgeSeconds: 7 * 24 * 60 * 60,
-        },
-      },
-    },
-  ],
+      ...defaultRuntimeCaching,
+    ],
+  },
 });
 
 const nextConfig = {
   bundlePagesRouterDependencies: true,
   output: "standalone",
+  outputFileTracingIncludes: {
+    "/*": ["./utils/lightning/lnd-proto/*.proto"],
+  },
   // Pin the file tracer to this project root so Next.js bundles only what's
   // needed into .next/standalone (silences multi-lockfile warnings and keeps
   // the deployment image lean).
