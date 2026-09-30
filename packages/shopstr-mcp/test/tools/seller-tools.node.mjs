@@ -549,6 +549,9 @@ test("list_companies advances from the newest saturated relay boundary", async (
 
   assert.equal(first.count, 0);
   assert.equal(first._pagination.hasMore, true);
+  // An empty page with more pages to fetch must not tell the agent to stop.
+  assert.equal(first._meta.notFound, undefined);
+  assert.equal(first._meta.retryable, undefined);
   assert.equal(
     profileRequests.find(
       (request) =>
@@ -604,6 +607,9 @@ test("list_companies advances from a saturated continuation window containing on
 
   assert.equal(emptyPage.count, 0);
   assert.equal(emptyPage._pagination.hasMore, true);
+  // An empty page with more pages to fetch must not tell the agent to stop.
+  assert.equal(emptyPage._meta.notFound, undefined);
+  assert.equal(emptyPage._meta.retryable, undefined);
   assert.equal(profileFilters[1][0].until, 94);
   assert.equal(olderPage.companies[0].pubkey, olderSeller);
 });

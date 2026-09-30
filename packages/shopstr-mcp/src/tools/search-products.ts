@@ -698,7 +698,8 @@ export async function handleSearchProducts(
         hints,
       }),
       returnedProducts.length,
-      "products"
+      "products",
+      hasMore
     ),
     nip50: {
       ...nip50Meta,

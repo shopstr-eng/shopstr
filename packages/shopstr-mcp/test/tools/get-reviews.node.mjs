@@ -669,6 +669,9 @@ test("get_reviews advances from a saturated continuation window containing only 
 
   assert.equal(emptyPage.count, 0);
   assert.equal(emptyPage._pagination.hasMore, true);
+  // An empty page with more pages to fetch must not tell the agent to stop.
+  assert.equal(emptyPage._meta.notFound, undefined);
+  assert.equal(emptyPage._meta.retryable, undefined);
   assert.equal(capturedFilters[1][0].until, 948);
   assert.equal(olderPage.reviews[0].id, olderReview.id);
 });

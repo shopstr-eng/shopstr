@@ -117,6 +117,49 @@ for (const [name, handler, args, subject] of tools) {
   });
 }
 
+test("search_products leaves notFound off an empty sparse page that has more pages, even when a relay failed", async () => {
+  // A full window of non-matching products saturates okRelay, so the page is
+  // empty but the next cursor may still reach a match.
+  const saturatedWindow = [100, 99, 98, 97, 96].map((created_at, index) => ({
+    id: String(index + 1).repeat(64),
+    pubkey: "b".repeat(64),
+    created_at,
+    kind: 30402,
+    tags: [
+      ["d", `other-${index}`],
+      ["title", "Other product"],
+      ["price", "40", "USD"],
+    ],
+    content: "",
+    sig: "c".repeat(128),
+  }));
+  const response = await handleSearchProducts(
+    { keyword: "matching", limit: 1 },
+    multiRelayContext([okRelay, downRelay], (relay, filters) => {
+      if (relay === downRelay) {
+        throw new Error("Relay subscription closed: connection failed");
+      }
+      if (!filters[0].kinds?.includes(30402) || filters[0].search) {
+        return { events: [], complete: true };
+      }
+      return { events: saturatedWindow, complete: true };
+    })
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.notEqual(response.isError, true);
+  assert.equal(body.count, 0);
+  assert.equal(body._pagination.hasMore, true);
+  assert.equal(body._meta.degraded, true);
+  assert.equal(body._meta.notFound, undefined);
+  assert.equal(body._meta.retryable, undefined);
+  assert.equal(body._meta.retryAfterMs, undefined);
+  assert.ok(
+    !body._meta._hints.some((hint) => hint.includes("retry later")),
+    "an empty page with more pages should not advise a retry"
+  );
+});
+
 test("search_products leaves notFound off when results were returned despite a failed relay", async () => {
   const product = {
     id: "a".repeat(64),

@@ -313,14 +313,17 @@ export function createNotFoundResponse(
  * empty page stays a success so existing clients keep working. Adds
  * `notFound: true` to an empty result, and marks it retryable with a
  * relay-naming hint when the lookup was degraded. Returns meta unchanged when
- * there are results.
+ * there are results, or when the page is empty but `hasMore` is true: a sparse
+ * scan window can match nothing while later pages still do, so the caller
+ * should keep paging rather than stop or retry.
  */
 export function withEmptyResultSignal<T extends ToolMeta & RelayFetchMeta>(
   meta: T,
   resultCount: number,
-  subject: string
+  subject: string,
+  hasMore = false
 ): T {
-  if (resultCount > 0) return meta;
+  if (resultCount > 0 || hasMore) return meta;
   const hints = Array.isArray(meta._hints) ? (meta._hints as string[]) : [];
   if (!isDegradedLookup(meta)) {
     return { ...meta, notFound: true, retryable: false };

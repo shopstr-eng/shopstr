@@ -291,7 +291,8 @@ export async function handleListCompanies(
       hints,
     }),
     returnedCompanies.length,
-    "companies"
+    "companies",
+    hasMore
   );
 
   return createSuccessResponse(

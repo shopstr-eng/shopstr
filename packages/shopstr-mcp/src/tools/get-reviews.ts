@@ -289,7 +289,8 @@ function buildResponse(
         _hints: hints,
       },
       returnedReviews.length,
-      "reviews"
+      "reviews",
+      hasMore
     ),
     returnedReviews.length
   );

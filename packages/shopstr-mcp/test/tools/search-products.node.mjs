@@ -1276,6 +1276,9 @@ test("search_products advances from the newest saturated relay boundary", async 
 
   assert.equal(first.count, 0);
   assert.equal(first._pagination.hasMore, true);
+  // An empty page with more pages to fetch must not tell the agent to stop.
+  assert.equal(first._meta.notFound, undefined);
+  assert.equal(first._meta.retryable, undefined);
   assert.equal(
     requests.find(
       (request) =>
@@ -1355,6 +1358,9 @@ test("search_products advances from a saturated continuation window containing o
 
   assert.equal(emptyPage.count, 0);
   assert.equal(emptyPage._pagination.hasMore, true);
+  // An empty page with more pages to fetch must not tell the agent to stop.
+  assert.equal(emptyPage._meta.notFound, undefined);
+  assert.equal(emptyPage._meta.retryable, undefined);
   assert.equal(typeof emptyPage._pagination.nextCursor, "string");
   assert.equal(capturedFilters[1][0].until, 94);
   assert.equal(olderPage.products[0].id, olderProduct.id);
