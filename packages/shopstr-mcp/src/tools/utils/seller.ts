@@ -19,11 +19,7 @@ import type {
   RelayFetchMeta,
   ReviewResponse,
 } from "../../types.js";
-import {
-  MCP_ERROR_CODES,
-  createErrorResponse,
-  type ToolTextResponse,
-} from "../../errors.js";
+import type { ToolTextResponse } from "../../errors.js";
 import {
   PRODUCT_KIND,
   PRODUCT_RESPONSE_BUDGET,
@@ -33,9 +29,10 @@ import {
   SHOP_PROFILE_KIND,
   CACHE_KINDS,
   allRelaysFailed,
-  buildToolMeta,
+  createNotFoundResponse,
   createRelayUnavailableResponse,
   emptyRelayMeta,
+  isDegradedLookup,
   observeProductEventsForCategories,
 } from "./common.js";
 import type { CoreToolContext } from "./context.js";
@@ -262,7 +259,7 @@ export async function fetchSellerProducts(
     );
     events = relayResult.events;
     meta = relayResult.meta;
-    if (!allRelaysFailed(meta)) {
+    if (shouldCacheRelayResult(events, meta)) {
       context.cache.set({ pubkey, kind: CACHE_KINDS.SELLER_PRODUCTS }, events);
       observeProductEventsForCategories(events);
     }
@@ -324,7 +321,7 @@ export async function fetchSellerReviews(
     );
     events = relayResult.events;
     meta = relayResult.meta;
-    if (!allRelaysFailed(meta)) {
+    if (shouldCacheRelayResult(events, meta)) {
       context.cache.set(
         { pubkey: sellerPubkey, kind: CACHE_KINDS.SELLER_REVIEWS },
         events
@@ -357,6 +354,19 @@ export async function fetchSellerReviews(
       reviews: cached?.cached ?? false,
     },
   };
+}
+
+/**
+ * Skip caching when every relay failed, or when the result is empty and some
+ * relay failed or timed out: the empty set may be a false negative, and a
+ * cached copy would make the retry we advertise return the same answer.
+ */
+function shouldCacheRelayResult(
+  events: readonly NostrEvent[],
+  meta: RelayFetchMeta
+): boolean {
+  if (allRelaysFailed(meta)) return false;
+  return events.length > 0 || !isDegradedLookup(meta);
 }
 
 export function buildPaymentInfo(products: readonly ProductResponse[]): {
@@ -491,15 +501,9 @@ export function guardSellerNotFound(
     products.products.length === 0 &&
     (reviews?.reviews.length ?? 0) === 0
   ) {
-    return createErrorResponse(
-      "Seller not found.",
-      MCP_ERROR_CODES.NOT_FOUND,
-      false,
-      undefined,
-      buildToolMeta(relayMeta, {
-        hints: [discoveryHint],
-      })
-    );
+    return createNotFoundResponse("Seller not found.", relayMeta, "seller", [
+      discoveryHint,
+    ]);
   }
 
   return undefined;

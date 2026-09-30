@@ -15,6 +15,8 @@ import {
   allRelaysFailed,
   buildToolMeta,
   createRelayUnavailableResponse,
+  isDegradedLookup,
+  withEmptyResultSignal,
   createValidationErrorResponse,
   getDataFreshness,
   observeProductEventsForCategories,
@@ -89,25 +91,33 @@ export async function handleGetCategories(
     dataFreshness = getDataFreshness(
       events.map((event) => ({ createdAt: event.created_at }))
     );
-    context.categoryCache.set(
-      { pubkey: CATEGORY_CACHE_KEY, kind: CACHE_KINDS.CATEGORY_SUMMARY },
-      categories
-    );
+    // An empty summary from a degraded scan may be a false negative; caching
+    // it would make the advertised retry return the same answer.
+    if (categories.length > 0 || !isDegradedLookup(relayResult.meta)) {
+      context.categoryCache.set(
+        { pubkey: CATEGORY_CACHE_KEY, kind: CACHE_KINDS.CATEGORY_SUMMARY },
+        categories
+      );
+    }
     relayMeta = relayResult.meta;
   }
 
   const returnedCategories = categories.slice(0, parsed.data.limit);
-  const meta = buildToolMeta(relayMeta, {
-    resultCount: returnedCategories.length,
-    totalMatches: categories.length,
-    truncated: categories.length > returnedCategories.length,
-    dataFreshness,
-    hints: [
-      "Categories are sampled observations from recent public products, not an authoritative or exhaustive Nostr category index.",
-      "count is the number of sampled products with this tag, not a total network count.",
-      "Normal product-fetching tool calls continuously enrich the in-memory category variant registry as this MCP instance observes more events.",
-    ],
-  });
+  const meta = withEmptyResultSignal(
+    buildToolMeta(relayMeta, {
+      resultCount: returnedCategories.length,
+      totalMatches: categories.length,
+      truncated: categories.length > returnedCategories.length,
+      dataFreshness,
+      hints: [
+        "Categories are sampled observations from recent public products, not an authoritative or exhaustive Nostr category index.",
+        "count is the number of sampled products with this tag, not a total network count.",
+        "Normal product-fetching tool calls continuously enrich the in-memory category variant registry as this MCP instance observes more events.",
+      ],
+    }),
+    returnedCategories.length,
+    "categories"
+  );
   return createSuccessResponse(
     {
       count: returnedCategories.length,

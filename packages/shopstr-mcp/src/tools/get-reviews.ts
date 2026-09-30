@@ -32,6 +32,7 @@ import {
   buildToolMeta,
   combineRelayMetas,
   createRelayUnavailableResponse,
+  withEmptyResultSignal,
   createValidationErrorResponse,
   getDataFreshness,
 } from "./utils/common.js";
@@ -278,14 +279,18 @@ function buildResponse(
         hasMore,
       },
     },
-    {
-      ...meta,
-      resultCount: returnedReviews.length,
-      totalMatches: reviews.length,
-      _truncated: hasMore,
-      dataFreshness: getDataFreshness(returnedReviews),
-      _hints: hints,
-    },
+    withEmptyResultSignal(
+      {
+        ...meta,
+        resultCount: returnedReviews.length,
+        totalMatches: reviews.length,
+        _truncated: hasMore,
+        dataFreshness: getDataFreshness(returnedReviews),
+        _hints: hints,
+      },
+      returnedReviews.length,
+      "reviews"
+    ),
     returnedReviews.length
   );
 }

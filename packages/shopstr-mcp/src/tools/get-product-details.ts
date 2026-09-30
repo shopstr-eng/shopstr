@@ -1,12 +1,7 @@
 import { z } from "zod";
 
 import { getDTag, mergeAndDeduplicateProducts } from "../dedup.js";
-import {
-  MCP_ERROR_CODES,
-  createErrorResponse,
-  createSuccessResponse,
-  type ToolTextResponse,
-} from "../errors.js";
+import { createSuccessResponse, type ToolTextResponse } from "../errors.js";
 import { parseProductEvent } from "../parse-tags.js";
 import { fetchFromRelays } from "../relay-fetch.js";
 import type { NostrFilter } from "../types.js";
@@ -19,6 +14,7 @@ import {
   PRODUCT_KIND,
   allRelaysFailed,
   buildToolMeta,
+  createNotFoundResponse,
   createRelayUnavailableResponse,
   createValidationErrorResponse,
   getDataFreshness,
@@ -181,12 +177,14 @@ export async function handleGetProductDetails(
     hints.push(
       "Use search_products with keyword, category, or location filters to discover products."
     );
-    return createErrorResponse(
+    // On the exact-id fallback this fetch repeats the resolve query, so its
+    // relay outcomes are the latest answer from every relay: a relay that
+    // failed during resolution but answered here empty is not unreached.
+    return createNotFoundResponse(
       "Product not found.",
-      MCP_ERROR_CODES.NOT_FOUND,
-      false,
-      undefined,
-      buildToolMeta(relayResult.meta, { hints })
+      relayResult.meta,
+      "product",
+      hints
     );
   }
 
