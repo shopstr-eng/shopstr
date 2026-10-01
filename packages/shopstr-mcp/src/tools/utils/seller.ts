@@ -19,11 +19,7 @@ import type {
   RelayFetchMeta,
   ReviewResponse,
 } from "../../types.js";
-import {
-  MCP_ERROR_CODES,
-  createErrorResponse,
-  type ToolTextResponse,
-} from "../../errors.js";
+import type { ToolTextResponse } from "../../errors.js";
 import {
   PRODUCT_KIND,
   PRODUCT_RESPONSE_BUDGET,
@@ -33,9 +29,10 @@ import {
   SHOP_PROFILE_KIND,
   CACHE_KINDS,
   allRelaysFailed,
-  buildToolMeta,
+  createNotFoundResponse,
   createRelayUnavailableResponse,
   emptyRelayMeta,
+  isDegradedLookup,
   observeProductEventsForCategories,
 } from "./common.js";
 import type { CoreToolContext } from "./context.js";
@@ -262,7 +259,7 @@ export async function fetchSellerProducts(
     );
     events = relayResult.events;
     meta = relayResult.meta;
-    if (!allRelaysFailed(meta)) {
+    if (shouldCacheRelayResult(events, meta)) {
       context.cache.set({ pubkey, kind: CACHE_KINDS.SELLER_PRODUCTS }, events);
       observeProductEventsForCategories(events);
     }
@@ -293,7 +290,10 @@ export async function fetchSellerReviews(
   productEvents: readonly NostrEvent[],
   context: CoreToolContext
 ): Promise<SellerReviewsResult> {
-  const cached = context.cache.get<NostrEvent[]>({
+  const cached = context.cache.get<{
+    events: NostrEvent[];
+    productAddresses: string[];
+  }>({
     pubkey: sellerPubkey,
     kind: CACHE_KINDS.SELLER_REVIEWS,
   });
@@ -308,7 +308,16 @@ export async function fetchSellerReviews(
     0,
     REVIEW_PRODUCT_FILTER_LIMIT
   );
-  let events = cached?.value;
+  // Product discovery can recover or change within the review cache TTL.
+  // Reuse reviews only if the cache covered the same address queries.
+  const cacheMatchesQuery =
+    cached &&
+    cached.value.productAddresses.length === productAddresses.length &&
+    productAddresses.every((address) =>
+      cached.value.productAddresses.includes(address)
+    );
+  const cacheHit = cacheMatchesQuery ? cached : undefined;
+  let events = cacheHit?.value.events;
   let meta = emptyRelayMeta();
 
   if (!events) {
@@ -324,10 +333,10 @@ export async function fetchSellerReviews(
     );
     events = relayResult.events;
     meta = relayResult.meta;
-    if (!allRelaysFailed(meta)) {
+    if (shouldCacheRelayResult(events, meta)) {
       context.cache.set(
         { pubkey: sellerPubkey, kind: CACHE_KINDS.SELLER_REVIEWS },
-        events
+        { events, productAddresses }
       );
     }
   }
@@ -354,9 +363,22 @@ export async function fetchSellerReviews(
     reviewLookupPartial,
     meta,
     cache: {
-      reviews: cached?.cached ?? false,
+      reviews: cacheHit?.cached ?? false,
     },
   };
+}
+
+/**
+ * Skip caching when every relay failed, or when the result is empty and some
+ * relay failed or timed out: the empty set may be a false negative, and a
+ * cached copy would make the retry we advertise return the same answer.
+ */
+function shouldCacheRelayResult(
+  events: readonly NostrEvent[],
+  meta: RelayFetchMeta
+): boolean {
+  if (allRelaysFailed(meta)) return false;
+  return events.length > 0 || !isDegradedLookup(meta);
 }
 
 export function buildPaymentInfo(products: readonly ProductResponse[]): {
@@ -491,15 +513,9 @@ export function guardSellerNotFound(
     products.products.length === 0 &&
     (reviews?.reviews.length ?? 0) === 0
   ) {
-    return createErrorResponse(
-      "Seller not found.",
-      MCP_ERROR_CODES.NOT_FOUND,
-      false,
-      undefined,
-      buildToolMeta(relayMeta, {
-        hints: [discoveryHint],
-      })
-    );
+    return createNotFoundResponse("Seller not found.", relayMeta, "seller", [
+      discoveryHint,
+    ]);
   }
 
   return undefined;

@@ -228,3 +228,167 @@ test("get_product_details skips pre-flight on second call when cache is enabled"
     "second call should skip pre-flight via cache"
   );
 });
+
+const okRelay = "wss://ok.example.com";
+const downRelay = "wss://down.example.com";
+const slowRelay = "wss://slow.example.com";
+
+// Per-relay context: `relayImpl(relay, filters)` returns { events, complete }
+// or throws to simulate a failed relay.
+function multiRelayContext(relays, relayImpl) {
+  return {
+    relays,
+    timeoutMs: 100,
+    cache: new MemoryCache(0),
+    nostr: {
+      async fetchWithStatus(filters, _params, relayUrls) {
+        return relayImpl(relayUrls[0], filters);
+      },
+    },
+  };
+}
+
+const productAddress = `30402:${hex("b")}:product`;
+
+test("get_product_details returns retryable NOT_FOUND when a relay failed and others were empty", async () => {
+  const response = await handleGetProductDetails(
+    { productAddress },
+    multiRelayContext([okRelay, downRelay], (relay) => {
+      if (relay === downRelay) {
+        throw new Error("Relay subscription closed: connection failed");
+      }
+      return { events: [], complete: true };
+    })
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, true);
+  assert.equal(body.errorCode, "NOT_FOUND");
+  assert.equal(body.retryable, true);
+  assert.equal(body.retryAfterMs, 2_000);
+  assert.equal(response._meta.retryable, true);
+  assert.equal(response._meta.retryAfterMs, 2_000);
+  assert.equal(body._meta.degraded, true);
+  assert.equal(
+    body._meta._hints[0],
+    `Not found on ${okRelay}. ${downRelay} failed and may have this product; retry later.`
+  );
+  assert.ok(
+    body._meta._hints.some((hint) => hint.startsWith("Use search_products"))
+  );
+});
+
+test("get_product_details treats a timed-out relay like a failed one when nothing is found", async () => {
+  const response = await handleGetProductDetails(
+    { productAddress },
+    multiRelayContext([okRelay, slowRelay], (relay) => ({
+      events: [],
+      complete: relay !== slowRelay,
+    }))
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.errorCode, "NOT_FOUND");
+  assert.equal(body.retryable, true);
+  assert.equal(body.retryAfterMs, 2_000);
+  assert.equal(
+    body._meta._hints[0],
+    `Not found on ${okRelay}. ${slowRelay} timed out and may have this product; retry later.`
+  );
+});
+
+test("get_product_details stays non-retryable NOT_FOUND when every relay answered empty", async () => {
+  const response = await handleGetProductDetails(
+    { productAddress },
+    multiRelayContext([okRelay, "wss://ok2.example.com"], () => ({
+      events: [],
+      complete: true,
+    }))
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.errorCode, "NOT_FOUND");
+  assert.equal(body.retryable, false);
+  assert.equal(body.retryAfterMs, undefined);
+  assert.equal(body._meta.degraded, false);
+  assert.deepEqual(body._meta._hints, [
+    "Use search_products with keyword, category, or location filters to discover products.",
+  ]);
+});
+
+test("get_product_details stays RELAY_UNAVAILABLE when every relay failed", async () => {
+  const response = await handleGetProductDetails(
+    { productAddress },
+    multiRelayContext([downRelay, "wss://down2.example.com"], () => {
+      throw new Error("connection failed");
+    })
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.errorCode, "RELAY_UNAVAILABLE");
+  assert.equal(body.retryable, true);
+});
+
+test("get_product_details uses the id fallback's relay outcomes when a relay recovers", async () => {
+  const productId = hex("1");
+  let idsRequests = 0;
+  const response = await handleGetProductDetails(
+    { productId },
+    multiRelayContext([okRelay, downRelay], (relay, filters) => {
+      assert.ok(filters.some((filter) => filter.ids?.includes(productId)));
+      idsRequests++;
+      // The relay fails only during resolution; the fallback repeats the same
+      // query and it answers empty, so nothing is left unreached.
+      if (relay === downRelay && idsRequests <= 2) {
+        throw new Error("connection failed");
+      }
+      return { events: [], complete: true };
+    })
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(
+    idsRequests,
+    4,
+    "resolve and fallback should each hit both relays"
+  );
+  assert.equal(body.errorCode, "NOT_FOUND");
+  assert.equal(body.retryable, false);
+  assert.equal(body.retryAfterMs, undefined);
+  assert.equal(body._meta.degraded, false);
+  assert.deepEqual(body._meta.relaysFailed, []);
+});
+
+test("get_product_details returns retryable NOT_FOUND when a relay fails both the productId resolve and the id fallback", async () => {
+  const productId = hex("1");
+  let idsRequests = 0;
+  const response = await handleGetProductDetails(
+    { productId },
+    multiRelayContext([okRelay, downRelay], (relay, filters) => {
+      assert.ok(filters.some((filter) => filter.ids?.includes(productId)));
+      idsRequests++;
+      if (relay === downRelay) throw new Error("connection failed");
+      return { events: [], complete: true };
+    })
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(
+    idsRequests,
+    4,
+    "resolve and fallback should each hit both relays"
+  );
+  assert.equal(body.errorCode, "NOT_FOUND");
+  assert.equal(body.retryable, true);
+  assert.equal(body.retryAfterMs, 2_000);
+  assert.equal(body._meta.degraded, true);
+  assert.deepEqual(
+    body._meta.relaysFailed.map((failure) => failure.url),
+    [downRelay]
+  );
+  assert.ok(
+    body._meta._hints.includes(
+      `Not found on ${okRelay}. ${downRelay} failed and may have this product; retry later.`
+    )
+  );
+});

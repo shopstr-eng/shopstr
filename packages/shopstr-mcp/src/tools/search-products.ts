@@ -30,6 +30,7 @@ import {
   buildToolMeta,
   combineRelayMetas,
   createRelayUnavailableResponse,
+  withEmptyResultSignal,
   createValidationErrorResponse,
   getDataFreshness,
   getCategoryQueryVariants,
@@ -688,13 +689,18 @@ export async function handleSearchProducts(
     returnedProducts.length
   );
   const meta = {
-    ...buildToolMeta(combineRelayMetas(relayMetas, Date.now() - startedAt), {
-      resultCount: returnedProducts.length,
-      totalMatches,
-      truncated,
-      dataFreshness: getDataFreshness(returnedProducts),
-      hints,
-    }),
+    ...withEmptyResultSignal(
+      buildToolMeta(combineRelayMetas(relayMetas, Date.now() - startedAt), {
+        resultCount: returnedProducts.length,
+        totalMatches,
+        truncated,
+        dataFreshness: getDataFreshness(returnedProducts),
+        hints,
+      }),
+      returnedProducts.length,
+      "products",
+      hasMore
+    ),
     nip50: {
       ...nip50Meta,
       reservedSlotsUsed: returnedNip50.length,

@@ -161,7 +161,7 @@ export function buildToolMeta(
     truncated?: boolean;
     dataFreshness?: string | null;
   } = {}
-): ToolMeta {
+): ToolMeta & RelayFetchMeta {
   return {
     ...relayMeta,
     dataSource: "nostr_relays",
@@ -245,6 +245,96 @@ export function createRelayUnavailableResponse(
     RELAY_RETRY_AFTER_MS,
     buildToolMeta(meta, { hints })
   );
+}
+
+/**
+ * True when at least one relay failed or timed out, so an empty result may be
+ * a false negative rather than proof the data doesn't exist.
+ */
+export function isDegradedLookup(meta: RelayFetchMeta): boolean {
+  return meta.relaysFailed.length > 0 || meta.relaysIncomplete.length > 0;
+}
+
+function describeUnreachedRelays(
+  meta: RelayFetchMeta,
+  missing: string
+): string {
+  const failed = Array.from(new Set(meta.relaysFailed.map((f) => f.url)));
+  const incomplete = meta.relaysIncomplete.filter(
+    (relay) => !failed.includes(relay)
+  );
+  const unreached = [
+    ...(failed.length > 0 ? [`${failed.join(", ")} failed`] : []),
+    ...(incomplete.length > 0 ? [`${incomplete.join(", ")} timed out`] : []),
+  ].join(" and ");
+  // A merged meta can list a relay as both succeeded and failed; name it once.
+  const answered = meta.relaysSucceeded.filter(
+    (relay) => !failed.includes(relay) && !incomplete.includes(relay)
+  );
+  const searched =
+    answered.length > 0 ? `Not found on ${answered.join(", ")}. ` : "";
+  return `${searched}${unreached} and may have ${missing}; retry later.`;
+}
+
+/**
+ * NOT_FOUND response that is retryable when the lookup was degraded. The
+ * error code stays NOT_FOUND so existing clients keep working; only
+ * `retryable`, `retryAfterMs`, and a relay-naming hint change.
+ */
+export function createNotFoundResponse(
+  error: string,
+  meta: RelayFetchMeta,
+  subject: string,
+  hints: string[] = []
+): ToolTextResponse {
+  if (!isDegradedLookup(meta)) {
+    return createErrorResponse(
+      error,
+      MCP_ERROR_CODES.NOT_FOUND,
+      false,
+      undefined,
+      buildToolMeta(meta, { hints })
+    );
+  }
+
+  return createErrorResponse(
+    error,
+    MCP_ERROR_CODES.NOT_FOUND,
+    true,
+    RELAY_RETRY_AFTER_MS,
+    buildToolMeta(meta, {
+      hints: [describeUnreachedRelays(meta, `this ${subject}`), ...hints],
+    })
+  );
+}
+
+/**
+ * Success-meta counterpart of createNotFoundResponse for list tools, where an
+ * empty page stays a success so existing clients keep working. Adds
+ * `notFound: true` to an empty result, and marks it retryable with a
+ * relay-naming hint when the lookup was degraded. Returns meta unchanged when
+ * there are results, or when the page is empty but `hasMore` is true: a sparse
+ * scan window can match nothing while later pages still do, so the caller
+ * should keep paging rather than stop or retry.
+ */
+export function withEmptyResultSignal<T extends ToolMeta & RelayFetchMeta>(
+  meta: T,
+  resultCount: number,
+  subject: string,
+  hasMore = false
+): T {
+  if (resultCount > 0 || hasMore) return meta;
+  const hints = Array.isArray(meta._hints) ? (meta._hints as string[]) : [];
+  if (!isDegradedLookup(meta)) {
+    return { ...meta, notFound: true, retryable: false };
+  }
+  return {
+    ...meta,
+    notFound: true,
+    retryable: true,
+    retryAfterMs: RELAY_RETRY_AFTER_MS,
+    _hints: [describeUnreachedRelays(meta, `matching ${subject}`), ...hints],
+  };
 }
 
 export function getDataFreshness(

@@ -549,6 +549,9 @@ test("list_companies advances from the newest saturated relay boundary", async (
 
   assert.equal(first.count, 0);
   assert.equal(first._pagination.hasMore, true);
+  // An empty page with more pages to fetch must not tell the agent to stop.
+  assert.equal(first._meta.notFound, undefined);
+  assert.equal(first._meta.retryable, undefined);
   assert.equal(
     profileRequests.find(
       (request) =>
@@ -604,6 +607,9 @@ test("list_companies advances from a saturated continuation window containing on
 
   assert.equal(emptyPage.count, 0);
   assert.equal(emptyPage._pagination.hasMore, true);
+  // An empty page with more pages to fetch must not tell the agent to stop.
+  assert.equal(emptyPage._meta.notFound, undefined);
+  assert.equal(emptyPage._meta.retryable, undefined);
   assert.equal(profileFilters[1][0].until, 94);
   assert.equal(olderPage.companies[0].pubkey, olderSeller);
 });
@@ -1400,4 +1406,153 @@ test("get_seller_reputation returns NOT_FOUND for unknown seller", async () => {
 
   assert.equal(response.isError, true);
   assert.equal(body.errorCode, "NOT_FOUND");
+});
+
+// ─── degraded not-found ──────────────────────────────────────────────
+
+const okRelay = "wss://ok.example.com";
+const downRelay = "wss://down.example.com";
+const slowRelay = "wss://slow.example.com";
+
+// Per-relay context: `relayImpl(relay, filters)` returns { events, complete }
+// or throws to simulate a failed relay.
+function multiRelayContext(relays, relayImpl, cache = new MemoryCache(60_000)) {
+  const calls = [];
+  return {
+    calls,
+    relays,
+    timeoutMs: 100,
+    cache,
+    categoryCache: new MemoryCache(60_000),
+    maxConcurrentRequests: 10,
+    nostr: {
+      async fetchWithStatus(filters, _params, relayUrls) {
+        calls.push({ relay: relayUrls[0], filters });
+        return relayImpl(relayUrls[0], filters);
+      },
+    },
+  };
+}
+
+function downRelayImpl(relay) {
+  if (relay === downRelay) {
+    throw new Error("Relay subscription closed: connection failed");
+  }
+  return { events: [], complete: true };
+}
+
+function assertDegradedSellerNotFound(body, unreachedPhrase) {
+  assert.equal(body.errorCode, "NOT_FOUND");
+  assert.equal(body.retryable, true);
+  assert.equal(body.retryAfterMs, 2_000);
+  assert.equal(body._meta.degraded, true);
+  assert.equal(
+    body._meta._hints[0],
+    `Not found on ${okRelay}. ${unreachedPhrase} and may have this seller; retry later.`
+  );
+  assert.ok(
+    body._meta._hints.some((hint) => hint.startsWith("Use list_companies"))
+  );
+}
+
+for (const [toolName, handler] of [
+  ["get_company_details", handleGetCompanyDetails],
+  ["get_seller_reputation", handleGetSellerReputation],
+]) {
+  test(`${toolName} returns retryable NOT_FOUND when a relay failed and others were empty`, async () => {
+    const response = await handler(
+      { sellerPubkey: hex("f") },
+      multiRelayContext([okRelay, downRelay], downRelayImpl)
+    );
+    const body = JSON.parse(response.content[0].text);
+
+    assert.equal(response.isError, true);
+    assertDegradedSellerNotFound(body, `${downRelay} failed`);
+  });
+
+  test(`${toolName} treats a timed-out relay like a failed one when nothing is found`, async () => {
+    const response = await handler(
+      { sellerPubkey: hex("f") },
+      multiRelayContext([okRelay, slowRelay], (relay) => ({
+        events: [],
+        complete: relay !== slowRelay,
+      }))
+    );
+    const body = JSON.parse(response.content[0].text);
+
+    assertDegradedSellerNotFound(body, `${slowRelay} timed out`);
+  });
+
+  test(`${toolName} stays non-retryable NOT_FOUND when every relay answered empty`, async () => {
+    const response = await handler(
+      { sellerPubkey: hex("f") },
+      multiRelayContext([okRelay, "wss://ok2.example.com"], () => ({
+        events: [],
+        complete: true,
+      }))
+    );
+    const body = JSON.parse(response.content[0].text);
+
+    assert.equal(body.errorCode, "NOT_FOUND");
+    assert.equal(body.retryable, false);
+    assert.equal(body.retryAfterMs, undefined);
+  });
+
+  test(`${toolName} stays RELAY_UNAVAILABLE when every relay failed`, async () => {
+    const response = await handler(
+      { sellerPubkey: hex("f") },
+      multiRelayContext([downRelay, "wss://down2.example.com"], () => {
+        throw new Error("connection failed");
+      })
+    );
+    const body = JSON.parse(response.content[0].text);
+
+    assert.equal(body.errorCode, "RELAY_UNAVAILABLE");
+    assert.equal(body.retryable, true);
+  });
+}
+
+test("seller lookups do not cache degraded empty product and review results", async () => {
+  const cache = new MemoryCache(60_000);
+  const ctx = multiRelayContext([okRelay, downRelay], downRelayImpl, cache);
+  const countKindCalls = (kind) =>
+    ctx.calls.filter(({ filters }) =>
+      filters.some((filter) => filter.kinds?.includes(kind))
+    ).length;
+
+  await handleGetSellerReputation({ sellerPubkey: hex("f") }, ctx);
+  const productCallsAfterFirst = countKindCalls(30402);
+  const reviewCallsAfterFirst = countKindCalls(31555);
+  assert.equal(productCallsAfterFirst, 2);
+  assert.equal(reviewCallsAfterFirst, 2);
+
+  const retry = await handleGetSellerReputation(
+    { sellerPubkey: hex("f") },
+    ctx
+  );
+  const body = JSON.parse(retry.content[0].text);
+
+  assert.equal(countKindCalls(30402), productCallsAfterFirst * 2);
+  assert.equal(countKindCalls(31555), reviewCallsAfterFirst * 2);
+  assert.equal(body.retryable, true);
+  assert.equal(body._meta.cached, undefined);
+});
+
+test("seller lookups still cache empty results when every relay answered", async () => {
+  const cache = new MemoryCache(60_000);
+  const ctx = multiRelayContext(
+    [okRelay, "wss://ok2.example.com"],
+    () => ({ events: [], complete: true }),
+    cache
+  );
+  const countProductCalls = () =>
+    ctx.calls.filter(({ filters }) =>
+      filters.some((filter) => filter.kinds?.includes(30402))
+    ).length;
+
+  await handleGetSellerReputation({ sellerPubkey: hex("f") }, ctx);
+  const afterFirst = countProductCalls();
+  await handleGetSellerReputation({ sellerPubkey: hex("f") }, ctx);
+
+  assert.equal(countProductCalls(), afterFirst);
 });

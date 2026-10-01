@@ -26,6 +26,7 @@ import {
   buildToolMeta,
   combineRelayMetas,
   createRelayUnavailableResponse,
+  withEmptyResultSignal,
   createValidationErrorResponse,
   getDataFreshness,
   getCategoryQueryVariants,
@@ -281,15 +282,17 @@ export async function handleListCompanies(
       "Too many seller profiles matched; use get_company_details with a specific sellerPubkey to inspect one seller."
     );
   }
-  const meta = buildToolMeta(
-    combineRelayMetas(relayMetas, Date.now() - startedAt),
-    {
+  const meta = withEmptyResultSignal(
+    buildToolMeta(combineRelayMetas(relayMetas, Date.now() - startedAt), {
       resultCount: returnedCompanies.length,
       totalMatches: companies.length,
       truncated: hasMatchingCompaniesBeyondPage,
       dataFreshness: getDataFreshness(returnedCompanies),
       hints,
-    }
+    }),
+    returnedCompanies.length,
+    "companies",
+    hasMore
   );
 
   return createSuccessResponse(

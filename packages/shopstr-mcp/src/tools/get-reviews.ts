@@ -32,6 +32,7 @@ import {
   buildToolMeta,
   combineRelayMetas,
   createRelayUnavailableResponse,
+  withEmptyResultSignal,
   createValidationErrorResponse,
   getDataFreshness,
 } from "./utils/common.js";
@@ -278,14 +279,19 @@ function buildResponse(
         hasMore,
       },
     },
-    {
-      ...meta,
-      resultCount: returnedReviews.length,
-      totalMatches: reviews.length,
-      _truncated: hasMore,
-      dataFreshness: getDataFreshness(returnedReviews),
-      _hints: hints,
-    },
+    withEmptyResultSignal(
+      {
+        ...meta,
+        resultCount: returnedReviews.length,
+        totalMatches: reviews.length,
+        _truncated: hasMore,
+        dataFreshness: getDataFreshness(returnedReviews),
+        _hints: hints,
+      },
+      returnedReviews.length,
+      "reviews",
+      hasMore
+    ),
     returnedReviews.length
   );
 }
@@ -303,7 +309,11 @@ function addProductAddressesFromEvents(
 async function resolveProductAddressFromProductId(
   productId: string,
   context: CoreToolContext
-): Promise<{ address?: string; errorResponse?: ToolTextResponse }> {
+): Promise<{
+  address?: string;
+  meta: RelayFetchMeta;
+  errorResponse?: ToolTextResponse;
+}> {
   const relayResult = await fetchFromRelays(
     context.nostr,
     context.relays,
@@ -318,6 +328,7 @@ async function resolveProductAddressFromProductId(
 
   if (allRelaysFailed(relayResult.meta)) {
     return {
+      meta: relayResult.meta,
       errorResponse: createRelayUnavailableResponse(relayResult.meta, [
         "Could not resolve productId to a product address; retry later or pass productAddress directly.",
       ]),
@@ -329,6 +340,7 @@ async function resolveProductAddressFromProductId(
   );
 
   return {
+    meta: relayResult.meta,
     address: productEvent
       ? getParameterizedReplaceableCoordinate(productEvent)
       : undefined,
@@ -443,6 +455,9 @@ export async function handleGetReviews(
     if (resolved.address) {
       productAddresses.add(resolved.address);
     } else {
+      // A legacy #e lookup cannot establish coverage of canonical #a/#d
+      // reviews when their product address could not be resolved.
+      addressResolutionMetas.push(resolved.meta);
       addressResolutionHint =
         "Could not resolve productId to a product address; used legacy #e review lookup only.";
     }
