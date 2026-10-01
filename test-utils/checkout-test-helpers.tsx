@@ -386,13 +386,17 @@ export function mockP2pkCheckoutModule(
 export function mockNostrHelperFunctionsModule(
   overrides: Record<string, unknown> = {}
 ) {
+  const getLocalStorageData = jest.fn().mockReturnValue({
+    mints: ["https://mint.example.com"],
+    tokens: [],
+    history: [],
+  });
+
   return {
-    getLocalStorageData: jest.fn().mockReturnValue({
-      mints: ["https://mint.example.com"],
-      tokens: [],
-      history: [],
-    }),
+    getCachedCashuProofs: jest.fn(() => getLocalStorageData().tokens ?? []),
+    getLocalStorageData,
     publishProofEvent: jest.fn().mockResolvedValue(undefined),
+    setCachedCashuProofs: jest.fn(),
     getSavedAddresses: jest.fn().mockReturnValue([]),
     ...overrides,
   };

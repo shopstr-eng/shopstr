@@ -18,9 +18,11 @@ import {
   Spinner,
 } from "@heroui/react";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
-  publishProofEvent,
+  setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEventBestEffort } from "@/utils/cashu/wallet-recovery";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   Mint as CashuMint,
@@ -52,7 +54,8 @@ const PayButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, history } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
 
   const { theme } = useTheme();
 
@@ -171,7 +174,7 @@ const PayButton = () => {
             ) || !send.some((s) => s.secret === p.secret)
         ) as Proof[];
         const quarantineProofArray = [...remainingProofsAfterMelt, ...keep];
-        storage.setJson(STORAGE_KEYS.TOKENS, quarantineProofArray);
+        setCachedCashuProofs(quarantineProofArray);
         throw new Error(meltOutcome.errorMessage ?? "Melt outcome ambiguous");
       }
       const changeProofs = [...keep, ...meltOutcome.changeProofs];
@@ -189,7 +192,6 @@ const PayButton = () => {
       } else {
         proofArray = [...remainingProofs];
       }
-      storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
       const filteredTokenAmount = sumProofAmounts(filteredProofs);
       const transactionAmount = filteredTokenAmount - changeAmount;
       storage.setJson(STORAGE_KEYS.HISTORY, [
@@ -200,7 +202,8 @@ const PayButton = () => {
         },
         ...history,
       ]);
-      await publishProofEvent(
+      setCachedCashuProofs(proofArray);
+      await publishProofEventBestEffort(
         nostr!,
         signer!,
         mints[0]!,

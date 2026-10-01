@@ -21,15 +21,8 @@ import {
   Input,
 } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import {
-  getLocalStorageData,
-  publishProofEvent,
-} from "@/utils/nostr/nostr-helper-functions";
-import {
-  Mint as CashuMint,
-  Wallet as CashuWallet,
-  Proof,
-} from "@cashu/cashu-ts";
+import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
+import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import QRCode from "qrcode";
 import FailureModal from "@/components/utility-components/failure-modal";
 import {
@@ -42,14 +35,14 @@ import {
   withMintRetry,
 } from "@/utils/cashu/mint-retry-service";
 import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
-import { getUniqueProofs } from "@/utils/nostr/fetch-service";
 import {
   markMintQuoteClaimed,
   markMintQuotePaid,
   recordPendingMintQuote,
   updatePendingMintQuote,
 } from "@/utils/cashu/pending-mint-operations";
-import { storage, STORAGE_KEYS } from "@/utils/storage";
+import { creditProofsToLocalWallet } from "@/utils/cashu/local-wallet-cache";
+import { publishProofEventBestEffort } from "@/utils/cashu/wallet-recovery";
 
 const MintButton = () => {
   const [showMintModal, setShowMintModal] = useState(false);
@@ -214,22 +207,8 @@ const MintButton = () => {
           { maxAttempts: 5, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
         );
         if (proofs && proofs.length > 0) {
-          const { tokens: currentTokens, history: currentHistory } =
-            getLocalStorageData();
-          const proofArray = getUniqueProofs([
-            ...(currentTokens as Proof[]),
-            ...proofs,
-          ]);
-          storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
-          storage.setJson(STORAGE_KEYS.HISTORY, [
-            {
-              type: 3,
-              amount: invoiceAmount,
-              date: Math.floor(Date.now() / 1000),
-            },
-            ...currentHistory,
-          ]);
-          await publishProofEvent(
+          creditProofsToLocalWallet(proofs, invoiceAmount, 3);
+          const proofPersistence = await publishProofEventBestEffort(
             nostr!,
             signer!,
             mints[0]!,
@@ -237,6 +216,9 @@ const MintButton = () => {
             "in",
             invoiceAmount.toString()
           );
+          if (!proofPersistence.published && !proofPersistence.queued) {
+            throw new Error("Cashu proofs could not be published or queued");
+          }
           markMintQuoteClaimed(hash);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
