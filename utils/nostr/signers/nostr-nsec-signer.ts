@@ -141,7 +141,20 @@ export class NostrNSecSigner implements NostrSigner {
     return [passphrase, remind];
   }
 
-  public async _getPrivKey(): Promise<Uint8Array> {
+  private pendingUnlock?: Promise<Uint8Array>;
+
+  public _getPrivKey(): Promise<Uint8Array> {
+    // Concurrent NIP-98 requests and message decryptions must share one prompt.
+    // Keep only the in-flight operation; do not extend private-key retention.
+    if (!this.pendingUnlock) {
+      this.pendingUnlock = this.unlockPrivKey().finally(() => {
+        this.pendingUnlock = undefined;
+      });
+    }
+    return this.pendingUnlock;
+  }
+
+  private async unlockPrivKey(): Promise<Uint8Array> {
     let error: Error | undefined;
 
     let aborted = false;

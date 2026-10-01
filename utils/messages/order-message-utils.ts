@@ -113,6 +113,8 @@ export const resolveExplicitPaymentMethod = (paymentTag?: string) => {
       return "Cashu";
     case "lightning":
       return "Lightning";
+    case "hodl":
+      return "Lightning Escrow";
     default:
       return paymentTag.charAt(0).toUpperCase() + paymentTag.slice(1);
   }

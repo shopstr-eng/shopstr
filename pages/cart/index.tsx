@@ -1,6 +1,5 @@
 import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
-import Link from "next/link";
 import {
   Button,
   Modal,
@@ -618,9 +617,21 @@ export default function Component() {
             <div className="rounded-lg border-2 border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-200">
               {excludedItemCount} item(s) from other sellers are not shown
               because you are checking out from a storefront. Visit your{" "}
-              <Link href="/cart" className="font-bold underline">
+              <a
+                href="/cart"
+                className="font-bold underline"
+                onClick={() => {
+                  for (const key of [
+                    STORAGE_KEYS.SF_SELLER_PUBKEY,
+                    STORAGE_KEYS.SF_SHOP_SLUG,
+                  ]) {
+                    storage.removeSessionItem(key);
+                    storage.removeItem(key);
+                  }
+                }}
+              >
                 full cart
-              </Link>{" "}
+              </a>{" "}
               to see all items.
             </div>
           </div>
