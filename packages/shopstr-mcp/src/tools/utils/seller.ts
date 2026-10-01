@@ -290,7 +290,10 @@ export async function fetchSellerReviews(
   productEvents: readonly NostrEvent[],
   context: CoreToolContext
 ): Promise<SellerReviewsResult> {
-  const cached = context.cache.get<NostrEvent[]>({
+  const cached = context.cache.get<{
+    events: NostrEvent[];
+    productAddresses: string[];
+  }>({
     pubkey: sellerPubkey,
     kind: CACHE_KINDS.SELLER_REVIEWS,
   });
@@ -305,7 +308,16 @@ export async function fetchSellerReviews(
     0,
     REVIEW_PRODUCT_FILTER_LIMIT
   );
-  let events = cached?.value;
+  // Product discovery can recover or change within the review cache TTL.
+  // Reuse reviews only if the cache covered the same address queries.
+  const cacheMatchesQuery =
+    cached &&
+    cached.value.productAddresses.length === productAddresses.length &&
+    productAddresses.every((address) =>
+      cached.value.productAddresses.includes(address)
+    );
+  const cacheHit = cacheMatchesQuery ? cached : undefined;
+  let events = cacheHit?.value.events;
   let meta = emptyRelayMeta();
 
   if (!events) {
@@ -324,7 +336,7 @@ export async function fetchSellerReviews(
     if (shouldCacheRelayResult(events, meta)) {
       context.cache.set(
         { pubkey: sellerPubkey, kind: CACHE_KINDS.SELLER_REVIEWS },
-        events
+        { events, productAddresses }
       );
     }
   }
@@ -351,7 +363,7 @@ export async function fetchSellerReviews(
     reviewLookupPartial,
     meta,
     cache: {
-      reviews: cached?.cached ?? false,
+      reviews: cacheHit?.cached ?? false,
     },
   };
 }
