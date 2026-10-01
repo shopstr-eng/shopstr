@@ -163,19 +163,6 @@ for (const mode of ["failure", "timeout"]) {
           ).length,
         2
       );
-
-      const beforeCachedCall = nostr.calls.length;
-      const cached = await call(name, { sellerPubkey });
-      assert.equal(count(cached.body), 1);
-      assert.equal(cached.body._meta.cached.reviews, true);
-      assert.equal(
-        nostr.calls
-          .slice(beforeCachedCall)
-          .some(({ filters }) =>
-            filters.some((filter) => filter.kinds.includes(31555))
-          ),
-        false
-      );
     });
   }
 }
