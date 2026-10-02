@@ -11,7 +11,7 @@ import {
   buildSignedHttpRequestProofTemplate,
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
-import ConfirmActionDropdown from "../utility-components/dropdowns/confirm-action-dropdown";
+import ConfirmActionModal from "../utility-components/modals/confirm-action-modal";
 
 interface DiscountCode {
   code: string;
@@ -248,7 +248,7 @@ export default function DiscountCodes() {
                       </p>
                     )}
                   </div>
-                  <ConfirmActionDropdown
+                  <ConfirmActionModal
                     helpText="Are you sure you want to delete this discount code?"
                     buttonLabel="Delete Code"
                     onConfirm={() => handleDeleteCode(code.code)}
@@ -256,7 +256,7 @@ export default function DiscountCodes() {
                     <Button isIconOnly color="danger" variant="light" size="sm">
                       <TrashIcon className="h-5 w-5" />
                     </Button>
-                  </ConfirmActionDropdown>
+                  </ConfirmActionModal>
                 </div>
               </CardBody>
             </Card>
