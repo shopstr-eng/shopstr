@@ -21,10 +21,12 @@ import {
 } from "../../utils/context/context";
 import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
+  getCachedCashuProofs,
   getLocalStorageData,
-  publishProofEvent,
   publishWalletEvent,
+  setCachedCashuProofs,
 } from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEventBestEffort } from "@/utils/cashu/wallet-recovery";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -121,7 +123,8 @@ export default function ClaimButton({
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
   const [isP2pkKeyMissing, setIsP2pkKeyMissing] = useState(false);
   const [p2pk, setP2PK] = useState<ParsedP2PK | null>(null);
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, history } = getLocalStorageData();
+  const tokens = getCachedCashuProofs();
 
   const [disputeStatus, setDisputeStatus] =
     useState<P2pkEscrowDisputeStatus>("none");
@@ -518,7 +521,8 @@ export default function ClaimButton({
         const freshProofs = await wallet!.receive(proofs, {
           privkey: cashuPrivkey,
         });
-        await publishProofEvent(
+        setCachedCashuProofs([...tokens, ...freshProofs]);
+        await publishProofEventBestEffort(
           nostr!,
           signer!,
           tokenMint,
@@ -526,7 +530,6 @@ export default function ClaimButton({
           "in",
           tokenAmount.toString()
         );
-        storage.setJson(STORAGE_KEYS.TOKENS, [...tokens, ...freshProofs]);
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           storage.setJson(STORAGE_KEYS.MINTS, updatedMints);
@@ -576,7 +579,9 @@ export default function ClaimButton({
           setIsRedeeming(false);
           return;
         }
-        await publishProofEvent(
+        const tokenArray = [...tokens, ...uniqueProofs];
+        setCachedCashuProofs(tokenArray);
+        await publishProofEventBestEffort(
           nostr!,
           signer!,
           tokenMint,
@@ -584,8 +589,6 @@ export default function ClaimButton({
           "in",
           tokenAmount.toString()
         );
-        const tokenArray = [...tokens, ...uniqueProofs];
-        storage.setJson(STORAGE_KEYS.TOKENS, tokenArray);
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           storage.setJson(STORAGE_KEYS.MINTS, updatedMints);

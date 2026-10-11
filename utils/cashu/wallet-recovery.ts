@@ -1,6 +1,6 @@
 import { Proof } from "@cashu/cashu-ts";
 import { publishProofEvent } from "@/utils/nostr/nostr-helper-functions";
-import { storage, STORAGE_KEYS } from "@/utils/storage";
+import { creditProofsToLocalWallet } from "./local-wallet-cache";
 
 type Nostr = Parameters<typeof publishProofEvent>[0];
 type Signer = Parameters<typeof publishProofEvent>[1];
@@ -8,8 +8,8 @@ type Signer = Parameters<typeof publishProofEvent>[1];
 /**
  * Persist freshly-minted proofs into the buyer's local wallet when the
  * downstream seller-DM hand-off fails. Mirrors the wallet-top-up bookkeeping
- * done by the mint-button claim path: localStorage `tokens`, history entry,
- * and a kind-7375 wallet event so other devices can sync.
+ * done by the mint-button claim path: volatile proof cache, history entry, and
+ * a kind-7375 wallet event so other devices can sync.
  *
  * Idempotency: callers must only invoke this once per failed claim. The
  * pending-mint-store should be transitioned to `claimed` immediately after
@@ -25,37 +25,47 @@ export async function recoverProofsToBuyerWallet(
   if (typeof window === "undefined") return;
   if (!proofs || proofs.length === 0) return;
 
-  const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
-  const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []);
+  creditProofsToLocalWallet(proofs, amount, 3);
 
-  const proofArray = [...tokens, ...proofs];
-  storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
-  storage.setJson(STORAGE_KEYS.HISTORY, [
-    {
-      type: 3,
-      amount,
-      date: Math.floor(Date.now() / 1000),
-    },
-    ...history,
-  ]);
+  // Best-effort wallet event publish. Local proof cache is credited first, and
+  // Await durability before callers mark the one-shot mint quote claimed.
+  const result = await publishProofEventBestEffort(
+    nostr,
+    signer,
+    mintUrl,
+    proofs,
+    "in",
+    amount.toString()
+  );
+  if (!result.published && !result.queued) {
+    throw new Error("Cashu proofs could not be published or queued");
+  }
+}
 
-  // Best-effort wallet event publish; localStorage is the source of truth and
-  // sendGiftWrappedMessageEvent / publishProofEvent already cache to DB first
-  // so durability does not depend on relay reachability here.
+export async function publishProofEventBestEffort(
+  nostr: Nostr,
+  signer: Signer,
+  mintUrl: string,
+  proofs: Proof[],
+  direction: "in" | "out",
+  amount: string,
+  deletedEventsArray?: string[]
+): Promise<{ published: boolean; queued: boolean }> {
   try {
-    await publishProofEvent(
+    const result = await publishProofEvent(
       nostr,
       signer,
       mintUrl,
       proofs,
-      "in",
-      amount.toString()
+      direction,
+      amount,
+      deletedEventsArray,
+      { throwOnFailure: false }
     );
+    return result;
   } catch (err) {
-    console.warn(
-      "[wallet-recovery] proof event publish failed; tokens are safe in localStorage:",
-      err
-    );
+    console.warn("[wallet-recovery] proof event publish failed:", err);
+    return { published: false, queued: false };
   }
 }
 
