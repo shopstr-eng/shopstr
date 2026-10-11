@@ -312,4 +312,4 @@ Thank you for contributing to Shopstr! 🚀 Your contributions help build the fu
 
 ## Questions?
 
-Join our [Discord server](https://discord.gg/F9XemadR) to ask questions and get help directly from the maintainers and community!
+Join our [Discord server](https://discord.gg/sUcS8CWvpS) to ask questions and get help directly from the maintainers and community!
