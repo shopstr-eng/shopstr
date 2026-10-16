@@ -41,12 +41,14 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 
 const SendButton = () => {
   const [showSendModal, setShowSendModal] = useState(false);
   const [showTokenCard, setShowTokenCard] = useState(false);
   const [newToken, setNewToken] = useState("");
-  const [copiedToClipboard, setCopiedToClipboard] = useState(false);
+  const { copied: copiedToClipboard, copy: copyToClipboard } =
+    useCopyToClipboard();
   const [sendFailed, setSendFailed] = useState(false);
 
   const walletContext = useContext(CashuWalletContext);
@@ -170,11 +172,7 @@ const SendButton = () => {
   };
 
   const handleCopyTokenString = () => {
-    navigator.clipboard.writeText(newToken);
-    setCopiedToClipboard(true);
-    setTimeout(() => {
-      setCopiedToClipboard(false);
-    }, 2100);
+    void copyToClipboard(newToken);
   };
 
   return (
