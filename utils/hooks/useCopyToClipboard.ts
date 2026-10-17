@@ -24,20 +24,19 @@ export function useCopyToClipboard(
       }
 
       try {
-        const writePromise = navigator.clipboard.writeText(text);
-        setCopied(true);
-        clearResetTimeout();
-        resetTimeoutRef.current = setTimeout(() => {
-          resetTimeoutRef.current = null;
-          setCopied(false);
-        }, durationMs);
-        await writePromise;
-        return true;
-      } catch {
-        clearResetTimeout();
-        setCopied(false);
+        await navigator.clipboard.writeText(text);
+      } catch (error) {
+        console.error("Failed to copy to clipboard", error);
         return false;
       }
+
+      setCopied(true);
+      clearResetTimeout();
+      resetTimeoutRef.current = setTimeout(() => {
+        resetTimeoutRef.current = null;
+        setCopied(false);
+      }, durationMs);
+      return true;
     },
     [clearResetTimeout, durationMs]
   );

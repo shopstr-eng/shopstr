@@ -108,6 +108,7 @@ describe("useCopyToClipboard", () => {
 
   it("returns false and does not mark copied when the clipboard rejects", async () => {
     writeText.mockRejectedValue(new Error("denied"));
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     const { result } = renderHook(() => useCopyToClipboard());
 
     let copied = true;
@@ -117,6 +118,7 @@ describe("useCopyToClipboard", () => {
 
     expect(copied).toBe(false);
     expect(result.current.copied).toBe(false);
+    expect(errorSpy).toHaveBeenCalled();
   });
 
   it("returns false when the clipboard API is unavailable", async () => {
