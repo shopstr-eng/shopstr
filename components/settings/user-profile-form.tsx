@@ -28,6 +28,7 @@ import {
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import { storage } from "@/utils/storage";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 
 interface UserProfileFormProps {
   isOnboarding?: boolean;
@@ -38,10 +39,11 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [isFetchingProfile, setIsFetchingProfile] = useState(false);
-  const [isNPubCopied, setIsNPubCopied] = useState(false);
-  const [isNSecCopied, setIsNSecCopied] = useState(false);
+  const { copied: isNPubCopied, copy: copyNPub } = useCopyToClipboard();
+  const { copied: isNSecCopied, copy: copyNSec } = useCopyToClipboard();
   const [isNSecVisible, setIsNSecVisible] = useState(false);
-  const [isNcryptsecCopied, setIsNcryptsecCopied] = useState(false);
+  const { copied: isNcryptsecCopied, copy: copyNcryptsec } =
+    useCopyToClipboard();
   const [isNcryptsecVisible, setIsNcryptsecVisible] = useState(false);
   const [userNcryptsec, setUserNcryptsec] = useState("");
   const [userNSec, setUserNSec] = useState("");
@@ -232,9 +234,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               variant="light"
               className="h-6 w-6 min-w-0 flex-shrink-0 p-0"
               onClick={() => {
-                navigator.clipboard.writeText(userNPub);
-                setIsNPubCopied(true);
-                setTimeout(() => setIsNPubCopied(false), 2000);
+                void copyNPub(userNPub);
               }}
             >
               {isNPubCopied ? "✅" : "📋"}
@@ -274,9 +274,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                 variant="light"
                 className="h-6 w-6 min-w-0 p-0"
                 onClick={() => {
-                  navigator.clipboard.writeText(userNSec);
-                  setIsNSecCopied(true);
-                  setTimeout(() => setIsNSecCopied(false), 2000);
+                  void copyNSec(userNSec);
                 }}
               >
                 {isNSecCopied ? "✅" : "📋"}
@@ -322,9 +320,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                 variant="light"
                 className="h-6 w-6 min-w-0 p-0"
                 onClick={() => {
-                  navigator.clipboard.writeText(userNcryptsec);
-                  setIsNcryptsecCopied(true);
-                  setTimeout(() => setIsNcryptsecCopied(false), 2000);
+                  void copyNcryptsec(userNcryptsec);
                 }}
               >
                 {isNcryptsecCopied ? "✅" : "📋"}

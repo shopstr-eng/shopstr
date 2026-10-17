@@ -8,6 +8,7 @@ import { NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 import { getTokenMetadata } from "@cashu/cashu-ts";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 
 function isDecodableToken(token: string): boolean {
   try {
@@ -61,7 +62,8 @@ const ChatMessage = ({
   setOrderId: (orderId: string) => void;
 }) => {
   const router = useRouter();
-  const [copiedToClipboard, setCopiedToClipboard] = useState(false);
+  const { copied: copiedToClipboard, copy: copyToClipboard } =
+    useCopyToClipboard();
   const [localOrderId, setLocalOrderId] = useState("");
   const { pubkey: userPubkey } = useContext(SignerContext);
 
@@ -124,11 +126,7 @@ const ChatMessage = ({
   } catch {}
 
   const handleCopyToken = (token: string) => {
-    navigator.clipboard.writeText(token);
-    setCopiedToClipboard(true);
-    setTimeout(() => {
-      setCopiedToClipboard(false);
-    }, 2100);
+    void copyToClipboard(token);
   };
 
   const renderMessageContent = (content: string) => {

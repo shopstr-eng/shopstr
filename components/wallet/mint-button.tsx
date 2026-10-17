@@ -50,6 +50,7 @@ import {
   updatePendingMintQuote,
 } from "@/utils/cashu/pending-mint-operations";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 
 const MintButton = () => {
   const [showMintModal, setShowMintModal] = useState(false);
@@ -58,7 +59,8 @@ const MintButton = () => {
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [invoice, setInvoice] = useState("");
-  const [copiedToClipboard, setCopiedToClipboard] = useState(false);
+  const { copied: copiedToClipboard, copy: copyToClipboard } =
+    useCopyToClipboard();
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
@@ -304,11 +306,7 @@ const MintButton = () => {
   }
 
   const handleCopyInvoice = () => {
-    navigator.clipboard.writeText(invoice);
-    setCopiedToClipboard(true);
-    setTimeout(() => {
-      setCopiedToClipboard(false);
-    }, 2100);
+    void copyToClipboard(invoice);
   };
 
   return (

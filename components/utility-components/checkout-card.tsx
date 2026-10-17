@@ -5,6 +5,7 @@ import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
 import { getListingSlug } from "@/utils/url-slugs";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { DisplayCheckoutCost } from "./display-monetary-info";
 import ProductInvoiceCard from "../product-invoice-card";
@@ -115,6 +116,7 @@ export default function CheckoutCard({
   const [successText, setSuccessText] = useState(
     "Listing URL copied to clipboard!"
   );
+  const { copy } = useCopyToClipboard();
 
   const [cart, setCart] = useState<ProductData[]>([]);
   const [selectedVolume, setSelectedVolume] = useState<string>("");
@@ -431,11 +433,11 @@ export default function CheckoutCard({
     if (navigator.share) {
       await navigator.share(shareData);
     } else {
-      navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${listingPath}`
-      );
-      setSuccessText("Listing URL copied to clipboard!");
-      setShowSuccessModal(true);
+      const didCopy = await copy(shareData.url);
+      if (didCopy) {
+        setSuccessText("Listing URL copied to clipboard!");
+        setShowSuccessModal(true);
+      }
     }
   };
 

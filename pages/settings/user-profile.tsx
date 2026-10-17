@@ -39,6 +39,7 @@ import {
   normalizeCashuPubkey,
   isP2pkEscrowFeatureEnabled,
 } from "@/utils/cashu/p2pk-checkout";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 
 function decodeNpubOrHexPubkey(value: string): string {
   const cashuPubkey = normalizeCashuPubkey(value);
@@ -91,8 +92,8 @@ const UserProfilePage = () => {
     pubkey: userPubkey,
     npub: userNPub,
   } = useContext(SignerContext);
-  const [isNPubCopied, setIsNPubCopied] = useState(false);
-  const [isNSecCopied, setIsNSecCopied] = useState(false);
+  const { copied: isNPubCopied, copy: copyNPub } = useCopyToClipboard();
+  const { copied: isNSecCopied, copy: copyNSec } = useCopyToClipboard();
   const [userNSec, setUserNSec] = useState("");
   const [viewState, setViewState] = useState<"shown" | "hidden">("hidden");
 
@@ -355,11 +356,7 @@ const UserProfilePage = () => {
               <div
                 className="border-light-fg dark:border-dark-fg mx-auto mb-2 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 p-2 hover:opacity-60"
                 onClick={() => {
-                  if (userNPub) navigator.clipboard.writeText(userNPub);
-                  setIsNPubCopied(true);
-                  setTimeout(() => {
-                    setIsNPubCopied(false);
-                  }, 2100);
+                  if (userNPub) void copyNPub(userNPub);
                 }}
               >
                 <span
@@ -405,11 +402,7 @@ const UserProfilePage = () => {
                       height={15}
                       className="text-light-text dark:text-dark-text flex-shrink-0 hover:text-purple-700 dark:hover:text-yellow-700"
                       onClick={() => {
-                        navigator.clipboard.writeText(userNSec);
-                        setIsNSecCopied(true);
-                        setTimeout(() => {
-                          setIsNSecCopied(false);
-                        }, 2100);
+                        void copyNSec(userNSec);
                       }}
                     />
                   )}
