@@ -645,14 +645,24 @@ const D_TAG_SCOPED_KINDS: ReadonlySet<number> = new Set([34550, 31555]);
 type ReplaceableScope = { dTag?: string };
 
 // Describes the slot an event replaces, or null when the kind just accumulates
-// (a plain upsert by id). A d-tag kind without a d tag has no slot to replace.
+// (a plain upsert by id). Per NIP-01 a missing d tag means d = "", so those
+// events share one slot per pubkey instead of piling up as separate rows.
 function getReplaceableScope(event: NostrEvent): ReplaceableScope | null {
   if (D_TAG_SCOPED_KINDS.has(event.kind)) {
-    const dTag = event.tags.find((tag) => tag[0] === "d")?.[1];
-    return dTag === undefined ? null : { dTag };
+    return { dTag: event.tags.find((tag) => tag[0] === "d")?.[1] ?? "" };
   }
   return shouldKeepOnlyLatest(event.kind) ? {} : null;
 }
+
+// Rows in the d = "" slot: no d tag at all, or a d tag whose value is empty.
+// `tags @> [["d",""]]` alone would miss the first case.
+const EMPTY_D_TAG_SLOT_SQL = `COALESCE((
+  SELECT e.elem->>1
+  FROM jsonb_array_elements(tags) WITH ORDINALITY AS e(elem, ord)
+  WHERE e.elem->>0 = 'd'
+  ORDER BY e.ord
+  LIMIT 1
+), '') = ''`;
 
 function getReplaceableSlotKey(
   event: NostrEvent,
@@ -663,17 +673,17 @@ function getReplaceableSlotKey(
 
 // Stores `event` only if it is the newest of its slot, using the NIP-01 rule
 // (highest created_at, lowest id on a tie). Older rows are dropped; an older
-// incoming event is ignored. Must run inside a transaction: the advisory lock
-// serializes writers of the same slot, which row locks cannot do when the
-// slot is still empty.
+// incoming event is ignored. Returns whether the event was stored. Must run
+// inside a transaction: the advisory lock serializes writers of the same slot,
+// which row locks cannot do when the slot is still empty.
 async function cacheNewestReplaceableEvent(
   client: PoolClient,
   table: string,
   event: NostrEvent,
   scope: ReplaceableScope
-): Promise<void> {
-  const dTagFilter =
-    scope.dTag === undefined ? undefined : buildReviewDTagFilter(scope.dTag);
+): Promise<boolean> {
+  const dTagFilter = scope.dTag ? buildReviewDTagFilter(scope.dTag) : undefined;
+  const emptyDTagSlot = scope.dTag === "" ? ` AND ${EMPTY_D_TAG_SLOT_SQL}` : "";
 
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
     `${table}:${getReplaceableSlotKey(event, scope)}`,
@@ -686,7 +696,7 @@ async function cacheNewestReplaceableEvent(
   deleteValues.push(event.id, event.created_at);
   await client.query({
     text: `DELETE FROM ${table}
-           WHERE pubkey = $1 AND kind = $2${dTagFilter ? " AND tags @> $3::jsonb" : ""}
+           WHERE pubkey = $1 AND kind = $2${dTagFilter ? " AND tags @> $3::jsonb" : ""}${emptyDTagSlot}
              AND id != ${idParam}
              AND (created_at < ${createdAtParam}
                   OR (created_at = ${createdAtParam} AND id > ${idParam}))`,
@@ -703,12 +713,12 @@ async function cacheNewestReplaceableEvent(
     event.sig,
   ];
   if (dTagFilter) insertValues.push(dTagFilter);
-  await client.query({
+  const result = await client.query({
     text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
            SELECT $1::text, $2::text, $3::bigint, $4::integer, $5::jsonb, $6::text, $7::text
            WHERE NOT EXISTS (
              SELECT 1 FROM ${table}
-             WHERE pubkey = $2 AND kind = $4${dTagFilter ? " AND tags @> $8::jsonb" : ""}
+             WHERE pubkey = $2 AND kind = $4${dTagFilter ? " AND tags @> $8::jsonb" : ""}${emptyDTagSlot}
                AND id != $1
                AND (created_at > $3 OR (created_at = $3 AND id < $1))
            )
@@ -718,19 +728,21 @@ async function cacheNewestReplaceableEvent(
              tags = EXCLUDED.tags,
              content = EXCLUDED.content,
              sig = EXCLUDED.sig,
-             cached_at = CURRENT_TIMESTAMP`,
+             cached_at = CURRENT_TIMESTAMP
+           RETURNING id`,
     values: insertValues,
   });
+  return (result.rowCount ?? 0) > 0;
 }
 
 async function cacheEventInternal(
   event: NostrEvent,
   throwOnError: boolean
-): Promise<void> {
+): Promise<boolean> {
   const table = getTableForKind(event.kind);
   if (!table) {
     console.warn(`No table mapping for event kind ${event.kind}`);
-    return;
+    return false;
   }
 
   const dbPool =
@@ -744,11 +756,18 @@ async function cacheEventInternal(
     const scope = getReplaceableScope(event);
     if (scope) {
       await client.query("BEGIN");
-      await cacheNewestReplaceableEvent(client, table, event, scope);
+      const stored = await cacheNewestReplaceableEvent(
+        client,
+        table,
+        event,
+        scope
+      );
       await client.query("COMMIT");
-    } else {
-      await client.query(buildEventUpsertQuery(table, event));
+      return stored;
     }
+
+    await client.query(buildEventUpsertQuery(table, event));
+    return true;
   } catch (error) {
     if (client) {
       try {
@@ -759,6 +778,7 @@ async function cacheEventInternal(
     }
     console.error("Failed to cache event %s:", event.id, error);
     if (throwOnError) throw error;
+    return false;
   } finally {
     if (client) {
       client.release();
@@ -772,8 +792,10 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
 }
 
 // Fail-closed cache used before security-sensitive delivery side effects.
-export async function cacheEventStrict(event: NostrEvent): Promise<void> {
-  await cacheEventInternal(event, true);
+// Resolves to false when the event was valid but not stored because a newer
+// event for the same replaceable slot is already cached.
+export async function cacheEventStrict(event: NostrEvent): Promise<boolean> {
+  return cacheEventInternal(event, true);
 }
 
 // Cache multiple events in a batch with retry logic for deadlocks

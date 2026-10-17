@@ -2855,11 +2855,15 @@ describe("db-service helpers", () => {
       expect(del?.values?.[2]).toBe(JSON.stringify([["d", "community-a"]]));
     });
 
-    test("cacheEvent upserts a community without a d tag instead of replacing", async () => {
-      const queries: string[] = [];
+    test("cacheEvent treats a missing d tag as the empty-string slot", async () => {
+      const queries: Array<{ text: string; values?: unknown[] }> = [];
       const client: MockDbClient = {
-        query: jest.fn(async (q: QueryInput) => {
-          queries.push(typeof q === "string" ? q : q.text || "");
+        query: jest.fn(async (q: QueryInput, params?: unknown[]) => {
+          if (typeof q === "string") {
+            queries.push({ text: q, values: params });
+          } else {
+            queries.push({ text: q.text || "", values: (q as any).values });
+          }
           return { rows: [], rowCount: 1 };
         }),
         release: jest.fn(),
@@ -2867,16 +2871,56 @@ describe("db-service helpers", () => {
 
       await withMockedDbService(client, async (mod) => {
         await mod.cacheEvent(
-          latestOnlyEvent({ id: "community-no-d", kind: 34550, tags: [] })
+          latestOnlyEvent({
+            id: "community-no-d",
+            pubkey: "community-owner",
+            kind: 34550,
+            tags: [],
+          })
         );
       });
 
-      expect(queries.some((query) => query.includes("DELETE FROM"))).toBe(
-        false
+      const lock = queries.find((query) =>
+        query.text.includes("pg_advisory_xact_lock")
       );
-      expect(
-        queries.some((query) => query.includes("ON CONFLICT (id) DO UPDATE"))
-      ).toBe(true);
+      expect(lock?.values).toEqual(["community_events:community-owner:34550:"]);
+
+      const del = queries.find((query) =>
+        query.text.includes("DELETE FROM community_events")
+      );
+      expect(del?.text).toContain("jsonb_array_elements(tags)");
+      expect(del?.text).not.toContain("tags @>");
+      expect(del?.values).toHaveLength(4);
+
+      const insert = queries.find((query) =>
+        query.text.includes("INSERT INTO community_events")
+      );
+      expect(insert?.text).toContain("jsonb_array_elements(tags)");
+      expect(insert?.values).toHaveLength(7);
+    });
+
+    test("cacheEventStrict reports whether the event was stored", async () => {
+      const makeClient = (insertedRows: number): MockDbClient => ({
+        query: jest.fn(async (q: QueryInput) => {
+          const text = typeof q === "string" ? q : q.text || "";
+          return {
+            rows: [],
+            rowCount: text.includes("INSERT INTO") ? insertedRows : 0,
+          };
+        }),
+        release: jest.fn(),
+      });
+
+      await withMockedDbService(makeClient(1), async (mod) => {
+        await expect(
+          mod.cacheEventStrict(latestOnlyEvent({ id: "fresh", kind: 30019 }))
+        ).resolves.toBe(true);
+      });
+      await withMockedDbService(makeClient(0), async (mod) => {
+        await expect(
+          mod.cacheEventStrict(latestOnlyEvent({ id: "stale", kind: 30019 }))
+        ).resolves.toBe(false);
+      });
     });
 
     test("cacheEvents writes one candidate per slot and keeps different d tags apart", async () => {
@@ -5048,6 +5092,80 @@ describe("db-service helpers", () => {
           await expect(
             db.fetchCachedEvents(30019, { pubkey: "race-owner" })
           ).resolves.toMatchObject([{ id: "race-11" }]);
+        });
+      }
+    );
+
+    maybeItTc(
+      "events without a d tag share the empty-string slot and stale writes are reported",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["community_events", "review_events"]);
+
+          const community = (
+            id: string,
+            created_at: number,
+            tags: string[][]
+          ) =>
+            latestOnlyEvent({
+              id,
+              pubkey: "no-d-owner",
+              kind: 34550,
+              created_at,
+              tags,
+            });
+          const ids = async (kind: number, pubkey: string) =>
+            (await db.fetchCachedEvents(kind, { pubkey }))
+              .map((event) => event.id)
+              .sort();
+
+          // Two events with no d tag: only the newest survives.
+          await expect(
+            db.cacheEventStrict(community("no-d-new", 200, []))
+          ).resolves.toBe(true);
+          await expect(
+            db.cacheEventStrict(community("no-d-old", 100, []))
+          ).resolves.toBe(false);
+          expect(await ids(34550, "no-d-owner")).toEqual(["no-d-new"]);
+
+          // An explicit empty d tag is the same slot, so it replaces the above.
+          await db.cacheEvent(community("empty-d", 300, [["d", ""]]));
+          expect(await ids(34550, "no-d-owner")).toEqual(["empty-d"]);
+
+          // A named d tag is a different slot and is left alone.
+          await db.cacheEvent(community("named-d", 50, [["d", "named"]]));
+          await db.cacheEvents([community("no-d-older", 10, [])]);
+          expect(await ids(34550, "no-d-owner")).toEqual([
+            "empty-d",
+            "named-d",
+          ]);
+
+          // The same holds in a batch, and for reviews.
+          await db.cacheEvents([
+            community("batch-no-d-a", 400, []),
+            community("batch-no-d-b", 500, []),
+          ]);
+          expect(await ids(34550, "no-d-owner")).toEqual([
+            "batch-no-d-b",
+            "named-d",
+          ]);
+
+          const review = (id: string, created_at: number) =>
+            reviewEvent({
+              id,
+              pubkey: "no-d-reviewer",
+              created_at,
+              tags: [],
+            });
+          await db.cacheEvent(review("review-no-d-1", 100));
+          await db.cacheEvent(review("review-no-d-2", 200));
+          await db.cacheEvent(review("review-no-d-0", 50));
+          expect(await ids(31555, "no-d-reviewer")).toEqual(["review-no-d-2"]);
+
+          // Re-sending the stored event is not "skipped".
+          await expect(
+            db.cacheEventStrict(review("review-no-d-2", 200))
+          ).resolves.toBe(true);
         });
       }
     );
