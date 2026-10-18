@@ -22,21 +22,23 @@ const CommunityCard: React.FC<CommunityCardProps> = ({ community }) => {
   };
 
   return (
-    <Card className="w-full py-4">
+    <Card className="h-full w-full py-4">
       <CardHeader className="flex-col items-start px-4 pt-2 pb-0">
         <p className="text-tiny font-bold uppercase">Community</p>
         <h4 className="text-large font-bold">{community.name}</h4>
       </CardHeader>
-      <CardBody className="overflow-visible py-2">
-        <Image
-          alt={community.name}
-          className="h-[140px] w-full rounded-xl object-cover"
-          src={sanitizeUrl(community.image)}
-          width={270}
-        />
-        <p className="text-default-500 mt-2 line-clamp-2 text-sm">
-          {community.description}
-        </p>
+      <CardBody className="flex flex-1 flex-col justify-between overflow-visible py-2">
+        <div>
+          <Image
+            alt={community.name}
+            className="h-[140px] w-full rounded-xl object-cover"
+            src={sanitizeUrl(community.image)}
+            width={270}
+          />
+          <p className="text-default-500 mt-2 line-clamp-2 text-sm">
+            {community.description}
+          </p>
+        </div>
         <Button onClick={handleVisit} className="mt-4 w-full">
           Visit
         </Button>
