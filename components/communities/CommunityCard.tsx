@@ -25,7 +25,9 @@ const CommunityCard: React.FC<CommunityCardProps> = ({ community }) => {
     <Card className="h-full w-full py-4">
       <CardHeader className="flex-col items-start px-4 pt-2 pb-0">
         <p className="text-tiny font-bold uppercase">Community</p>
-        <h4 className="text-large font-bold">{community.name}</h4>
+        <h4 className="text-large line-clamp-2 h-14 font-bold">
+          {community.name}
+        </h4>
       </CardHeader>
       <CardBody className="flex flex-1 flex-col justify-between overflow-visible py-2">
         <div>
@@ -35,7 +37,7 @@ const CommunityCard: React.FC<CommunityCardProps> = ({ community }) => {
             src={sanitizeUrl(community.image)}
             width={270}
           />
-          <p className="text-default-500 mt-2 line-clamp-2 text-sm">
+          <p className="text-default-500 mt-2 line-clamp-3 text-sm">
             {community.description}
           </p>
         </div>
