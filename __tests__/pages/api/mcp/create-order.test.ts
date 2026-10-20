@@ -24,6 +24,7 @@ const walletReceiveMock = jest.fn();
 
 const withMintRetryMock = jest.fn();
 const getTrustedMintUrlMock = jest.fn();
+const getSatoshiValueMock = jest.fn();
 
 jest.mock("@/utils/mcp/auth", () => ({
   authenticateRequest: (...args: unknown[]) => authenticateRequestMock(...args),
@@ -75,6 +76,10 @@ jest.mock("@/utils/cashu/mint-retry-service", () => ({
 
 jest.mock("@/utils/cashu/trusted-mints", () => ({
   getTrustedMintUrl: (...args: unknown[]) => getTrustedMintUrlMock(...args),
+}));
+
+jest.mock("@getalby/lightning-tools", () => ({
+  getSatoshiValue: (...args: unknown[]) => getSatoshiValueMock(...args),
 }));
 
 // --- Fixtures ---------------------------------------------------------------
@@ -198,6 +203,7 @@ beforeEach(async () => {
   formatOrderForResponseMock.mockImplementation((order: unknown) => order);
 
   walletLoadMintMock.mockResolvedValue(undefined);
+  getSatoshiValueMock.mockReset();
   walletCreateMintQuoteBolt11Mock.mockResolvedValue({
     quote: "quote-1",
     request: "lnbc1...",
@@ -1117,6 +1123,41 @@ describe("handleLightningPayment", () => {
     expect(walletCreateMintQuoteBolt11Mock).not.toHaveBeenCalled();
     expect(createMcpOrderMock).not.toHaveBeenCalled();
   });
+
+  describe("fiat currency conversion", () => {
+    it("requests the mint quote for the converted amount and calls getSatoshiValue with the right amount and currency", async () => {
+      withPricedProduct([["price", "100", "USD"]]);
+      getSatoshiValueMock.mockResolvedValue(150_000);
+
+      const res = await createOrder({ productId: "product-1" });
+
+      expect(res.statusCode).toBe(402);
+      expect(getSatoshiValueMock).toHaveBeenCalledWith({
+        amount: 100,
+        currency: "USD",
+      });
+      expect(walletCreateMintQuoteBolt11Mock).toHaveBeenCalledWith(150_000);
+      const body = res.jsonBody as {
+        payment: {
+          amount: number;
+          currency: string;
+        };
+      };
+      expect(body.payment.amount).toBe(150_000);
+      expect(body.payment.currency).toBe("sats");
+    });
+
+    it("returns 500 without creating an invoice or order when rate lookup rejects", async () => {
+      withPricedProduct([["price", "100", "USD"]]);
+      getSatoshiValueMock.mockRejectedValue(new Error("Rate lookup rejected"));
+
+      const res = await createOrder({ productId: "product-1" });
+
+      expect(res.statusCode).toBe(500);
+      expect(walletCreateMintQuoteBolt11Mock).not.toHaveBeenCalled();
+      expect(createMcpOrderMock).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("handleCashuPayment", () => {
@@ -1362,6 +1403,74 @@ describe("handleCashuPayment", () => {
         });
       }
     );
+  });
+
+  describe("fiat currency conversion", () => {
+    it("returns 400 with the converted required value and does not call wallet.receive when token under-pays", async () => {
+      withPricedProduct([["price", "100", "USD"]]);
+      getSatoshiValueMock.mockResolvedValue(150_000);
+      getDecodedTokenMock.mockReturnValueOnce(
+        decodedToken({ proofs: [{ amount: 100 }] })
+      );
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(400);
+      expect(getSatoshiValueMock).toHaveBeenCalledWith({
+        amount: 100,
+        currency: "USD",
+      });
+      expect(res.jsonBody).toMatchObject({
+        error: "Insufficient Cashu token amount",
+        provided: 100,
+        required: 150_000,
+        currency: "sats",
+      });
+      expect(walletReceiveMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 201 and computes change against the converted amount when token is sufficient", async () => {
+      withPricedProduct([["price", "100", "USD"]]);
+      getSatoshiValueMock.mockResolvedValue(150_000);
+      getDecodedTokenMock.mockReturnValueOnce(
+        decodedToken({ proofs: [{ amount: 160_000 }] })
+      );
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(201);
+      expect(getSatoshiValueMock).toHaveBeenCalledWith({
+        amount: 100,
+        currency: "USD",
+      });
+      expect(walletReceiveMock).toHaveBeenCalledWith(CASHU_TOKEN);
+      expect(res.jsonBody).toMatchObject({
+        success: true,
+        paymentMethod: "cashu",
+        payment: {
+          method: "cashu",
+          amount: 160_000,
+          required: 150_000,
+          status: "paid",
+          change: 10_000,
+        },
+      });
+    });
+
+    it("returns 500 without redeeming the token or creating an order when rate lookup rejects", async () => {
+      withPricedProduct([["price", "100", "USD"]]);
+      getSatoshiValueMock.mockRejectedValue(new Error("Rate lookup rejected"));
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonBody).toMatchObject({
+        error: "Failed to process Cashu payment",
+        details: "Rate lookup rejected",
+      });
+      expect(walletReceiveMock).not.toHaveBeenCalled();
+      expect(createMcpOrderMock).not.toHaveBeenCalled();
+    });
   });
 });
 
