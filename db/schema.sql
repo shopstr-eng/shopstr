@@ -125,6 +125,17 @@ CREATE TABLE IF NOT EXISTS discount_codes (
 CREATE INDEX IF NOT EXISTS idx_discount_codes_pubkey ON discount_codes(pubkey);
 CREATE INDEX IF NOT EXISTS idx_discount_codes_code ON discount_codes(code);
 
+-- NIP-09 tombstones so deleted listings are not re-cached from relays
+CREATE TABLE IF NOT EXISTS deleted_product_events (
+    pubkey TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target TEXT NOT NULL,
+    deleted_at BIGINT NOT NULL,
+    cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (pubkey, target_type, target),
+    CONSTRAINT deleted_product_events_type_check CHECK (target_type IN ('event', 'address'))
+);
+
 -- Failed relay publish tracking table
 CREATE TABLE IF NOT EXISTS failed_relay_publishes (
     event_id TEXT PRIMARY KEY,

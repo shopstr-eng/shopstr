@@ -39,6 +39,12 @@ import {
 } from "@/utils/db/db-client";
 import { mapWithConcurrency } from "@/utils/concurrency";
 import {
+  buildProductAddress,
+  extractProductDeletionTargets,
+  isProductTombstoned,
+  type ProductTombstone,
+} from "@/utils/db/product-deletions";
+import {
   applyWalletConfigContent,
   generateCashuWalletKeypair,
   LatestWalletKeypair,
@@ -633,13 +639,53 @@ export const fetchAllPosts = async (
         "#t": ["shopstr-zapsnag", "zapsnag"],
       };
 
-      const fetchedEvents = await nostr.fetch(
-        [filter, zapsnagFilter],
+      const deletionFilter: Filter = {
+        kinds: [5],
+        "#k": ["30402"],
+      };
+
+      const allFetchedEvents = await nostr.fetch(
+        [filter, zapsnagFilter, deletionFilter],
         {},
         relays
       );
+      const fetchedDeletions = allFetchedEvents.filter(
+        (event): event is NostrEvent => event?.kind === 5
+      );
+      const tombstones: ProductTombstone[] = fetchedDeletions.flatMap(
+        (deletion) => {
+          const { eventIds, dTags } = extractProductDeletionTargets(deletion);
+          return [
+            ...eventIds.map((target) => ({
+              pubkey: deletion.pubkey,
+              targetType: "event" as const,
+              target,
+              deletedAt: deletion.created_at,
+            })),
+            ...dTags.map((dTag) => ({
+              pubkey: deletion.pubkey,
+              targetType: "address" as const,
+              target: buildProductAddress(deletion.pubkey, dTag),
+              deletedAt: deletion.created_at,
+            })),
+          ];
+        }
+      );
+      // Listings the author deleted must not come back from relays that
+      // still hold them.
+      const fetchedEvents = allFetchedEvents.filter(
+        (event) =>
+          event?.kind !== 5 &&
+          !(event?.kind === 30402 && isProductTombstoned(event, tombstones))
+      );
       if (!fetchedEvents.length) {
         console.error("No products found with filter: ", filter);
+      }
+
+      if (fetchedDeletions.length > 0) {
+        cacheEventsToDatabase(fetchedDeletions).catch((error) =>
+          console.error("Failed to cache deletions to database:", error)
+        );
       }
 
       // Cache valid product events to database

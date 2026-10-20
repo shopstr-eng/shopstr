@@ -19,6 +19,7 @@ import { getDecodedToken, Mint, Wallet } from "@cashu/cashu-ts";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { registerWriteTools } from "@/mcp/tools/write-tools";
+import { fetchProductByIdFromDb } from "@/utils/db/db-service";
 
 jest.mock("@/utils/mcp/auth", () => ({
   getAgentSigner: jest.fn(),
@@ -37,6 +38,7 @@ jest.mock("@/utils/mcp/nostr-signing", () => ({
 
 jest.mock("@/utils/db/db-service", () => ({
   cacheEvent: jest.fn(),
+  fetchProductByIdFromDb: jest.fn(),
   getDbPool: jest.fn(),
   fetchAllMessagesFromDb: jest.fn(),
   fetchCachedEvents: jest.fn(),
@@ -1027,6 +1029,46 @@ describe("registerWriteTools — (core listing & shop lifecycle)", () => {
       ]);
       expect(template.content).toBe("Deletion request");
       expect(textPayload(result).deletedEventIds).toEqual(["id1", "id2"]);
+    });
+
+    it("adds a and k tags for the author's own listings and caches durably", async () => {
+      jest.mocked(fetchProductByIdFromDb).mockResolvedValueOnce({
+        id: "id1",
+        pubkey: TEST_PUBKEY,
+        kind: 30402,
+        created_at: 1,
+        content: "",
+        sig: "sig",
+        tags: [["d", "my-listing"]],
+      });
+      const tool = getCallback();
+      await tool({ eventIds: ["id1"] });
+
+      const call = jest.mocked(signAndPublishEvent).mock.calls[0]!;
+      expect((call[1] as any).tags).toEqual([
+        ["e", "id1"],
+        ["a", `30402:${TEST_PUBKEY}:my-listing`],
+        ["k", "30402"],
+      ]);
+      expect(call[3]).toEqual({ requireDurableCache: true });
+    });
+
+    it("does not add a or k tags for listings owned by someone else", async () => {
+      jest.mocked(fetchProductByIdFromDb).mockResolvedValueOnce({
+        id: "id1",
+        pubkey: "other",
+        kind: 30402,
+        created_at: 1,
+        content: "",
+        sig: "sig",
+        tags: [["d", "their-listing"]],
+      });
+      const tool = getCallback();
+      await tool({ eventIds: ["id1"] });
+
+      const template = jest.mocked(signAndPublishEvent).mock
+        .calls[0]![1] as any;
+      expect(template.tags).toEqual([["e", "id1"]]);
     });
 
     it("uses the provided reason as content when given", async () => {

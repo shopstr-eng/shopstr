@@ -4701,5 +4701,140 @@ describe("db-service helpers", () => {
         });
       }
     );
+
+    maybeItTc(
+      "kind-5 deletions remove listings and block re-caching from relays",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["product_events", "deleted_product_events"]);
+
+          const author = "a".repeat(64);
+          const other = "b".repeat(64);
+          const listing = (
+            id: string,
+            pubkey: string,
+            createdAt: number,
+            dTag: string
+          ): NostrEvent => ({
+            id,
+            pubkey,
+            created_at: createdAt,
+            kind: 30402,
+            tags: [["d", dTag]],
+            content: id,
+            sig: `sig-${id}`,
+          });
+          const deletion = (
+            id: string,
+            pubkey: string,
+            createdAt: number,
+            tags: string[][]
+          ): NostrEvent => ({
+            id,
+            pubkey,
+            created_at: createdAt,
+            kind: 5,
+            tags,
+            content: "",
+            sig: `sig-${id}`,
+          });
+
+          await db.cacheEvents([
+            listing("mine-old", author, 10, "mine"),
+            listing("mine-new", author, 20, "mine"),
+            listing("theirs", other, 10, "theirs"),
+            listing("by-addr", author, 10, "by-addr"),
+          ]);
+
+          // e-tag delete by the author removes the listing and older versions.
+          await db.cacheEvent(
+            deletion("del-1", author, 30, [
+              ["e", "mine-new"],
+              ["k", "30402"],
+            ])
+          );
+          await expect(
+            db.fetchProductByIdFromDb("mine-new")
+          ).resolves.toBeNull();
+          await expect(
+            db.fetchProductByIdFromDb("mine-old")
+          ).resolves.toBeNull();
+
+          // Another author's deletion cannot touch the listing, and
+          // deletions for listings that are not cached add no tombstones.
+          const tombstoneCount = async () =>
+            (
+              await db
+                .getDbPool()
+                .query("SELECT COUNT(*)::int AS n FROM deleted_product_events")
+            ).rows[0].n;
+          const countBefore = await tombstoneCount();
+          await db.cacheEvent(deletion("del-2", author, 30, [["e", "theirs"]]));
+          await db.cacheEvent(
+            deletion("del-2b", author, 30, [
+              ["e", "never-cached"],
+              ["a", `30402:${author}:never-cached`],
+            ])
+          );
+          expect(await tombstoneCount()).toBe(countBefore);
+          await expect(
+            db.fetchProductByIdFromDb("theirs")
+          ).resolves.toMatchObject({
+            id: "theirs",
+          });
+
+          // Relays re-delivering the deleted versions are rejected.
+          await db.cacheEvent(listing("mine-new", author, 20, "mine"));
+          await db.cacheEvents([listing("mine-old", author, 10, "mine")]);
+          await expect(
+            db.fetchProductByIdFromDb("mine-new")
+          ).resolves.toBeNull();
+          await expect(
+            db.fetchProductByIdFromDb("mine-old")
+          ).resolves.toBeNull();
+
+          // A newer re-listing of the same address is allowed.
+          await db.cacheEvent(listing("mine-relisted", author, 40, "mine"));
+          await expect(
+            db.fetchProductByIdFromDb("mine-relisted")
+          ).resolves.toMatchObject({ id: "mine-relisted" });
+
+          // a-tag deletion covers versions up to the deletion time.
+          await db.cacheEvents([
+            deletion("del-3", author, 50, [
+              ["a", `30402:${author}:by-addr`],
+              ["k", "30402"],
+            ]),
+          ]);
+          await expect(
+            db.fetchProductByIdFromDb("by-addr")
+          ).resolves.toBeNull();
+          await db.cacheEvent(listing("by-addr-late", author, 45, "by-addr"));
+          await expect(
+            db.fetchProductByIdFromDb("by-addr-late")
+          ).resolves.toBeNull();
+
+          // A deletion batched with the listing it targets still applies.
+          await db.cacheEvents([
+            listing("batched", author, 70, "batched"),
+            deletion("del-5", author, 71, [["e", "batched"]]),
+          ]);
+          await expect(
+            db.fetchProductByIdFromDb("batched")
+          ).resolves.toBeNull();
+
+          // Wallet deletions are left alone.
+          await db.cacheEvent(
+            deletion("del-4", author, 60, [
+              ["e", "mine-relisted"],
+              ["k", "7375"],
+            ])
+          );
+          await expect(
+            db.fetchProductByIdFromDb("mine-relisted")
+          ).resolves.toMatchObject({ id: "mine-relisted" });
+        });
+      }
+    );
   });
 });

@@ -5,6 +5,14 @@ import {
   selectPreferredReplaceableEvent,
 } from "../nostr/replaceable-events";
 import { findListingBySlug } from "../url-slugs";
+import {
+  PRODUCT_KIND,
+  buildProductAddress,
+  extractProductDeletionTargets,
+  getProductDTag,
+  isProductTombstoned,
+  type ProductTombstone,
+} from "./product-deletions";
 
 let pool: Pool | null = null;
 let tablesInitialized = false;
@@ -271,6 +279,17 @@ async function initializeTables(): Promise<void> {
 
       CREATE INDEX IF NOT EXISTS idx_product_events_pubkey ON product_events(pubkey);
       CREATE INDEX IF NOT EXISTS idx_product_events_created_at ON product_events(created_at DESC);
+
+      -- NIP-09 tombstones so deleted listings are not re-cached from relays
+      CREATE TABLE IF NOT EXISTS deleted_product_events (
+          pubkey TEXT NOT NULL,
+          target_type TEXT NOT NULL,
+          target TEXT NOT NULL,
+          deleted_at BIGINT NOT NULL,
+          cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (pubkey, target_type, target),
+          CONSTRAINT deleted_product_events_type_check CHECK (target_type IN ('event', 'address'))
+      );
 
       -- Contact list events (kind 3 - NIP-02 follows)
       CREATE TABLE IF NOT EXISTS contact_list_events (
@@ -686,10 +705,201 @@ async function cachePreferredReplaceableEvent(
   }
 }
 
+async function recordProductTombstone(
+  client: PoolClient,
+  pubkey: string,
+  targetType: ProductTombstone["targetType"],
+  target: string,
+  deletedAt: number
+): Promise<void> {
+  await client.query(
+    `INSERT INTO deleted_product_events (pubkey, target_type, target, deleted_at)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (pubkey, target_type, target) DO UPDATE SET
+       deleted_at = GREATEST(deleted_product_events.deleted_at, EXCLUDED.deleted_at)`,
+    [pubkey, targetType, target, deletedAt] as any[]
+  );
+}
+
+// Remove every cached version of a listing address up to `deletedUpTo`.
+async function deleteProductVersionsUpTo(
+  client: PoolClient,
+  pubkey: string,
+  dTag: string,
+  deletedUpTo: number
+): Promise<void> {
+  await client.query(
+    `DELETE FROM product_events pe
+     WHERE pe.pubkey = $1
+       AND pe.kind = ${PRODUCT_KIND}
+       AND pe.created_at <= $3
+       AND EXISTS (
+         SELECT 1 FROM jsonb_array_elements(pe.tags) elem
+         WHERE elem->>0 = 'd' AND elem->>1 = $2
+       )`,
+    [pubkey, dTag, deletedUpTo] as any[]
+  );
+}
+
+// Applies a NIP-09 deletion from the listing's author: drops cached versions
+// and leaves tombstones so relays cannot re-introduce them. Must run inside a
+// transaction. Only listings already cached for the deletion's pubkey are
+// touched or tombstoned, so deletions for unknown or foreign listings add no
+// rows and cannot be used to grow the tombstone table.
+async function applyProductDeletion(
+  client: PoolClient,
+  event: NostrEvent
+): Promise<void> {
+  const { eventIds, dTags } = extractProductDeletionTargets(event);
+  if (eventIds.length === 0 && dTags.length === 0) return;
+
+  const deletionTime = Number(event.created_at);
+  const deletedUpToByDTag = new Map<string, number>();
+
+  if (dTags.length > 0) {
+    const known = await client.query<{ d_tag: string }>(
+      `SELECT DISTINCT elem->>1 AS d_tag
+       FROM product_events pe, jsonb_array_elements(pe.tags) elem
+       WHERE pe.pubkey = $1
+         AND pe.kind = ${PRODUCT_KIND}
+         AND elem->>0 = 'd'
+         AND elem->>1 = ANY($2)`,
+      [event.pubkey, dTags] as any[]
+    );
+    for (const row of known.rows) {
+      deletedUpToByDTag.set(row.d_tag, deletionTime);
+    }
+  }
+
+  if (eventIds.length > 0) {
+    const cached = await client.query<{
+      id: string;
+      created_at: string | number;
+      tags: string[][];
+    }>(
+      `SELECT id, created_at, tags FROM product_events
+       WHERE pubkey = $1 AND id = ANY($2)`,
+      [event.pubkey, eventIds] as any[]
+    );
+
+    // Deleting a version also retires older versions of the same listing,
+    // matching deleteCachedEventsByIds.
+    for (const row of cached.rows) {
+      await recordProductTombstone(
+        client,
+        event.pubkey,
+        "event",
+        row.id,
+        deletionTime
+      );
+      const dTag = getProductDTag({ tags: row.tags } as NostrEvent);
+      if (!dTag) continue;
+      deletedUpToByDTag.set(
+        dTag,
+        Math.max(deletedUpToByDTag.get(dTag) ?? 0, Number(row.created_at))
+      );
+    }
+
+    await client.query(
+      `DELETE FROM product_events WHERE pubkey = $1 AND id = ANY($2)`,
+      [event.pubkey, eventIds] as any[]
+    );
+  }
+
+  for (const [dTag, deletedUpTo] of deletedUpToByDTag) {
+    await recordProductTombstone(
+      client,
+      event.pubkey,
+      "address",
+      buildProductAddress(event.pubkey, dTag),
+      deletedUpTo
+    );
+    await deleteProductVersionsUpTo(client, event.pubkey, dTag, deletedUpTo);
+  }
+}
+
+async function fetchProductTombstones(
+  client: PoolClient,
+  events: NostrEvent[]
+): Promise<ProductTombstone[]> {
+  const products = events.filter((event) => event.kind === PRODUCT_KIND);
+  if (products.length === 0) return [];
+
+  const pubkeys = new Set<string>();
+  const ids = new Set<string>();
+  const addresses = new Set<string>();
+  for (const product of products) {
+    pubkeys.add(product.pubkey);
+    ids.add(product.id);
+    const dTag = getProductDTag(product);
+    if (dTag) addresses.add(buildProductAddress(product.pubkey, dTag));
+  }
+
+  const result = await client.query<{
+    pubkey: string;
+    target_type: ProductTombstone["targetType"];
+    target: string;
+    deleted_at: string | number;
+  }>(
+    `SELECT pubkey, target_type, target, deleted_at
+     FROM deleted_product_events
+     WHERE pubkey = ANY($1)
+       AND ((target_type = 'event' AND target = ANY($2))
+         OR (target_type = 'address' AND target = ANY($3)))`,
+    [[...pubkeys], [...ids], [...addresses]] as any[]
+  );
+
+  return result.rows.map((row) => ({
+    pubkey: row.pubkey,
+    targetType: row.target_type,
+    target: row.target,
+    deletedAt: Number(row.deleted_at),
+  }));
+}
+
+async function cacheDeletionEvent(
+  event: NostrEvent,
+  throwOnError: boolean
+): Promise<void> {
+  // Gift wraps, wallet events, and deletions of other kinds are not handled
+  // here, so skip the DB round trip entirely.
+  const { eventIds, dTags } = extractProductDeletionTargets(event);
+  if (eventIds.length === 0 && dTags.length === 0) return;
+
+  const dbPool = throwOnError ? await getInitializedDbPool() : getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await client.query("BEGIN");
+    await applyProductDeletion(client, event);
+    await client.query("COMMIT");
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Failed to rollback transaction:", rollbackError);
+      }
+    }
+    console.error("Failed to apply deletion event %s:", event.id, error);
+    if (throwOnError) throw error;
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
 async function cacheEventInternal(
   event: NostrEvent,
   throwOnError: boolean
 ): Promise<void> {
+  if (event.kind === 5) {
+    await cacheDeletionEvent(event, throwOnError);
+    return;
+  }
+
   const table = getTableForKind(event.kind);
   if (!table) {
     console.warn(`No table mapping for event kind ${event.kind}`);
@@ -704,6 +914,12 @@ async function cacheEventInternal(
 
   try {
     client = await dbPool.connect();
+
+    if (event.kind === PRODUCT_KIND) {
+      const tombstones = await fetchProductTombstones(client, [event]);
+      if (isProductTombstoned(event, tombstones)) return;
+    }
+
     // For events that should only keep the latest version per pubkey
     if (shouldKeepOnlyLatest(event.kind)) {
       await client.query("BEGIN");
@@ -884,6 +1100,15 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
     client = await dbPool.connect();
     await client.query("BEGIN");
 
+    const productEvents = eventsByTable.get("product_events");
+    if (productEvents) {
+      const tombstones = await fetchProductTombstones(client, productEvents);
+      eventsByTable.set(
+        "product_events",
+        productEvents.filter((event) => !isProductTombstoned(event, tombstones))
+      );
+    }
+
     for (const [table, tableEvents] of eventsByTable.entries()) {
       // Group events by type
       const latestOnlyEvents = tableEvents.filter((e) =>
@@ -1035,6 +1260,14 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
       }
     }
 
+    // Deletions run after inserts so a deletion batched with the listing it
+    // targets still finds it cached.
+    for (const event of events) {
+      if (event.kind === 5) {
+        await applyProductDeletion(client, event);
+      }
+    }
+
     await client.query("COMMIT");
   } catch (error) {
     if (client) {
@@ -1163,6 +1396,39 @@ export async function deleteCachedEventsByIds(
   try {
     client = await dbPool.connect();
     await client.query("BEGIN");
+
+    // Tombstone the listings first so relays that still hold them cannot
+    // re-cache them after this delete.
+    const doomedProducts = await client.query<{
+      id: string;
+      pubkey: string;
+      created_at: string | number;
+      tags: string[][];
+    }>(
+      `SELECT id, pubkey, created_at, tags FROM product_events
+       WHERE id = ANY($1)`,
+      [eventIds]
+    );
+    for (const row of doomedProducts.rows ?? []) {
+      const createdAt = Number(row.created_at);
+      await recordProductTombstone(
+        client,
+        row.pubkey,
+        "event",
+        row.id,
+        createdAt
+      );
+      const dTag = getProductDTag({ tags: row.tags } as NostrEvent);
+      if (dTag) {
+        await recordProductTombstone(
+          client,
+          row.pubkey,
+          "address",
+          buildProductAddress(row.pubkey, dTag),
+          createdAt
+        );
+      }
+    }
 
     // For product_events: delete by ID, and also remove any versions that are
     // strictly OLDER than the deleted event (same pubkey + d-tag, smaller

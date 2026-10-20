@@ -58,12 +58,14 @@ export async function deleteEvent(
   nostr: NostrManager,
   signer: NostrSigner,
   event_ids_to_delete: string[],
-  deletedKind?: number
+  deletedKind?: number,
+  addresses_to_delete: string[] = []
 ) {
   const deletionEvent = createNostrDeleteEvent(
     event_ids_to_delete,
     "Shopstr deletion request",
-    deletedKind
+    deletedKind,
+    addresses_to_delete
   );
 
   await finalizeAndSendNostrEvent(signer, nostr, deletionEvent);
@@ -87,13 +89,17 @@ export async function deleteEvent(
 export function createNostrDeleteEvent(
   event_ids: string[],
   content: string,
-  deletedKind?: number
+  deletedKind?: number,
+  addresses: string[] = []
 ): EventTemplate {
   const msg: EventTemplate = {
     kind: 5,
     content: content,
     tags: [
       ...event_ids.map((id) => ["e", id]),
+      // Addressable events (e.g. listings) need an `a` tag so relays holding
+      // older versions drop them too (NIP-09).
+      ...addresses.map((address) => ["a", address]),
       ...(deletedKind !== undefined ? [["k", deletedKind.toString()]] : []),
     ],
     created_at: Math.floor(Date.now() / 1000),
