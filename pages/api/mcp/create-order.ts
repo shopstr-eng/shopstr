@@ -14,6 +14,7 @@ import {
   createMcpOrder,
   getMcpOrder,
   listMcpOrders,
+  listMcpOrdersAsSeller,
   formatOrderForResponse,
   CreateOrderInput,
 } from "@/mcp/tools/purchase-tools";
@@ -580,7 +581,7 @@ async function updateOrderPaymentStatus(orderId: string, status: string) {
 async function handleGetOrder(
   res: NextApiResponse,
   orderId: string,
-  buyerPubkey: string
+  requesterPubkey: string
 ) {
   try {
     const order = await getMcpOrder(orderId);
@@ -588,7 +589,10 @@ async function handleGetOrder(
       return res.status(404).json({ error: "Order not found" });
     }
 
-    if (order.buyer_pubkey !== buyerPubkey) {
+    if (
+      order.buyer_pubkey !== requesterPubkey &&
+      order.seller_pubkey !== requesterPubkey
+    ) {
       return res
         .status(403)
         .json({ error: "Not authorized to view this order" });
@@ -607,12 +611,26 @@ async function handleGetOrder(
 async function handleListOrders(
   req: NextApiRequest,
   res: NextApiResponse,
-  buyerPubkey: string
+  requesterPubkey: string
 ) {
   try {
     const limit = Number(req.query.limit) || 50;
     const offset = Number(req.query.offset) || 0;
-    const orders = await listMcpOrders(buyerPubkey, limit, offset);
+    const rawRole = req.query.role;
+    const role =
+      typeof rawRole === "string" ? rawRole.trim().toLowerCase() : "buyer";
+
+    if (role !== "buyer" && role !== "seller") {
+      return res.status(400).json({
+        error: "Invalid role parameter. Must be 'buyer' or 'seller'.",
+      });
+    }
+
+    const orders =
+      role === "seller"
+        ? await listMcpOrdersAsSeller(requesterPubkey, limit, offset)
+        : await listMcpOrders(requesterPubkey, limit, offset);
+
     return res.status(200).json({
       success: true,
       orders: orders.map(formatOrderForResponse),
