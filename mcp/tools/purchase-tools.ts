@@ -91,18 +91,39 @@ export async function getMcpOrder(orderId: string): Promise<McpOrder | null> {
   }
 }
 
+const DEFAULT_ORDER_LIST_LIMIT = 50;
+const MAX_ORDER_LIST_LIMIT = 100;
+
+// Postgres rejects negative or fractional LIMIT/OFFSET values, and an
+// uncapped limit would return a seller's whole order history (including
+// every buyer's shipping address) in one response. Invalid values fall
+// back to the defaults instead of surfacing as database errors.
+function normalizeOrderListPagination(
+  limit: number,
+  offset: number
+): { limit: number; offset: number } {
+  return {
+    limit:
+      Number.isSafeInteger(limit) && limit > 0
+        ? Math.min(limit, MAX_ORDER_LIST_LIMIT)
+        : DEFAULT_ORDER_LIST_LIMIT,
+    offset: Number.isSafeInteger(offset) && offset >= 0 ? offset : 0,
+  };
+}
+
 export async function listMcpOrders(
   buyerPubkey: string,
-  limit: number = 50,
+  limit: number = DEFAULT_ORDER_LIST_LIMIT,
   offset: number = 0
 ): Promise<McpOrder[]> {
+  const pagination = normalizeOrderListPagination(limit, offset);
   const pool = getDbPool();
   let client;
   try {
     client = await pool.connect();
     const result = await client.query(
       `SELECT * FROM mcp_orders WHERE buyer_pubkey = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-      [buyerPubkey, limit, offset] as any[]
+      [buyerPubkey, pagination.limit, pagination.offset] as any[]
     );
     return result.rows;
   } finally {
@@ -112,16 +133,17 @@ export async function listMcpOrders(
 
 export async function listMcpOrdersAsSeller(
   sellerPubkey: string,
-  limit: number = 50,
+  limit: number = DEFAULT_ORDER_LIST_LIMIT,
   offset: number = 0
 ): Promise<McpOrder[]> {
+  const pagination = normalizeOrderListPagination(limit, offset);
   const pool = getDbPool();
   let client;
   try {
     client = await pool.connect();
     const result = await client.query(
       `SELECT * FROM mcp_orders WHERE seller_pubkey = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-      [sellerPubkey, limit, offset] as any[]
+      [sellerPubkey, pagination.limit, pagination.offset] as any[]
     );
     return result.rows;
   } finally {

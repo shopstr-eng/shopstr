@@ -209,6 +209,52 @@ describe("listMcpOrders", () => {
       20,
     ]);
   });
+
+  it.each([
+    ["negative", -1],
+    ["zero", 0],
+    ["fractional", 2.5],
+    ["NaN", NaN],
+    ["unsafe integer", 1e300],
+  ])("falls back to the default limit for a %s limit", async (_, limit) => {
+    const { query } = mockDbPool(() => ({ rows: [] }));
+
+    await listMcpOrders(BUYER_PUBKEY, limit, 0);
+
+    expect(query).toHaveBeenCalledWith(expect.any(String), [
+      BUYER_PUBKEY,
+      50,
+      0,
+    ]);
+  });
+
+  it("caps the limit at 100", async () => {
+    const { query } = mockDbPool(() => ({ rows: [] }));
+
+    await listMcpOrders(BUYER_PUBKEY, 1_000_000, 0);
+
+    expect(query).toHaveBeenCalledWith(expect.any(String), [
+      BUYER_PUBKEY,
+      100,
+      0,
+    ]);
+  });
+
+  it.each([
+    ["negative", -1],
+    ["fractional", 1.5],
+    ["NaN", NaN],
+  ])("falls back to offset 0 for a %s offset", async (_, offset) => {
+    const { query } = mockDbPool(() => ({ rows: [] }));
+
+    await listMcpOrders(BUYER_PUBKEY, 10, offset);
+
+    expect(query).toHaveBeenCalledWith(expect.any(String), [
+      BUYER_PUBKEY,
+      10,
+      0,
+    ]);
+  });
 });
 
 describe("listMcpOrdersAsSeller", () => {
@@ -221,6 +267,24 @@ describe("listMcpOrdersAsSeller", () => {
       expect.stringContaining("WHERE seller_pubkey = $1"),
       [SELLER_PUBKEY, 50, 0]
     );
+  });
+
+  it("normalizes invalid pagination and caps the limit", async () => {
+    const { query } = mockDbPool(() => ({ rows: [] }));
+
+    await listMcpOrdersAsSeller(SELLER_PUBKEY, -1, -1);
+    await listMcpOrdersAsSeller(SELLER_PUBKEY, 1_000_000, 20);
+
+    expect(query).toHaveBeenNthCalledWith(1, expect.any(String), [
+      SELLER_PUBKEY,
+      50,
+      0,
+    ]);
+    expect(query).toHaveBeenNthCalledWith(2, expect.any(String), [
+      SELLER_PUBKEY,
+      100,
+      20,
+    ]);
   });
 });
 
