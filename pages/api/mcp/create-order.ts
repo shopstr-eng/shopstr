@@ -617,8 +617,12 @@ async function handleListOrders(
     const limit = Number(req.query.limit) || 50;
     const offset = Number(req.query.offset) || 0;
     const rawRole = req.query.role;
-    const role =
-      typeof rawRole === "string" ? rawRole.trim().toLowerCase() : "buyer";
+    if (rawRole !== undefined && typeof rawRole !== "string") {
+      return res.status(400).json({
+        error: "Invalid role parameter. Must be 'buyer' or 'seller'.",
+      });
+    }
+    const role = rawRole === undefined ? "buyer" : rawRole.trim().toLowerCase();
 
     if (role !== "buyer" && role !== "seller") {
       return res.status(400).json({

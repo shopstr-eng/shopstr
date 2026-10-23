@@ -1399,7 +1399,9 @@ describe("handleGetOrder / handleListOrders", () => {
     return res;
   }
 
-  async function listOrders(query: Record<string, string> = {}) {
+  async function listOrders(
+    query: Record<string, string | string[] | undefined> = {}
+  ) {
     const req = createMockRequest({ method: "GET", query });
     const res = createMockResponse();
     await handler(req, res as unknown as NextApiResponse);
@@ -1431,7 +1433,12 @@ describe("handleGetOrder / handleListOrders", () => {
       });
     });
 
-    it("returns 200 with success:true and the formatted order when the requester is the seller", async () => {
+    it("returns 200 with success:true and the formatted order containing buyerPubkey when the requester is the seller", async () => {
+      const { formatOrderForResponse } = jest.requireActual(
+        "@/mcp/tools/purchase-tools"
+      );
+      formatOrderForResponseMock.mockImplementationOnce(formatOrderForResponse);
+
       const otherBuyer = "x".repeat(64);
       const order = makeMcpOrder({
         buyer_pubkey: otherBuyer,
@@ -1442,8 +1449,14 @@ describe("handleGetOrder / handleListOrders", () => {
       const res = await getOrder("mcp_1");
 
       expect(res.statusCode).toBe(200);
-      expect(res.jsonBody).toEqual({ success: true, order });
       expect(formatOrderForResponseMock).toHaveBeenCalledWith(order);
+      const body = res.jsonBody as {
+        success: boolean;
+        order: Record<string, unknown>;
+      };
+      expect(body.success).toBe(true);
+      expect(body.order.buyerPubkey).toBe(otherBuyer);
+      expect(body.order.sellerPubkey).toBe(BUYER_PUBKEY);
     });
 
     it("returns 200 with success:true and the formatted order when the buyer pubkeys match", async () => {
@@ -1539,6 +1552,17 @@ describe("handleGetOrder / handleListOrders", () => {
 
     it("returns 400 when role parameter is invalid", async () => {
       const res = await listOrders({ role: "admin" });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toEqual({
+        error: "Invalid role parameter. Must be 'buyer' or 'seller'.",
+      });
+      expect(listMcpOrdersMock).not.toHaveBeenCalled();
+      expect(listMcpOrdersAsSellerMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 when role parameter is an array (repeated query param)", async () => {
+      const res = await listOrders({ role: ["seller", "seller"] });
 
       expect(res.statusCode).toBe(400);
       expect(res.jsonBody).toEqual({

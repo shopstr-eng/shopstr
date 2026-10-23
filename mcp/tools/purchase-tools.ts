@@ -208,6 +208,8 @@ export async function updateMcpOrderAddress(
 export function formatOrderForResponse(order: McpOrder) {
   return {
     orderId: order.order_id,
+    buyerPubkey: order.buyer_pubkey,
+    sellerPubkey: order.seller_pubkey,
     productId: order.product_id,
     productTitle: order.product_title,
     quantity: order.quantity,

@@ -421,6 +421,8 @@ describe("formatOrderForResponse", () => {
 
     expect(formatOrderForResponse(order)).toEqual({
       orderId: "order-1",
+      buyerPubkey: BUYER_PUBKEY,
+      sellerPubkey: SELLER_PUBKEY,
       productId: "prod-1",
       productTitle: "Handmade Mug",
       quantity: 2,
