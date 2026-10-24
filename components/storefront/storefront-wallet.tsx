@@ -1,7 +1,10 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { StorefrontColorScheme } from "@/utils/types/types";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
+import {
+  getCachedCashuProofs,
+  getLocalStorageData,
+} from "@/utils/nostr/nostr-helper-functions";
 import MintButton from "@/components/wallet/mint-button";
 import ReceiveButton from "@/components/wallet/receive-button";
 import SendButton from "@/components/wallet/send-button";
@@ -31,7 +34,8 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
   const [mintKeySetIds, setMintKeySetIds] = useState<MintKeyset[]>([]);
 
   const localStorageData = useMemo(() => getLocalStorageData(), []);
-  const { mints, tokens } = localStorageData;
+  const { mints } = localStorageData;
+  const tokens = getCachedCashuProofs();
 
   useEffect(() => {
     if (mints && mints[0]) {
@@ -76,7 +80,7 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const { tokens: newTokens } = getLocalStorageData();
+      const newTokens = getCachedCashuProofs();
       if (newTokens) {
         const tokensTotal =
           newTokens.length >= 1 ? sumProofAmounts(newTokens as Proof[]) : 0;

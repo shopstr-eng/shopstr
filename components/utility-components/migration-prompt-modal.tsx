@@ -97,8 +97,13 @@ export default function MigrationPromptModal({
                 if (e.key === "Enter" && passphrase) handleMigration();
               }}
               isInvalid={!!error}
-              errorMessage={error}
+              errorMessage=""
             />
+            {error && (
+              <p role="alert" className="text-tiny text-danger mt-1 px-1">
+                {error}
+              </p>
+            )}
           </div>
 
           <div className="flex justify-end space-x-2">

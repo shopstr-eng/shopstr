@@ -6,7 +6,7 @@ import {
   signP2PKProof,
 } from "@cashu/cashu-ts";
 import { verifyEvent } from "nostr-tools";
-import { publishProofEvent } from "@/utils/nostr/nostr-helper-functions";
+import { publishProofEventBestEffort } from "@/utils/cashu/wallet-recovery";
 import { NostrEvent, NostrManager } from "@/utils/nostr/nostr-manager";
 import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import {
@@ -14,6 +14,7 @@ import {
   buildSignedHttpRequestProofTemplate,
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
+import { creditProofsToLocalWallet } from "@/utils/cashu/local-wallet-cache";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 export type EscrowPaymentRequestPayload = {
@@ -119,7 +120,6 @@ export async function combineAndRedeem(params: {
     signer,
     mints,
     tokens,
-    history,
   } = params;
 
   if (proofs.length !== sig1.length || proofs.length !== sig2.length) {
@@ -143,20 +143,12 @@ export async function combineAndRedeem(params: {
     const uniqueProofs = freshProofs.filter(
       (proof: Proof) => !tokens.some((t: Proof) => t.C === proof.C)
     );
-    storage.setJson(STORAGE_KEYS.TOKENS, [...tokens, ...uniqueProofs]);
+    creditProofsToLocalWallet(uniqueProofs, tokenAmount, 1);
     if (!mints.includes(tokenMint)) {
       storage.setJson(STORAGE_KEYS.MINTS, [...mints, tokenMint]);
     }
-    storage.setJson(STORAGE_KEYS.HISTORY, [
-      {
-        type: 1,
-        amount: tokenAmount,
-        date: Math.floor(Date.now() / 1000),
-      },
-      ...history,
-    ]);
 
-    await publishProofEvent(
+    await publishProofEventBestEffort(
       nostr,
       signer,
       tokenMint,

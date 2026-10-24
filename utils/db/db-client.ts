@@ -37,10 +37,11 @@ export async function cacheEventToDatabase(event: NostrEvent): Promise<void> {
       body: JSON.stringify(event),
     });
     if (!response.ok) {
-      console.error("Failed to cache event to database");
+      throw new Error("Failed to cache event to database");
     }
   } catch (error) {
     console.error("Failed to cache event to database:", error);
+    throw error;
   }
 }
 

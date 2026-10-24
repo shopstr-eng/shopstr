@@ -1,5 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
-
 import { useEffect } from "react";
 import HomeFeed from "@/components/home/home-feed";
 import { GetServerSideProps } from "next";
