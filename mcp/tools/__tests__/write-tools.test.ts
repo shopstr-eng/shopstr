@@ -15,9 +15,12 @@ import {
   updateMcpOrderStatus,
   updateMcpOrderAddress,
 } from "@/mcp/tools/purchase-tools";
-import { getDecodedToken, Mint, Wallet } from "@cashu/cashu-ts";
-import { withMintRetry } from "@/utils/cashu/mint-retry-service";
-import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
+import {
+  AgentWalletError,
+  getAgentWalletBalance,
+  payInvoiceFromAgentWallet,
+  receiveAgentCashuToken,
+} from "@/utils/mcp/agent-cashu-wallet";
 import { registerWriteTools } from "@/mcp/tools/write-tools";
 
 jest.mock("@/utils/mcp/auth", () => ({
@@ -57,21 +60,11 @@ jest.mock("@/mcp/tools/purchase-tools", () => ({
   updateMcpOrderAddress: jest.fn(),
 }));
 
-jest.mock("@cashu/cashu-ts", () => ({
-  getDecodedToken: jest.fn(),
-  Mint: jest.fn().mockImplementation(() => ({})),
-  Wallet: jest.fn().mockImplementation(() => ({
-    loadMint: jest.fn(),
-    createMeltQuoteBolt11: jest.fn(),
-  })),
-}));
-
-jest.mock("@/utils/cashu/mint-retry-service", () => ({
-  withMintRetry: jest.fn((fn: () => Promise<unknown>) => fn()),
-}));
-
-jest.mock("@/utils/cashu/melt-retry-service", () => ({
-  safeMeltProofs: jest.fn(),
+jest.mock("@/utils/mcp/agent-cashu-wallet", () => ({
+  ...jest.requireActual("@/utils/mcp/agent-cashu-wallet"),
+  getAgentWalletBalance: jest.fn(),
+  receiveAgentCashuToken: jest.fn(),
+  payInvoiceFromAgentWallet: jest.fn(),
 }));
 
 // write-tools.ts does `const resolveCname = promisify(dns.resolveCname)` at
@@ -182,22 +175,6 @@ function encryptForMock(plainText: string) {
   return `encrypted(${plainText})`;
 }
 
-function buildMockProofEvent(overrides: {
-  pubkey?: string;
-  mint?: string;
-  proofs?: Array<{ amount: number }>;
-}) {
-  const {
-    pubkey = TEST_PUBKEY,
-    mint = "https://mint.example",
-    proofs = [],
-  } = overrides;
-  return {
-    pubkey,
-    content: encryptForMock(JSON.stringify({ mint, proofs })),
-  };
-}
-
 function buildMockMessage(
   overrides: Partial<{
     id: string;
@@ -287,7 +264,6 @@ beforeEach(() => {
     });
   jest.mocked(cacheEvent).mockResolvedValue(undefined);
   jest.mocked(fetchCachedEvents).mockResolvedValue([]);
-  jest.mocked(withMintRetry).mockImplementation((fn: any) => fn());
   global.fetch = jest.fn() as any;
 });
 
@@ -3055,19 +3031,6 @@ describe("registerWriteTools — (Cashu payments)", () => {
       .mockReturnValue(["wss://relay.damus.io", "wss://nos.lol"]);
   });
 
-  function mockCashuWallet(meltQuote: {
-    amount: number;
-    fee_reserve?: number;
-  }) {
-    const wallet = {
-      loadMint: jest.fn().mockResolvedValue(undefined),
-      createMeltQuoteBolt11: jest.fn().mockResolvedValue(meltQuote),
-    };
-    jest.mocked(Mint).mockImplementationOnce(() => ({}) as any);
-    jest.mocked(Wallet).mockImplementationOnce(() => wallet as any);
-    return wallet;
-  }
-
   describe.each(PHASE_5_TOOLS)("%s — shared guards", (toolName) => {
     it("returns a permission error when apiKey.permissions is not full_access", async () => {
       const callbacks = registerToolsForTest(readOnlyApiKey);
@@ -3100,112 +3063,60 @@ describe("registerWriteTools — (Cashu payments)", () => {
       );
     }
 
-    it("filters proof events to only ones authored by the signer's own pubkey", async () => {
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          pubkey: TEST_PUBKEY,
-          proofs: [{ amount: 5 }],
-        }),
-        buildMockProofEvent({
-          pubkey: "other-pubkey",
-          proofs: [{ amount: 999 }],
-        }),
-      ] as any);
-      const tool = getCallback();
-
-      const result = await tool({});
-
-      expect(fetchCachedEvents).toHaveBeenCalledWith(7375);
-      const payload = textPayload(result);
-      expect(payload.totalBalance).toBe(5);
-      expect(payload.proofEventCount).toBe(1);
-    });
-
-    it("treats a proof missing its amount field as 0 rather than throwing", async () => {
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          proofs: [{} as any, { amount: 5 }],
-        }),
-      ] as any);
-      const tool = getCallback();
-
-      const result = await tool({});
-
-      expect(textPayload(result).totalBalance).toBe(5);
-    });
-
-    it("treats a proof event whose decrypted payload omits proofs entirely as contributing 0", async () => {
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        {
-          pubkey: TEST_PUBKEY,
-          content: encryptForMock(
-            JSON.stringify({ mint: "https://mint.example" })
-          ),
-        },
-      ] as any);
-      const tool = getCallback();
-
-      const result = await tool({});
-
-      expect(textPayload(result).totalBalance).toBe(0);
-    });
-
-    it("skips a proof event when decrypt/JSON.parse fails, without failing the whole call", async () => {
-      jest
-        .mocked(fetchCachedEvents)
-        .mockResolvedValueOnce([
-          { pubkey: TEST_PUBKEY, content: "not encrypted json" },
-          buildMockProofEvent({ proofs: [{ amount: 7 }] }),
-        ] as any);
-      const tool = getCallback();
-
-      const result = await tool({});
-
-      expect(textPayload(result).totalBalance).toBe(7);
-    });
-
-    it("aggregates across mints by default, and filters to one mint when mintUrl is provided", async () => {
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint-a.example",
-          proofs: [{ amount: 3 }],
-        }),
-        buildMockProofEvent({
-          mint: "https://mint-b.example",
-          proofs: [{ amount: 4 }],
-        }),
-      ] as any);
-      const tool = getCallback();
-
-      const all = await tool({});
-      expect(textPayload(all)).toMatchObject({
+    it("reads the signer's wallet and reports sats", async () => {
+      jest.mocked(getAgentWalletBalance).mockResolvedValueOnce({
         totalBalance: 7,
-        mintBalances: {
-          "https://mint-a.example": 3,
-          "https://mint-b.example": 4,
-        },
+        mintBalances: { "https://mint.example": 7 },
+        proofEventCount: 2,
       });
+      const tool = getCallback();
 
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint-a.example",
-          proofs: [{ amount: 3 }],
-        }),
-        buildMockProofEvent({
-          mint: "https://mint-b.example",
-          proofs: [{ amount: 4 }],
-        }),
-      ] as any);
-      const filtered = await tool({ mintUrl: "https://mint-a.example" });
-      expect(textPayload(filtered)).toMatchObject({
-        totalBalance: 3,
-        mintBalances: { "https://mint-a.example": 3 },
+      const result = await tool({});
+
+      expect(getAgentWalletBalance).toHaveBeenCalledWith(mockSigner, undefined);
+      expect(textPayload(result)).toMatchObject({
+        success: true,
+        totalBalance: 7,
+        unit: "sats",
+        mintBalances: { "https://mint.example": 7 },
+        proofEventCount: 2,
       });
     });
 
-    it("returns errorResponse when fetchCachedEvents throws", async () => {
+    it("passes the mint filter through", async () => {
+      jest.mocked(getAgentWalletBalance).mockResolvedValueOnce({
+        totalBalance: 0,
+        mintBalances: {},
+        proofEventCount: 0,
+      });
+      const tool = getCallback();
+
+      await tool({ mintUrl: "https://mint.example" });
+
+      expect(getAgentWalletBalance).toHaveBeenCalledWith(
+        mockSigner,
+        "https://mint.example"
+      );
+    });
+
+    it("returns the wallet error's title and details", async () => {
       jest
-        .mocked(fetchCachedEvents)
+        .mocked(getAgentWalletBalance)
+        .mockRejectedValueOnce(new AgentWalletError("Wallet title", "why"));
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result)).toMatchObject({
+        error: "Wallet title",
+        details: "why",
+      });
+    });
+
+    it("returns errorResponse for unexpected failures", async () => {
+      jest
+        .mocked(getAgentWalletBalance)
         .mockRejectedValueOnce(new Error("db offline"));
       const tool = getCallback();
 
@@ -3213,10 +3124,11 @@ describe("registerWriteTools — (Cashu payments)", () => {
 
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to get Cashu balance");
+      expect(textPayload(result).details).toBe("db offline");
     });
 
     it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
-      jest.mocked(fetchCachedEvents).mockRejectedValueOnce("raw failure");
+      jest.mocked(getAgentWalletBalance).mockRejectedValueOnce("raw failure");
       const tool = getCallback();
 
       const result = await tool({});
@@ -3233,66 +3145,68 @@ describe("registerWriteTools — (Cashu payments)", () => {
       );
     }
 
-    it("decodes the token, sums proof amounts, and publishes an encrypted kind:7375 event tagged with mint + relay hints", async () => {
-      const proofs = [{ amount: 7 }, { amount: 8 }];
-      jest.mocked(getDecodedToken).mockReturnValueOnce({
+    it("hands the token to the wallet and returns what was stored", async () => {
+      jest.mocked(receiveAgentCashuToken).mockResolvedValueOnce({
+        eventId: "evt-1",
+        amount: 15,
         mint: "https://mint.example",
-        proofs,
-      } as any);
+        proofCount: 2,
+      });
       const tool = getCallback();
 
       const result = await tool({ token: "cashu-token" });
 
-      expect(mockSigner.encrypt).toHaveBeenCalledWith(
-        TEST_PUBKEY,
-        JSON.stringify({ mint: "https://mint.example", proofs })
+      expect(receiveAgentCashuToken).toHaveBeenCalledWith(
+        mockSigner,
+        "cashu-token"
       );
-      const template = jest.mocked(signAndPublishEvent).mock
-        .calls[0]![1] as any;
-      expect(template.kind).toBe(7375);
-      expect(template.tags).toEqual([
-        ["mint", "https://mint.example"],
-        ["relay", "wss://relay.damus.io"],
-        ["relay", "wss://nos.lol"],
-      ]);
       expect(textPayload(result)).toMatchObject({
+        success: true,
+        eventId: "evt-1",
         amount: 15,
         mint: "https://mint.example",
         proofCount: 2,
       });
     });
 
-    it("treats a decoded proof missing its amount field as 0 when summing totalAmount", async () => {
-      jest.mocked(getDecodedToken).mockReturnValueOnce({
-        mint: "https://mint.example",
-        proofs: [{}, { amount: 8 }],
-      } as any);
+    it("returns the wallet error's title and details, e.g. a spent token", async () => {
+      jest
+        .mocked(receiveAgentCashuToken)
+        .mockRejectedValueOnce(
+          new AgentWalletError(
+            "Failed to receive Cashu tokens",
+            "Token already spent."
+          )
+        );
       const tool = getCallback();
 
       const result = await tool({ token: "cashu-token" });
 
-      expect(textPayload(result).amount).toBe(8);
+      expect(result.isError).toBe(true);
+      expect(textPayload(result)).toMatchObject({
+        error: "Failed to receive Cashu tokens",
+        details: "Token already spent.",
+      });
     });
 
-    it("returns errorResponse when getDecodedToken throws on a malformed token", async () => {
-      jest.mocked(getDecodedToken).mockImplementationOnce(() => {
-        throw new Error("invalid token encoding");
-      });
+    it("returns errorResponse for unexpected failures", async () => {
+      jest
+        .mocked(receiveAgentCashuToken)
+        .mockRejectedValueOnce(new Error("database offline"));
       const tool = getCallback();
 
-      const result = await tool({ token: "garbage" });
+      const result = await tool({ token: "cashu-token" });
 
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to receive Cashu tokens");
+      expect(textPayload(result).details).toBe("database offline");
     });
 
     it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
-      jest.mocked(getDecodedToken).mockImplementationOnce(() => {
-        throw "raw failure";
-      });
+      jest.mocked(receiveAgentCashuToken).mockRejectedValueOnce("raw failure");
       const tool = getCallback();
 
-      const result = await tool({ token: "garbage" });
+      const result = await tool({ token: "cashu-token" });
 
       expect(textPayload(result).details).toBe("Unknown error");
     });
@@ -3356,14 +3270,15 @@ describe("registerWriteTools — (Cashu payments)", () => {
       );
     }
 
-    it("returns 'No available proofs' when no cached proof event matches the target mint", async () => {
-      mockCashuWallet({ amount: 10, fee_reserve: 1 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://other-mint.example",
-          proofs: [{ amount: 100 }],
-        }),
-      ] as any);
+    it("pays the invoice from the signer's wallet and reports the outcome", async () => {
+      jest.mocked(payInvoiceFromAgentWallet).mockResolvedValueOnce({
+        paid: true,
+        amount: 1000,
+        fee: 10,
+        mintUrl: "https://mint.example",
+        change: 9,
+        eventId: "evt-2",
+      });
       const tool = getCallback();
 
       const result = await tool({
@@ -3371,256 +3286,80 @@ describe("registerWriteTools — (Cashu payments)", () => {
         mintUrl: "https://mint.example",
       });
 
-      expect(result.isError).toBe(true);
-      const payload = textPayload(result);
-      expect(payload.error).toBe("No available proofs");
-      expect(safeMeltProofs).not.toHaveBeenCalled();
-    });
-
-    it("returns 'Insufficient balance' with needed vs. available amounts, without melting", async () => {
-      mockCashuWallet({ amount: 100, fee_reserve: 5 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint.example",
-          proofs: [{ amount: 10 }],
-        }),
-      ] as any);
-      const tool = getCallback();
-
-      const result = await tool({
-        invoice: "lnbc1invoice",
-        mintUrl: "https://mint.example",
-      });
-
-      expect(result.isError).toBe(true);
-      const payload = textPayload(result);
-      expect(payload.error).toBe("Insufficient balance");
-      expect(payload.details).toBe("Need 105 sats but only have 10 sats");
-      expect(safeMeltProofs).not.toHaveBeenCalled();
-    });
-
-    it("skips a malformed proof event while aggregating available proofs", async () => {
-      mockCashuWallet({ amount: 5, fee_reserve: 0 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        { pubkey: TEST_PUBKEY, content: "not encrypted json" },
-        buildMockProofEvent({
-          mint: "https://mint.example",
-          proofs: [{ amount: 5 }],
-        }),
-      ] as any);
-      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
-        status: "paid",
-        changeProofs: [],
-      } as any);
-      const tool = getCallback();
-
-      const result = await tool({
-        invoice: "lnbc1invoice",
-        mintUrl: "https://mint.example",
-      });
-
-      expect(safeMeltProofs).toHaveBeenCalledWith(
-        expect.any(Object),
-        expect.any(Object),
-        [{ amount: 5 }]
+      expect(payInvoiceFromAgentWallet).toHaveBeenCalledWith(
+        mockSigner,
+        "lnbc1invoice",
+        "https://mint.example"
       );
-      expect(textPayload(result).paid).toBe(true);
-    });
-
-    it("treats an available proof missing its amount field as 0 when summing totalAvailable", async () => {
-      mockCashuWallet({ amount: 5, fee_reserve: 0 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint.example",
-          proofs: [{} as any, { amount: 5 }],
-        }),
-      ] as any);
-      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
-        status: "paid",
-        changeProofs: [],
-      } as any);
-      const tool = getCallback();
-
-      const result = await tool({
-        invoice: "lnbc1invoice",
+      expect(textPayload(result)).toMatchObject({
+        success: true,
+        paid: true,
+        amount: 1000,
+        fee: 10,
+        change: 9,
         mintUrl: "https://mint.example",
       });
+    });
 
-      // totalAvailable = 0 + 5 = 5, exactly totalNeeded (5) — proves the
-      // amount-less proof contributed 0, not NaN/undefined, to the sum.
-      expect(textPayload(result).paid).toBe(true);
+    it("leaves the mint to the wallet's default when none is given", async () => {
+      jest.mocked(payInvoiceFromAgentWallet).mockResolvedValueOnce({
+        paid: true,
+        amount: 1,
+        fee: 0,
+        mintUrl: "https://mint.minibits.cash/Bitcoin",
+        change: 0,
+        eventId: null,
+      });
+      const tool = getCallback();
+
+      await tool({ invoice: "lnbc1invoice" });
+
+      expect(payInvoiceFromAgentWallet).toHaveBeenCalledWith(
+        mockSigner,
+        "lnbc1invoice",
+        undefined
+      );
     });
 
     it.each([
-      ["pending", "Mint payment pending"],
-      ["unknown", "Cashu payment outcome unknown"],
-      ["failed", "Cashu payment failed"],
-    ])(
-      "maps a '%s' melt outcome to the error '%s'",
-      async (status, expectedError) => {
-        mockCashuWallet({ amount: 5, fee_reserve: 0 });
-        jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-          buildMockProofEvent({
-            mint: "https://mint.example",
-            proofs: [{ amount: 5 }],
-          }),
-        ] as any);
-        jest.mocked(safeMeltProofs).mockResolvedValueOnce({
-          status,
-          changeProofs: [],
-        } as any);
-        const tool = getCallback();
-
-        const result = await tool({
-          invoice: "lnbc1invoice",
-          mintUrl: "https://mint.example",
-        });
-
-        expect(result.isError).toBe(true);
-        expect(textPayload(result).error).toBe(expectedError);
-      }
-    );
-
-    it("surfaces meltOutcome.errorMessage as details when the mint provides one", async () => {
-      mockCashuWallet({ amount: 5, fee_reserve: 0 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint.example",
-          proofs: [{ amount: 5 }],
-        }),
-      ] as any);
-      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
-        status: "failed",
-        changeProofs: [],
-        errorMessage: "mint rejected the melt request",
-      } as any);
-      const tool = getCallback();
-
-      const result = await tool({
-        invoice: "lnbc1invoice",
-        mintUrl: "https://mint.example",
-      });
-
-      expect(textPayload(result).details).toBe(
-        "mint rejected the melt request"
-      );
-    });
-
-    it("sums changeProofs, handling both plain-number and .toNumber()-style amounts", async () => {
-      mockCashuWallet({ amount: 5, fee_reserve: 0 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint.example",
-          proofs: [{ amount: 5 }],
-        }),
-      ] as any);
-      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
-        status: "paid",
-        changeProofs: [{ amount: 4 }, { amount: { toNumber: () => 6 } }],
-      } as any);
-      const tool = getCallback();
-
-      const result = await tool({
-        invoice: "lnbc1invoice",
-        mintUrl: "https://mint.example",
-      });
-
-      expect(textPayload(result).change).toBe(10);
-    });
-
-    it("treats a change proof missing its amount entirely as 0", async () => {
-      mockCashuWallet({ amount: 5, fee_reserve: 0 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint.example",
-          proofs: [{ amount: 5 }],
-        }),
-      ] as any);
-      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
-        status: "paid",
-        changeProofs: [{}],
-      } as any);
-      const tool = getCallback();
-
-      const result = await tool({
-        invoice: "lnbc1invoice",
-        mintUrl: "https://mint.example",
-      });
-
-      expect(textPayload(result).change).toBe(0);
-    });
-
-    it("defaults mintUrl to https://mint.minibits.cash/Bitcoin when not provided", async () => {
-      mockCashuWallet({ amount: 5, fee_reserve: 0 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint.minibits.cash/Bitcoin",
-          proofs: [{ amount: 5 }],
-        }),
-      ] as any);
-      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
-        status: "paid",
-        changeProofs: [],
-      } as any);
+      ["Insufficient balance", "Need 105 sats but only have 10 sats"],
+      ["No available proofs", "No Cashu proofs found for mint https://m"],
+      ["Mint payment pending", "Melt quote is PENDING"],
+      ["Cashu payment outcome unknown", "state check failed"],
+      ["Cashu payment failed", "mint rejected the melt request"],
+      ["Failed to send Cashu payment", "Mint host is not allowed"],
+    ])("returns the wallet error '%s' as is", async (title, details) => {
+      jest
+        .mocked(payInvoiceFromAgentWallet)
+        .mockRejectedValueOnce(new AgentWalletError(title, details));
       const tool = getCallback();
 
       const result = await tool({ invoice: "lnbc1invoice" });
 
-      expect(Mint).toHaveBeenCalledWith("https://mint.minibits.cash/Bitcoin");
-      expect(textPayload(result).mintUrl).toBe(
-        "https://mint.minibits.cash/Bitcoin"
-      );
+      expect(result.isError).toBe(true);
+      expect(textPayload(result)).toMatchObject({ error: title, details });
     });
 
-    it("calls withMintRetry with the documented retry configuration", async () => {
-      mockCashuWallet({ amount: 5, fee_reserve: 0 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint.example",
-          proofs: [{ amount: 5 }],
-        }),
-      ] as any);
-      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
-        status: "paid",
-        changeProofs: [],
-      } as any);
+    it("returns errorResponse for unexpected failures", async () => {
+      jest
+        .mocked(payInvoiceFromAgentWallet)
+        .mockRejectedValueOnce(new Error("mint unreachable"));
       const tool = getCallback();
 
-      await tool({ invoice: "lnbc1invoice", mintUrl: "https://mint.example" });
-
-      expect(withMintRetry).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.objectContaining({
-          maxAttempts: 4,
-          perAttemptTimeoutMs: 15000,
-          totalTimeoutMs: 60000,
-        })
-      );
-    });
-
-    it("returns errorResponse when wallet.loadMint throws", async () => {
-      const wallet = mockCashuWallet({ amount: 5, fee_reserve: 0 });
-      wallet.loadMint.mockRejectedValueOnce(new Error("mint unreachable"));
-      const tool = getCallback();
-
-      const result = await tool({
-        invoice: "lnbc1invoice",
-        mintUrl: "https://mint.example",
-      });
+      const result = await tool({ invoice: "lnbc1invoice" });
 
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to send Cashu payment");
+      expect(textPayload(result).details).toBe("mint unreachable");
     });
 
     it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
-      const wallet = mockCashuWallet({ amount: 5, fee_reserve: 0 });
-      wallet.loadMint.mockRejectedValueOnce("raw failure");
+      jest
+        .mocked(payInvoiceFromAgentWallet)
+        .mockRejectedValueOnce("raw failure");
       const tool = getCallback();
 
-      const result = await tool({
-        invoice: "lnbc1invoice",
-        mintUrl: "https://mint.example",
-      });
+      const result = await tool({ invoice: "lnbc1invoice" });
 
       expect(textPayload(result).details).toBe("Unknown error");
     });
