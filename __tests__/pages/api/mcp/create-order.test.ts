@@ -14,6 +14,7 @@ const validateDiscountCodeMock = jest.fn();
 const createMcpOrderMock = jest.fn();
 const getMcpOrderMock = jest.fn();
 const listMcpOrdersMock = jest.fn();
+const listMcpOrdersAsSellerMock = jest.fn();
 const formatOrderForResponseMock = jest.fn();
 const updateMcpOrderPaymentMock = jest.fn();
 
@@ -53,6 +54,8 @@ jest.mock("@/mcp/tools/purchase-tools", () => ({
   createMcpOrder: (...args: unknown[]) => createMcpOrderMock(...args),
   getMcpOrder: (...args: unknown[]) => getMcpOrderMock(...args),
   listMcpOrders: (...args: unknown[]) => listMcpOrdersMock(...args),
+  listMcpOrdersAsSeller: (...args: unknown[]) =>
+    listMcpOrdersAsSellerMock(...args),
   formatOrderForResponse: (...args: unknown[]) =>
     formatOrderForResponseMock(...args),
   updateMcpOrderPayment: (...args: unknown[]) =>
@@ -200,6 +203,7 @@ beforeEach(async () => {
 
   getMcpOrderMock.mockResolvedValue(null);
   listMcpOrdersMock.mockResolvedValue([]);
+  listMcpOrdersAsSellerMock.mockResolvedValue([]);
   formatOrderForResponseMock.mockImplementation((order: unknown) => order);
 
   walletLoadMintMock.mockResolvedValue(undefined);
@@ -1504,7 +1508,9 @@ describe("handleGetOrder / handleListOrders", () => {
     return res;
   }
 
-  async function listOrders(query: Record<string, string> = {}) {
+  async function listOrders(
+    query: Record<string, string | string[] | undefined> = {}
+  ) {
     const req = createMockRequest({ method: "GET", query });
     const res = createMockResponse();
     await handler(req, res as unknown as NextApiResponse);
@@ -1521,9 +1527,11 @@ describe("handleGetOrder / handleListOrders", () => {
       expect(res.jsonBody).toEqual({ error: "Order not found" });
     });
 
-    it("returns 403 'Not authorized to view this order' when the order belongs to a different buyer", async () => {
+    it("returns 403 'Not authorized to view this order' when the requester is neither the buyer nor the seller", async () => {
+      const otherBuyer = "x".repeat(64);
+      const otherSeller = "y".repeat(64);
       getMcpOrderMock.mockResolvedValueOnce(
-        makeMcpOrder({ buyer_pubkey: SELLER_PUBKEY })
+        makeMcpOrder({ buyer_pubkey: otherBuyer, seller_pubkey: otherSeller })
       );
 
       const res = await getOrder("mcp_1");
@@ -1532,6 +1540,32 @@ describe("handleGetOrder / handleListOrders", () => {
       expect(res.jsonBody).toEqual({
         error: "Not authorized to view this order",
       });
+    });
+
+    it("returns 200 with success:true and the formatted order containing buyerPubkey when the requester is the seller", async () => {
+      const { formatOrderForResponse } = jest.requireActual(
+        "@/mcp/tools/purchase-tools"
+      );
+      formatOrderForResponseMock.mockImplementationOnce(formatOrderForResponse);
+
+      const otherBuyer = "x".repeat(64);
+      const order = makeMcpOrder({
+        buyer_pubkey: otherBuyer,
+        seller_pubkey: BUYER_PUBKEY,
+      });
+      getMcpOrderMock.mockResolvedValueOnce(order);
+
+      const res = await getOrder("mcp_1");
+
+      expect(res.statusCode).toBe(200);
+      expect(formatOrderForResponseMock).toHaveBeenCalledWith(order);
+      const body = res.jsonBody as {
+        success: boolean;
+        order: Record<string, unknown>;
+      };
+      expect(body.success).toBe(true);
+      expect(body.order.buyerPubkey).toBe(otherBuyer);
+      expect(body.order.sellerPubkey).toBe(BUYER_PUBKEY);
     });
 
     it("returns 200 with success:true and the formatted order when the buyer pubkeys match", async () => {
@@ -1602,6 +1636,55 @@ describe("handleGetOrder / handleListOrders", () => {
       listMcpOrdersMock.mockRejectedValueOnce(new Error("db down"));
 
       const res = await listOrders({});
+
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonBody).toEqual({ error: "Failed to list orders" });
+    });
+
+    it("queries listMcpOrdersAsSeller when role=seller", async () => {
+      await listOrders({ role: "seller" });
+
+      expect(listMcpOrdersAsSellerMock).toHaveBeenCalledWith(
+        BUYER_PUBKEY,
+        50,
+        0
+      );
+      expect(listMcpOrdersMock).not.toHaveBeenCalled();
+    });
+
+    it("queries listMcpOrders when role=buyer explicitly", async () => {
+      await listOrders({ role: "buyer" });
+
+      expect(listMcpOrdersMock).toHaveBeenCalledWith(BUYER_PUBKEY, 50, 0);
+      expect(listMcpOrdersAsSellerMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 when role parameter is invalid", async () => {
+      const res = await listOrders({ role: "admin" });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toEqual({
+        error: "Invalid role parameter. Must be 'buyer' or 'seller'.",
+      });
+      expect(listMcpOrdersMock).not.toHaveBeenCalled();
+      expect(listMcpOrdersAsSellerMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 when role parameter is an array (repeated query param)", async () => {
+      const res = await listOrders({ role: ["seller", "seller"] });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toEqual({
+        error: "Invalid role parameter. Must be 'buyer' or 'seller'.",
+      });
+      expect(listMcpOrdersMock).not.toHaveBeenCalled();
+      expect(listMcpOrdersAsSellerMock).not.toHaveBeenCalled();
+    });
+
+    it("returns 500 'Failed to list orders' when listMcpOrdersAsSeller throws", async () => {
+      listMcpOrdersAsSellerMock.mockRejectedValueOnce(new Error("db down"));
+
+      const res = await listOrders({ role: "seller" });
 
       expect(res.statusCode).toBe(500);
       expect(res.jsonBody).toEqual({ error: "Failed to list orders" });
