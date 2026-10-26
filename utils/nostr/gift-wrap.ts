@@ -344,6 +344,15 @@ export async function constructMessageGiftWrap(
 type SendGiftWrappedMessageOptions = {
   waitForRelayPublish?: boolean;
   requireDurableCache?: boolean;
+  /**
+   * Throw unless the event is durably cached AND at least one relay accepts
+   * it. Use when the sender must know the message was actually delivered —
+   * e.g. an order-payment DM sent from wallet recovery, where the seller
+   * otherwise never learns their order was paid. The failed-publish retry
+   * tracking still runs before the throw, so a later background retry may
+   * deliver the event even when the caller treats it as failed.
+   */
+  requireRelayDelivery?: boolean;
 };
 
 export async function sendGiftWrappedMessageEvent(
@@ -355,25 +364,30 @@ export async function sendGiftWrappedMessageEvent(
   const { relays, writeRelays } = getLocalStorageData();
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
 
-  if (options.requireDurableCache) {
+  if (options.requireDurableCache || options.requireRelayDelivery) {
     await cacheEventToDatabaseStrict(giftWrappedMessageEvent);
   } else {
     await cacheEventToDatabase(giftWrappedMessageEvent);
   }
 
-  const publishWithRetryTracking = async () => {
+  // Returns how many relays accepted the event; 0 on timeout/failure.
+  const publishWithRetryTracking = async (): Promise<number> => {
     try {
-      await newPromiseWithTimeout(
+      const results = await newPromiseWithTimeout<
+        PromiseSettledResult<string>[]
+      >(
         async (resolve, reject) => {
           try {
-            await nostr.publish(giftWrappedMessageEvent, allWriteRelays);
-            resolve(undefined);
+            resolve(
+              await nostr.publish(giftWrappedMessageEvent, allWriteRelays)
+            );
           } catch (err) {
             reject(err as Error);
           }
         },
         { timeout: 21000 }
       );
+      return results.filter((result) => result.status === "fulfilled").length;
     } catch (error) {
       console.warn(
         "Relay publish timed out or failed for gift-wrapped message, but event is saved to database:",
@@ -386,13 +400,27 @@ export async function sendGiftWrappedMessageEvent(
         allWriteRelays,
         signer
       ).catch(console.error);
+      return 0;
     }
   };
 
-  if (options.waitForRelayPublish === false) {
+  if (options.waitForRelayPublish === false && !options.requireRelayDelivery) {
     void publishWithRetryTracking();
     return;
   }
 
-  await publishWithRetryTracking();
+  const deliveredRelays = await publishWithRetryTracking();
+  if (options.requireRelayDelivery && deliveredRelays === 0) {
+    // The publish itself did not throw, but no relay accepted the event —
+    // track it for background retry, then fail loudly so the caller can
+    // keep its own retry path (e.g. the pending payout record) alive.
+    const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
+    await trackFailedRelayPublish(
+      giftWrappedMessageEvent.id,
+      giftWrappedMessageEvent,
+      allWriteRelays,
+      signer
+    ).catch(console.error);
+    throw new Error("No relay accepted the message.");
+  }
 }

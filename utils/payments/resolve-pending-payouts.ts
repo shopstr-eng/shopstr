@@ -15,8 +15,23 @@ export type PendingPayoutResolution =
   | { status: "recovered"; recoveredAmount: number }
   | { status: "still-pending"; reason: string }
   | { status: "needs-attention"; reason: string }
+  | { status: "notify-failed"; reason: string }
   | { status: "not-owner" }
   | { status: "unknown"; reason: string };
+
+export interface ResolvePendingPayoutOptions {
+  timeoutMs?: number;
+  /**
+   * Invoked in the PAID branch after the buyer's remaining proofs are safe
+   * but BEFORE the record is cleared, so a failed seller notification keeps
+   * the record and can be retried. (At-least-once delivery: if the record
+   * clear then fails, a retry may send the DM again — a duplicate DM is
+   * better than a seller never told their order was paid.)
+   */
+  notifySeller?: (
+    record: PendingSellerLightningPayout
+  ) => Promise<void>;
+}
 
 const DEFAULT_MINT_TIMEOUT_MS = 15_000;
 
@@ -167,8 +182,9 @@ export async function resolvePendingSellerLightningPayout(
   nostr: Nostr,
   signer: Signer,
   currentBuyerPubkey?: string,
-  timeoutMs: number = DEFAULT_MINT_TIMEOUT_MS
+  options: ResolvePendingPayoutOptions = {}
 ): Promise<PendingPayoutResolution> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_MINT_TIMEOUT_MS;
   // Unbound (legacy) records are never resolved: with no buyer identity to
   // check against, any signed-in account could claim the bearer proofs.
   if (!record.buyerPubkey || record.buyerPubkey !== currentBuyerPubkey) {
@@ -248,6 +264,18 @@ export async function resolvePendingSellerLightningPayout(
               "The payout is complete, but the wallet write for your remaining proofs could not be confirmed. The record was kept; check again.",
           };
         }
+      }
+    }
+    if (options.notifySeller) {
+      try {
+        await options.notifySeller(record);
+      } catch (error) {
+        return {
+          status: "notify-failed",
+          reason: `The mint paid the seller, but the confirmation message could not be sent: ${
+            error instanceof Error ? error.message : String(error)
+          }. The record was kept; check again to retry the notification.`,
+        };
       }
     }
     if (!tryRemoveRecord(record.meltQuoteId)) {

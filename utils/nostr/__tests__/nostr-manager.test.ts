@@ -196,7 +196,11 @@ describe("NostrManager", () => {
     });
 
     it("publishes and resolves", async () => {
-      await expect(mgr.publish(evt, ["p1"])).resolves.toBeUndefined();
+      // Per-relay settled results are returned so callers can verify
+      // at least one relay accepted the event.
+      await expect(mgr.publish(evt, ["p1"])).resolves.toEqual([
+        { status: "fulfilled", value: "ok" },
+      ]);
 
       expect(fakePoolInstance.publish).toHaveBeenCalledWith(["p1"], evt);
     });
@@ -206,7 +210,9 @@ describe("NostrManager", () => {
         new Promise(() => {}) // connection attempt that never settles
       );
 
-      await expect(mgr.publish(evt, ["p1"])).resolves.toBeUndefined();
+      await expect(mgr.publish(evt, ["p1"])).resolves.toEqual([
+        { status: "fulfilled", value: "ok" },
+      ]);
 
       expect(fakePoolInstance.publish).toHaveBeenCalledWith(["p1"], evt);
     });

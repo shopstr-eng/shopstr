@@ -88,7 +88,10 @@ interface PaymentMessageInput {
 export interface PaymentEventOptionsInput {
   orderId?: string;
   orderAmount: number;
-  productData: ProductData;
+  productData?: ProductData;
+  /** NIP-33 address (`30402:<pubkey>:<d>`); used for the item tag when no
+   * full ProductData is available (e.g. delayed payout confirmations). */
+  productAddress?: string;
   quantity: number;
   paymentType?: string;
   paymentReference?: string;
@@ -128,6 +131,25 @@ export function buildLightningPaymentMessage({
   const buyer = buyerNpub || "a guest buyer";
   return (
     `You have received a payment from ${buyer} ${forClause(quantity)} ${title} listing${productDetails}` +
+    ` on Shopstr! Check your Lightning address (${lnurl}) for your sats.`
+  );
+}
+
+/** Fallback confirmation for a delayed Lightning payout whose pending record
+ * predates captured order context — the seller still learns which order was
+ * paid and where the sats landed. */
+export function buildDelayedLightningPaymentMessage({
+  buyerNpub,
+  orderId,
+  lnurl,
+}: {
+  buyerNpub?: string;
+  orderId: string;
+  lnurl: string;
+}): string {
+  const buyer = buyerNpub || "a guest buyer";
+  return (
+    `You have received a payment from ${buyer} for order ${orderId}` +
     ` on Shopstr! Check your Lightning address (${lnurl}) for your sats.`
   );
 }

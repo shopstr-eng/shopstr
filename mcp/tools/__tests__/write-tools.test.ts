@@ -3443,6 +3443,7 @@ describe("registerWriteTools — (Cashu payments)", () => {
     it("hands the token to the wallet and returns what was stored", async () => {
       jest.mocked(receiveAgentCashuToken).mockResolvedValueOnce({
         eventId: "evt-1",
+        persisted: true,
         amount: 15,
         mint: "https://mint.example",
         proofCount: 2,

@@ -7,6 +7,7 @@ import {
   type Proof,
   type SerializedBlindedSignature,
   type SerializedOutputData,
+  getEncodedToken,
 } from "@cashu/cashu-ts";
 import type { McpNostrSigner } from "@/utils/mcp/nostr-signing";
 import { signAndPublishEvent } from "@/utils/mcp/nostr-signing";
@@ -486,13 +487,38 @@ export async function receiveAgentCashuToken(
       throw new AgentWalletError(title, errorMessage(error));
     }
 
-    const eventId = await replaceProofEvents(signer, mint, fresh, []);
-    return {
-      eventId,
-      amount: sumProofAmounts(fresh),
-      mint,
-      proofCount: fresh.length,
-    };
+    // The swap already spent the sender's proofs, so the fresh proofs are
+    // the only copy of the funds. If they cannot be saved durably, they
+    // must leave with the caller as a redeemable recovery token — throwing
+    // here would strand them in this failed request.
+    try {
+      const eventId = await replaceProofEvents(signer, mint, fresh, []);
+      return {
+        eventId,
+        persisted: true,
+        amount: sumProofAmounts(fresh),
+        mint,
+        proofCount: fresh.length,
+      };
+    } catch (error) {
+      console.error(
+        "[agent-cashu-wallet] received proofs could not be saved; returning them as a recovery token:",
+        error
+      );
+      return {
+        eventId: null,
+        persisted: false,
+        amount: sumProofAmounts(fresh),
+        mint,
+        proofCount: fresh.length,
+        recoveryToken: getEncodedToken({
+          mint,
+          proofs: normalizeProofAmounts(fresh),
+          memo: "Shopstr wallet recovery — redeem this token to claim the funds",
+        }),
+        warning: `Received ${sumProofAmounts(fresh)} sats at the mint, but saving them to the wallet failed (${errorMessage(error)}). The original token is already spent; redeem the recoveryToken to claim the funds.`,
+      };
+    }
   });
 }
 

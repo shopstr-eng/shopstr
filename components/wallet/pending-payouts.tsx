@@ -11,6 +11,7 @@ import {
   PendingPayoutResolution,
   resolvePendingSellerLightningPayout,
 } from "@/utils/payments/resolve-pending-payouts";
+import { notifySellerOfCompletedPayout } from "@/utils/payments/seller-payout-notification";
 import { buildLegacyPayoutExportToken } from "@/utils/payments/legacy-payout-export";
 import { removePendingSellerLightningPayout } from "@/utils/payments/pending-lightning-payouts";
 
@@ -60,7 +61,7 @@ const PendingPayouts = () => {
   const describeResolution = (result: PendingPayoutResolution): string => {
     switch (result.status) {
       case "completed":
-        return "Payout completed — the mint paid the seller's Lightning invoice.";
+        return "Payout completed — the mint paid the seller's Lightning invoice, and the seller has been notified.";
       case "recovered":
         return `Recovered ${result.recoveredAmount} sats back to your wallet.`;
       case "not-owner":
@@ -85,7 +86,16 @@ const PendingPayouts = () => {
         record,
         nostr,
         signer,
-        pubkey
+        pubkey,
+        {
+          notifySeller: (resolvedRecord) =>
+            notifySellerOfCompletedPayout({
+              nostr,
+              signer,
+              record: resolvedRecord,
+              buyerPubkey: pubkey,
+            }),
+        }
       );
       const message = describeResolution(result);
       if (result.status === "completed" || result.status === "recovered") {

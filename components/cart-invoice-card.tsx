@@ -1796,6 +1796,9 @@ export default function CartInvoiceCard({
               "Cannot record a pending seller payout without a buyer identity."
             );
           }
+          const pendingPickupLocation =
+            selectedPickupLocations[product.id] ||
+            data[`pickupLocation_${product.id}`];
           const payout = recordPendingSellerLightningPayout({
             orderId,
             mintUrl: paymentMintUrl,
@@ -1812,6 +1815,27 @@ export default function CartInvoiceCard({
             ],
             quarantinedProofs: payoutOutcome.quarantinedProofs,
             errorMessage: payoutOutcome.errorMessage,
+            // Captured so a later wallet-page resolution can send the seller
+            // the same payment-confirmation DM checkout would have sent.
+            productTitle: title,
+            productDetails: buildProductDetailsSuffix({
+              selectedSize: product.selectedSize,
+              selectedVolume: product.selectedVolume,
+              selectedWeight: product.selectedWeight,
+              selectedBulkOption: product.selectedBulkOption,
+              pickupLocation: pendingPickupLocation,
+            }),
+            quantity:
+              quantities[product.id] && quantities[product.id]! > 1
+                ? quantities[product.id]
+                : 1,
+            productAddress: product.d
+              ? `30402:${product.pubkey}:${product.d}`
+              : undefined,
+            address: shippingAddressTag,
+            pickup: pendingPickupLocation || undefined,
+            donationAmount,
+            donationPercentage,
           });
           throw new UnresolvedSellerLightningPayoutError(payout);
         }

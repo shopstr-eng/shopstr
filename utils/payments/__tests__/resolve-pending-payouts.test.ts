@@ -1,15 +1,22 @@
 /**
  * @jest-environment jsdom
  */
+import { generateSecretKey, getPublicKey } from "nostr-tools";
 import { resolvePendingSellerLightningPayout } from "../resolve-pending-payouts";
+import { notifySellerOfCompletedPayout } from "../seller-payout-notification";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 import {
   getPendingSellerLightningPayouts,
   recordPendingSellerLightningPayout,
+  type PendingSellerLightningPayout,
 } from "../pending-lightning-payouts";
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   publishProofEvent: jest.fn().mockResolvedValue(undefined),
+  getLocalStorageData: jest.fn(() => ({
+    relays: ["wss://relay.one"],
+    writeRelays: [],
+  })),
 }));
 
 const mockLoadMint = jest.fn();
@@ -104,7 +111,7 @@ describe("resolvePendingSellerLightningPayout", () => {
       nostr,
       signer,
       "buyer-pubkey",
-      50
+      { timeoutMs: 50 }
     );
 
     expect(result.status).toBe("unknown");
@@ -297,6 +304,115 @@ describe("resolvePendingSellerLightningPayout", () => {
     expect(getPendingSellerLightningPayouts()).toHaveLength(1);
   });
 
+  it("notifies the seller before clearing the record when the mint reports PAID", async () => {
+    seedRecord();
+    storage.setJson(STORAGE_KEYS.TOKENS, [recoverableProof]);
+    mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "PAID" });
+    const notifySeller = jest.fn().mockResolvedValue(undefined);
+
+    await expect(
+      resolvePendingSellerLightningPayout(
+        makeRecord(),
+        nostr,
+        signer,
+        "buyer-pubkey",
+        { notifySeller }
+      )
+    ).resolves.toEqual({ status: "completed" });
+
+    expect(notifySeller).toHaveBeenCalledTimes(1);
+    expect(notifySeller).toHaveBeenCalledWith(
+      expect.objectContaining({
+        meltQuoteId: "melt-quote-1",
+        sellerPubkey: "seller-pubkey",
+      })
+    );
+    expect(getPendingSellerLightningPayouts()).toHaveLength(0);
+  });
+
+  it("keeps the record and surfaces notify-failed when the seller notification fails", async () => {
+    seedRecord();
+    storage.setJson(STORAGE_KEYS.TOKENS, [recoverableProof]);
+    mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "PAID" });
+    const notifySeller = jest
+      .fn()
+      .mockRejectedValue(new Error("no relays available"));
+
+    const result = await resolvePendingSellerLightningPayout(
+      makeRecord(),
+      nostr,
+      signer,
+      "buyer-pubkey",
+      { notifySeller }
+    );
+
+    expect(result.status).toBe("notify-failed");
+    expect(result).toMatchObject({
+      reason: expect.stringMatching(/no relays available/),
+    });
+    // The record is kept so the buyer can retry the notification.
+    expect(getPendingSellerLightningPayouts()).toHaveLength(1);
+  });
+
+  it("retries the notification and clears the record on a later attempt", async () => {
+    seedRecord();
+    storage.setJson(STORAGE_KEYS.TOKENS, [recoverableProof]);
+    mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "PAID" });
+    const notifySeller = jest
+      .fn()
+      .mockRejectedValueOnce(new Error("relay offline"))
+      .mockResolvedValueOnce(undefined);
+
+    const first = await resolvePendingSellerLightningPayout(
+      makeRecord(),
+      nostr,
+      signer,
+      "buyer-pubkey",
+      { notifySeller }
+    );
+    expect(first.status).toBe("notify-failed");
+    expect(getPendingSellerLightningPayouts()).toHaveLength(1);
+
+    const second = await resolvePendingSellerLightningPayout(
+      makeRecord(),
+      nostr,
+      signer,
+      "buyer-pubkey",
+      { notifySeller }
+    );
+    expect(second).toEqual({ status: "completed" });
+    expect(notifySeller).toHaveBeenCalledTimes(2);
+    expect(getPendingSellerLightningPayouts()).toHaveLength(0);
+  });
+
+  it("never notifies the seller when the payout did not confirm (PENDING/UNPAID)", async () => {
+    seedRecord();
+    mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "PENDING" });
+    const notifySeller = jest.fn();
+
+    await resolvePendingSellerLightningPayout(
+      makeRecord(),
+      nostr,
+      signer,
+      "buyer-pubkey",
+      { notifySeller }
+    );
+    mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "UNPAID" });
+    mockCheckProofsStates.mockResolvedValue([
+      { state: "UNSPENT" },
+      { state: "UNSPENT" },
+    ]);
+    await resolvePendingSellerLightningPayout(
+      makeRecord(),
+      nostr,
+      signer,
+      "buyer-pubkey",
+      { notifySeller }
+    );
+
+    expect(notifySeller).not.toHaveBeenCalled();
+  });
+
   it("keeps the record when the wallet write cannot be confirmed by read-back", async () => {
     seedRecord();
     mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "UNPAID" });
@@ -355,6 +471,7 @@ describe("resolvePendingSellerLightningPayout", () => {
   });
 
   it("retry after a partial restore is idempotent and never double-counts proofs", async () => {
+
     seedRecord();
     storage.setJson(STORAGE_KEYS.TOKENS, [recoverableProof]);
     mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "UNPAID" });
@@ -399,4 +516,109 @@ describe("resolvePendingSellerLightningPayout", () => {
     ).toHaveLength(1);
     expect(getPendingSellerLightningPayouts()).toHaveLength(0);
   });
+});
+
+// These tests run the REAL notification path (gift-wrap construction,
+// durable cache write, relay publish) with only the network stubbed, so a
+// swallowed cache or publish failure can never masquerade as "seller
+// notified" — the record must survive for a retry.
+describe("seller notification delivery through the recovery flow", () => {
+  // nip44 requires real curve points, so these must be genuine pubkeys.
+  const SELLER_HEX = getPublicKey(generateSecretKey());
+  const BUYER_HEX = getPublicKey(generateSecretKey());
+  const originalFetch = (global as any).fetch;
+
+  beforeEach(() => {
+    (global as any).fetch = jest.fn();
+  });
+  afterAll(() => {
+    (global as any).fetch = originalFetch;
+  });
+
+  const realNotify =
+    (publish: jest.Mock) => (record: PendingSellerLightningPayout) =>
+      notifySellerOfCompletedPayout({
+        nostr: { publish } as any,
+        signer: {} as any,
+        record,
+        buyerPubkey: BUYER_HEX,
+      });
+
+  function seedHexRecord() {
+    const overrides = { sellerPubkey: SELLER_HEX };
+    seedRecord(overrides);
+    storage.setJson(STORAGE_KEYS.TOKENS, [recoverableProof]);
+    mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "PAID" });
+    return makeRecord(overrides);
+  }
+
+  it("keeps the record and reports notify-failed when the DM cannot be durably cached", async () => {
+    const record = seedHexRecord();
+    ((global as any).fetch as jest.Mock).mockResolvedValue({ ok: false });
+    const publish = jest.fn();
+
+    const result = await resolvePendingSellerLightningPayout(
+      record,
+      nostr,
+      signer,
+      "buyer-pubkey",
+      { notifySeller: realNotify(publish) }
+    );
+
+    expect(result.status).toBe("notify-failed");
+    expect(getPendingSellerLightningPayouts()).toHaveLength(1);
+    expect((global as any).fetch).toHaveBeenCalledWith(
+      "/api/db/cache-event",
+      expect.objectContaining({ method: "POST" })
+    );
+    // The strict cache write fails before any relay publish is attempted.
+    expect(publish).not.toHaveBeenCalled();
+  }, 20000);
+
+  it("keeps the record and reports notify-failed when no relay accepts the DM", async () => {
+    const record = seedHexRecord();
+    ((global as any).fetch as jest.Mock).mockResolvedValue({ ok: true });
+    const publish = jest
+      .fn()
+      .mockResolvedValue([
+        { status: "rejected", reason: new Error("blocked") },
+      ]);
+
+    const result = await resolvePendingSellerLightningPayout(
+      record,
+      nostr,
+      signer,
+      "buyer-pubkey",
+      { notifySeller: realNotify(publish) }
+    );
+
+    expect(result.status).toBe("notify-failed");
+    expect(result).toMatchObject({
+      reason: expect.stringMatching(/No relay accepted/),
+    });
+    expect(getPendingSellerLightningPayouts()).toHaveLength(1);
+  }, 20000);
+
+  it("completes once the DM is durably cached and at least one relay accepts it", async () => {
+    const record = seedHexRecord();
+    ((global as any).fetch as jest.Mock).mockResolvedValue({ ok: true });
+    const publish = jest
+      .fn()
+      .mockResolvedValue([
+        { status: "rejected", reason: new Error("blocked") },
+        { status: "fulfilled", value: "wss://relay.one" },
+      ]);
+
+    const result = await resolvePendingSellerLightningPayout(
+      record,
+      nostr,
+      signer,
+      "buyer-pubkey",
+      { notifySeller: realNotify(publish) }
+    );
+
+    expect(result).toEqual({ status: "completed" });
+    expect(getPendingSellerLightningPayouts()).toHaveLength(0);
+    expect(publish).toHaveBeenCalledTimes(1);
+  }, 20000);
 });

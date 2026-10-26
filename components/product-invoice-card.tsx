@@ -1608,6 +1608,23 @@ export default function ProductInvoiceCard({
           ],
           quarantinedProofs: payoutOutcome.quarantinedProofs,
           errorMessage: payoutOutcome.errorMessage,
+          // Captured so a later wallet-page resolution can send the seller
+          // the same payment-confirmation DM checkout would have sent.
+          productTitle: productData.title,
+          productDetails: buildProductDetailsSuffix({
+            selectedSize,
+            selectedVolume,
+            selectedWeight,
+            selectedBulkOption,
+            pickupLocation: selectedPickupLocation,
+          }),
+          quantity: 1,
+          productAddress: productData.d
+            ? `30402:${productData.pubkey}:${productData.d}`
+            : undefined,
+          pickup: selectedPickupLocation || undefined,
+          donationAmount,
+          donationPercentage,
         });
         throw new UnresolvedSellerLightningPayoutError(payout);
       }

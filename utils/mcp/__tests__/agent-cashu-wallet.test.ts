@@ -7,7 +7,7 @@ import {
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { resolveSafeMintUrl } from "@/utils/cashu/mint-url-safety";
-import { getTokenMetadata, OutputData, Wallet } from "@cashu/cashu-ts";
+import { getTokenMetadata, Wallet, OutputData, getEncodedToken } from "@cashu/cashu-ts";
 import {
   AgentWalletError,
   getAgentWalletBalance,
@@ -18,6 +18,7 @@ import {
 jest.mock("@cashu/cashu-ts", () => ({
   Mint: jest.fn().mockImplementation(() => ({})),
   Wallet: jest.fn(),
+  getEncodedToken: jest.fn(() => "cashuBrecoverytoken"),
   getTokenMetadata: jest.fn(),
   normalizeProofAmounts: jest.fn((proofs: unknown) => proofs),
   OutputData: {
@@ -305,6 +306,7 @@ describe("receiveAgentCashuToken", () => {
     ]);
     expect(result).toEqual({
       eventId: "evt-1",
+      persisted: true,
       amount: 10,
       mint: MINT,
       proofCount: 2,
@@ -399,14 +401,30 @@ describe("receiveAgentCashuToken", () => {
     }
   );
 
-  it("surfaces a failed durable save instead of reporting success", async () => {
+  it("returns the fresh proofs as a recovery token when the durable save fails", async () => {
     jest
       .mocked(signAndPublishEvent)
       .mockRejectedValueOnce(new Error("database offline"));
 
-    await expect(receiveAgentCashuToken(signer, TOKEN)).rejects.toThrow(
-      "database offline"
-    );
+    // The mint swap already spent the sender's proofs, so the fresh proofs
+    // must leave with the caller — a bare failure would strand the funds.
+    const result = await receiveAgentCashuToken(signer, TOKEN);
+
+    expect(result).toMatchObject({
+      eventId: null,
+      persisted: false,
+      amount: 10,
+      mint: MINT,
+      proofCount: 2,
+      recoveryToken: "cashuBrecoverytoken",
+      warning: expect.stringMatching(/database offline/),
+    });
+    const encoded = jest.mocked(getEncodedToken).mock.calls[0]![0] as any;
+    expect(encoded.mint).toBe(MINT);
+    expect(encoded.proofs.map((p: any) => p.secret)).toEqual([
+      "fresh1",
+      "fresh2",
+    ]);
   });
 
   it("falls back to 'Unknown error' when a non-Error is thrown", async () => {

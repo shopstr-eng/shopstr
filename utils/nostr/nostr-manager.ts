@@ -286,7 +286,10 @@ export class NostrManager {
     }
   }
 
-  public async publish(event: NostrEvent, relayUrls?: string[]): Promise<void> {
+  public async publish(
+    event: NostrEvent,
+    relayUrls?: string[]
+  ): Promise<PromiseSettledResult<string>[]> {
     if (!this.params.writable) throw new Error("not writable");
     if (relayUrls) {
       for (const relayUrl of relayUrls) {
@@ -300,7 +303,9 @@ export class NostrManager {
     // Fire-and-forget: pool.publish() connects to each relay independently
     // with its own bounded connection timeout.
     this.keepAlive(relays).catch(console.error);
-    await Promise.allSettled(
+    // Per-relay results are returned so callers that need verifiable
+    // delivery can count how many relays accepted the event.
+    return await Promise.allSettled(
       this.pool.publish(
         relays.map((r) => r.url),
         event

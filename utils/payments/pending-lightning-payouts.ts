@@ -14,6 +14,22 @@ export type PendingSellerLightningPayout = {
   buyerPubkey?: string;
   lnurl: string;
   sellerAmount: number;
+  /**
+   * Order context captured at checkout so that when a delayed payout later
+   * confirms, the seller can be sent the same payment-confirmation DM the
+   * normal checkout path would have sent. Optional only because records
+   * written before this field existed lack it; those fall back to a generic
+   * confirmation message.
+   */
+  productTitle?: string;
+  productDetails?: string;
+  quantity?: number;
+  /** NIP-33 address (`30402:<pubkey>:<d>`) of the purchased listing. */
+  productAddress?: string;
+  address?: string;
+  pickup?: string;
+  donationAmount?: number;
+  donationPercentage?: number;
   status: "pending" | "unknown";
   meltQuoteId: string;
   recoverableProofs: Proof[];
