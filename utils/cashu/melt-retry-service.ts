@@ -1,6 +1,7 @@
 import {
   Wallet as CashuWallet,
   MeltQuoteBolt11Response,
+  OutputType,
   Proof,
 } from "@cashu/cashu-ts";
 import { withMintRetry, MintRetryOptions } from "./mint-retry-service";
@@ -79,7 +80,17 @@ export async function safeMeltProofs(
   wallet: CashuWallet,
   meltQuote: MeltQuoteBolt11Response,
   proofsToSend: Proof[],
-  options: { meltRetry?: MintRetryOptions; checkRetry?: MintRetryOptions } = {}
+  options: {
+    meltRetry?: MintRetryOptions;
+    checkRetry?: MintRetryOptions;
+    /**
+     * Caller-prepared NUT-08 change outputs. The caller must persist the
+     * serialized outputs BEFORE calling so that a crash or failed follow-up
+     * write can still unblind the mint's change signatures once the quote
+     * resolves PAID.
+     */
+    changeOutputType?: OutputType;
+  } = {}
 ): Promise<MeltOutcome> {
   const meltOpts = { ...DEFAULT_MELT_OPTS, ...options.meltRetry };
   const checkOpts = { ...DEFAULT_CHECK_OPTS, ...options.checkRetry };
@@ -87,9 +98,44 @@ export async function safeMeltProofs(
   let originalError: unknown;
   try {
     const meltResponse = await withMintRetry(
-      () => wallet.meltProofsBolt11(meltQuote, proofsToSend),
+      () =>
+        options.changeOutputType
+          ? wallet.meltProofsBolt11(
+              meltQuote,
+              proofsToSend,
+              undefined,
+              options.changeOutputType
+            )
+          : wallet.meltProofsBolt11(meltQuote, proofsToSend),
       meltOpts
     );
+    // A resolved melt call is not necessarily settled: async melts can
+    // answer with the quote still PENDING or UNPAID. Never label those
+    // "paid" — the caller would treat unsettled inputs as spent and retire
+    // the change-recovery data for a payment still in flight.
+    const responseState = (
+      meltResponse.quote as { state?: string } | undefined
+    )?.state;
+    if (responseState === "PENDING") {
+      return {
+        status: "pending",
+        meltQuote: meltResponse.quote,
+        meltResponse,
+        changeProofs: [],
+        errorMessage:
+          "Melt was accepted but the quote is still PENDING — the mint is still processing.",
+      };
+    }
+    if (responseState === "UNPAID") {
+      return {
+        status: "unpaid",
+        meltQuote: meltResponse.quote,
+        meltResponse,
+        changeProofs: [],
+        errorMessage:
+          "Melt resolved with the quote UNPAID; proofs are unspent.",
+      };
+    }
     return {
       status: "paid",
       meltQuote,

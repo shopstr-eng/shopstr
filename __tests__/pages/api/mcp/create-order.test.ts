@@ -1151,13 +1151,16 @@ describe("handleLightningPayment", () => {
       expect(body.payment.currency).toBe("sats");
     });
 
-    it("returns 500 without creating an invoice or order when rate lookup rejects", async () => {
+    it("returns 502 with a conversion error without creating an invoice or order when rate lookup rejects", async () => {
       withPricedProduct([["price", "100", "USD"]]);
       getSatoshiValueMock.mockRejectedValue(new Error("Rate lookup rejected"));
 
       const res = await createOrder({ productId: "product-1" });
 
-      expect(res.statusCode).toBe(500);
+      expect(res.statusCode).toBe(502);
+      expect(res.jsonBody).toEqual({
+        error: "Could not convert USD to sats: Rate lookup rejected",
+      });
       expect(walletCreateMintQuoteBolt11Mock).not.toHaveBeenCalled();
       expect(createMcpOrderMock).not.toHaveBeenCalled();
     });
@@ -1502,16 +1505,15 @@ describe("handleCashuPayment", () => {
       });
     });
 
-    it("returns 500 without redeeming the token or creating an order when rate lookup rejects", async () => {
+    it("returns 502 without redeeming the token or creating an order when rate lookup rejects", async () => {
       withPricedProduct([["price", "100", "USD"]]);
       getSatoshiValueMock.mockRejectedValue(new Error("Rate lookup rejected"));
 
       const res = await createCashuOrder();
 
-      expect(res.statusCode).toBe(500);
-      expect(res.jsonBody).toMatchObject({
-        error: "Failed to process Cashu payment",
-        details: "Rate lookup rejected",
+      expect(res.statusCode).toBe(502);
+      expect(res.jsonBody).toEqual({
+        error: "Could not convert USD to sats: Rate lookup rejected",
       });
       expect(walletReceiveMock).not.toHaveBeenCalled();
       expect(createMcpOrderMock).not.toHaveBeenCalled();

@@ -3,7 +3,10 @@ import {
   Wallet as CashuWallet,
   getTokenMetadata,
   normalizeProofAmounts,
+  OutputData,
   type Proof,
+  type SerializedBlindedSignature,
+  type SerializedOutputData,
 } from "@cashu/cashu-ts";
 import type { McpNostrSigner } from "@/utils/mcp/nostr-signing";
 import { signAndPublishEvent } from "@/utils/mcp/nostr-signing";
@@ -43,10 +46,24 @@ export class AgentWalletError extends Error {
 // its Amount type as a string, so everything is converted before it is stored.
 type StoredProof = Omit<Proof, "amount"> & { amount: number };
 
+/**
+ * Recovery material for a melt whose change has not been persisted yet: the
+ * serialized blank outputs the mint signs change against. Lets a later
+ * session unblind that change once the quote resolves PAID.
+ */
+type PendingChange = {
+  quote: string;
+  keysetId: string;
+  /** Secrets of the melt's input proofs — quarantined while unresolved. */
+  inputs: string[];
+  outputs: SerializedOutputData[];
+};
+
 type WalletProofEvent = {
   id: string;
   mint: string;
   proofs: StoredProof[];
+  pendingChange?: PendingChange[];
 };
 
 function mintKey(mintUrl: string): string {
@@ -110,16 +127,46 @@ async function loadProofEvents(
   const pubkey = signer.getPubKey();
   const events = await fetchAllWalletEventsFromDb(pubkey);
   const proofEvents: WalletProofEvent[] = [];
+  // A failed retirement can leave a replaced event behind alongside its
+  // successor, holding the same proofs or the same pendingChange entry.
+  // Count each proof secret and each recovery quote exactly once.
+  const seenSecrets = new Set<string>();
+  const seenQuotes = new Set<string>();
 
   for (const event of events) {
     if (event.kind !== PROOF_EVENT_KIND) continue;
     try {
       const parsed = JSON.parse(signer.decrypt(pubkey, event.content));
       if (typeof parsed?.mint !== "string") continue;
+      const proofs = parseStoredProofs(parsed.proofs).filter((proof) => {
+        if (seenSecrets.has(proof.secret)) return false;
+        seenSecrets.add(proof.secret);
+        return true;
+      });
+      const pendingChange: PendingChange[] = Array.isArray(parsed?.pendingChange)
+        ? parsed.pendingChange.filter(
+            (entry: unknown): entry is PendingChange => {
+              if (
+                !entry ||
+                typeof entry !== "object" ||
+                typeof (entry as PendingChange).quote !== "string" ||
+                typeof (entry as PendingChange).keysetId !== "string" ||
+                !Array.isArray((entry as PendingChange).inputs) ||
+                !Array.isArray((entry as PendingChange).outputs)
+              ) {
+                return false;
+              }
+              if (seenQuotes.has((entry as PendingChange).quote)) return false;
+              seenQuotes.add((entry as PendingChange).quote);
+              return true;
+            }
+          )
+        : [];
       proofEvents.push({
         id: event.id,
         mint: parsed.mint,
-        proofs: parseStoredProofs(parsed.proofs),
+        proofs,
+        ...(pendingChange.length > 0 ? { pendingChange } : {}),
       });
     } catch {
       continue;
@@ -158,18 +205,22 @@ async function requireSafeMint(
  * Writes `proofs` as a new kind 7375 event (durably, before returning), then
  * retires the events it replaces. The save always comes first so a failure
  * part way through can leave stale events behind but never lose proofs.
- * Stale events are harmless: the next payment prunes whatever the mint
- * reports as spent.
+ * Stale events are harmless: loading deduplicates repeated proofs and
+ * recovery entries, and the next payment prunes whatever the mint reports
+ * as spent.
  */
 async function replaceProofEvents(
   signer: McpNostrSigner,
   mint: string,
   proofs: Array<Proof | StoredProof>,
-  replaces: string[]
+  replaces: string[],
+  pendingChange: PendingChange[] = []
 ): Promise<string | null> {
   let newEventId: string | null = null;
 
-  if (proofs.length > 0) {
+  // An event carrying only unresolved change-recovery data is still written:
+  // deleting the events it replaces would otherwise destroy that data.
+  if (proofs.length > 0 || pendingChange.length > 0) {
     const pubkey = signer.getPubKey();
     const content = signer.encrypt(
       pubkey,
@@ -178,6 +229,7 @@ async function replaceProofEvents(
         unit: "sat",
         proofs: proofs.map(toStoredProof),
         ...(replaces.length > 0 ? { del: replaces } : {}),
+        ...(pendingChange.length > 0 ? { pendingChange } : {}),
       })
     );
     const tags: string[][] = [["mint", mint]];
@@ -217,10 +269,122 @@ async function replaceProofEvents(
     } catch (error) {
       console.warn("Failed to publish Cashu proof deletion:", error);
     }
-    await deleteCachedEventsByIds(replaces);
+    try {
+      await deleteCachedEventsByIds(replaces);
+    } catch (error) {
+      // The replacement is already saved; stale remnants are deduplicated
+      // on load and pruned once the mint reports them spent.
+      console.warn("Failed to delete replaced Cashu proof events:", error);
+    }
   }
 
   return newEventId;
+}
+
+/**
+ * Recovers change for melts whose post-payment wallet write failed or never
+ * completed. Each pendingChange entry carries the melt's serialized blank
+ * outputs; once the mint reports the quote PAID, its blinded change
+ * signatures are unblinded into spendable proofs. UNPAID means the melt
+ * never settled and the staged proofs are still spendable, so the entry is
+ * simply retired. PENDING, unreachable mints, and malformed responses leave
+ * the entry untouched for the next attempt.
+ */
+async function reconcilePendingChange(
+  signer: McpNostrSigner,
+  wallet: CashuWallet,
+  mint: string,
+  events: WalletProofEvent[]
+): Promise<WalletProofEvent[]> {
+  const result: WalletProofEvent[] = [];
+  // Secrets already held across the wallet: recovered change that is
+  // already persisted elsewhere (e.g. a staged event whose retirement
+  // failed after its replacement was saved) must not be stored twice.
+  const heldSecrets = new Set(
+    events.flatMap((event) => event.proofs.map((proof) => proof.secret))
+  );
+  for (const event of events) {
+    const pending = event.pendingChange ?? [];
+    if (pending.length === 0) {
+      result.push(event);
+      continue;
+    }
+
+    let proofs = [...event.proofs];
+    const stillPending: PendingChange[] = [];
+    let resolvedAny = false;
+    for (const entry of pending) {
+      let quote;
+      try {
+        quote = await withMintRetry(
+          () => wallet.checkMeltQuoteBolt11(entry.quote),
+          MINT_READ_RETRY
+        );
+      } catch {
+        stillPending.push(entry);
+        continue;
+      }
+      if (quote.state === "PAID") {
+        // PAID means the mint consumed the melt's inputs; drop them so a
+        // later payment cannot select already-spent proofs.
+        proofs = proofs.filter(
+          (proof) => !entry.inputs.includes(proof.secret)
+        );
+        const blinded =
+          (quote as { change?: SerializedBlindedSignature[] }).change ?? [];
+        if (blinded.length > 0) {
+          try {
+            const changeProofs = wallet.createMeltChangeProofs(
+              entry.outputs.map((output) => OutputData.deserialize(output)),
+              blinded
+            );
+            const fresh = changeProofs.filter(
+              (proof) => !heldSecrets.has(proof.secret)
+            );
+            for (const proof of fresh) heldSecrets.add(proof.secret);
+            proofs = [...proofs, ...fresh.map(toStoredProof)];
+          } catch {
+            // A malformed change response must not destroy recovery data.
+            stillPending.push(entry);
+            continue;
+          }
+        }
+        resolvedAny = true;
+      } else if (quote.state === "UNPAID") {
+        resolvedAny = true;
+      } else {
+        stillPending.push(entry);
+      }
+    }
+
+    if (!resolvedAny) {
+      result.push(event);
+      continue;
+    }
+    try {
+      const newId = await replaceProofEvents(
+        signer,
+        mint,
+        proofs,
+        [event.id],
+        stillPending
+      );
+      if (newId) {
+        result.push({
+          id: newId,
+          mint,
+          proofs,
+          ...(stillPending.length > 0 ? { pendingChange: stillPending } : {}),
+        });
+      }
+      // A null id means nothing remains (no proofs, no pending entries):
+      // the event was fully resolved and retired.
+    } catch {
+      // The rewrite failed; the original event keeps the recovery data.
+      result.push(event);
+    }
+  }
+  return result;
 }
 
 /**
@@ -235,7 +399,7 @@ async function pruneSpentProofs(
   events: WalletProofEvent[]
 ): Promise<WalletProofEvent[]> {
   const proofs = events.flatMap((event) => event.proofs);
-  if (proofs.length === 0) return [];
+  if (proofs.length === 0) return events;
 
   const states = await withMintRetry(
     () => wallet.checkProofsStates(proofs),
@@ -246,10 +410,17 @@ async function pruneSpentProofs(
   );
   if (spent.size === 0) return events;
 
-  const clean = events.filter((e) =>
-    e.proofs.every((p) => !spent.has(p.secret))
+  // Events carrying unresolved melt-change recovery data are left to
+  // reconcilePendingChange: pruning them here could retire the blank
+  // outputs while the quote is still pending.
+  const hasPending = (e: WalletProofEvent) =>
+    !!e.pendingChange && e.pendingChange.length > 0;
+  const clean = events.filter(
+    (e) => hasPending(e) || e.proofs.every((p) => !spent.has(p.secret))
   );
-  const dirty = events.filter((e) => e.proofs.some((p) => spent.has(p.secret)));
+  const dirty = events.filter(
+    (e) => !hasPending(e) && e.proofs.some((p) => spent.has(p.secret))
+  );
   const survivors = dirty
     .flatMap((e) => e.proofs)
     .filter((p) => !spent.has(p.secret));
@@ -346,8 +517,18 @@ export async function payInvoiceFromAgentWallet(
     if (stored.length === 0) throw noProofs();
 
     const wallet = await openWallet(mint, title);
-    const events = await pruneSpentProofs(signer, wallet, mint, stored);
-    const proofs = events.flatMap((event) => event.proofs);
+    const reconciled = await reconcilePendingChange(signer, wallet, mint, stored);
+    const events = await pruneSpentProofs(signer, wallet, mint, reconciled);
+    // Inputs of unresolved melts stay quarantined until their quote
+    // resolves: they may already be spent at the mint.
+    const quarantined = new Set(
+      events
+        .flatMap((event) => event.pendingChange ?? [])
+        .flatMap((entry) => entry.inputs)
+    );
+    const proofs = events
+      .flatMap((event) => event.proofs)
+      .filter((proof) => !quarantined.has(proof.secret));
     if (proofs.length === 0) throw noProofs();
 
     const meltQuote = await withMintRetry(
@@ -392,14 +573,51 @@ export async function payInvoiceFromAgentWallet(
           "The swap outcome could not be confirmed. Spent proofs are removed on the next payment."
       );
     }
+    // Prepare the NUT-08 blank change outputs up front and persist them
+    // inside the staged event: if the melt succeeds but the final write
+    // fails (or the process dies), the mint's change signatures can still
+    // be unblinded later by reconcilePendingChange. Entries carried from
+    // earlier unresolved melts ride along so staging this payment cannot
+    // retire their recovery data.
+    const carriedChange = events.flatMap((event) => event.pendingChange ?? []);
+    let changeOutputs: OutputData[] | undefined;
+    let thisChange: PendingChange | undefined;
+    // Size the NUT-08 blanks from the ACTUAL excess the mint can turn into
+    // change: send inputs minus the quote amount. wallet.send can add mint
+    // input fees on top of the quoted fee reserve, so feeReserve alone can
+    // under-size (or skip) the blanks.
+    const excess = sumProofAmounts(swap.send) - amount;
+    if (excess > 0) {
+      const keyset = wallet.keyChain.getKeyset();
+      // Mirror the wallet's own NUT-08 preparation: ceil(log2(excess))
+      // zero-amount blanks.
+      const blankCount = Math.ceil(Math.log2(excess)) || 1;
+      changeOutputs = OutputData.createRandomData(
+        0,
+        keyset,
+        Array(blankCount).fill(0)
+      );
+      thisChange = {
+        quote: meltQuote.quote,
+        keysetId: keyset.id,
+        inputs: swap.send.map((proof) => proof.secret),
+        outputs: changeOutputs.map((output) => OutputData.serialize(output)),
+      };
+    }
+
     const stagedId = await replaceProofEvents(
       signer,
       mint,
       [...swap.keep, ...swap.send],
-      events.map((event) => event.id)
+      events.map((event) => event.id),
+      thisChange ? [...carriedChange, thisChange] : carriedChange
     );
 
-    const melt = await safeMeltProofs(wallet, meltQuote, swap.send);
+    const melt = await safeMeltProofs(wallet, meltQuote, swap.send, {
+      changeOutputType: changeOutputs
+        ? { type: "custom", data: changeOutputs }
+        : undefined,
+    });
     if (melt.status !== "paid") {
       // The staged event still holds every proof. If the mint settles a
       // pending melt as paid, the next payment prunes the spent ones.
@@ -413,20 +631,65 @@ export async function payInvoiceFromAgentWallet(
       );
     }
 
-    const eventId = await replaceProofEvents(
-      signer,
-      mint,
-      [...swap.keep, ...melt.changeProofs],
-      stagedId ? [stagedId] : []
-    );
+    // The invoice is paid at this point no matter what happens next. If the
+    // final wallet state cannot be persisted, the staged event still holds
+    // every proof and the next payment prunes whatever the mint reports as
+    // spent — but the caller must still hear "paid", or it may retry and
+    // pay the invoice twice.
+    // When the melt call itself succeeded, changeProofs are already
+    // unblinded. When safeMeltProofs confirmed PAID via a quote check, the
+    // quote carries blinded change signatures instead — unblind them with
+    // the persisted outputs now. Only an unblinding failure defers recovery
+    // to the next payment.
+    let changeProofs = melt.changeProofs;
+    let retainedChange = carriedChange;
+    if (thisChange && changeProofs.length === 0) {
+      const blinded =
+        (
+          melt.meltQuote as
+            | { change?: SerializedBlindedSignature[] }
+            | undefined
+        )?.change ?? [];
+      if (blinded.length > 0) {
+        try {
+          changeProofs = wallet.createMeltChangeProofs(
+            thisChange.outputs.map((output) => OutputData.deserialize(output)),
+            blinded
+          );
+        } catch {
+          retainedChange = [...carriedChange, thisChange];
+        }
+      }
+    }
+
+    let eventId: string | null = null;
+    let persisted = true;
+    try {
+      eventId = await replaceProofEvents(
+        signer,
+        mint,
+        [...swap.keep, ...changeProofs],
+        stagedId ? [stagedId] : [],
+        // This melt's change is now in changeProofs; only entries from
+        // earlier, still-unresolved melts carry forward.
+        retainedChange
+      );
+    } catch (error) {
+      persisted = false;
+      console.warn(
+        "Payment succeeded but the wallet state could not be persisted; the next payment will reconcile it:",
+        error
+      );
+    }
     return {
       paid: true,
       amount,
       // The quote's fee reserve. Whatever the mint did not use is in `change`.
       fee: feeReserve,
       mintUrl: mint,
-      change: sumProofAmounts(melt.changeProofs),
+      change: sumProofAmounts(changeProofs),
       eventId,
+      persisted,
     };
   });
 }

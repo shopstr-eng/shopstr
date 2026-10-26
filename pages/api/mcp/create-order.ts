@@ -364,6 +364,13 @@ async function handleCreateOrder(
   }
 }
 
+/**
+ * Thrown only when the external fiat→sats price lookup fails or stalls, so
+ * callers can answer 502 while local validation errors keep their existing
+ * handling.
+ */
+class PriceConversionError extends Error {}
+
 async function convertOrderTotalToSats(
   total: number,
   currency: string
@@ -373,10 +380,32 @@ async function convertOrderTotalToSats(
     return toCashuMintAmountSats(Math.round(total));
   }
 
-  const sats = await getSatoshiValue({
-    amount: total,
-    currency,
-  });
+  // The fiat conversion depends on an external price API; bound it so a
+  // stalled API cannot hang the order request.
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let sats: number;
+  try {
+    sats = await Promise.race([
+      getSatoshiValue({
+        amount: total,
+        currency,
+      }),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error("price conversion timed out")),
+          10_000
+        );
+      }),
+    ]);
+  } catch (error) {
+    throw new PriceConversionError(
+      `Could not convert ${currency} to sats: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
 
   return toCashuMintAmountSats(Math.round(sats));
 }
@@ -395,7 +424,16 @@ async function handleLightningPayment(
   pricingBlock: any
 ) {
   const mint = getTrustedMintUrl();
-  const amountInSats = await convertOrderTotalToSats(totalAmount, currency);
+
+  let amountInSats: number;
+  try {
+    amountInSats = await convertOrderTotalToSats(totalAmount, currency);
+  } catch (error) {
+    if (error instanceof PriceConversionError) {
+      return res.status(502).json({ error: error.message });
+    }
+    throw error;
+  }
 
   try {
     const cashuMint = new CashuMint(mint);
@@ -492,7 +530,15 @@ async function handleCashuPayment(
 
     const tokenAmount = sumProofAmounts(decoded.proofs);
 
-    const requiredAmount = await convertOrderTotalToSats(totalAmount, currency);
+    let requiredAmount: number;
+    try {
+      requiredAmount = await convertOrderTotalToSats(totalAmount, currency);
+    } catch (error) {
+      if (error instanceof PriceConversionError) {
+        return res.status(502).json({ error: error.message });
+      }
+      throw error;
+    }
 
     if (tokenAmount < requiredAmount) {
       return res.status(400).json({

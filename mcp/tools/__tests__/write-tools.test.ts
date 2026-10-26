@@ -3573,6 +3573,7 @@ describe("registerWriteTools — (Cashu payments)", () => {
         mintUrl: "https://mint.example",
         change: 9,
         eventId: "evt-2",
+        persisted: true,
       });
       const tool = getCallback();
 
@@ -3604,6 +3605,7 @@ describe("registerWriteTools — (Cashu payments)", () => {
         mintUrl: "https://mint.minibits.cash/Bitcoin",
         change: 0,
         eventId: null,
+        persisted: true,
       });
       const tool = getCallback();
 

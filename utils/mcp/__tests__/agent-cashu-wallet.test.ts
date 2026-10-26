@@ -7,7 +7,7 @@ import {
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { resolveSafeMintUrl } from "@/utils/cashu/mint-url-safety";
-import { getTokenMetadata, Wallet } from "@cashu/cashu-ts";
+import { getTokenMetadata, OutputData, Wallet } from "@cashu/cashu-ts";
 import {
   AgentWalletError,
   getAgentWalletBalance,
@@ -20,6 +20,11 @@ jest.mock("@cashu/cashu-ts", () => ({
   Wallet: jest.fn(),
   getTokenMetadata: jest.fn(),
   normalizeProofAmounts: jest.fn((proofs: unknown) => proofs),
+  OutputData: {
+    createRandomData: jest.fn(() => [{ fake: "output-data" }]),
+    serialize: jest.fn((output: unknown) => output),
+    deserialize: jest.fn((output: unknown) => output),
+  },
 }));
 
 jest.mock("@/utils/mcp/nostr-signing", () => ({
@@ -76,7 +81,13 @@ const signer = {
   },
 } as unknown as McpNostrSigner;
 
-function storedEvent(id: string, mint: string, proofs: unknown[], kind = 7375) {
+function storedEvent(
+  id: string,
+  mint: string,
+  proofs: unknown[],
+  kind = 7375,
+  pendingChange?: unknown[]
+) {
   return {
     id,
     pubkey: PUBKEY,
@@ -84,7 +95,11 @@ function storedEvent(id: string, mint: string, proofs: unknown[], kind = 7375) {
     created_at: 1,
     tags: [],
     sig: "sig",
-    content: `enc:${JSON.stringify({ mint, proofs })}`,
+    content: `enc:${JSON.stringify({
+      mint,
+      proofs,
+      ...(pendingChange ? { pendingChange } : {}),
+    })}`,
   };
 }
 
@@ -93,6 +108,9 @@ let walletMock: {
   loadMint: jest.Mock;
   checkProofsStates: jest.Mock;
   createMeltQuoteBolt11: jest.Mock;
+  checkMeltQuoteBolt11: jest.Mock;
+  createMeltChangeProofs: jest.Mock;
+  keyChain: { getKeyset: jest.Mock };
   receive: jest.Mock;
   decodeToken: jest.Mock;
 };
@@ -143,6 +161,15 @@ beforeEach(() => {
       amount: { toNumber: () => 1000 },
       fee_reserve: { toNumber: () => 10 },
     }),
+    checkMeltQuoteBolt11: jest.fn().mockResolvedValue({
+      quote: "melt-quote",
+      state: "UNPAID",
+      change: [],
+    }),
+    createMeltChangeProofs: jest.fn(),
+    keyChain: {
+      getKeyset: jest.fn(() => ({ id: "keyset-1", keys: {} })),
+    },
     receive: jest.fn(),
     decodeToken: jest.fn((token: string) => ({ token })),
   };
@@ -405,7 +432,8 @@ describe("payInvoiceFromAgentWallet", () => {
     jest.mocked(safeSwap).mockResolvedValue({
       status: "swapped",
       keep: [proof("keep1", { toNumber: () => 60, toString: () => "60" })],
-      send: [proof("send1", 24)],
+      // send covers amount + fee reserve exactly, like a real exact swap.
+      send: [proof("send1", 1010)],
     } as never);
     jest.mocked(safeMeltProofs).mockResolvedValue({
       status: "paid",
@@ -425,7 +453,13 @@ describe("payInvoiceFromAgentWallet", () => {
       expect(safeMeltProofs).toHaveBeenCalledWith(
         walletMock,
         expect.objectContaining({ quote: "melt-quote" }),
-        [expect.objectContaining({ secret: "send1" })]
+        [expect.objectContaining({ secret: "send1" })],
+        {
+          changeOutputType: {
+            type: "custom",
+            data: [{ fake: "output-data" }],
+          },
+        }
       );
       const final = publishedProofEvents().at(-1)!;
       expect(final.body.proofs.map((p: TestProof) => p.secret)).toEqual([
@@ -439,7 +473,335 @@ describe("payInvoiceFromAgentWallet", () => {
         mintUrl: MINT,
         change: 9,
         eventId: "evt-3",
+        persisted: true,
       });
+    });
+
+    it("still reports paid when the final wallet write fails, so the invoice is never paid twice", async () => {
+      const mock = jest.mocked(signAndPublishEvent);
+      const defaultImpl = mock.getMockImplementation();
+      mock
+        .mockImplementationOnce(defaultImpl!) // staged proof save
+        .mockImplementationOnce(defaultImpl!) // staged deletion notice
+        .mockRejectedValueOnce(new Error("durable cache down")); // final save
+
+      const result = await payInvoiceFromAgentWallet(signer, INVOICE, MINT);
+
+      expect(result).toEqual({
+        paid: true,
+        amount: 1000,
+        fee: 10,
+        mintUrl: MINT,
+        change: 9,
+        eventId: null,
+        persisted: false,
+      });
+    });
+
+    it("recovers unblinded change from a staged event whose final write failed", async () => {
+      const sendProof = proof("send-old", 1010);
+      seed(
+        storedEvent("staged-old", MINT, [sendProof], 7375, [
+          {
+            quote: "old-quote",
+            keysetId: "keyset-1",
+            inputs: ["send-old"],
+            outputs: [{ fake: "output-data" }],
+          },
+        ])
+      );
+      spent = new Set(["send-old"]);
+      walletMock.checkMeltQuoteBolt11.mockResolvedValue({
+        quote: "old-quote",
+        state: "PAID",
+        change: [{ blinded: "sig-1" }],
+      });
+      walletMock.createMeltChangeProofs.mockReturnValue([
+        proof("change-recovered", 7),
+      ]);
+
+      // After recovery the wallet holds only the 7-sat change proof, so the
+      // new payment fails on insufficient balance — recovery already ran.
+      await expect(
+        payInvoiceFromAgentWallet(signer, INVOICE, MINT)
+      ).rejects.toMatchObject({ title: "Insufficient balance" });
+
+      const rewrite = publishedProofEvents()[0]!;
+      // The spent melt inputs are dropped; only the recovered change remains.
+      expect(rewrite.body.proofs.map((p: TestProof) => p.secret)).toEqual([
+        "change-recovered",
+      ]);
+      expect(rewrite.body.pendingChange).toBeUndefined();
+    });
+
+    it("retires recovery data when the mint reports the old melt UNPAID", async () => {
+      const keepProof = proof("keep-old", 500);
+      seed(
+        storedEvent("staged-old", MINT, [keepProof], 7375, [
+          {
+            quote: "old-quote",
+            keysetId: "keyset-1",
+            inputs: ["send-old"],
+            outputs: [{ fake: "output-data" }],
+          },
+        ])
+      );
+      walletMock.checkMeltQuoteBolt11.mockResolvedValue({
+        quote: "old-quote",
+        state: "UNPAID",
+      });
+
+      await expect(
+        payInvoiceFromAgentWallet(signer, INVOICE, MINT)
+      ).rejects.toMatchObject({ title: "Insufficient balance" });
+
+      const rewrite = publishedProofEvents()[0]!;
+      expect(rewrite.body.proofs.map((p: TestProof) => p.secret)).toEqual([
+        "keep-old",
+      ]);
+      expect(rewrite.body.pendingChange).toBeUndefined();
+      expect(walletMock.createMeltChangeProofs).not.toHaveBeenCalled();
+    });
+
+    it("carries an unresolved pending change into the next payment's events", async () => {
+      const oldEntry = {
+        quote: "old-quote",
+        keysetId: "keyset-1",
+        inputs: ["send-old"],
+        outputs: [{ fake: "output-data" }],
+      };
+      seed(storedEvent("staged-old", MINT, [proof("keep-old", 5000)], 7375, [oldEntry]));
+      walletMock.checkMeltQuoteBolt11.mockResolvedValue({
+        quote: "old-quote",
+        state: "PENDING",
+      });
+
+      const result = await payInvoiceFromAgentWallet(signer, INVOICE, MINT);
+
+      expect(result.paid).toBe(true);
+      const staged = publishedProofEvents()[0]!;
+      expect(staged.body.pendingChange).toEqual([
+        oldEntry,
+        {
+          quote: "melt-quote",
+          keysetId: "keyset-1",
+          inputs: ["send1"],
+          outputs: [{ fake: "output-data" }],
+        },
+      ]);
+      // The paid melt's own entry is resolved (its change is in the final
+      // proofs); only the still-pending old entry carries forward.
+      const final = publishedProofEvents().at(-1)!;
+      expect(final.body.pendingChange).toEqual([oldEntry]);
+    });
+
+    it("keeps the change record when the melt resolves with the quote still pending", async () => {
+      jest.mocked(safeMeltProofs).mockResolvedValue({
+        status: "pending",
+        meltQuote: { quote: "melt-quote", state: "PENDING" },
+        changeProofs: [],
+        errorMessage: "still pending",
+      } as never);
+
+      await expect(
+        payInvoiceFromAgentWallet(signer, INVOICE, MINT)
+      ).rejects.toMatchObject({ title: "Mint payment pending" });
+
+      const staged = publishedProofEvents().at(-1)!;
+      expect(staged.body.pendingChange).toEqual([
+        {
+          quote: "melt-quote",
+          keysetId: "keyset-1",
+          inputs: ["send1"],
+          outputs: [{ fake: "output-data" }],
+        },
+      ]);
+    });
+
+    it("prepares zero-amount NUT-08 blanks sized to the fee reserve", async () => {
+      await payInvoiceFromAgentWallet(signer, INVOICE, MINT);
+
+      // fee_reserve is 10 → ceil(log2(10)) = 4 zero-amount blanks, matching
+      // the wallet's own melt preparation.
+      expect(jest.mocked(OutputData.createRandomData)).toHaveBeenCalledWith(
+        0,
+        expect.objectContaining({ id: "keyset-1" }),
+        [0, 0, 0, 0]
+      );
+    });
+
+    it("sizes blanks from the real excess when input fees exceed the quoted fee reserve", async () => {
+      walletMock.createMeltQuoteBolt11.mockResolvedValue({
+        quote: "melt-quote",
+        amount: { toNumber: () => 1000 },
+        fee_reserve: { toNumber: () => 0 },
+      });
+      jest.mocked(safeSwap).mockResolvedValue({
+        status: "swapped",
+        keep: [proof("keep1", { toNumber: () => 60, toString: () => "60" })],
+        // includeFees added 4 sats of mint input fees on a zero-reserve quote.
+        send: [proof("send1", 1004)],
+      } as never);
+
+      await payInvoiceFromAgentWallet(signer, INVOICE, MINT);
+
+      // excess = 1004 − 1000 = 4 → ceil(log2(4)) = 2 zero-amount blanks.
+      // Sizing from feeReserve (0) would have persisted no recovery data.
+      expect(jest.mocked(OutputData.createRandomData)).toHaveBeenCalledWith(
+        0,
+        expect.objectContaining({ id: "keyset-1" }),
+        [0, 0]
+      );
+      const staged = publishedProofEvents()[0]!;
+      expect(staged.body.pendingChange).toEqual([
+        {
+          quote: "melt-quote",
+          keysetId: "keyset-1",
+          inputs: ["send1"],
+          outputs: [{ fake: "output-data" }],
+        },
+      ]);
+    });
+
+    it("unblinds change immediately when the melt is confirmed paid via quote check", async () => {
+      jest.mocked(safeMeltProofs).mockResolvedValue({
+        status: "paid",
+        meltQuote: { quote: "melt-quote", change: [{ blinded: "sig-1" }] },
+        changeProofs: [],
+      } as never);
+      walletMock.createMeltChangeProofs.mockReturnValue([
+        proof("change-recovered", 7),
+      ]);
+
+      const result = await payInvoiceFromAgentWallet(signer, INVOICE, MINT);
+
+      expect(result.change).toBe(7);
+      const final = publishedProofEvents().at(-1)!;
+      expect(final.body.proofs.map((p: TestProof) => p.secret)).toEqual([
+        "keep1",
+        "change-recovered",
+      ]);
+      expect(final.body.pendingChange).toBeUndefined();
+    });
+
+    it("persists an event that carries only unresolved change recovery data", async () => {
+      const oldEntry = {
+        quote: "old-quote",
+        keysetId: "keyset-1",
+        inputs: ["send-old"],
+        outputs: [{ fake: "output-data" }],
+      };
+      seed(
+        storedEvent("staged-old", MINT, [proof("keep-old", 5000)], 7375, [
+          oldEntry,
+        ])
+      );
+      walletMock.checkMeltQuoteBolt11.mockResolvedValue({
+        quote: "old-quote",
+        state: "PENDING",
+      });
+      jest.mocked(safeSwap).mockResolvedValue({
+        status: "swapped",
+        keep: [],
+        send: [proof("send1", 24)],
+      } as never);
+      jest.mocked(safeMeltProofs).mockResolvedValue({
+        status: "paid",
+        meltQuote: { quote: "melt-quote", change: [] },
+        changeProofs: [],
+      } as never);
+
+      const result = await payInvoiceFromAgentWallet(signer, INVOICE, MINT);
+
+      expect(result.paid).toBe(true);
+      const final = publishedProofEvents().at(-1)!;
+      expect(final.body.proofs).toEqual([]);
+      expect(final.body.pendingChange).toEqual([oldEntry]);
+      expect(result.eventId).not.toBeNull();
+    });
+
+    it("does not offer inputs of an unresolved melt to the next swap", async () => {
+      seed(
+        storedEvent(
+          "staged-old",
+          MINT,
+          [proof("keep-old", 500), proof("send-old", 1010)],
+          7375,
+          [
+            {
+              quote: "old-quote",
+              keysetId: "keyset-1",
+              inputs: ["send-old"],
+              outputs: [{ fake: "output-data" }],
+            },
+          ]
+        )
+      );
+      walletMock.checkMeltQuoteBolt11.mockResolvedValue({
+        quote: "old-quote",
+        state: "PENDING",
+      });
+
+      await expect(
+        payInvoiceFromAgentWallet(signer, INVOICE, MINT)
+      ).rejects.toMatchObject({ title: "Insufficient balance" });
+      expect(safeSwap).not.toHaveBeenCalled();
+    });
+
+    it("counts proofs only once when a failed retirement leaves duplicates", async () => {
+      // Simulates: the final save succeeded but the staged event's deletion
+      // failed, so both events remain holding some of the same proofs.
+      seed(
+        storedEvent("final", MINT, [proof("keep1", 600), proof("change1", 500)]),
+        storedEvent("staged", MINT, [proof("keep1", 600), proof("send1", 1010)])
+      );
+
+      const balance = await getAgentWalletBalance(signer, MINT);
+
+      expect(balance.totalBalance).toBe(600 + 500 + 1010);
+    });
+
+    it("never recovers or spends the same proof twice after a partial retirement failure", async () => {
+      const entry = {
+        quote: "old-quote",
+        keysetId: "keyset-1",
+        inputs: ["send1"],
+        outputs: [{ fake: "output-data" }],
+      };
+      // Final save succeeded, staged deletion failed: the staged event still
+      // carries its pendingChange entry for a melt whose change the final
+      // event already holds.
+      seed(
+        storedEvent("final", MINT, [proof("keep1", 600), proof("change1", 500)]),
+        storedEvent("staged", MINT, [proof("keep1", 600), proof("send1", 1010)], 7375, [entry])
+      );
+      walletMock.checkMeltQuoteBolt11.mockResolvedValue({
+        quote: "old-quote",
+        state: "PAID",
+        change: [{ blinded: "sig-1" }],
+      });
+      // Deterministic unblinding yields the SAME change1 proof the final
+      // event already holds.
+      walletMock.createMeltChangeProofs.mockReturnValue([proof("change1", 500)]);
+      jest.mocked(safeMeltProofs).mockResolvedValue({
+        status: "paid",
+        meltQuote: { quote: "melt-quote", change: [] },
+        changeProofs: [],
+      } as never);
+
+      await payInvoiceFromAgentWallet(signer, INVOICE, MINT);
+
+      // keep1 was deduplicated at load and the re-recovered change1 was
+      // dropped as already held: selection sees each secret exactly once.
+      const swapInputs = jest.mocked(safeSwap).mock.calls[0]![2] as TestProof[];
+      expect(swapInputs.map((p) => p.secret)).toEqual(["keep1", "change1"]);
+      // The retired staged event stored nothing: its inputs were consumed
+      // and its change was already persisted elsewhere.
+      expect(
+        publishedProofEvents()
+          .flatMap((e) => e.body.proofs)
+          .map((p: TestProof) => p.secret)
+      ).not.toContain("change1");
     });
 
     it("saves every proof before melting, so a failed melt cannot lose any", async () => {
