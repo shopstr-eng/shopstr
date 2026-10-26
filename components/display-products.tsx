@@ -351,7 +351,17 @@ const DisplayProducts = ({
 
   const handleDelete = async (productId: string) => {
     try {
-      await deleteEvent(nostr!, signer!, [productId]);
+      const product = productEventContext.productEvents.find(
+        (event) => event.id === productId
+      );
+      const dTag = product?.tags.find((tag) => tag[0] === "d")?.[1];
+      await deleteEvent(
+        nostr!,
+        signer!,
+        [productId],
+        30402,
+        product && dTag ? [`30402:${product.pubkey}:${dTag}`] : []
+      );
       productEventContext.removeDeletedProductEvent(productId);
     } catch {
       return;

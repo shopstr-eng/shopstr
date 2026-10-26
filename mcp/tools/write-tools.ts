@@ -7,7 +7,11 @@ import {
 } from "@/utils/mcp/nostr-signing";
 import { ApiKeyRecord, getAgentSigner } from "@/utils/mcp/auth";
 import { EventTemplate, getEventHash } from "nostr-tools";
-import { cacheEvent, getDbPool } from "@/utils/db/db-service";
+import {
+  cacheEvent,
+  fetchProductByIdFromDb,
+  getDbPool,
+} from "@/utils/db/db-service";
 import { v4 as uuidv4 } from "uuid";
 import dns from "dns";
 import { promisify } from "util";
@@ -1168,14 +1172,38 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
+        // Listings are addressable, so deletions carry `a` and `k` tags
+        // alongside the `e` tags.
+        const authorPubkey = signer.getPubKey();
+        const addresses = new Set<string>();
+        const kinds = new Set<string>();
+        for (const id of params.eventIds as string[]) {
+          const listing = await fetchProductByIdFromDb(id);
+          if (listing?.pubkey !== authorPubkey) continue;
+          const dTag = listing.tags.find((tag) => tag[0] === "d")?.[1];
+          if (dTag) addresses.add(`${listing.kind}:${listing.pubkey}:${dTag}`);
+          kinds.add(String(listing.kind));
+        }
+
         const eventTemplate: EventTemplate = {
           kind: 5,
           content: params.reason || "Deletion request",
-          tags: params.eventIds.map((id: string) => ["e", id]),
+          tags: [
+            ...params.eventIds.map((id: string) => ["e", id]),
+            ...[...addresses].map((address) => ["a", address]),
+            ...[...kinds].map((kind) => ["k", kind]),
+          ],
           created_at: Math.floor(Date.now() / 1000),
         };
 
-        const signedEvent = await signAndPublishEvent(signer, eventTemplate);
+        // The durable cache write drops the listing and tombstones it so it
+        // cannot be searched, ordered, or re-cached from relays.
+        const signedEvent = await signAndPublishEvent(
+          signer,
+          eventTemplate,
+          undefined,
+          { requireDurableCache: true }
+        );
 
         return successResponse(
           {
