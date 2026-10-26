@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { randomBytes } from "crypto";
 import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
+import { getSatoshiValue } from "@getalby/lightning-tools";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
 import { authenticateRequest, initializeApiKeysTable } from "@/utils/mcp/auth";
@@ -361,6 +362,23 @@ async function handleCreateOrder(
   }
 }
 
+async function convertOrderTotalToSats(
+  total: number,
+  currency: string
+): Promise<number> {
+  const normalizedCurrency = currency.toLowerCase();
+  if (normalizedCurrency === "sats" || normalizedCurrency === "sat") {
+    return toCashuMintAmountSats(Math.round(total));
+  }
+
+  const sats = await getSatoshiValue({
+    amount: total,
+    currency,
+  });
+
+  return toCashuMintAmountSats(Math.round(sats));
+}
+
 async function handleLightningPayment(
   res: NextApiResponse,
   orderId: string,
@@ -375,15 +393,7 @@ async function handleLightningPayment(
   pricingBlock: any
 ) {
   const mint = getTrustedMintUrl();
-
-  let amountInSats: number;
-  if (currency.toLowerCase() === "sats" || currency.toLowerCase() === "sat") {
-    amountInSats = Math.round(totalAmount);
-  } else {
-    amountInSats = Math.round(totalAmount);
-  }
-
-  amountInSats = toCashuMintAmountSats(amountInSats);
+  const amountInSats = await convertOrderTotalToSats(totalAmount, currency);
 
   try {
     const cashuMint = new CashuMint(mint);
@@ -483,12 +493,7 @@ async function handleCashuPayment(
       0
     );
 
-    let requiredAmount: number;
-    if (currency.toLowerCase() === "sats" || currency.toLowerCase() === "sat") {
-      requiredAmount = Math.round(totalAmount);
-    } else {
-      requiredAmount = Math.round(totalAmount);
-    }
+    const requiredAmount = await convertOrderTotalToSats(totalAmount, currency);
 
     if (tokenAmount < requiredAmount) {
       return res.status(400).json({
