@@ -11,6 +11,8 @@ import {
   PendingPayoutResolution,
   resolvePendingSellerLightningPayout,
 } from "@/utils/payments/resolve-pending-payouts";
+import { buildLegacyPayoutExportToken } from "@/utils/payments/legacy-payout-export";
+import { removePendingSellerLightningPayout } from "@/utils/payments/pending-lightning-payouts";
 
 function formatAge(timestamp: number): string {
   const minutes = Math.max(1, Math.floor((Date.now() - timestamp) / 60_000));
@@ -35,15 +37,22 @@ const PendingPayouts = () => {
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [rowMessages, setRowMessages] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string | null>(null);
+  const [exportTokens, setExportTokens] = useState<Record<string, string>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Records bound to a buyer pubkey belong to that account only. Records
-    // without one predate account binding; they are shown with a warning.
+  const refreshRecords = () => {
     setRecords(
       getPendingSellerLightningPayouts().filter(
         (record) => !record.buyerPubkey || record.buyerPubkey === pubkey
       )
     );
+  };
+
+  useEffect(() => {
+    // Records bound to a buyer pubkey belong to that account only. Records
+    // without one predate account binding; they are shown with an export
+    // path instead of resolution.
+    refreshRecords();
   }, [pubkey]);
 
   if (records.length === 0) return null;
@@ -100,12 +109,60 @@ const PendingPayouts = () => {
       }));
     } finally {
       setResolvingId(null);
-      setRecords(
-        getPendingSellerLightningPayouts().filter(
-          (record) => !record.buyerPubkey || record.buyerPubkey === pubkey
-        )
-      );
+      refreshRecords();
     }
+  };
+
+  // Legacy (unbound) records cannot be resolved to any account, but their
+  // proofs already live in this browser's storage — exporting them as a
+  // Cashu token reveals nothing the browser doesn't already hold and lets
+  // the buyer redeem the funds in any Cashu wallet supporting the mint.
+  const handleExport = (record: PendingSellerLightningPayout) => {
+    try {
+      const token = buildLegacyPayoutExportToken(record);
+      setExportTokens((prev) => ({ ...prev, [record.meltQuoteId]: token }));
+      setRowMessages((prev) => {
+        const next = { ...prev };
+        delete next[record.meltQuoteId];
+        return next;
+      });
+    } catch (error) {
+      setRowMessages((prev) => ({
+        ...prev,
+        [record.meltQuoteId]:
+          error instanceof Error ? error.message : String(error),
+      }));
+    }
+  };
+
+  const handleCopyToken = async (record: PendingSellerLightningPayout) => {
+    const token = exportTokens[record.meltQuoteId];
+    if (!token) return;
+    try {
+      await navigator.clipboard.writeText(token);
+      setCopiedId(record.meltQuoteId);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      setRowMessages((prev) => ({
+        ...prev,
+        [record.meltQuoteId]:
+          "Could not copy automatically — select the token text and copy it manually.",
+      }));
+    }
+  };
+
+  const handleRemoveRecord = (record: PendingSellerLightningPayout) => {
+    const confirmed = window.confirm(
+      "Remove this record? Its payout proofs will be permanently deleted from this browser. Only continue after you have redeemed the exported token in another Cashu wallet."
+    );
+    if (!confirmed) return;
+    removePendingSellerLightningPayout(record.meltQuoteId);
+    setExportTokens((prev) => {
+      const next = { ...prev };
+      delete next[record.meltQuoteId];
+      return next;
+    });
+    refreshRecords();
   };
 
   return (
@@ -138,7 +195,7 @@ const PendingPayouts = () => {
                   {record.status} · {formatAge(record.updatedAt)}
                 </p>
               </div>
-              {record.buyerPubkey && (
+              {record.buyerPubkey ? (
                 <button
                   type="button"
                   disabled={resolvingId !== null}
@@ -149,15 +206,55 @@ const PendingPayouts = () => {
                     ? "Checking…"
                     : "Check & recover"}
                 </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleExport(record)}
+                  className="rounded-md border border-shopstr-purple px-3 py-2 text-sm font-medium text-shopstr-purple dark:border-shopstr-yellow dark:text-shopstr-yellow"
+                >
+                  Export proofs
+                </button>
               )}
             </div>
             {!record.buyerPubkey && (
-              <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                Recorded before payouts were bound to an account, so it cannot
-                be recovered here — any signed-in account could otherwise claim
-                the funds. The proofs remain in this browser's storage for
-                manual recovery.
-              </p>
+              <div className="mt-2">
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Recorded before payouts were bound to an account, so it
+                  cannot be recovered into this wallet. Export the proofs as a
+                  Cashu token and redeem them in any Cashu wallet that
+                  supports {mintHost(record.mintUrl)} (proofs already in this
+                  wallet are left out).
+                </p>
+                {exportTokens[record.meltQuoteId] && (
+                  <div className="mt-2 rounded-md border border-gray-200 p-3 dark:border-gray-700">
+                    <textarea
+                      readOnly
+                      rows={3}
+                      value={exportTokens[record.meltQuoteId]}
+                      onFocus={(event) => event.currentTarget.select()}
+                      className="text-light-text dark:text-dark-text w-full resize-none break-all rounded-md border border-gray-300 bg-gray-50 p-2 font-mono text-xs dark:border-gray-600 dark:bg-gray-900"
+                    />
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyToken(record)}
+                        className="rounded-md bg-shopstr-purple px-3 py-1.5 text-xs font-medium text-white dark:bg-shopstr-yellow dark:text-black"
+                      >
+                        {copiedId === record.meltQuoteId
+                          ? "Copied!"
+                          : "Copy token"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveRecord(record)}
+                        className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 dark:border-red-700 dark:text-red-400"
+                      >
+                        Remove record
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
             {rowMessages[record.meltQuoteId] && (
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
