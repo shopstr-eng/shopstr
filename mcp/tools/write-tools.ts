@@ -25,6 +25,12 @@ import {
 } from "@/utils/nostr/request-auth";
 import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
 import { createGiftWrapEvent } from "@/utils/nostr/gift-wrap";
+import {
+  AgentWalletError,
+  getAgentWalletBalance,
+  payInvoiceFromAgentWallet,
+  receiveAgentCashuToken,
+} from "@/utils/mcp/agent-cashu-wallet";
 
 const resolveCname = promisify(dns.resolveCname);
 const resolve4 = promisify(dns.resolve4);
@@ -98,6 +104,21 @@ function errorResponse(message: string, details: string, startTime: number) {
     ],
     isError: true,
   };
+}
+
+function walletErrorResponse(
+  fallbackMessage: string,
+  error: unknown,
+  startTime: number
+) {
+  if (error instanceof AgentWalletError) {
+    return errorResponse(error.title, error.details, startTime);
+  }
+  return errorResponse(
+    fallbackMessage,
+    error instanceof Error ? error.message : "Unknown error",
+    startTime
+  );
 }
 
 async function getSigner(apiKey: ApiKeyRecord): Promise<McpNostrSigner | null> {
@@ -2437,49 +2458,12 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { fetchCachedEvents } = await import("@/utils/db/db-service");
-        const pubkey = signer.getPubKey();
-        const proofEvents = await fetchCachedEvents(7375);
-        const myProofEvents = proofEvents.filter(
-          (e: any) => e.pubkey === pubkey
-        );
-
-        let totalBalance = 0;
-        const mintBalances: Record<string, number> = {};
-
-        for (const event of myProofEvents) {
-          try {
-            const decryptedContent = signer.decrypt(pubkey, event.content);
-            const parsed = JSON.parse(decryptedContent);
-            const mintUrl = parsed.mint;
-            const proofs = parsed.proofs || [];
-            const amount = proofs.reduce(
-              (sum: number, p: any) => sum + (p.amount || 0),
-              0
-            );
-
-            if (!params.mintUrl || mintUrl === params.mintUrl) {
-              totalBalance += amount;
-              mintBalances[mintUrl] = (mintBalances[mintUrl] || 0) + amount;
-            }
-          } catch {
-            continue;
-          }
-        }
-
-        return successResponse(
-          {
-            totalBalance,
-            unit: "sats",
-            mintBalances,
-            proofEventCount: myProofEvents.length,
-          },
-          startTime
-        );
+        const balance = await getAgentWalletBalance(signer, params.mintUrl);
+        return successResponse({ ...balance, unit: "sats" }, startTime);
       } catch (error) {
-        return errorResponse(
+        return walletErrorResponse(
           "Failed to get Cashu balance",
-          error instanceof Error ? error.message : "Unknown error",
+          error,
           startTime
         );
       }
@@ -2488,7 +2472,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
   reg(
     "receive_cashu_tokens",
-    "Receive Cashu tokens and store them as a proof event (kind 7375). Publishes the encrypted proof event to your Nostr relays.",
+    "Receive a Cashu token. The token is swapped at its mint so the proofs are yours alone, then stored as an encrypted proof event (kind 7375). Spent, duplicate and forged tokens are rejected.",
     {
       token: z.string().describe("Serialized Cashu token string to receive"),
     },
@@ -2499,51 +2483,12 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { getDecodedToken } = await import("@cashu/cashu-ts");
-        const decoded = getDecodedToken(params.token, []);
-        const mintUrl = decoded.mint;
-        const proofs = decoded.proofs;
-        const totalAmount = proofs.reduce(
-          (sum: number, p: any) => sum + (p.amount || 0),
-          0
-        );
-
-        const pubkey = signer.getPubKey();
-
-        const proofData = JSON.stringify({
-          mint: mintUrl,
-          proofs,
-        });
-        const encryptedContent = signer.encrypt(pubkey, proofData);
-
-        const relays = withBlastr(getDefaultRelays());
-        const tags: string[][] = [["mint", mintUrl]];
-        for (const relay of relays) {
-          tags.push(["relay", relay]);
-        }
-
-        const eventTemplate: EventTemplate = {
-          kind: 7375,
-          created_at: Math.floor(Date.now() / 1000),
-          tags,
-          content: encryptedContent,
-        };
-
-        const signedEvent = await signAndPublishEvent(signer, eventTemplate);
-
-        return successResponse(
-          {
-            eventId: signedEvent.id,
-            amount: totalAmount,
-            mint: mintUrl,
-            proofCount: proofs.length,
-          },
-          startTime
-        );
+        const received = await receiveAgentCashuToken(signer, params.token);
+        return successResponse(received, startTime);
       } catch (error) {
-        return errorResponse(
+        return walletErrorResponse(
           "Failed to receive Cashu tokens",
-          error instanceof Error ? error.message : "Unknown error",
+          error,
           startTime
         );
       }
@@ -2609,7 +2554,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
   reg(
     "send_cashu_payment",
-    "Send a Cashu payment by melting tokens to pay a Lightning invoice. Uses proofs from your stored Cashu wallet.",
+    "Pay a Lightning invoice from your stored Cashu wallet. Only the proofs needed for the invoice are spent; the change stays in your wallet.",
     {
       invoice: z.string().describe("Lightning invoice (bolt11) to pay"),
       mintUrl: z
@@ -2626,101 +2571,16 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { Mint: CashuMint, Wallet: CashuWallet } =
-          await import("@cashu/cashu-ts");
-        const mintUrl = params.mintUrl || "https://mint.minibits.cash/Bitcoin";
-        const mint = new CashuMint(mintUrl);
-        const wallet = new CashuWallet(mint);
-        await wallet.loadMint();
-
-        const { fetchCachedEvents } = await import("@/utils/db/db-service");
-        const pubkey = signer.getPubKey();
-        const proofEvents = await fetchCachedEvents(7375);
-        const myProofEvents = proofEvents.filter(
-          (e: any) => e.pubkey === pubkey
+        const payment = await payInvoiceFromAgentWallet(
+          signer,
+          params.invoice,
+          params.mintUrl
         );
-
-        const availableProofs: any[] = [];
-        for (const event of myProofEvents) {
-          try {
-            const decryptedContent = signer.decrypt(pubkey, event.content);
-            const parsed = JSON.parse(decryptedContent);
-            if (parsed.mint === mintUrl && parsed.proofs) {
-              availableProofs.push(...parsed.proofs);
-            }
-          } catch {
-            continue;
-          }
-        }
-
-        if (availableProofs.length === 0) {
-          return errorResponse(
-            "No available proofs",
-            `No Cashu proofs found for mint ${mintUrl}`,
-            startTime
-          );
-        }
-
-        const { withMintRetry } =
-          await import("@/utils/cashu/mint-retry-service");
-        const { safeMeltProofs } =
-          await import("@/utils/cashu/melt-retry-service");
-        const meltQuote = await withMintRetry(
-          () => wallet.createMeltQuoteBolt11(params.invoice),
-          { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
-        );
-        const totalNeeded =
-          meltQuote.amount.toNumber() +
-          (meltQuote.fee_reserve?.toNumber() || 0);
-        const totalAvailable = availableProofs.reduce(
-          (sum: number, p: any) => sum + (p.amount || 0),
-          0
-        );
-
-        if (totalAvailable < totalNeeded) {
-          return errorResponse(
-            "Insufficient balance",
-            `Need ${totalNeeded} sats but only have ${totalAvailable} sats`,
-            startTime
-          );
-        }
-
-        const meltOutcome = await safeMeltProofs(
-          wallet,
-          meltQuote,
-          availableProofs
-        );
-        if (meltOutcome.status !== "paid") {
-          return errorResponse(
-            meltOutcome.status === "pending"
-              ? "Mint payment pending"
-              : meltOutcome.status === "unknown"
-                ? "Cashu payment outcome unknown"
-                : "Cashu payment failed",
-            meltOutcome.errorMessage ??
-              `Mint reported melt status: ${meltOutcome.status}`,
-            startTime
-          );
-        }
-
-        return successResponse(
-          {
-            paid: true,
-            amount: meltQuote.amount,
-            fee: meltQuote.fee_reserve || 0,
-            mintUrl,
-            change: meltOutcome.changeProofs.reduce(
-              (sum: number, p: any) =>
-                sum + (p.amount?.toNumber?.() ?? p.amount ?? 0),
-              0
-            ),
-          },
-          startTime
-        );
+        return successResponse(payment, startTime);
       } catch (error) {
-        return errorResponse(
+        return walletErrorResponse(
           "Failed to send Cashu payment",
-          error instanceof Error ? error.message : "Unknown error",
+          error,
           startTime
         );
       }
