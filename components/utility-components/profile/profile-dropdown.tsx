@@ -21,6 +21,7 @@ import {
 import { nip19 } from "nostr-tools";
 import { useContext, useEffect, useRef, useState } from "react";
 import { getProfileSlug } from "@/utils/url-slugs";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 import {
   ArrowRightStartOnRectangleIcon,
   BuildingStorefrontIcon,
@@ -148,7 +149,7 @@ export const ProfileWithDropdown = ({
   const [fetchedProfileContent, setFetchedProfileContent] = useState<
     ProfileData["content"] | null
   >(null);
-  const [isNPubCopied, setIsNPubCopied] = useState(false);
+  const { copied: isNPubCopied, copy: copyNPub } = useCopyToClipboard();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const profileContext = useContext(ProfileMapContext);
   const {
@@ -520,20 +521,8 @@ export const ProfileWithDropdown = ({
         <ClipboardIcon className="h-5 w-5" />
       ),
       onPress: () => {
-        handleDropdownAction(async () => {
-          try {
-            const npub = nip19.npubEncode(pubkey);
-            if (!navigator.clipboard?.writeText) {
-              throw new Error("Clipboard API is not available");
-            }
-            await navigator.clipboard.writeText(npub);
-            setIsNPubCopied(true);
-            setTimeout(() => {
-              setIsNPubCopied(false);
-            }, 2100);
-          } catch (error) {
-            console.error("Failed to copy npub to clipboard", error);
-          }
+        handleDropdownAction(() => {
+          void copyNPub(nip19.npubEncode(pubkey));
         });
       },
       label: isNPubCopied ? "Copied!" : "Copy npub",

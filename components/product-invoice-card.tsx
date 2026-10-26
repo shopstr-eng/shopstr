@@ -1,4 +1,5 @@
 import { useCallback, useContext, useState, useEffect, useRef } from "react";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 import {
   CashuWalletContext,
   ChatsContext,
@@ -172,7 +173,8 @@ export default function ProductInvoiceCard({
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [invoice, setInvoice] = useState("");
-  const [copiedToClipboard, setCopiedToClipboard] = useState(false);
+  const { copied: copiedToClipboard, copy: copyToClipboard } =
+    useCopyToClipboard();
 
   // Tracks the in-flight invoice polling so a "Back" click or unmount can
   // signal the polling loop to exit cleanly instead of letting it complete
@@ -1845,11 +1847,7 @@ export default function ProductInvoiceCard({
   };
 
   const handleCopyInvoice = () => {
-    navigator.clipboard.writeText(invoice);
-    setCopiedToClipboard(true);
-    setTimeout(() => {
-      setCopiedToClipboard(false);
-    }, 2100);
+    void copyToClipboard(invoice);
   };
 
   const formattedTotalCost = formatWithCommas(

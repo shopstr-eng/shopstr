@@ -28,6 +28,7 @@ import parseTags, {
 } from "@/utils/parsers/product-parser-functions";
 import { ProductContext } from "@/utils/context/context";
 import { getListingSlug } from "@/utils/url-slugs";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 import { NostrEvent } from "@/utils/types/types";
 import { formatTimestampParts } from "@/utils/date-display";
 
@@ -50,6 +51,8 @@ export default function DisplayProductModal({
   const [showProductForm, setShowProductForm] = useState(false);
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  const { copy } = useCopyToClipboard();
 
   const [createdDate, createdTime] = formatTimestampParts(
     productData.createdAt
@@ -74,10 +77,10 @@ export default function DisplayProductModal({
     if (navigator.share) {
       await navigator.share(shareData);
     } else {
-      navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${listingPath}`
-      );
-      setShowSuccessModal(true);
+      const didCopy = await copy(shareData.url);
+      if (didCopy) {
+        setShowSuccessModal(true);
+      }
     }
   };
 

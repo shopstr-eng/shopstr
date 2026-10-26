@@ -246,7 +246,9 @@ describe("ChatMessage", () => {
       const clipboardIcon = document.querySelector(".cursor-pointer");
       expect(clipboardIcon).toBeInTheDocument();
 
-      fireEvent.click(clipboardIcon!);
+      await act(async () => {
+        fireEvent.click(clipboardIcon!);
+      });
 
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith(token);
       expect(document.querySelector(".text-green-400")).toBeInTheDocument();
