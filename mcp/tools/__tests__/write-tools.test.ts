@@ -1881,6 +1881,26 @@ describe("registerWriteTools — (community & messaging)", () => {
       expect(updateMcpOrderStatus).not.toHaveBeenCalled();
     });
 
+    it("rejects with 'Seller mismatch' when sellerPubkey param does not match order.seller_pubkey", async () => {
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(
+        mockMcpOrder({
+          seller_pubkey: "actual-seller",
+          buyer_pubkey: TEST_PUBKEY,
+        }) as any
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        orderId: "order-1",
+        status: "cancelled",
+        sellerPubkey: "wrong-seller",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Seller mismatch");
+      expect(updateMcpOrderStatus).not.toHaveBeenCalled();
+    });
+
     it("returns 'Unauthorized order update' when updateMcpOrderStatus resolves null", async () => {
       jest.mocked(getMcpOrder).mockResolvedValueOnce(
         mockMcpOrder({
@@ -1990,6 +2010,74 @@ describe("registerWriteTools — (community & messaging)", () => {
         expect(subjectTag[1]).toBe(expectedSubject);
       }
     );
+
+    it("sends notification DM to the seller when buyer cancels an order", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: "actual-seller",
+        buyer_pubkey: TEST_PUBKEY,
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "cancelled" } as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        orderId: "order-1",
+        status: "cancelled",
+        message: "I need to cancel this order",
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(textPayload(result).notificationSent).toBe(true);
+      expect(createGiftWrapEvent).toHaveBeenCalledWith(
+        expect.any(String),
+        "actual-seller"
+      );
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.tags).toContainEqual([
+        "p",
+        "actual-seller",
+        "wss://relay.damus.io",
+      ]);
+      expect(innerEvent.tags).toContainEqual(["status", "cancelled"]);
+    });
+
+    it("sends notification DM to the buyer when seller confirms an order", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: TEST_PUBKEY,
+        buyer_pubkey: "actual-buyer",
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "confirmed" } as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        orderId: "order-1",
+        status: "confirmed",
+        buyerPubkey: "actual-buyer",
+        message: "Your order is confirmed!",
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(textPayload(result).notificationSent).toBe(true);
+      expect(createGiftWrapEvent).toHaveBeenCalledWith(
+        expect.any(String),
+        "actual-buyer"
+      );
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.tags).toContainEqual([
+        "p",
+        "actual-buyer",
+        "wss://relay.damus.io",
+      ]);
+    });
 
     it("adds an item tag referencing productAddress in the notification DM when provided", async () => {
       const order = mockMcpOrder({

@@ -1785,7 +1785,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
   reg(
     "update_order_status",
-    "Update the status of an order and optionally notify the buyer via encrypted DM. Sellers can confirm, ship, or mark orders delivered. Buyers can cancel orders.",
+    "Update the status of an order and optionally notify the counterparty via encrypted DM. Sellers can confirm, ship, or mark orders delivered. Buyers can cancel orders.",
     {
       orderId: z.string().describe("The order ID to update"),
       status: z
@@ -1795,7 +1795,13 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .string()
         .optional()
         .describe(
-          "Buyer's pubkey (hex format) — required to send a notification DM"
+          "Buyer's pubkey (hex format) — required when seller sends a notification DM"
+        ),
+      sellerPubkey: z
+        .string()
+        .optional()
+        .describe(
+          "Seller's pubkey (hex format) — optional confirmation when buyer cancels"
         ),
       message: z
         .string()
@@ -1847,6 +1853,17 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
+        if (
+          params.sellerPubkey &&
+          params.sellerPubkey !== order.seller_pubkey
+        ) {
+          return errorResponse(
+            "Seller mismatch",
+            `Provided seller pubkey does not match order "${params.orderId}"`,
+            startTime
+          );
+        }
+
         const updatedOrder = await updateMcpOrderStatus(
           params.orderId,
           params.status,
@@ -1862,9 +1879,16 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         }
 
         let notificationSent = false;
-        const buyerPubkey = order.buyer_pubkey;
+        const isBuyerCancellation = params.status === "cancelled";
+        const recipientPubkey = isBuyerCancellation
+          ? order.seller_pubkey
+          : order.buyer_pubkey;
 
-        if (params.buyerPubkey && params.message) {
+        const shouldSendNotification = Boolean(
+          params.message && (isBuyerCancellation || params.buyerPubkey)
+        );
+
+        if (shouldSendNotification) {
           try {
             const senderPubkey = signer.getPubKey();
             const defaultRelays = getDefaultRelays();
@@ -1881,7 +1905,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             };
 
             const innerTags: string[][] = [
-              ["p", order.buyer_pubkey, relayHint],
+              ["p", recipientPubkey, relayHint],
               ["subject", subjectMap[params.status] || "order-info"],
               ["order", params.orderId],
               ["status", params.status],
@@ -1905,7 +1929,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
             const wrapEvent = await createGiftWrapEvent(
               JSON.stringify(fullInnerEvent),
-              buyerPubkey
+              recipientPubkey
             );
 
             const relayManager = new McpRelayManager(withBlastr(defaultRelays));
