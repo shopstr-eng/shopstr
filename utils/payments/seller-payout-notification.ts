@@ -1,11 +1,4 @@
 import { nip19 } from "nostr-tools";
-import { generateKeys } from "@/utils/nostr/key-utilities";
-import {
-  constructGiftWrappedEvent,
-  constructMessageGiftWrap,
-  constructMessageSeal,
-  sendGiftWrappedMessageEvent,
-} from "@/utils/nostr/gift-wrap";
 import type { NostrManager } from "@/utils/nostr/nostr-manager";
 import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import {
@@ -14,8 +7,7 @@ import {
   buildPaymentEventOptions,
 } from "./checkout-messages";
 import type { PendingSellerLightningPayout } from "./pending-lightning-payouts";
-
-const MAX_ATTEMPTS = 3;
+import { sendOrderMessageWithRetries } from "./send-order-message";
 
 /**
  * Sends the seller the same order-payment DM the normal checkout path sends
@@ -68,63 +60,19 @@ export async function notifySellerOfCompletedPayout({
     donationPercentage: record.donationPercentage,
   });
 
-  let lastError: unknown;
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    try {
-      // Ephemeral sender/receiver keys per attempt, mirroring the checkout
-      // path — the buyer's real identity travels in the "b" tag only.
-      const { nsec: senderNsec, npub: senderNpub } = await generateKeys();
-      const { nsec: receiverNsec, npub: receiverNpub } = await generateKeys();
-      const senderPubkey = nip19.decode(senderNpub).data as string;
-      const senderPrivkey = nip19.decode(senderNsec).data as Uint8Array;
-      const receiverPubkey = nip19.decode(receiverNpub).data as string;
-      const receiverPrivkey = nip19.decode(receiverNsec).data as Uint8Array;
-
-      const giftWrappedMessageEvent = await constructGiftWrappedEvent(
-        senderPubkey,
-        record.sellerPubkey,
-        message,
-        "order-payment",
-        messageOptions
-      );
-      const sealedEvent = await constructMessageSeal(
-        signer,
-        giftWrappedMessageEvent,
-        senderPubkey,
-        record.sellerPubkey,
-        senderPrivkey
-      );
-      const giftWrappedEvent = await constructMessageGiftWrap(
-        sealedEvent,
-        receiverPubkey,
-        receiverPrivkey,
-        record.sellerPubkey
-      );
-      // Verifiable delivery: the strict cache write throws when the event
-      // cannot be persisted, and requireRelayDelivery throws when no relay
-      // accepts it — the seller's chat loader reads from relays, so an
-      // unaccepted event would silently never reach them. A throw here
-      // triggers a retry and ultimately keeps the pending payout record.
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer, {
-        requireDurableCache: true,
-        requireRelayDelivery: true,
-      });
-      return;
-    } catch (error) {
-      lastError = error;
-      console.warn(
-        `Seller payout notification attempt ${attempt + 1} failed:`,
-        error
-      );
-      if (attempt < MAX_ATTEMPTS - 1) {
-        // Exponential backoff, matching the checkout retry cadence.
-        await new Promise((resolve) =>
-          setTimeout(resolve, Math.pow(2, attempt) * 1000)
-        );
-      }
-    }
-  }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Seller notification failed.");
+  // Verifiable delivery: strict delivery throws when the event cannot be
+  // persisted or no relay accepts it — the seller's chat loader reads from
+  // relays, so an unaccepted event would silently never reach them. A throw
+  // here triggers a retry and ultimately keeps the pending payout record.
+  await sendOrderMessageWithRetries({
+    nostr,
+    signer,
+    recipientPubkey: record.sellerPubkey,
+    message,
+    subject: "order-payment",
+    messageOptions,
+    strictDelivery: true,
+    failureLabel: "Seller payout notification",
+    fallbackErrorMessage: "Seller notification failed.",
+  });
 }

@@ -96,6 +96,11 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
 } from "@/utils/nostr/gift-wrap";
+import {
+  sendOrderMessage,
+  sendOrderMessageWithRetries,
+  type OrderMessageEphemeralKeys,
+} from "@/utils/payments/send-order-message";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { registerOrderParticipantsOnServer } from "@/utils/db/order-participants-client";
@@ -613,9 +618,20 @@ export default function CartInvoiceCard({
     }
   };
 
-  const sendPaymentAndContactMessage = async (
-    pubkeyToReceiveMessage: string,
-    message: string,
+  const toOrderMessageKeys = (keys: {
+    senderNpub: string;
+    senderNsec: string;
+    receiverNpub: string;
+    receiverNsec: string;
+  }): OrderMessageEphemeralKeys => ({
+    senderPubkey: nip19.decode(keys.senderNpub).data as string,
+    senderPrivkey: nip19.decode(keys.senderNsec).data as Uint8Array,
+    receiverPubkey: nip19.decode(keys.receiverNpub).data as string,
+    receiverPrivkey: nip19.decode(keys.receiverNsec).data as Uint8Array,
+  });
+
+  const buildPaymentMessageContent = async (
+    senderPubkey: string,
     product: ProductData,
     isPayment?: boolean,
     isReceipt?: boolean,
@@ -626,103 +642,15 @@ export default function CartInvoiceCard({
     paymentProof?: string,
     messageAmount?: number,
     productQuantity?: number,
-    contact?: string,
-    address?: string,
-    pickup?: string,
-    donationAmountValue?: number,
-    donationPercentageValue?: number,
-    retryCount: number = 3
-  ) => {
-    const newKeys = await generateNewKeys();
-    if (!newKeys) {
-      setFailureText("Failed to generate new keys for messages!");
-      setShowFailureModal(true);
-      return;
-    }
-
-    for (let attempt = 0; attempt < retryCount; attempt++) {
-      try {
-        await sendPaymentAndContactMessageWithKeys(
-          pubkeyToReceiveMessage,
-          message,
-          product,
-          isPayment,
-          isReceipt,
-          isDonation,
-          orderId,
-          paymentType,
-          paymentReference,
-          paymentProof,
-          messageAmount,
-          productQuantity,
-          newKeys,
-          contact,
-          address,
-          pickup,
-          donationAmountValue,
-          donationPercentageValue
-        );
-        // If we get here, the message was sent successfully
-        return;
-      } catch (error) {
-        console.warn(
-          `Attempt ${attempt + 1} failed for message sending:`,
-          error
-        );
-
-        if (attempt === retryCount - 1) {
-          // This was the last attempt, log the error but don't throw
-          console.error("Failed to send message after all retries:", error);
-          return; // Continue with the flow instead of breaking it
-        }
-
-        // Wait before retrying (exponential backoff)
-        await new Promise((resolve) =>
-          setTimeout(resolve, Math.pow(2, attempt) * 1000)
-        );
-      }
-    }
-  };
-
-  const sendPaymentAndContactMessageWithKeys = async (
-    pubkeyToReceiveMessage: string,
-    message: string,
-    product: ProductData,
-    isPayment?: boolean,
-    isReceipt?: boolean,
-    isDonation?: boolean,
-    orderId?: string,
-    paymentType?: string,
-    paymentReference?: string,
-    paymentProof?: string,
-    messageAmount?: number,
-    productQuantity?: number,
-    keys?: {
-      senderNpub: string;
-      senderNsec: string;
-      receiverNpub: string;
-      receiverNsec: string;
-    },
     contact?: string,
     address?: string,
     pickup?: string,
     donationAmountValue?: number,
     donationPercentageValue?: number
-  ) => {
-    if (!keys) {
-      setFailureText("Message keys are required!");
-      setShowFailureModal(true);
-      return;
-    }
-
-    const decodedRandomPubkeyForSender = nip19.decode(keys.senderNpub);
-    const decodedRandomPrivkeyForSender = nip19.decode(keys.senderNsec);
-    const decodedRandomPubkeyForReceiver = nip19.decode(keys.receiverNpub);
-    const decodedRandomPrivkeyForReceiver = nip19.decode(keys.receiverNsec);
-
+  ): Promise<{ messageSubject: string; messageOptions: any }> => {
     let buyerPubkey = await signer?.getPubKey?.();
     if (!buyerPubkey) {
-      buyerPubkey = decodedRandomPubkeyForSender.data as string;
+      buyerPubkey = senderPubkey;
     }
 
     let messageSubject = "";
@@ -794,32 +722,152 @@ export default function CartInvoiceCard({
       };
     }
 
-    const giftWrappedMessageEvent = await constructGiftWrappedEvent(
-      decodedRandomPubkeyForSender.data as string,
-      pubkeyToReceiveMessage,
+    return { messageSubject, messageOptions };
+  };
+
+  const sendPaymentAndContactMessage = async (
+    pubkeyToReceiveMessage: string,
+    message: string,
+    product: ProductData,
+    isPayment?: boolean,
+    isReceipt?: boolean,
+    isDonation?: boolean,
+    orderId?: string,
+    paymentType?: string,
+    paymentReference?: string,
+    paymentProof?: string,
+    messageAmount?: number,
+    productQuantity?: number,
+    contact?: string,
+    address?: string,
+    pickup?: string,
+    donationAmountValue?: number,
+    donationPercentageValue?: number,
+    retryCount: number = 3
+  ) => {
+    const newKeys = await generateNewKeys();
+    if (!newKeys) {
+      setFailureText("Failed to generate new keys for messages!");
+      setShowFailureModal(true);
+      return;
+    }
+    const keys = toOrderMessageKeys(newKeys);
+    const { messageSubject, messageOptions } = await buildPaymentMessageContent(
+      keys.senderPubkey,
+      product,
+      isPayment,
+      isReceipt,
+      isDonation,
+      orderId,
+      paymentType,
+      paymentReference,
+      paymentProof,
+      messageAmount,
+      productQuantity,
+      contact,
+      address,
+      pickup,
+      donationAmountValue,
+      donationPercentageValue
+    );
+
+    try {
+      await sendOrderMessageWithRetries({
+        nostr: nostr!,
+        signer,
+        recipientPubkey: pubkeyToReceiveMessage,
+        message,
+        subject: messageSubject,
+        messageOptions,
+        keys,
+        strictDelivery: false,
+        maxAttempts: retryCount,
+        failureLabel: "Order message",
+        onSuccess: (rumor) => {
+          if (isReceipt) {
+            chatsContext.addNewlyCreatedMessageEvent(
+              {
+                ...rumor,
+                sig: "",
+                read: false,
+              },
+              true
+            );
+          }
+        },
+      });
+    } catch (error) {
+      // This was the last attempt, log the error but don't throw — continue
+      // with the checkout flow instead of breaking it.
+      console.error("Failed to send message after all retries:", error);
+    }
+  };
+
+  const sendPaymentAndContactMessageWithKeys = async (
+    pubkeyToReceiveMessage: string,
+    message: string,
+    product: ProductData,
+    isPayment?: boolean,
+    isReceipt?: boolean,
+    isDonation?: boolean,
+    orderId?: string,
+    paymentType?: string,
+    paymentReference?: string,
+    paymentProof?: string,
+    messageAmount?: number,
+    productQuantity?: number,
+    keys?: {
+      senderNpub: string;
+      senderNsec: string;
+      receiverNpub: string;
+      receiverNsec: string;
+    },
+    contact?: string,
+    address?: string,
+    pickup?: string,
+    donationAmountValue?: number,
+    donationPercentageValue?: number
+  ) => {
+    if (!keys) {
+      setFailureText("Message keys are required!");
+      setShowFailureModal(true);
+      return;
+    }
+    const ephemeralKeys = toOrderMessageKeys(keys);
+    const { messageSubject, messageOptions } = await buildPaymentMessageContent(
+      ephemeralKeys.senderPubkey,
+      product,
+      isPayment,
+      isReceipt,
+      isDonation,
+      orderId,
+      paymentType,
+      paymentReference,
+      paymentProof,
+      messageAmount,
+      productQuantity,
+      contact,
+      address,
+      pickup,
+      donationAmountValue,
+      donationPercentageValue
+    );
+
+    const rumor = await sendOrderMessage({
+      nostr: nostr!,
+      signer,
+      recipientPubkey: pubkeyToReceiveMessage,
       message,
-      messageSubject,
-      messageOptions
-    );
-    const sealedEvent = await constructMessageSeal(
-      signer || ({} as any),
-      giftWrappedMessageEvent,
-      decodedRandomPubkeyForSender.data as string,
-      pubkeyToReceiveMessage,
-      decodedRandomPrivkeyForSender.data as Uint8Array
-    );
-    const giftWrappedEvent = await constructMessageGiftWrap(
-      sealedEvent,
-      decodedRandomPubkeyForReceiver.data as string,
-      decodedRandomPrivkeyForReceiver.data as Uint8Array,
-      pubkeyToReceiveMessage
-    );
-    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
+      subject: messageSubject,
+      messageOptions,
+      keys: ephemeralKeys,
+      strictDelivery: false,
+    });
 
     if (isReceipt) {
       chatsContext.addNewlyCreatedMessageEvent(
         {
-          ...giftWrappedMessageEvent,
+          ...rumor,
           sig: "",
           read: false,
         },

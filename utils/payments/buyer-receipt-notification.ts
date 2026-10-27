@@ -1,11 +1,4 @@
 import { nip19 } from "nostr-tools";
-import { generateKeys } from "@/utils/nostr/key-utilities";
-import {
-  constructGiftWrappedEvent,
-  constructMessageGiftWrap,
-  constructMessageSeal,
-  sendGiftWrappedMessageEvent,
-} from "@/utils/nostr/gift-wrap";
 import type { NostrManager } from "@/utils/nostr/nostr-manager";
 import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import {
@@ -14,14 +7,14 @@ import {
   buildThankYouReceiptMessage,
 } from "./checkout-messages";
 import type { PendingSellerLightningPayout } from "./pending-lightning-payouts";
-
-const MAX_ATTEMPTS = 3;
+import {
+  sendOrderMessageWithRetries,
+  type OrderMessageRumor,
+} from "./send-order-message";
 
 /** The inner kind-14 rumor, returned so the caller can add it to the buyer's
  * local chat context exactly like the checkout receipt path does. */
-export type BuyerOrderReceiptEvent = Awaited<
-  ReturnType<typeof constructGiftWrappedEvent>
->;
+export type BuyerOrderReceiptEvent = OrderMessageRumor;
 
 /**
  * Sends the buyer the same order-receipt DM the normal checkout path sends
@@ -88,58 +81,15 @@ export async function sendBuyerOrderReceipt({
     donationPercentage: record.donationPercentage,
   };
 
-  let lastError: unknown;
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    try {
-      // Ephemeral sender/receiver keys per attempt, mirroring the checkout
-      // path — the buyer's real identity travels in the "b" tag only.
-      const { nsec: senderNsec, npub: senderNpub } = await generateKeys();
-      const { nsec: receiverNsec, npub: receiverNpub } = await generateKeys();
-      const senderPubkey = nip19.decode(senderNpub).data as string;
-      const senderPrivkey = nip19.decode(senderNsec).data as Uint8Array;
-      const receiverPubkey = nip19.decode(receiverNpub).data as string;
-      const receiverPrivkey = nip19.decode(receiverNsec).data as Uint8Array;
-
-      const giftWrappedMessageEvent = await constructGiftWrappedEvent(
-        senderPubkey,
-        buyerPubkey,
-        message,
-        "order-receipt",
-        messageOptions
-      );
-      const sealedEvent = await constructMessageSeal(
-        signer,
-        giftWrappedMessageEvent,
-        senderPubkey,
-        buyerPubkey,
-        senderPrivkey
-      );
-      const giftWrappedEvent = await constructMessageGiftWrap(
-        sealedEvent,
-        receiverPubkey,
-        receiverPrivkey,
-        buyerPubkey
-      );
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent, signer, {
-        requireDurableCache: true,
-        requireRelayDelivery: true,
-      });
-      return giftWrappedMessageEvent;
-    } catch (error) {
-      lastError = error;
-      console.warn(
-        `Buyer order receipt attempt ${attempt + 1} failed:`,
-        error
-      );
-      if (attempt < MAX_ATTEMPTS - 1) {
-        // Exponential backoff, matching the checkout retry cadence.
-        await new Promise((resolve) =>
-          setTimeout(resolve, Math.pow(2, attempt) * 1000)
-        );
-      }
-    }
-  }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Buyer order receipt failed.");
+  return sendOrderMessageWithRetries({
+    nostr,
+    signer,
+    recipientPubkey: buyerPubkey,
+    message,
+    subject: "order-receipt",
+    messageOptions,
+    strictDelivery: true,
+    failureLabel: "Buyer order receipt",
+    fallbackErrorMessage: "Buyer order receipt failed.",
+  });
 }

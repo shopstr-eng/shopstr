@@ -83,6 +83,10 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
 } from "@/utils/nostr/gift-wrap";
+import {
+  sendOrderMessageWithRetries,
+  type OrderMessageEphemeralKeys,
+} from "@/utils/payments/send-order-message";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { registerOrderParticipantsOnServer } from "@/utils/db/order-participants-client";
@@ -472,22 +476,17 @@ export default function ProductInvoiceCard({
     donationPercentageValue?: number,
     retryCount: number = 3
   ) => {
-    const decodedRandomPubkeyForSender = nip19.decode(
-      randomNpubForSenderRef.current
-    );
-    const decodedRandomPrivkeyForSender = nip19.decode(
-      randomNsecForSenderRef.current
-    );
-    const decodedRandomPubkeyForReceiver = nip19.decode(
-      randomNpubForReceiverRef.current
-    );
-    const decodedRandomPrivkeyForReceiver = nip19.decode(
-      randomNsecForReceiverRef.current
-    );
+    const keys: OrderMessageEphemeralKeys = {
+      senderPubkey: nip19.decode(randomNpubForSenderRef.current).data as string,
+      senderPrivkey: nip19.decode(randomNsecForSenderRef.current)
+        .data as Uint8Array,
+      receiverPubkey: nip19.decode(randomNpubForReceiverRef.current)
+        .data as string,
+      receiverPrivkey: nip19.decode(randomNsecForReceiverRef.current)
+        .data as Uint8Array,
+    };
 
-    const buyerPubkey = signer
-      ? await signer.getPubKey?.()
-      : (decodedRandomPubkeyForSender.data as string);
+    const buyerPubkey = signer ? await signer.getPubKey?.() : keys.senderPubkey;
 
     let messageSubject = "";
     let messageOptions: any = {};
@@ -580,61 +579,35 @@ export default function ProductInvoiceCard({
       };
     }
 
-    for (let attempt = 0; attempt < retryCount; attempt++) {
-      try {
-        const giftWrappedMessageEvent = await constructGiftWrappedEvent(
-          decodedRandomPubkeyForSender.data as string,
-          pubkeyToReceiveMessage,
-          message,
-          messageSubject,
-          messageOptions
-        );
-        const sealedEvent = await constructMessageSeal(
-          signer || ({} as any),
-          giftWrappedMessageEvent,
-          decodedRandomPubkeyForSender.data as string,
-          pubkeyToReceiveMessage,
-          decodedRandomPrivkeyForSender.data as Uint8Array
-        );
-        const giftWrappedEvent = await constructMessageGiftWrap(
-          sealedEvent,
-          decodedRandomPubkeyForReceiver.data as string,
-          decodedRandomPrivkeyForReceiver.data as Uint8Array,
-          pubkeyToReceiveMessage
-        );
-
-        await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
-
-        if (isReceipt) {
-          chatsContext.addNewlyCreatedMessageEvent(
-            {
-              ...giftWrappedMessageEvent,
-              sig: "",
-              read: false,
-            },
-            true
-          );
-        }
-
-        // If we get here, the message was sent successfully
-        return;
-      } catch (error) {
-        console.warn(
-          `Attempt ${attempt + 1} failed for message sending:`,
-          error
-        );
-
-        if (attempt === retryCount - 1) {
-          // This was the last attempt, log the error but don't throw
-          console.error("Failed to send message after all retries:", error);
-          return; // Continue with the flow instead of breaking it
-        }
-
-        // Wait before retrying (exponential backoff)
-        await new Promise((resolve) =>
-          setTimeout(resolve, Math.pow(2, attempt) * 1000)
-        );
-      }
+    try {
+      await sendOrderMessageWithRetries({
+        nostr: nostr!,
+        signer,
+        recipientPubkey: pubkeyToReceiveMessage,
+        message,
+        subject: messageSubject,
+        messageOptions,
+        keys,
+        strictDelivery: false,
+        maxAttempts: retryCount,
+        failureLabel: "Order message",
+        onSuccess: (rumor) => {
+          if (isReceipt) {
+            chatsContext.addNewlyCreatedMessageEvent(
+              {
+                ...rumor,
+                sig: "",
+                read: false,
+              },
+              true
+            );
+          }
+        },
+      });
+    } catch (error) {
+      // This was the last attempt, log the error but don't throw — continue
+      // with the checkout flow instead of breaking it.
+      console.error("Failed to send message after all retries:", error);
     }
   };
 
