@@ -38,6 +38,15 @@ export type PendingSellerLightningPayout = {
    * record removal failed) safe to retry without re-sending the DM.
    */
   notifiedAt?: number;
+  /**
+   * Set once the buyer's order-receipt DM was sent during resolution.
+   * Tracked separately from notifiedAt: the seller DM is stamped as soon as
+   * it succeeds, so a retry after a failed record removal would otherwise
+   * skip a buyer receipt that failed on the first attempt. With this flag a
+   * retry re-sends only the receipt, and a receipt that already succeeded is
+   * never sent twice.
+   */
+  receiptSentAt?: number;
   meltQuoteId: string;
   recoverableProofs: Proof[];
   quarantinedProofs: Proof[];
@@ -117,6 +126,26 @@ export function markPendingSellerLightningPayoutNotified(
   const next = getPendingSellerLightningPayouts().map((record) =>
     record.meltQuoteId === meltQuoteId
       ? { ...record, notifiedAt: now, updatedAt: now }
+      : record
+  );
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+}
+
+/**
+ * Record that the buyer's order-receipt DM for this payout was sent. Throws
+ * on storage failure just like the other mutators — callers treat it as
+ * best-effort (a failed mark plus a failed removal means the retry re-sends
+ * the receipt, the accepted at-least-once fallback).
+ */
+export function markPendingSellerLightningPayoutReceiptSent(
+  meltQuoteId: string
+): void {
+  if (typeof window === "undefined") return;
+
+  const now = Date.now();
+  const next = getPendingSellerLightningPayouts().map((record) =>
+    record.meltQuoteId === meltQuoteId
+      ? { ...record, receiptSentAt: now, updatedAt: now }
       : record
   );
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));

@@ -498,8 +498,68 @@ describe("resolvePendingSellerLightningPayout", () => {
     const notifySeller = jest.fn().mockResolvedValue(undefined);
     const notifyBuyer = jest.fn().mockResolvedValue(undefined);
 
-    // First attempt: the notifiedAt mark lands, but the record removal
-    // fails (e.g. storage quota pressure between the two writes).
+    // First attempt: the notifiedAt and receiptSentAt marks land, but the
+    // record removal fails (e.g. storage quota pressure between writes).
+    const originalSetItem = Storage.prototype.setItem;
+    let payoutWrites = 0;
+    const setItem = jest
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(function (this: Storage, key: string, value: string) {
+        if (key === "shopstr.pendingSellerLightningPayouts") {
+          payoutWrites += 1;
+          if (payoutWrites === 3) throw new Error("quota exceeded");
+        }
+        return originalSetItem.call(this, key, value);
+      });
+
+    let first;
+    try {
+      first = await resolvePendingSellerLightningPayout(
+        makeRecord(),
+        nostr,
+        signer,
+        "buyer-pubkey",
+        { notifySeller, notifyBuyer }
+      );
+    } finally {
+      setItem.mockRestore();
+    }
+    expect(first.status).toBe("unknown");
+    expect(notifySeller).toHaveBeenCalledTimes(1);
+    expect(notifyBuyer).toHaveBeenCalledTimes(1);
+    const storedRecords = getPendingSellerLightningPayouts();
+    expect(storedRecords).toHaveLength(1);
+    expect(storedRecords[0]!.notifiedAt).toEqual(expect.any(Number));
+    expect(storedRecords[0]!.receiptSentAt).toEqual(expect.any(Number));
+
+    // Retry: the mint still says PAID, but the record is already stamped —
+    // neither DM is re-sent and the record is simply cleared.
+    const second = await resolvePendingSellerLightningPayout(
+      storedRecords[0]!,
+      nostr,
+      signer,
+      "buyer-pubkey",
+      { notifySeller, notifyBuyer }
+    );
+    expect(second).toEqual({ status: "completed" });
+    expect(notifySeller).toHaveBeenCalledTimes(1);
+    expect(notifyBuyer).toHaveBeenCalledTimes(1);
+    expect(getPendingSellerLightningPayouts()).toHaveLength(0);
+  });
+
+  it("retries a failed buyer receipt after a record-removal failure without re-sending the seller DM", async () => {
+    seedRecord();
+    storage.setJson(STORAGE_KEYS.TOKENS, [recoverableProof]);
+    mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "PAID" });
+    const notifySeller = jest.fn().mockResolvedValue(undefined);
+    const notifyBuyer = jest
+      .fn()
+      .mockRejectedValueOnce(new Error("no relays available"))
+      .mockResolvedValueOnce(undefined);
+
+    // First attempt: the seller DM lands (notifiedAt mark is written), the
+    // buyer receipt fails (receiptSentAt never lands), and the record
+    // removal fails.
     const originalSetItem = Storage.prototype.setItem;
     let payoutWrites = 0;
     const setItem = jest
@@ -530,9 +590,10 @@ describe("resolvePendingSellerLightningPayout", () => {
     const storedRecords = getPendingSellerLightningPayouts();
     expect(storedRecords).toHaveLength(1);
     expect(storedRecords[0]!.notifiedAt).toEqual(expect.any(Number));
+    expect(storedRecords[0]!.receiptSentAt).toBeUndefined();
 
-    // Retry: the mint still says PAID, but the record is already stamped —
-    // neither DM is re-sent and the record is simply cleared.
+    // Retry: the seller DM is skipped via notifiedAt, but the receipt is
+    // re-attempted because receiptSentAt was never stamped.
     const second = await resolvePendingSellerLightningPayout(
       storedRecords[0]!,
       nostr,
@@ -542,7 +603,7 @@ describe("resolvePendingSellerLightningPayout", () => {
     );
     expect(second).toEqual({ status: "completed" });
     expect(notifySeller).toHaveBeenCalledTimes(1);
-    expect(notifyBuyer).toHaveBeenCalledTimes(1);
+    expect(notifyBuyer).toHaveBeenCalledTimes(2);
     expect(getPendingSellerLightningPayouts()).toHaveLength(0);
   });
 

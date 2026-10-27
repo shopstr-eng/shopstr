@@ -5,6 +5,7 @@ import { storage, STORAGE_KEYS } from "@/utils/storage";
 import {
   PendingSellerLightningPayout,
   markPendingSellerLightningPayoutNotified,
+  markPendingSellerLightningPayoutReceiptSent,
   removePendingSellerLightningPayout,
 } from "./pending-lightning-payouts";
 
@@ -45,7 +46,10 @@ export interface ResolvePendingPayoutOptions {
    * send the buyer the order-receipt DM the normal checkout path sends.
    * Unlike notifySeller, a failure here never keeps the pending record —
    * the seller DM is the critical one, so a receipt failure is reported on
-   * the "completed" result instead of blocking resolution.
+   * the "completed" result instead of blocking resolution. Once it succeeds
+   * the record is stamped with receiptSentAt, so a retry after a failed
+   * record removal re-sends only a receipt that previously failed and never
+   * sends one twice.
    */
   notifyBuyer?: (
     record: PendingSellerLightningPayout
@@ -285,10 +289,12 @@ export async function resolvePendingSellerLightningPayout(
         }
       }
     }
-    // A record already stamped notifiedAt was fully notified on a previous
-    // attempt whose record removal then failed — retrying only needs to
-    // clear the record, not re-send either DM.
+    // A record already stamped notifiedAt had its seller DM sent on a
+    // previous attempt whose record removal then failed — retrying must not
+    // re-send it. The buyer receipt is gated separately on receiptSentAt so
+    // that same retry still delivers a receipt whose first send failed.
     const needsNotification = record.notifiedAt === undefined;
+    const needsReceipt = record.receiptSentAt === undefined;
     if (needsNotification && options.notifySeller) {
       try {
         await options.notifySeller(record);
@@ -311,13 +317,25 @@ export async function resolvePendingSellerLightningPayout(
       }
     }
     let receiptError: string | undefined;
-    if (needsNotification && options.notifyBuyer) {
+    if (needsReceipt && options.notifyBuyer) {
       try {
         await options.notifyBuyer(record);
+        // Stamp the record so a failed removal below retries without
+        // re-sending the receipt. Best-effort: if the mark cannot be
+        // persisted the removal will likely fail too, and the retry falls
+        // back to a duplicate receipt — still better than a buyer whose
+        // chat history never gets one.
+        try {
+          markPendingSellerLightningPayoutReceiptSent(record.meltQuoteId);
+        } catch {
+          // Removal below is attempted regardless.
+        }
       } catch (error) {
         // Best-effort: the seller was paid and notified, so the payout is
         // complete regardless. Surface the failure but still clear the
         // record — keeping it would re-send the seller DM on every retry.
+        // receiptSentAt stays unset, so if the removal below fails the
+        // retry re-attempts the receipt without touching the seller DM.
         receiptError =
           error instanceof Error ? error.message : String(error);
       }
