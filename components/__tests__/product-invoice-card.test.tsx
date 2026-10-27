@@ -1179,6 +1179,79 @@ describe("sendTokens — seller payout branches", () => {
     );
   });
 
+  it("captures the shipping address in the pending record for a shipping order with no pickup location", async () => {
+    mockGetLocalStorageData.mockReturnValue({
+      ...DEFAULT_LOCAL_STORAGE_DATA,
+      tokens: [{ id: "ks1", amount: 1000, secret: "s1" }],
+    });
+    const { setCashuPaymentFailed } = renderProductInvoiceCard({
+      price: 1000,
+      currency: "SATS",
+      totalCost: 1100,
+      shippingType: "Added Cost",
+      shippingCost: 100,
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /Online order with shipping/i })
+    );
+    fillShippingForm({
+      Name: "Ada Lovelace",
+      Address: "123 Main St",
+      City: "Metropolis",
+      "Postal Code": "12345",
+      "State/Province": "NY",
+      Country: "USA",
+    });
+    mockFetchJsonOnce(makeMintQuoteResponse());
+    mockResolveSellerCheckoutProfile.mockResolvedValueOnce({
+      content: {
+        payment_preference: "lightning",
+        lud16: "seller@getalby.com",
+        shopstr_donation: 0,
+      },
+    });
+    mockCashuWalletCtor.mockImplementation(() => ({
+      loadMint: jest.fn().mockResolvedValue(undefined),
+      createMeltQuoteBolt11: jest.fn().mockResolvedValue({
+        amount: 1078,
+        fee_reserve: 5,
+        quote: "pending-quote",
+      }),
+      keyChain: {
+        getKeysets: jest.fn().mockResolvedValue([{ id: "ks1" }]),
+      },
+    }));
+    mockSafeSwap.mockResolvedValueOnce({
+      status: "swapped",
+      keep: [],
+      send: [{ id: "ks1", amount: 1100, secret: "seller" }],
+    });
+    mockSafeMeltProofs.mockResolvedValueOnce({
+      status: "pending",
+      meltQuote: { quote: "pending-quote" },
+      changeProofs: [],
+      errorMessage: "mint still processing",
+    });
+
+    const payButton = screen.getByRole("button", { name: /Pay with Cashu/ });
+    await waitFor(() => expect(payButton).toBeEnabled());
+    fireEvent.click(payButton);
+
+    await waitFor(() =>
+      expect(setCashuPaymentFailed).toHaveBeenCalledWith(true)
+    );
+    // Without the address, the delayed buyer receipt would fall back to the
+    // thank-you variant instead of the order-processed one checkout sends.
+    const pendingRecords = getPendingSellerLightningPayouts();
+    expect(pendingRecords).toEqual([
+      expect.objectContaining({
+        meltQuoteId: "pending-quote",
+        address: "Ada Lovelace, 123 Main St, Metropolis, NY, 12345, USA",
+      }),
+    ]);
+    expect(pendingRecords[0]!.pickup).toBeUndefined();
+  });
+
   it.each([
     ["the seller prefers ecash", { payment_preference: "ecash" }],
     ["a Lightning address is missing", { payment_preference: "lightning" }],

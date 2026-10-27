@@ -11,7 +11,15 @@ type Nostr = Parameters<typeof recoverProofsToBuyerWallet>[0];
 type Signer = Parameters<typeof recoverProofsToBuyerWallet>[1];
 
 export type PendingPayoutResolution =
-  | { status: "completed" }
+  | {
+      status: "completed";
+      /**
+       * Set when the seller was notified but the buyer's order-receipt DM
+       * failed. The receipt is best-effort: the payout is done and the
+       * record is cleared either way, so this only surfaces the failure.
+       */
+      receiptError?: string;
+    }
   | { status: "recovered"; recoveredAmount: number }
   | { status: "still-pending"; reason: string }
   | { status: "needs-attention"; reason: string }
@@ -29,6 +37,16 @@ export interface ResolvePendingPayoutOptions {
    * better than a seller never told their order was paid.)
    */
   notifySeller?: (
+    record: PendingSellerLightningPayout
+  ) => Promise<void>;
+  /**
+   * Invoked in the PAID branch after the seller notification succeeds, to
+   * send the buyer the order-receipt DM the normal checkout path sends.
+   * Unlike notifySeller, a failure here never keeps the pending record —
+   * the seller DM is the critical one, so a receipt failure is reported on
+   * the "completed" result instead of blocking resolution.
+   */
+  notifyBuyer?: (
     record: PendingSellerLightningPayout
   ) => Promise<void>;
 }
@@ -278,6 +296,18 @@ export async function resolvePendingSellerLightningPayout(
         };
       }
     }
+    let receiptError: string | undefined;
+    if (options.notifyBuyer) {
+      try {
+        await options.notifyBuyer(record);
+      } catch (error) {
+        // Best-effort: the seller was paid and notified, so the payout is
+        // complete regardless. Surface the failure but still clear the
+        // record — keeping it would re-send the seller DM on every retry.
+        receiptError =
+          error instanceof Error ? error.message : String(error);
+      }
+    }
     if (!tryRemoveRecord(record.meltQuoteId)) {
       return {
         status: "unknown",
@@ -285,7 +315,9 @@ export async function resolvePendingSellerLightningPayout(
           "The payout is complete, but the record could not be cleared. It will disappear on the next check.",
       };
     }
-    return { status: "completed" };
+    return receiptError
+      ? { status: "completed", receiptError }
+      : { status: "completed" };
   }
 
   if (quoteState === "PENDING") {

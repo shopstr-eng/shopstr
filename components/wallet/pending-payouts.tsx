@@ -3,6 +3,7 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
+import { ChatsContext } from "@/utils/context/context";
 import {
   getPendingSellerLightningPayouts,
   PendingSellerLightningPayout,
@@ -12,6 +13,7 @@ import {
   resolvePendingSellerLightningPayout,
 } from "@/utils/payments/resolve-pending-payouts";
 import { notifySellerOfCompletedPayout } from "@/utils/payments/seller-payout-notification";
+import { sendBuyerOrderReceipt } from "@/utils/payments/buyer-receipt-notification";
 import { buildLegacyPayoutExportToken } from "@/utils/payments/legacy-payout-export";
 import { removePendingSellerLightningPayout } from "@/utils/payments/pending-lightning-payouts";
 
@@ -34,6 +36,7 @@ function mintHost(mintUrl: string): string {
 const PendingPayouts = () => {
   const { nostr } = useContext(NostrContext);
   const { signer, pubkey } = useContext(SignerContext);
+  const chatsContext = useContext(ChatsContext);
   const [records, setRecords] = useState<PendingSellerLightningPayout[]>([]);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [rowMessages, setRowMessages] = useState<Record<string, string>>({});
@@ -56,12 +59,17 @@ const PendingPayouts = () => {
     refreshRecords();
   }, [pubkey]);
 
-  if (records.length === 0) return null;
+  // Keep the completion notice visible even when the resolution just
+  // cleared the last record — otherwise the buyer never sees the outcome
+  // (including a receipt failure) for the payout they just resolved.
+  if (records.length === 0 && !notice) return null;
 
   const describeResolution = (result: PendingPayoutResolution): string => {
     switch (result.status) {
       case "completed":
-        return "Payout completed — the mint paid the seller's Lightning invoice, and the seller has been notified.";
+        return result.receiptError
+          ? `Payout completed — the mint paid the seller's Lightning invoice, and the seller has been notified. Your order receipt could not be sent: ${result.receiptError}`
+          : "Payout completed — the mint paid the seller's Lightning invoice, and the seller has been notified. Your order receipt is in your messages.";
       case "recovered":
         return `Recovered ${result.recoveredAmount} sats back to your wallet.`;
       case "not-owner":
@@ -95,6 +103,20 @@ const PendingPayouts = () => {
               record: resolvedRecord,
               buyerPubkey: pubkey,
             }),
+          notifyBuyer: async (resolvedRecord) => {
+            const receiptEvent = await sendBuyerOrderReceipt({
+              nostr,
+              signer,
+              record: resolvedRecord,
+              buyerPubkey: pubkey,
+            });
+            // Mirror the checkout receipt path: the buyer's own receipt is
+            // added to their local chat history, not just published.
+            chatsContext.addNewlyCreatedMessageEvent(
+              { ...receiptEvent, sig: "", read: false },
+              true
+            );
+          },
         }
       );
       const message = describeResolution(result);
@@ -177,15 +199,23 @@ const PendingPayouts = () => {
 
   return (
     <div className="mb-8 rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
-      <h2 className="text-light-text dark:text-dark-text mb-1 text-lg font-semibold">
-        Pending seller payouts
-      </h2>
-      <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-        These Lightning payouts did not finish during checkout. Check with the
-        mint to either confirm payment or recover the funds.
-      </p>
+      {records.length > 0 && (
+        <>
+          <h2 className="text-light-text dark:text-dark-text mb-1 text-lg font-semibold">
+            Pending seller payouts
+          </h2>
+          <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+            These Lightning payouts did not finish during checkout. Check with
+            the mint to either confirm payment or recover the funds.
+          </p>
+        </>
+      )}
       {notice && (
-        <p className="mb-4 rounded-md bg-green-50 p-3 text-sm text-green-800 dark:bg-green-900/30 dark:text-green-200">
+        <p
+          className={`rounded-md bg-green-50 p-3 text-sm text-green-800 dark:bg-green-900/30 dark:text-green-200 ${
+            records.length > 0 ? "mb-4" : ""
+          }`}
+        >
           {notice}
         </p>
       )}

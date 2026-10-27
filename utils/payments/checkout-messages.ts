@@ -203,6 +203,22 @@ export function buildShippingAddressTag(addr: ShippingAddressInput): string {
     : `${addr.name}, ${addr.address}, ${addr.city}, ${addr.state}, ${addr.postalCode}, ${addr.country}`;
 }
 
+/** Buyer-facing receipt for a delayed Lightning payout whose pending record
+ * predates captured order context — the buyer still learns which order
+ * confirmed and who will follow up about fulfillment. */
+export function buildDelayedOrderReceiptMessage({
+  orderId,
+  sellerNpub,
+}: {
+  orderId: string;
+  sellerNpub: string;
+}): string {
+  return (
+    `Your payment for order ${orderId} on Shopstr was completed! If applicable, ` +
+    `you should be receiving delivery information from ${sellerNpub} as soon as they review your order.`
+  );
+}
+
 /** Buyer-facing receipt sent after a shipping or pickup order — tells them
  * to expect delivery/pickup details from the seller. */
 export function buildOrderProcessedReceiptMessage(

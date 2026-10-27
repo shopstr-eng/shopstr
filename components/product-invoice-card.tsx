@@ -1592,6 +1592,26 @@ export default function ProductInvoiceCard({
             "Cannot record a pending seller payout without a buyer identity."
           );
         }
+        // Captured so a later wallet-page resolution can send the same
+        // payment-confirmation and receipt DMs checkout would have sent —
+        // including the fulfillment context that selects the receipt variant.
+        const pendingShippingAddress =
+          shippingName &&
+          shippingAddress &&
+          shippingCity &&
+          shippingPostalCode &&
+          shippingState &&
+          shippingCountry
+            ? buildShippingAddressTag({
+                name: shippingName,
+                address: shippingAddress,
+                unitNo: shippingUnitNo,
+                city: shippingCity,
+                postalCode: shippingPostalCode,
+                state: shippingState,
+                country: shippingCountry,
+              })
+            : undefined;
         const payout = recordPendingSellerLightningPayout({
           orderId,
           mintUrl: tokenMintUrl,
@@ -1608,8 +1628,6 @@ export default function ProductInvoiceCard({
           ],
           quarantinedProofs: payoutOutcome.quarantinedProofs,
           errorMessage: payoutOutcome.errorMessage,
-          // Captured so a later wallet-page resolution can send the seller
-          // the same payment-confirmation DM checkout would have sent.
           productTitle: productData.title,
           productDetails: buildProductDetailsSuffix({
             selectedSize,
@@ -1622,6 +1640,7 @@ export default function ProductInvoiceCard({
           productAddress: productData.d
             ? `30402:${productData.pubkey}:${productData.d}`
             : undefined,
+          address: pendingShippingAddress,
           pickup: selectedPickupLocation || undefined,
           donationAmount,
           donationPercentage,

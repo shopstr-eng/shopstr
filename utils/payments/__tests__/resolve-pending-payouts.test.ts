@@ -413,6 +413,112 @@ describe("resolvePendingSellerLightningPayout", () => {
     expect(notifySeller).not.toHaveBeenCalled();
   });
 
+  it("sends the buyer receipt after the seller notification when the mint reports PAID", async () => {
+    seedRecord();
+    storage.setJson(STORAGE_KEYS.TOKENS, [recoverableProof]);
+    mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "PAID" });
+    const callOrder: string[] = [];
+    const notifySeller = jest.fn().mockImplementation(async () => {
+      callOrder.push("seller");
+    });
+    const notifyBuyer = jest.fn().mockImplementation(async () => {
+      callOrder.push("buyer");
+    });
+
+    await expect(
+      resolvePendingSellerLightningPayout(
+        makeRecord(),
+        nostr,
+        signer,
+        "buyer-pubkey",
+        { notifySeller, notifyBuyer }
+      )
+    ).resolves.toEqual({ status: "completed" });
+
+    // The seller DM is critical, so it goes first; the receipt follows.
+    expect(callOrder).toEqual(["seller", "buyer"]);
+    expect(notifyBuyer).toHaveBeenCalledWith(
+      expect.objectContaining({ meltQuoteId: "melt-quote-1" })
+    );
+    expect(getPendingSellerLightningPayouts()).toHaveLength(0);
+  });
+
+  it("clears the record and reports completed with receiptError when the buyer receipt fails", async () => {
+    seedRecord();
+    storage.setJson(STORAGE_KEYS.TOKENS, [recoverableProof]);
+    mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "PAID" });
+    const notifySeller = jest.fn().mockResolvedValue(undefined);
+    const notifyBuyer = jest
+      .fn()
+      .mockRejectedValue(new Error("no relays available"));
+
+    const result = await resolvePendingSellerLightningPayout(
+      makeRecord(),
+      nostr,
+      signer,
+      "buyer-pubkey",
+      { notifySeller, notifyBuyer }
+    );
+
+    // The seller was paid and notified, so the payout resolves — the
+    // receipt failure is surfaced separately and never keeps the record.
+    expect(result).toEqual({
+      status: "completed",
+      receiptError: "no relays available",
+    });
+    expect(getPendingSellerLightningPayouts()).toHaveLength(0);
+  });
+
+  it("never sends the buyer receipt when the seller notification fails", async () => {
+    seedRecord();
+    storage.setJson(STORAGE_KEYS.TOKENS, [recoverableProof]);
+    mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "PAID" });
+    const notifySeller = jest
+      .fn()
+      .mockRejectedValue(new Error("relay offline"));
+    const notifyBuyer = jest.fn();
+
+    const result = await resolvePendingSellerLightningPayout(
+      makeRecord(),
+      nostr,
+      signer,
+      "buyer-pubkey",
+      { notifySeller, notifyBuyer }
+    );
+
+    expect(result.status).toBe("notify-failed");
+    expect(notifyBuyer).not.toHaveBeenCalled();
+    expect(getPendingSellerLightningPayouts()).toHaveLength(1);
+  });
+
+  it("never sends the buyer receipt when the payout did not confirm (PENDING/UNPAID)", async () => {
+    seedRecord();
+    mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "PENDING" });
+    const notifyBuyer = jest.fn();
+
+    await resolvePendingSellerLightningPayout(
+      makeRecord(),
+      nostr,
+      signer,
+      "buyer-pubkey",
+      { notifyBuyer }
+    );
+    mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "UNPAID" });
+    mockCheckProofsStates.mockResolvedValue([
+      { state: "UNSPENT" },
+      { state: "UNSPENT" },
+    ]);
+    await resolvePendingSellerLightningPayout(
+      makeRecord(),
+      nostr,
+      signer,
+      "buyer-pubkey",
+      { notifyBuyer }
+    );
+
+    expect(notifyBuyer).not.toHaveBeenCalled();
+  });
+
   it("keeps the record when the wallet write cannot be confirmed by read-back", async () => {
     seedRecord();
     mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "UNPAID" });
