@@ -491,6 +491,110 @@ describe("resolvePendingSellerLightningPayout", () => {
     expect(getPendingSellerLightningPayouts()).toHaveLength(1);
   });
 
+  it("stamps the record as notified so a retry after a record-removal failure does not re-send the seller DM", async () => {
+    seedRecord();
+    storage.setJson(STORAGE_KEYS.TOKENS, [recoverableProof]);
+    mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "PAID" });
+    const notifySeller = jest.fn().mockResolvedValue(undefined);
+    const notifyBuyer = jest.fn().mockResolvedValue(undefined);
+
+    // First attempt: the notifiedAt mark lands, but the record removal
+    // fails (e.g. storage quota pressure between the two writes).
+    const originalSetItem = Storage.prototype.setItem;
+    let payoutWrites = 0;
+    const setItem = jest
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(function (this: Storage, key: string, value: string) {
+        if (key === "shopstr.pendingSellerLightningPayouts") {
+          payoutWrites += 1;
+          if (payoutWrites === 2) throw new Error("quota exceeded");
+        }
+        return originalSetItem.call(this, key, value);
+      });
+
+    let first;
+    try {
+      first = await resolvePendingSellerLightningPayout(
+        makeRecord(),
+        nostr,
+        signer,
+        "buyer-pubkey",
+        { notifySeller, notifyBuyer }
+      );
+    } finally {
+      setItem.mockRestore();
+    }
+    expect(first.status).toBe("unknown");
+    expect(notifySeller).toHaveBeenCalledTimes(1);
+    expect(notifyBuyer).toHaveBeenCalledTimes(1);
+    const storedRecords = getPendingSellerLightningPayouts();
+    expect(storedRecords).toHaveLength(1);
+    expect(storedRecords[0]!.notifiedAt).toEqual(expect.any(Number));
+
+    // Retry: the mint still says PAID, but the record is already stamped —
+    // neither DM is re-sent and the record is simply cleared.
+    const second = await resolvePendingSellerLightningPayout(
+      storedRecords[0]!,
+      nostr,
+      signer,
+      "buyer-pubkey",
+      { notifySeller, notifyBuyer }
+    );
+    expect(second).toEqual({ status: "completed" });
+    expect(notifySeller).toHaveBeenCalledTimes(1);
+    expect(notifyBuyer).toHaveBeenCalledTimes(1);
+    expect(getPendingSellerLightningPayouts()).toHaveLength(0);
+  });
+
+  it("falls back to re-sending the seller DM when the notifiedAt mark itself could not be persisted", async () => {
+    seedRecord();
+    storage.setJson(STORAGE_KEYS.TOKENS, [recoverableProof]);
+    mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "PAID" });
+    const notifySeller = jest.fn().mockResolvedValue(undefined);
+
+    // All payout-record writes fail: the mark never lands, so the removal
+    // fails too and the retry cannot know the DM already went out.
+    const originalSetItem = Storage.prototype.setItem;
+    const setItem = jest
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(function (this: Storage, key: string, value: string) {
+        if (key === "shopstr.pendingSellerLightningPayouts") {
+          throw new Error("quota exceeded");
+        }
+        return originalSetItem.call(this, key, value);
+      });
+
+    let first;
+    try {
+      first = await resolvePendingSellerLightningPayout(
+        makeRecord(),
+        nostr,
+        signer,
+        "buyer-pubkey",
+        { notifySeller }
+      );
+    } finally {
+      setItem.mockRestore();
+    }
+    expect(first.status).toBe("unknown");
+    const keptRecords = getPendingSellerLightningPayouts();
+    expect(keptRecords).toHaveLength(1);
+    expect(keptRecords[0]!.notifiedAt).toBeUndefined();
+
+    // The retry re-sends the DM — a duplicate is the accepted at-least-once
+    // fallback when the notifiedAt mark cannot be persisted.
+    const second = await resolvePendingSellerLightningPayout(
+      makeRecord(),
+      nostr,
+      signer,
+      "buyer-pubkey",
+      { notifySeller }
+    );
+    expect(second).toEqual({ status: "completed" });
+    expect(notifySeller).toHaveBeenCalledTimes(2);
+    expect(getPendingSellerLightningPayouts()).toHaveLength(0);
+  });
+
   it("never sends the buyer receipt when the payout did not confirm (PENDING/UNPAID)", async () => {
     seedRecord();
     mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "PENDING" });

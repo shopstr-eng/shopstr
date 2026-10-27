@@ -31,6 +31,13 @@ export type PendingSellerLightningPayout = {
   donationAmount?: number;
   donationPercentage?: number;
   status: "pending" | "unknown";
+  /**
+   * Set once the seller payment-confirmation DM was sent during resolution.
+   * The resolver notifies BEFORE clearing the record so a notification
+   * failure can be retried; this flag makes the opposite failure (DM sent,
+   * record removal failed) safe to retry without re-sending the DM.
+   */
+  notifiedAt?: number;
   meltQuoteId: string;
   recoverableProofs: Proof[];
   quarantinedProofs: Proof[];
@@ -93,6 +100,26 @@ export function recordPendingSellerLightningPayout(
     );
   }
   return record;
+}
+
+/**
+ * Record that the seller notification for this payout was sent. Throws on
+ * storage failure just like the other mutators — callers decide whether the
+ * payout can still proceed (a failed mark plus a failed removal means the
+ * retry re-sends the DM, which is the accepted at-least-once fallback).
+ */
+export function markPendingSellerLightningPayoutNotified(
+  meltQuoteId: string
+): void {
+  if (typeof window === "undefined") return;
+
+  const now = Date.now();
+  const next = getPendingSellerLightningPayouts().map((record) =>
+    record.meltQuoteId === meltQuoteId
+      ? { ...record, notifiedAt: now, updatedAt: now }
+      : record
+  );
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
 }
 
 export function removePendingSellerLightningPayout(

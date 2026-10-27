@@ -4,6 +4,7 @@ import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 import {
   PendingSellerLightningPayout,
+  markPendingSellerLightningPayoutNotified,
   removePendingSellerLightningPayout,
 } from "./pending-lightning-payouts";
 
@@ -32,9 +33,9 @@ export interface ResolvePendingPayoutOptions {
   /**
    * Invoked in the PAID branch after the buyer's remaining proofs are safe
    * but BEFORE the record is cleared, so a failed seller notification keeps
-   * the record and can be retried. (At-least-once delivery: if the record
-   * clear then fails, a retry may send the DM again — a duplicate DM is
-   * better than a seller never told their order was paid.)
+   * the record and can be retried. Once it succeeds the record is stamped
+   * with notifiedAt, so a retry after a failed record removal skips this
+   * callback instead of sending the seller a duplicate DM.
    */
   notifySeller?: (
     record: PendingSellerLightningPayout
@@ -284,7 +285,11 @@ export async function resolvePendingSellerLightningPayout(
         }
       }
     }
-    if (options.notifySeller) {
+    // A record already stamped notifiedAt was fully notified on a previous
+    // attempt whose record removal then failed — retrying only needs to
+    // clear the record, not re-send either DM.
+    const needsNotification = record.notifiedAt === undefined;
+    if (needsNotification && options.notifySeller) {
       try {
         await options.notifySeller(record);
       } catch (error) {
@@ -295,9 +300,18 @@ export async function resolvePendingSellerLightningPayout(
           }. The record was kept; check again to retry the notification.`,
         };
       }
+      // Stamp the record so a failed removal below retries without
+      // re-sending the DM. Best-effort: if the mark cannot be persisted the
+      // removal will likely fail too, and the retry falls back to a
+      // duplicate DM — still better than a seller never told.
+      try {
+        markPendingSellerLightningPayoutNotified(record.meltQuoteId);
+      } catch {
+        // Removal below is attempted regardless.
+      }
     }
     let receiptError: string | undefined;
-    if (options.notifyBuyer) {
+    if (needsNotification && options.notifyBuyer) {
       try {
         await options.notifyBuyer(record);
       } catch (error) {
