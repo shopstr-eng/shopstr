@@ -1795,13 +1795,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .string()
         .optional()
         .describe(
-          "Buyer's pubkey (hex format) — required when seller sends a notification DM"
-        ),
-      sellerPubkey: z
-        .string()
-        .optional()
-        .describe(
-          "Seller's pubkey (hex format) — optional confirmation when buyer cancels"
+          "Buyer's pubkey (hex format) — optional confirmation when seller sends a notification DM"
         ),
       message: z
         .string()
@@ -1853,17 +1847,6 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        if (
-          params.sellerPubkey &&
-          params.sellerPubkey !== order.seller_pubkey
-        ) {
-          return errorResponse(
-            "Seller mismatch",
-            `Provided seller pubkey does not match order "${params.orderId}"`,
-            startTime
-          );
-        }
-
         const updatedOrder = await updateMcpOrderStatus(
           params.orderId,
           params.status,
@@ -1879,13 +1862,15 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         }
 
         let notificationSent = false;
+        let notificationWarning: string | undefined;
+
         const isBuyerCancellation = params.status === "cancelled";
         const recipientPubkey = isBuyerCancellation
           ? order.seller_pubkey
           : order.buyer_pubkey;
 
         const shouldSendNotification = Boolean(
-          params.message && (isBuyerCancellation || params.buyerPubkey)
+          isBuyerCancellation || (params.buyerPubkey && params.message)
         );
 
         if (shouldSendNotification) {
@@ -1904,21 +1889,62 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
               cancelled: "order-info",
             };
 
+            const wireStatusMap: Record<string, string> = {
+              confirmed: "confirmed",
+              shipped: "shipped",
+              delivered: "completed",
+              cancelled: "canceled",
+            };
+
+            let resolvedProductAddress = params.productAddress;
+            if (!resolvedProductAddress) {
+              try {
+                const { fetchProductByIdFromDb } =
+                  await import("@/utils/db/db-service");
+                const productEvent = await fetchProductByIdFromDb(
+                  order.product_id
+                );
+                if (productEvent) {
+                  const dTag =
+                    productEvent.tags?.find(
+                      (t: string[]) => t[0] === "d"
+                    )?.[1] || productEvent.id;
+                  resolvedProductAddress = `30402:${order.seller_pubkey}:${dTag}`;
+                }
+              } catch {}
+            }
+            if (!resolvedProductAddress) {
+              resolvedProductAddress = order.product_id.includes(":")
+                ? order.product_id
+                : `30402:${order.seller_pubkey}:${order.product_id}`;
+            }
+
             const innerTags: string[][] = [
               ["p", recipientPubkey, relayHint],
               ["subject", subjectMap[params.status] || "order-info"],
               ["order", params.orderId],
-              ["status", params.status],
+              ["status", wireStatusMap[params.status] || params.status],
               ["b", order.buyer_pubkey],
             ];
-            if (params.productAddress) {
-              innerTags.push(["item", params.productAddress, "1"]);
+            if (resolvedProductAddress) {
+              innerTags.push([
+                "item",
+                resolvedProductAddress,
+                String(order.quantity || 1),
+              ]);
             }
+
+            const messageText =
+              params.message && params.message.trim().length > 0
+                ? params.message.trim()
+                : isBuyerCancellation
+                  ? "Order has been cancelled by the buyer."
+                  : "";
 
             const innerEvent = {
               pubkey: senderPubkey,
               created_at: Math.floor(Date.now() / 1000),
-              content: params.message,
+              content: messageText,
               kind: 14,
               tags: innerTags,
             };
@@ -1942,6 +1968,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             }
           } catch (dmError) {
             console.error("Failed to send status notification DM:", dmError);
+            notificationWarning = isBuyerCancellation
+              ? "Order was cancelled in the database, but the notification DM could not be delivered to the seller."
+              : "Order status was updated in the database, but the notification DM could not be delivered.";
           }
         }
 
@@ -1951,6 +1980,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             status: params.status,
             orderUpdated: true,
             notificationSent,
+            ...(notificationWarning ? { warning: notificationWarning } : {}),
           },
           startTime
         );

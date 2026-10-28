@@ -1881,26 +1881,6 @@ describe("registerWriteTools — (community & messaging)", () => {
       expect(updateMcpOrderStatus).not.toHaveBeenCalled();
     });
 
-    it("rejects with 'Seller mismatch' when sellerPubkey param does not match order.seller_pubkey", async () => {
-      jest.mocked(getMcpOrder).mockResolvedValueOnce(
-        mockMcpOrder({
-          seller_pubkey: "actual-seller",
-          buyer_pubkey: TEST_PUBKEY,
-        }) as any
-      );
-      const tool = getCallback();
-
-      const result = await tool({
-        orderId: "order-1",
-        status: "cancelled",
-        sellerPubkey: "wrong-seller",
-      });
-
-      expect(result.isError).toBe(true);
-      expect(textPayload(result).error).toBe("Seller mismatch");
-      expect(updateMcpOrderStatus).not.toHaveBeenCalled();
-    });
-
     it("returns 'Unauthorized order update' when updateMcpOrderStatus resolves null", async () => {
       jest.mocked(getMcpOrder).mockResolvedValueOnce(
         mockMcpOrder({
@@ -2042,7 +2022,157 @@ describe("registerWriteTools — (community & messaging)", () => {
         "actual-seller",
         "wss://relay.damus.io",
       ]);
-      expect(innerEvent.tags).toContainEqual(["status", "cancelled"]);
+      expect(innerEvent.tags).toContainEqual(["status", "canceled"]);
+    });
+
+    it.each([
+      ["confirmed", "confirmed"],
+      ["shipped", "shipped"],
+      ["delivered", "completed"],
+      ["cancelled", "canceled"],
+    ])(
+      "maps MCP status '%s' to client wire status '%s' in the notification DM",
+      async (status, expectedWireStatus) => {
+        const order = mockMcpOrder({
+          seller_pubkey: status === "cancelled" ? "someone-else" : TEST_PUBKEY,
+          buyer_pubkey: status === "cancelled" ? TEST_PUBKEY : "actual-buyer",
+        });
+        jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+        jest
+          .mocked(updateMcpOrderStatus)
+          .mockResolvedValueOnce({ ...order, order_status: status } as any);
+        const tool = getCallback();
+
+        await tool({
+          orderId: "order-1",
+          status,
+          buyerPubkey: order.buyer_pubkey,
+          message: "Update",
+        });
+
+        const innerEvent = JSON.parse(
+          jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+        );
+        expect(innerEvent.tags).toContainEqual(["status", expectedWireStatus]);
+      }
+    );
+
+    it("sends notification DM with default text when buyer cancels without a message", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: "actual-seller",
+        buyer_pubkey: TEST_PUBKEY,
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "cancelled" } as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        orderId: "order-1",
+        status: "cancelled",
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(textPayload(result).notificationSent).toBe(true);
+      expect(createGiftWrapEvent).toHaveBeenCalledWith(
+        expect.any(String),
+        "actual-seller"
+      );
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.content).toBe("Order has been cancelled by the buyer.");
+    });
+
+    it("falls back to deriving product address from DB event when productAddress is omitted", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: "actual-seller",
+        buyer_pubkey: TEST_PUBKEY,
+        product_id: "prod-event-id",
+        quantity: 2,
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "cancelled" } as any);
+      jest.mocked(fetchProductByIdFromDb).mockResolvedValueOnce({
+        id: "prod-event-id",
+        pubkey: "actual-seller",
+        tags: [["d", "my-d-tag"]],
+      } as any);
+      const tool = getCallback();
+
+      await tool({
+        orderId: "order-1",
+        status: "cancelled",
+      });
+
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.tags).toContainEqual([
+        "item",
+        "30402:actual-seller:my-d-tag",
+        "2",
+      ]);
+    });
+
+    it("falls back to order.product_id formatted as address when DB lookup returns null", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: "actual-seller",
+        buyer_pubkey: TEST_PUBKEY,
+        product_id: "prod-raw-id",
+        quantity: 1,
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "cancelled" } as any);
+      jest.mocked(fetchProductByIdFromDb).mockResolvedValueOnce(null);
+      const tool = getCallback();
+
+      await tool({
+        orderId: "order-1",
+        status: "cancelled",
+      });
+
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.tags).toContainEqual([
+        "item",
+        "30402:actual-seller:prod-raw-id",
+        "1",
+      ]);
+    });
+
+    it("includes explicit warning in response when notification DM delivery fails", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: "actual-seller",
+        buyer_pubkey: TEST_PUBKEY,
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "cancelled" } as any);
+      jest
+        .mocked(createGiftWrapEvent)
+        .mockRejectedValueOnce(new Error("relay timeout"));
+      const tool = getCallback();
+
+      const result = await tool({
+        orderId: "order-1",
+        status: "cancelled",
+      });
+
+      expect(result.isError).toBeFalsy();
+      const payload = textPayload(result);
+      expect(payload.orderUpdated).toBe(true);
+      expect(payload.notificationSent).toBe(false);
+      expect(payload.warning).toContain(
+        "Order was cancelled in the database, but the notification DM could not be delivered to the seller."
+      );
     });
 
     it("sends notification DM to the buyer when seller confirms an order", async () => {
