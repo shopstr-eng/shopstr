@@ -8,7 +8,7 @@ const parseDisputeEventMock = jest.fn();
 const selectAuthoritativeDisputeEventMock = jest.fn();
 const signAndPublishEventMock = jest.fn();
 const getTokenMetadataMock = jest.fn();
-const getDecodedTokenMock = jest.fn();
+const decodeTokenProofsMock = jest.fn();
 const parseP2PKProofSetMock = jest.fn();
 const getP2pkEscrowOrderMock = jest.fn();
 const recordP2pkEscrowRulingMock = jest.fn();
@@ -17,7 +17,10 @@ const deriveCashuPubkeyMock = jest.fn();
 
 jest.mock("@cashu/cashu-ts", () => ({
   getTokenMetadata: (...args: unknown[]) => getTokenMetadataMock(...args),
-  getDecodedToken: (...args: unknown[]) => getDecodedTokenMock(...args),
+}));
+
+jest.mock("@/utils/cashu/token-proofs", () => ({
+  decodeTokenProofs: (...args: unknown[]) => decodeTokenProofsMock(...args),
 }));
 
 jest.mock("@/utils/rate-limit", () => ({
@@ -135,9 +138,9 @@ describe("/api/arbiter/rule", () => {
       proofs: [{ id: "proof" }],
       partialSigs: ["arbiter-sig"],
     });
-    getDecodedTokenMock.mockReturnValue({
-      proofs: [{ amount: 10, secret: "p2pk-secret", C: "proof-C" }],
-    });
+    decodeTokenProofsMock.mockReturnValue([
+      { amount: 10, secret: "p2pk-secret", C: "proof-C" },
+    ]);
     parseP2PKProofSetMock.mockReturnValue({
       p2pk: {
         pubkey: "b".repeat(64),
@@ -242,7 +245,7 @@ describe("/api/arbiter/rule", () => {
       expect.objectContaining({ orderId: "order-1", timeoutMs: 10_000 })
     );
     expect(getP2pkEscrowOrderMock).toHaveBeenCalledWith("order-1");
-    expect(getDecodedTokenMock).toHaveBeenCalledWith("cashuAtoken", []);
+    expect(decodeTokenProofsMock).toHaveBeenCalledWith("cashuAtoken");
     expect(parseP2PKProofSetMock).toHaveBeenCalledWith([
       { amount: 10, secret: "p2pk-secret", C: "proof-C" },
     ]);
@@ -354,9 +357,9 @@ describe("/api/arbiter/rule", () => {
       ok: true,
       pubkey: "arbiter-nostr-pubkey",
     });
-    getDecodedTokenMock.mockReturnValue({
-      proofs: [{ amount: 11, secret: "p2pk-secret", C: "proof-C" }],
-    });
+    decodeTokenProofsMock.mockReturnValue([
+      { amount: 11, secret: "p2pk-secret", C: "proof-C" },
+    ]);
 
     const req = {
       method: "POST",

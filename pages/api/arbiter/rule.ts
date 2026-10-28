@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getDecodedToken, getTokenMetadata, type Proof } from "@cashu/cashu-ts";
+import { getTokenMetadata } from "@cashu/cashu-ts";
 import { applyRateLimit } from "@/utils/rate-limit";
 import { verifyNip98Request } from "@/utils/nostr/nip98-auth";
 import {
@@ -17,6 +17,7 @@ import {
 import { hashEscrowToken } from "@/utils/cashu/escrow-order-commitment";
 import { deriveCashuPubkey } from "@/utils/cashu/wallet-config";
 import { sumProofAmounts } from "@/utils/cashu/proof-amount";
+import { decodeTokenProofs, type TokenProof } from "@/utils/cashu/token-proofs";
 import { sendServerGiftWrappedDm } from "@/utils/nostr/server-gift-wrap";
 import {
   createDisputeEventTemplate,
@@ -85,16 +86,7 @@ function getTokenMint(token: string): string | null {
 type DisputeTokenValidation =
   { ok: true } | { ok: false; status: 400 | 403 | 500; error: string };
 
-function decodeTokenProofs(token: string): Proof[] | null {
-  try {
-    const decodedToken = getDecodedToken(token, []);
-    return Array.isArray(decodedToken?.proofs) ? decodedToken.proofs : null;
-  } catch {
-    return null;
-  }
-}
-
-function getProofAmountSats(proofs: Proof[]): number | null {
+function getProofAmountSats(proofs: TokenProof[]): number | null {
   try {
     const amount = sumProofAmounts(proofs);
     if (!Number.isFinite(amount) || amount < 0) return null;

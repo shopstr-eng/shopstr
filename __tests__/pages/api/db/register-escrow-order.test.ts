@@ -1,7 +1,7 @@
 const applyRateLimitMock = jest.fn();
 const verifyNip98RequestMock = jest.fn();
 const registerP2pkEscrowOrderMock = jest.fn();
-const getDecodedTokenMock = jest.fn();
+const decodeTokenProofsMock = jest.fn();
 const sumProofAmountsMock = jest.fn();
 const hashEscrowTokenMock = jest.fn();
 const getArbiterPubkeyMock = jest.fn();
@@ -20,9 +20,8 @@ jest.mock("@/utils/db/db-service", () => ({
     registerP2pkEscrowOrderMock(...args),
 }));
 
-jest.mock("@cashu/cashu-ts", () => ({
-  ...jest.requireActual("@cashu/cashu-ts"),
-  getDecodedToken: (...args: unknown[]) => getDecodedTokenMock(...args),
+jest.mock("@/utils/cashu/token-proofs", () => ({
+  decodeTokenProofs: (...args: unknown[]) => decodeTokenProofsMock(...args),
 }));
 
 jest.mock("@/utils/cashu/proof-amount", () => ({
@@ -66,7 +65,7 @@ const derivedCommitment = {
 };
 
 function mockValidToken() {
-  getDecodedTokenMock.mockReturnValue({ proofs: [{ amount: 42 }] });
+  decodeTokenProofsMock.mockReturnValue([{ amount: 42 }]);
   sumProofAmountsMock.mockReturnValue(42);
   hashEscrowTokenMock.mockReturnValue("6".repeat(64));
   getArbiterPubkeyMock.mockReturnValue(ARBITER_CASHU_PUBKEY);
@@ -151,9 +150,7 @@ describe("/api/db/register-escrow-order", () => {
   });
 
   it("rejects tokens that fail to decode", async () => {
-    getDecodedTokenMock.mockImplementation(() => {
-      throw new Error("bad token");
-    });
+    decodeTokenProofsMock.mockReturnValue(null);
     const res = createResponse();
     await handler(createRequest(), res as any);
 

@@ -4,6 +4,7 @@ import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
 import { getSatoshiValue } from "@getalby/lightning-tools";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import { authenticateRequest, initializeApiKeysTable } from "@/utils/mcp/auth";
 import {
   fetchAllProductsFromDb,
@@ -489,10 +490,7 @@ async function handleCashuPayment(
       });
     }
 
-    const tokenAmount = decoded.proofs.reduce(
-      (sum: number, p: any) => sum + (p.amount || 0),
-      0
-    );
+    const tokenAmount = sumProofAmounts(decoded.proofs);
 
     const requiredAmount = await convertOrderTotalToSats(totalAmount, currency);
 

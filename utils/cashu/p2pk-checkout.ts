@@ -532,7 +532,7 @@ export async function resolveP2pkCheckoutOutputConfig(params: {
   return outputConfig;
 }
 
-export function parseP2PK(proof: Proof): ParsedP2PK | null {
+export function parseP2PK(proof: Pick<Proof, "secret">): ParsedP2PK | null {
   try {
     const kind = getSecretKind(proof.secret);
 
@@ -623,7 +623,7 @@ export function parseP2PK(proof: Proof): ParsedP2PK | null {
   }
 }
 
-function hasP2pkKind(proof: Proof): boolean {
+function hasP2pkKind(proof: Pick<Proof, "secret">): boolean {
   try {
     return getSecretKind(proof.secret) === "P2PK";
   } catch {
@@ -642,7 +642,9 @@ function p2pkConstraintFingerprint(p2pk: ParsedP2PK): string {
   });
 }
 
-export function parseP2PKProofSet(proofs: Proof[]): P2pkProofSetParseResult {
+export function parseP2PKProofSet(
+  proofs: Array<Pick<Proof, "secret">>
+): P2pkProofSetParseResult {
   let parsedP2pk: ParsedP2PK | null = null;
   let fingerprint: string | null = null;
   let sawPlainProof = false;
