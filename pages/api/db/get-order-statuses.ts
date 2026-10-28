@@ -1,49 +1,22 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getOrderStatuses } from "@/utils/db/db-service";
+import {
+  getOrderParticipantsForOrders,
+  getOrderStatuses,
+} from "@/utils/db/db-service";
+import { verifyNip98Request } from "@/utils/nostr/nip98-auth";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { parseOrderIdList } from "@/utils/orders/order-id-list";
+import { getOrderRole } from "@/utils/orders/order-status-rules";
 
 // Polled by buyer/seller dashboards while orders are open. Generous limit
 // so a tab opened on multiple orders does not throttle, but bounded so a
 // single client can't keep this hot path saturated.
 const RATE_LIMIT = { limit: 600, windowMs: 60 * 1000 };
-const MAX_ORDER_IDS_PER_REQUEST = (() => {
-  const configured = Number.parseInt(
-    process.env.MAX_ORDER_IDS_PER_REQUEST || "",
-    10
-  );
-  return Number.isFinite(configured) && configured > 0 ? configured : 200;
-})();
-const MAX_ORDER_ID_LENGTH = 128;
+const PER_PUBKEY_LIMIT = { limit: 300, windowMs: 60 * 1000 };
 
-function normalizeOrderIds(orderIds: unknown): string[] | null {
-  if (orderIds === null || orderIds === undefined) {
-    return [];
-  }
-
-  if (typeof orderIds === "string") {
-    const trimmed = orderIds.trim();
-    return trimmed ? [trimmed] : [];
-  }
-
-  if (!Array.isArray(orderIds)) {
-    return null;
-  }
-
-  const normalized: string[] = [];
-  for (const value of orderIds) {
-    if (typeof value !== "string") {
-      return null;
-    }
-    // Normalize whitespace to avoid accidental client-side mismatches.
-    const trimmed = value.trim();
-    if (trimmed) {
-      normalized.push(trimmed);
-    }
-  }
-
-  return normalized;
-}
-
+// Statuses are returned only for orders the authenticated caller is a party
+// to. Participants resolve the same way status writes are authorized
+// (including the legacy fallback for orders placed before order_participants).
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -54,36 +27,47 @@ export default async function handler(
 
   if (!applyRateLimit(req, res, "get-order-statuses", RATE_LIMIT)) return;
 
-  const orderIds =
-    req.method === "POST" ? req.body.orderIds : req.query.orderIds;
-
-  const normalizedOrderIds = normalizeOrderIds(orderIds);
-  if (normalizedOrderIds === null) {
-    return res.status(400).json({
-      error: "Invalid orderIds. Expected a string or array of strings.",
-    });
+  const auth = await verifyNip98Request(req, req.method);
+  if (!auth.ok) {
+    return res.status(401).json({ error: auth.error });
   }
 
-  if (normalizedOrderIds.length === 0) {
+  if (
+    !applyRateLimit(
+      req,
+      res,
+      "get-order-statuses:pubkey",
+      PER_PUBKEY_LIMIT,
+      auth.pubkey
+    )
+  )
+    return;
+
+  const orderIds =
+    req.method === "POST" ? req.body?.orderIds : req.query.orderIds;
+
+  const parsed = parseOrderIdList(orderIds);
+  if (!parsed.ok) {
+    return res.status(parsed.status).json({ error: parsed.error });
+  }
+
+  if (parsed.orderIds.length === 0) {
     return res.status(200).json({ statuses: {} });
   }
 
-  if (normalizedOrderIds.length > MAX_ORDER_IDS_PER_REQUEST) {
-    return res.status(413).json({
-      error: `Too many order IDs. Maximum allowed is ${MAX_ORDER_IDS_PER_REQUEST}.`,
-    });
-  }
-
-  if (normalizedOrderIds.some((id) => id.length > MAX_ORDER_ID_LENGTH)) {
-    return res.status(400).json({
-      error: `Invalid order ID length. Maximum length is ${MAX_ORDER_ID_LENGTH}.`,
-    });
-  }
-
-  const orderIdArray = Array.from(new Set(normalizedOrderIds));
-
   try {
-    const statuses = await getOrderStatuses(orderIdArray);
+    const participants = await getOrderParticipantsForOrders(parsed.orderIds, {
+      includeLegacy: true,
+    });
+    const visibleOrderIds = parsed.orderIds.filter((orderId) => {
+      const orderParticipants = participants.get(orderId);
+      return (
+        orderParticipants !== undefined &&
+        getOrderRole(auth.pubkey, orderParticipants) !== null
+      );
+    });
+
+    const statuses = await getOrderStatuses(visibleOrderIds);
     return res.status(200).json({ statuses });
   } catch (error) {
     console.error("Failed to get order statuses:", error);

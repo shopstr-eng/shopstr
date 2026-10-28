@@ -501,6 +501,46 @@ async function initializeTables(): Promise<void> {
       -- Migration for tables created before invoice_order_id existed.
       ALTER TABLE p2pk_escrow_orders ADD COLUMN IF NOT EXISTS invoice_order_id TEXT;
 
+      -- Buyer/seller of web checkout orders. The buyer registers the record
+      -- with NIP-98 before the order id leaves their device; the first write
+      -- wins and rows can never be updated or deleted, because a freed order
+      -- id could be re-claimed by the seller, who learns it from the order DM.
+      CREATE TABLE IF NOT EXISTS order_participants (
+          order_id TEXT PRIMARY KEY,
+          buyer_pubkey TEXT NOT NULL,
+          seller_pubkey TEXT NOT NULL,
+          -- 30402 listing address, or the note id of a zapsnag listing
+          product_address TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- When a feature first reached this database. Orders placed before
+      -- order_participants existed fall back to the legacy message-tag
+      -- lookup, but only for messages cached before this moment.
+      CREATE TABLE IF NOT EXISTS schema_milestones (
+          name TEXT PRIMARY KEY,
+          reached_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      INSERT INTO schema_milestones (name)
+      VALUES ('order_participants')
+      ON CONFLICT (name) DO NOTHING;
+
+      CREATE INDEX IF NOT EXISTS idx_order_participants_buyer ON order_participants(buyer_pubkey);
+      CREATE INDEX IF NOT EXISTS idx_order_participants_seller ON order_participants(seller_pubkey);
+
+      CREATE OR REPLACE FUNCTION reject_order_participants_mutation()
+      RETURNS trigger AS $$
+      BEGIN
+        RAISE EXCEPTION 'order_participants rows are immutable';
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS order_participants_immutable ON order_participants;
+      CREATE TRIGGER order_participants_immutable
+        BEFORE UPDATE OR DELETE ON order_participants
+        FOR EACH ROW EXECUTE FUNCTION reject_order_participants_mutation();
+
       -- Shop slugs table (storefront URL slugs)
       CREATE TABLE IF NOT EXISTS shop_slugs (
           pubkey TEXT PRIMARY KEY,
@@ -2007,52 +2047,215 @@ export async function recordP2pkEscrowRuling(
   }
 }
 
-export async function getOrderParticipants(orderId: string): Promise<{
-  buyerPubkey: string | null;
-  sellerPubkey: string | null;
-}> {
-  const dbPool = getDbPool();
-  let client;
+export type OrderParticipantsRegistration = {
+  orderId: string;
+  buyerPubkey: string;
+  sellerPubkey: string;
+  productAddress: string;
+};
+
+type OrderParticipantsRow = {
+  buyer_pubkey: string;
+  seller_pubkey: string;
+  product_address: string;
+};
+
+// First write wins. Repeating the same registration is a no-op so clients
+// can retry; any different claim for an existing order id is a conflict and
+// never overwrites the stored participants.
+export async function registerOrderParticipants(
+  registration: OrderParticipantsRegistration
+): Promise<"created" | "existing" | "conflict"> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
 
   try {
-    client = await dbPool.connect();
-    const result = await client.query<{ tags: string[][] }>(
-      `SELECT tags
-       FROM message_events
-       WHERE order_id = $1
-       ORDER BY created_at DESC`,
-      [orderId] as any[]
+    const inserted = await client.query(
+      `INSERT INTO order_participants (
+         order_id,
+         buyer_pubkey,
+         seller_pubkey,
+         product_address
+       )
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (order_id) DO NOTHING
+       RETURNING order_id`,
+      [
+        registration.orderId,
+        registration.buyerPubkey,
+        registration.sellerPubkey,
+        registration.productAddress,
+      ]
     );
+    if ((inserted.rowCount ?? 0) > 0) return "created";
 
-    let buyerPubkey: string | null = null;
-    let sellerPubkey: string | null = null;
+    const existing = await client.query<OrderParticipantsRow>(
+      `SELECT buyer_pubkey, seller_pubkey, product_address
+       FROM order_participants
+       WHERE order_id = $1`,
+      [registration.orderId]
+    );
+    const row = existing.rows[0];
+    if (!row) return "conflict";
+    return row.buyer_pubkey === registration.buyerPubkey &&
+      row.seller_pubkey === registration.sellerPubkey &&
+      row.product_address === registration.productAddress
+      ? "existing"
+      : "conflict";
+  } finally {
+    client.release();
+  }
+}
 
-    for (const row of result.rows) {
-      const tags = Array.isArray(row.tags) ? (row.tags as string[][]) : [];
+export type OrderParticipantsSource =
+  "order_participants" | "mcp_orders" | "legacy_message_tags";
 
-      if (!buyerPubkey) {
-        const buyerTag = tags.find((tag) => tag[0] === "b");
-        if (buyerTag?.[1]) {
-          buyerPubkey = buyerTag[1];
-        }
-      }
+export type OrderParticipants = {
+  buyerPubkey: string;
+  sellerPubkey: string;
+  source: OrderParticipantsSource;
+};
 
-      if (!sellerPubkey) {
-        const itemTag = tags.find((tag) => tag[0] === "item");
-        const productAddress =
-          tags.find((tag) => tag[0] === "a")?.[1] || itemTag?.[1];
-        const addressParts = productAddress?.split(":");
-        if (addressParts && addressParts.length >= 2 && addressParts[1]) {
-          sellerPubkey = addressParts[1];
-        }
-      }
+// Pre-order_participants behaviour, kept only for orders placed before that
+// table existed. Message tags are written by whoever sends the message, so
+// this is not trustworthy; the cached_at cutoff (server clock) stops it from
+// resolving any order whose messages arrived after the table was introduced.
+async function getLegacyOrderParticipants(
+  client: PoolClient,
+  orderIds: string[]
+): Promise<Map<string, OrderParticipants>> {
+  const result = await client.query<{ order_id: string; tags: string[][] }>(
+    `SELECT order_id, tags
+     FROM message_events
+     WHERE order_id = ANY($1)
+       AND cached_at < (
+         SELECT reached_at
+         FROM schema_milestones
+         WHERE name = 'order_participants'
+       )
+     ORDER BY created_at DESC`,
+    [orderIds]
+  );
 
-      if (buyerPubkey && sellerPubkey) {
-        break;
+  const found = new Map<
+    string,
+    { buyerPubkey: string | null; sellerPubkey: string | null }
+  >();
+
+  for (const row of result.rows) {
+    const current = found.get(row.order_id) ?? {
+      buyerPubkey: null,
+      sellerPubkey: null,
+    };
+    const tags = Array.isArray(row.tags) ? row.tags : [];
+
+    if (!current.buyerPubkey) {
+      const buyerTag = tags.find((tag) => tag[0] === "b");
+      if (buyerTag?.[1]) {
+        current.buyerPubkey = buyerTag[1];
       }
     }
 
-    return { buyerPubkey, sellerPubkey };
+    if (!current.sellerPubkey) {
+      const itemTag = tags.find((tag) => tag[0] === "item");
+      const productAddress =
+        tags.find((tag) => tag[0] === "a")?.[1] || itemTag?.[1];
+      const addressParts = productAddress?.split(":");
+      if (addressParts && addressParts.length >= 2 && addressParts[1]) {
+        current.sellerPubkey = addressParts[1];
+      }
+    }
+
+    found.set(row.order_id, current);
+  }
+
+  const participants = new Map<string, OrderParticipants>();
+  for (const [orderId, { buyerPubkey, sellerPubkey }] of found) {
+    if (buyerPubkey && sellerPubkey) {
+      participants.set(orderId, {
+        buyerPubkey,
+        sellerPubkey,
+        source: "legacy_message_tags",
+      });
+    }
+  }
+  return participants;
+}
+
+// Resolves buyer/seller from records written by authenticated server code.
+// p2pk_escrow_orders is not a source, because its invoice_order_id is neither
+// unique nor bound to the real buyer. With includeLegacy, orders that have no
+// record at all fall back to the legacy lookup above; orders whose records
+// disagree stay unresolved either way. Unresolved orders are absent from the
+// returned map.
+export async function getOrderParticipantsForOrders(
+  orderIds: string[],
+  options: { includeLegacy: boolean }
+): Promise<Map<string, OrderParticipants>> {
+  const participants = new Map<string, OrderParticipants>();
+  if (orderIds.length === 0) return participants;
+
+  let client;
+
+  try {
+    const dbPool = await getInitializedDbPool();
+    client = await dbPool.connect();
+    const result = await client.query<{
+      order_id: string;
+      source: OrderParticipantsSource;
+      buyer_pubkey: string;
+      seller_pubkey: string;
+    }>(
+      `SELECT order_id, 'order_participants' AS source, buyer_pubkey, seller_pubkey
+       FROM order_participants
+       WHERE order_id = ANY($1)
+       UNION ALL
+       SELECT order_id, 'mcp_orders' AS source, buyer_pubkey, seller_pubkey
+       FROM mcp_orders
+       WHERE order_id = ANY($1)
+       ORDER BY order_id, source DESC`,
+      [orderIds]
+    );
+
+    const conflicted = new Set<string>();
+    for (const row of result.rows) {
+      if (conflicted.has(row.order_id)) continue;
+
+      const existing = participants.get(row.order_id);
+      if (!existing) {
+        participants.set(row.order_id, {
+          buyerPubkey: row.buyer_pubkey,
+          sellerPubkey: row.seller_pubkey,
+          source: row.source,
+        });
+        continue;
+      }
+
+      if (
+        existing.buyerPubkey !== row.buyer_pubkey ||
+        existing.sellerPubkey !== row.seller_pubkey
+      ) {
+        console.warn(
+          `Order ${row.order_id} has conflicting participant records; leaving it unresolved.`
+        );
+        participants.delete(row.order_id);
+        conflicted.add(row.order_id);
+      }
+    }
+
+    if (options.includeLegacy) {
+      const unrecorded = orderIds.filter(
+        (orderId) => !participants.has(orderId) && !conflicted.has(orderId)
+      );
+      if (unrecorded.length > 0) {
+        const legacy = await getLegacyOrderParticipants(client, unrecorded);
+        for (const [orderId, legacyParticipants] of legacy) {
+          participants.set(orderId, legacyParticipants);
+        }
+      }
+    }
+
+    return participants;
   } catch (error) {
     console.error("Failed to get order participants:", error);
     throw error;
@@ -2061,6 +2264,15 @@ export async function getOrderParticipants(orderId: string): Promise<{
       client.release();
     }
   }
+}
+
+export async function getOrderParticipants(
+  orderId: string
+): Promise<OrderParticipants | null> {
+  const participants = await getOrderParticipantsForOrders([orderId], {
+    includeLegacy: true,
+  });
+  return participants.get(orderId) ?? null;
 }
 
 // Update order status in database

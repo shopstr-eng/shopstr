@@ -2,6 +2,11 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getOrderParticipants, updateOrderStatus } from "@/utils/db/db-service";
 import { verifyNip98Request } from "@/utils/nostr/nip98-auth";
 import { applyRateLimit } from "@/utils/rate-limit";
+import {
+  canActorSetOrderStatus,
+  isOrderStatus,
+  ORDER_STATUSES,
+} from "@/utils/orders/order-status-rules";
 
 // Order status writes sit on the buyer/seller critical path. The per-IP
 // limit is generous (a buyer + seller behind shared NAT can both work many
@@ -9,33 +14,6 @@ import { applyRateLimit } from "@/utils/rate-limit";
 // since we only call it after NIP-98 verification.
 const PER_IP_LIMIT = { limit: 300, windowMs: 60 * 1000 };
 const PER_PUBKEY_LIMIT = { limit: 200, windowMs: 60 * 1000 };
-
-const SELLER_MANAGED_STATUSES = new Set(["confirmed", "shipped", "completed"]);
-const BUYER_MANAGED_STATUSES = new Set(["canceled"]);
-const PARTICIPANT_MANAGED_STATUSES = new Set(["pending"]);
-
-function canActorUpdateOrderStatus(
-  actorPubkey: string,
-  buyerPubkey: string | null,
-  sellerPubkey: string | null,
-  status: string
-): boolean {
-  if (actorPubkey === sellerPubkey) {
-    return (
-      SELLER_MANAGED_STATUSES.has(status) ||
-      PARTICIPANT_MANAGED_STATUSES.has(status)
-    );
-  }
-
-  if (actorPubkey === buyerPubkey) {
-    return (
-      BUYER_MANAGED_STATUSES.has(status) ||
-      PARTICIPANT_MANAGED_STATUSES.has(status)
-    );
-  }
-
-  return false;
-}
 
 export default async function handler(
   req: NextApiRequest,
@@ -71,36 +49,22 @@ export default async function handler(
       .json({ error: "Missing required fields: orderId, status" });
   }
 
-  const validStatuses = [
-    "pending",
-    "confirmed",
-    "shipped",
-    "completed",
-    "canceled",
-  ];
-  if (!validStatuses.includes(status)) {
+  if (!isOrderStatus(status)) {
     return res.status(400).json({
-      error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+      error: `Invalid status. Must be one of: ${ORDER_STATUSES.join(", ")}`,
     });
   }
 
   try {
-    const { buyerPubkey, sellerPubkey } = await getOrderParticipants(orderId);
+    const participants = await getOrderParticipants(orderId);
 
-    if (!buyerPubkey || !sellerPubkey) {
+    if (!participants) {
       return res.status(404).json({
         error: "Could not resolve order participants for this order.",
       });
     }
 
-    if (
-      !canActorUpdateOrderStatus(
-        authResult.pubkey,
-        buyerPubkey,
-        sellerPubkey,
-        status
-      )
-    ) {
+    if (!canActorSetOrderStatus(authResult.pubkey, participants, status)) {
       return res.status(403).json({
         error:
           "You are not allowed to set this order status for the current order role.",

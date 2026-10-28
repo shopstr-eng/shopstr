@@ -26,6 +26,7 @@ import {
 import { generateSecretKey, getPublicKey } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
+import { registerOrderParticipantsOnServer } from "@/utils/db/order-participants-client";
 import {
   validateZapReceipt,
   validateSingleReceipt,
@@ -259,6 +260,8 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       const ephemeralPubHex = getPublicKey(ephemeralPrivBytes);
 
       const orderId = crypto.randomUUID();
+      // Before the order DM carries the order id to the seller.
+      await registerOrderParticipantsOnServer(signer, orderId, product);
       const shippingMessage = JSON.stringify({
         type: "zapsnag_order",
         orderId: orderId,

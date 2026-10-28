@@ -3020,17 +3020,14 @@ describe("db-service helpers", () => {
           const text = typeof q === "string" ? q : q.text || "";
           queries.push({ text, params });
 
-          if (
-            text.includes("SELECT tags") &&
-            text.includes("FROM message_events")
-          ) {
+          if (text.includes("FROM order_participants")) {
             return {
               rows: [
                 {
-                  tags: [
-                    ["b", "buyer-1"],
-                    ["item", "30402:seller-1:listing-1"],
-                  ],
+                  order_id: "order-1",
+                  source: "order_participants",
+                  buyer_pubkey: "buyer-1",
+                  seller_pubkey: "seller-1",
                 },
               ],
               rowCount: 1,
@@ -3056,6 +3053,7 @@ describe("db-service helpers", () => {
         await expect(mod.getOrderParticipants("order-1")).resolves.toEqual({
           buyerPubkey: "buyer-1",
           sellerPubkey: "seller-1",
+          source: "order_participants",
         });
         await expect(
           mod.getOrderStatuses(["order-1", "order-2"])
@@ -3539,6 +3537,64 @@ describe("db-service helpers", () => {
 
   describe("db-service with Testcontainers (discounts, stats, cached events)", () => {
     maybeItTc(
+      "keeps order participants first-write-wins and immutable",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          await waitForTables(db, ["order_participants", "mcp_orders"]);
+
+          const registration = {
+            orderId: "7f0c1a52-3d4e-4b6f-8a9b-0c1d2e3f4a5b",
+            buyerPubkey: "1".repeat(64),
+            sellerPubkey: "2".repeat(64),
+            productAddress: `30402:${"2".repeat(64)}:listing-1`,
+          };
+
+          await expect(
+            db.registerOrderParticipants(registration)
+          ).resolves.toBe("created");
+          await expect(
+            db.registerOrderParticipants(registration)
+          ).resolves.toBe("existing");
+          await expect(
+            db.registerOrderParticipants({
+              ...registration,
+              buyerPubkey: "3".repeat(64),
+            })
+          ).resolves.toBe("conflict");
+
+          const client = await db.getDbPool().connect();
+          try {
+            await expect(
+              client.query(
+                `UPDATE order_participants SET buyer_pubkey = $1 WHERE order_id = $2`,
+                ["3".repeat(64), registration.orderId]
+              )
+            ).rejects.toThrow("order_participants rows are immutable");
+            await expect(
+              client.query(
+                `DELETE FROM order_participants WHERE order_id = $1`,
+                [registration.orderId]
+              )
+            ).rejects.toThrow("order_participants rows are immutable");
+          } finally {
+            client.release();
+          }
+
+          await expect(
+            db.getOrderParticipants(registration.orderId)
+          ).resolves.toEqual({
+            buyerPubkey: registration.buyerPubkey,
+            sellerPubkey: registration.sellerPubkey,
+            source: "order_participants",
+          });
+          await expect(
+            db.getOrderParticipants("unknown-order")
+          ).resolves.toBeNull();
+        });
+      }
+    );
+
+    maybeItTc(
       "persists immutable P2PK escrow commitments and one final ruling",
       async () => {
         await withPostgresDbService(async (db) => {
@@ -3910,7 +3966,7 @@ describe("db-service helpers", () => {
       "message flows resolve order participants and latest order statuses",
       async () => {
         await withPostgresDbService(async (db) => {
-          await waitForTables(db, ["message_events"]);
+          await waitForTables(db, ["message_events", "order_participants"]);
 
           const pool = db.getDbPool();
           const client = await pool.connect();
@@ -4005,9 +4061,55 @@ describe("db-service helpers", () => {
             client.release();
           }
 
+          // These messages were cached after order_participants existed, so
+          // their sender-controlled tags must not resolve roles.
+          await expect(db.getOrderParticipants("order-1")).resolves.toBeNull();
+
+          // Messages cached before the cutoff keep the legacy lookup.
+          const legacyClient = await db.getDbPool().connect();
+          try {
+            await legacyClient.query(
+              `INSERT INTO message_events (
+                 id, pubkey, created_at, kind, tags, content, sig, order_id, cached_at
+               ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9)`,
+              [
+                "legacy-order-message",
+                "legacy-wrap-pubkey",
+                100,
+                1059,
+                JSON.stringify([
+                  ["b", "buyer-legacy"],
+                  ["item", "30402:seller-legacy:listing-legacy"],
+                ]),
+                "legacy order",
+                "sig-legacy",
+                "legacy-order",
+                "2000-01-01T00:00:00Z",
+              ]
+            );
+          } finally {
+            legacyClient.release();
+          }
+          await expect(
+            db.getOrderParticipants("legacy-order")
+          ).resolves.toEqual({
+            buyerPubkey: "buyer-legacy",
+            sellerPubkey: "seller-legacy",
+            source: "legacy_message_tags",
+          });
+
+          await expect(
+            db.registerOrderParticipants({
+              orderId: "order-1",
+              buyerPubkey: "buyer-new",
+              sellerPubkey: "seller-new",
+              productAddress: "30402:seller-new:listing-new",
+            })
+          ).resolves.toBe("created");
           await expect(db.getOrderParticipants("order-1")).resolves.toEqual({
             buyerPubkey: "buyer-new",
             sellerPubkey: "seller-new",
+            source: "order_participants",
           });
 
           await db.updateOrderStatus(
