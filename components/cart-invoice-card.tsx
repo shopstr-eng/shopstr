@@ -686,85 +686,11 @@ export default function CartInvoiceCard({
     return { messageSubject, messageOptions };
   };
 
+  // Single sender for every cart checkout message. Callers that already
+  // hold an order's keys pass them in (reused across retry attempts so a
+  // retried message keeps the same sender identity); without keys a fresh
+  // pair is generated.
   const sendPaymentAndContactMessage = async (
-    pubkeyToReceiveMessage: string,
-    message: string,
-    product: ProductData,
-    isPayment?: boolean,
-    isReceipt?: boolean,
-    isDonation?: boolean,
-    orderId?: string,
-    paymentType?: string,
-    paymentReference?: string,
-    paymentProof?: string,
-    messageAmount?: number,
-    productQuantity?: number,
-    contact?: string,
-    address?: string,
-    pickup?: string,
-    donationAmountValue?: number,
-    donationPercentageValue?: number,
-    retryCount: number = 3
-  ) => {
-    const newKeys = await generateNewKeys();
-    if (!newKeys) {
-      setFailureText("Failed to generate new keys for messages!");
-      setShowFailureModal(true);
-      return;
-    }
-    const keys = toOrderMessageKeys(newKeys);
-    const { messageSubject, messageOptions } = await buildPaymentMessageContent(
-      keys.senderPubkey,
-      product,
-      isPayment,
-      isReceipt,
-      isDonation,
-      orderId,
-      paymentType,
-      paymentReference,
-      paymentProof,
-      messageAmount,
-      productQuantity,
-      contact,
-      address,
-      pickup,
-      donationAmountValue,
-      donationPercentageValue
-    );
-
-    try {
-      await sendOrderMessageWithRetries({
-        nostr: nostr!,
-        signer,
-        recipientPubkey: pubkeyToReceiveMessage,
-        message,
-        subject: messageSubject,
-        messageOptions,
-        keys,
-        strictDelivery: false,
-        maxAttempts: retryCount,
-        failureLabel: "Order message",
-        onSuccess: (rumor) => {
-          if (isReceipt) {
-            chatsContext.addNewlyCreatedMessageEvent(
-              {
-                ...rumor,
-                sig: "",
-                read: false,
-              },
-              true
-            );
-          }
-        },
-      });
-    } catch (error) {
-      // This was the last attempt, log the error but don't throw — continue
-      // with the checkout flow instead of breaking it.
-      console.error("Failed to send message after all retries:", error);
-    }
-  };
-
-  const sendPaymentAndContactMessageWithKeys = async (
     pubkeyToReceiveMessage: string,
     message: string,
     product: ProductData,
@@ -790,12 +716,17 @@ export default function CartInvoiceCard({
     donationPercentageValue?: number,
     retryCount: number = 3
   ) => {
-    if (!keys) {
-      setFailureText("Message keys are required!");
-      setShowFailureModal(true);
-      return;
+    let rawKeys = keys;
+    if (!rawKeys) {
+      const newKeys = await generateNewKeys();
+      if (!newKeys) {
+        setFailureText("Failed to generate new keys for messages!");
+        setShowFailureModal(true);
+        return;
+      }
+      rawKeys = newKeys;
     }
-    const ephemeralKeys = toOrderMessageKeys(keys);
+    const ephemeralKeys = toOrderMessageKeys(rawKeys);
     const { messageSubject, messageOptions } = await buildPaymentMessageContent(
       ephemeralKeys.senderPubkey,
       product,
@@ -815,10 +746,8 @@ export default function CartInvoiceCard({
       donationPercentageValue
     );
 
-    // Retry with backoff like the product card. The caller-supplied keys are
-    // reused across attempts so a retried message keeps the same sender
-    // identity. Still throws after the final attempt so callers keep their
-    // existing failure handling.
+    // Retry with backoff like the product card. Still throws after the
+    // final attempt so callers keep their existing failure handling.
     await sendOrderMessageWithRetries({
       nostr: nostr!,
       signer,
@@ -1744,7 +1673,7 @@ export default function CartInvoiceCard({
             quantity: quantities[product.id],
           });
           const pickupLocationForLightning = pickupLocation;
-          await sendPaymentAndContactMessageWithKeys(
+          await sendPaymentAndContactMessage(
             pubkey,
             paymentMessage,
             product,
@@ -1777,7 +1706,7 @@ export default function CartInvoiceCard({
             });
             const changeMessage = "Overpaid fee change: " + encodedChange;
             try {
-              await sendPaymentAndContactMessageWithKeys(
+              await sendPaymentAndContactMessage(
                 pubkey,
                 changeMessage,
                 product,
@@ -1879,7 +1808,7 @@ export default function CartInvoiceCard({
             token: sellerToken,
             quantity: quantities[product.id],
           });
-          await sendPaymentAndContactMessageWithKeys(
+          await sendPaymentAndContactMessage(
             pubkey,
             paymentMessage,
             product,
@@ -1930,7 +1859,7 @@ export default function CartInvoiceCard({
         const additionalMessage =
           "Additional customer information: " + data.additionalInfo;
         try {
-          await sendPaymentAndContactMessageWithKeys(
+          await sendPaymentAndContactMessage(
             pubkey,
             additionalMessage,
             product,
@@ -2018,7 +1947,7 @@ export default function CartInvoiceCard({
             shippingAddr
           );
           const addressTagForShipping = buildShippingAddressTag(shippingAddr);
-          await sendPaymentAndContactMessageWithKeys(
+          await sendPaymentAndContactMessage(
             pubkey,
             contactMessage,
             product,
@@ -2049,7 +1978,7 @@ export default function CartInvoiceCard({
             // Add delay between messages
             await new Promise((resolve) => setTimeout(resolve, 500));
 
-            await sendPaymentAndContactMessageWithKeys(
+            await sendPaymentAndContactMessage(
               userPubkey,
               receiptMessage,
               product,
@@ -2101,7 +2030,7 @@ export default function CartInvoiceCard({
           // Add delay between messages
           await new Promise((resolve) => setTimeout(resolve, 500));
 
-          await sendPaymentAndContactMessageWithKeys(
+          await sendPaymentAndContactMessage(
             userPubkey,
             receiptMessage,
             product,
@@ -2141,7 +2070,7 @@ export default function CartInvoiceCard({
           productDetails,
           nip19.npubEncode(product.pubkey)
         );
-        await sendPaymentAndContactMessageWithKeys(
+        await sendPaymentAndContactMessage(
           userPubkey!,
           receiptMessage,
           product,
