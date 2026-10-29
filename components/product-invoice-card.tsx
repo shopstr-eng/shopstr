@@ -78,12 +78,6 @@ import {
   getSavedAddresses,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
-  constructGiftWrappedEvent,
-  constructMessageSeal,
-  constructMessageGiftWrap,
-  sendGiftWrappedMessageEvent,
-} from "@/utils/nostr/gift-wrap";
-import {
   sendOrderMessageWithRetries,
   type OrderMessageEphemeralKeys,
 } from "@/utils/payments/send-order-message";
@@ -245,87 +239,57 @@ export default function ProductInvoiceCard({
   const sendInquiryDM = async (sellerPubkey: string, productTitle: string) => {
     if (!signer || !nostr || !userPubkey) return;
 
+    const inquiryMessage = `I just placed an order for your ${productTitle} listing on Shopstr! Please check your Shopstr order dashboard for any relevant information.`;
+
+    // Routed through the shared order-message pipeline so inquiries get the
+    // same retry cadence as checkout order messages. Unlike order messages,
+    // the rumor is authored by the buyer's real pubkey (sealed with their
+    // signer) so the seller can see who is asking — there is no order "b"
+    // tag to carry the buyer's identity.
     try {
-      const inquiryMessage = `I just placed an order for your ${productTitle} listing on Shopstr! Please check your Shopstr order dashboard for any relevant information.`;
-
-      const { nsec: nsecForSellerReceiver, npub: npubForSellerReceiver } =
-        await generateKeys();
-      const decodedRandomPubkeyForSellerReceiver = nip19.decode(
-        npubForSellerReceiver
-      );
-      const decodedRandomPrivkeyForSellerReceiver = nip19.decode(
-        nsecForSellerReceiver
-      );
-      const { nsec: nsecForBuyerReceiver, npub: npubForBuyerReceiver } =
-        await generateKeys();
-      const decodedRandomPubkeyForBuyerReceiver =
-        nip19.decode(npubForBuyerReceiver);
-      const decodedRandomPrivkeyForBuyerReceiver =
-        nip19.decode(nsecForBuyerReceiver);
-
       // Send to seller
-      const giftWrappedMessageEventForSeller = await constructGiftWrappedEvent(
-        userPubkey,
-        sellerPubkey,
-        inquiryMessage,
-        "listing-inquiry"
-      );
-      // Also send a copy to the buyer
-      const giftWrappedMessageEventForBuyer = await constructGiftWrappedEvent(
-        userPubkey,
-        userPubkey,
-        inquiryMessage,
-        "listing-inquiry"
-      );
-
-      const sealedEventForSeller = await constructMessageSeal(
-        signer,
-        giftWrappedMessageEventForSeller,
-        userPubkey,
-        sellerPubkey
-      );
-      const sealedEventForBuyer = await constructMessageSeal(
-        signer,
-        giftWrappedMessageEventForBuyer,
-        userPubkey,
-        userPubkey
-      );
-
-      const giftWrappedEventForSeller = await constructMessageGiftWrap(
-        sealedEventForSeller,
-        decodedRandomPubkeyForSellerReceiver.data as string,
-        decodedRandomPrivkeyForSellerReceiver.data as Uint8Array,
-        sellerPubkey
-      );
-      const giftWrappedEventForBuyer = await constructMessageGiftWrap(
-        sealedEventForBuyer,
-        decodedRandomPubkeyForBuyerReceiver.data as string,
-        decodedRandomPrivkeyForBuyerReceiver.data as Uint8Array,
-        userPubkey
-      );
-
-      await sendGiftWrappedMessageEvent(
+      await sendOrderMessageWithRetries({
         nostr,
-        giftWrappedEventForSeller,
-        signer
-      );
-      await sendGiftWrappedMessageEvent(
-        nostr,
-        giftWrappedEventForBuyer,
-        signer
-      );
-
-      // Add to local context for immediate UI feedback
-      chatsContext.addNewlyCreatedMessageEvent(
-        {
-          ...giftWrappedMessageEventForBuyer,
-          sig: "",
-          read: false,
-        },
-        true
-      );
+        signer,
+        senderPubkey: userPubkey,
+        recipientPubkey: sellerPubkey,
+        message: inquiryMessage,
+        subject: "listing-inquiry",
+        strictDelivery: false,
+        failureLabel: "Listing inquiry to seller",
+        fallbackErrorMessage: "Failed to send the listing inquiry.",
+      });
     } catch (error) {
-      console.error("Failed to send inquiry DM:", error);
+      console.error("Failed to send inquiry DM to seller:", error);
+    }
+
+    try {
+      // Also send a copy to the buyer so it appears in their chat history.
+      // Attempted independently so a seller-side failure can't lose it.
+      await sendOrderMessageWithRetries({
+        nostr,
+        signer,
+        senderPubkey: userPubkey,
+        recipientPubkey: userPubkey,
+        message: inquiryMessage,
+        subject: "listing-inquiry",
+        strictDelivery: false,
+        failureLabel: "Listing inquiry copy to buyer",
+        fallbackErrorMessage: "Failed to send the listing inquiry copy.",
+        onSuccess: (rumor) => {
+          // Add to local context for immediate UI feedback
+          chatsContext.addNewlyCreatedMessageEvent(
+            {
+              ...rumor,
+              sig: "",
+              read: false,
+            },
+            true
+          );
+        },
+      });
+    } catch (error) {
+      console.error("Failed to send inquiry DM copy to buyer:", error);
     }
   };
 

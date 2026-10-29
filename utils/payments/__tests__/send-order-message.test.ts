@@ -106,6 +106,50 @@ describe("sendOrderMessage", () => {
     );
   });
 
+  it("seals with the caller's signer when senderPubkey authors the rumor", async () => {
+    const SENDER = "a".repeat(64);
+
+    await sendOrderMessage({
+      nostr,
+      signer,
+      senderPubkey: SENDER,
+      recipientPubkey: RECIPIENT,
+      message: "hello",
+      subject: "listing-inquiry",
+      strictDelivery: false,
+    });
+
+    expect(mockConstructGiftWrappedEvent).toHaveBeenCalledWith(
+      SENDER,
+      RECIPIENT,
+      "hello",
+      "listing-inquiry",
+      undefined
+    );
+    // No ephemeral sender privkey: the real signer seals the message.
+    expect(mockConstructMessageSeal).toHaveBeenCalledWith(
+      signer,
+      innerEvent,
+      SENDER,
+      RECIPIENT,
+      undefined
+    );
+  });
+
+  it("throws when senderPubkey is set without a signer", async () => {
+    await expect(
+      sendOrderMessage({
+        nostr,
+        senderPubkey: "a".repeat(64),
+        recipientPubkey: RECIPIENT,
+        message: "hello",
+        subject: "listing-inquiry",
+      })
+    ).rejects.toThrow("senderPubkey requires a signer");
+
+    expect(mockConstructGiftWrappedEvent).not.toHaveBeenCalled();
+  });
+
   it("uses provided ephemeral keys instead of generating fresh ones", async () => {
     const keys = await generateOrderMessageKeys();
 

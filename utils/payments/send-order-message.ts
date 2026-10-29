@@ -50,6 +50,14 @@ export type SendOrderMessageParams = {
   subject: string;
   messageOptions?: OrderMessageOptions;
   /**
+   * When set, the rumor is authored by this real pubkey and the seal is
+   * encrypted/signed by `signer` (required in this mode), so the recipient
+   * can verify who sent it — used for listing inquiries. When omitted, an
+   * ephemeral sender keypair carries the wrap and the sender's real identity
+   * only travels in the rumor's tags (e.g. the "b" tag on order messages).
+   */
+  senderPubkey?: string;
+  /**
    * Pre-generated ephemeral keys. When omitted, a fresh set is generated for
    * this call — callers that retry should omit it so every attempt gets new
    * keys.
@@ -78,25 +86,33 @@ export async function sendOrderMessage({
   subject,
   messageOptions,
   keys,
+  senderPubkey,
   strictDelivery = true,
 }: SendOrderMessageParams): Promise<OrderMessageRumor> {
+  if (senderPubkey && !signer) {
+    throw new Error(
+      "sendOrderMessage: senderPubkey requires a signer to seal the message."
+    );
+  }
   const ephemeralKeys = keys ?? (await generateOrderMessageKeys());
+  const authorPubkey = senderPubkey ?? ephemeralKeys.senderPubkey;
 
   const giftWrappedMessageEvent = await constructGiftWrappedEvent(
-    ephemeralKeys.senderPubkey,
+    authorPubkey,
     recipientPubkey,
     message,
     subject,
     messageOptions
   );
   const sealedEvent = await constructMessageSeal(
-    // The seal is encrypted/signed with the ephemeral sender privkey, so the
-    // signer is only a formality here — mirror the checkout path's fallback.
+    // Ephemeral mode: the seal is encrypted/signed with the throwaway sender
+    // privkey, so the signer is only a formality — mirror the checkout
+    // path's fallback. Real-sender mode: the caller's signer seals it.
     signer ?? ({} as NostrSigner),
     giftWrappedMessageEvent,
-    ephemeralKeys.senderPubkey,
+    authorPubkey,
     recipientPubkey,
-    ephemeralKeys.senderPrivkey
+    senderPubkey ? undefined : ephemeralKeys.senderPrivkey
   );
   const giftWrappedEvent = await constructMessageGiftWrap(
     sealedEvent,
