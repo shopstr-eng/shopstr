@@ -1614,4 +1614,45 @@ describe("buyer receipt filing into chat history (checkout path)", () => {
       expect(call[3]).toBeUndefined();
     }
   }, 15000);
+
+  it("never files a phantom order-receipt rumor into chatsContext when every send attempt fails", async () => {
+    // sendGiftWrappedMessageEvent rejects on every attempt, so the inquiry
+    // and receipt sends each exhaust their retries (1s + 2s backoff). The
+    // payment itself still succeeds, and the buyer's chat history must not
+    // gain a receipt for a message that never went out.
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    mockSendGiftWrappedMessageEvent.mockRejectedValue(
+      new Error("relays unreachable")
+    );
+
+    try {
+      const { setCashuPaymentSent, addNewlyCreatedMessageEvent } =
+        renderCashuReadyToPay();
+      mockFetchJsonOnce(makeMintQuoteResponse());
+
+      fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+      // The receipt send is awaited inside the checkout flow before
+      // setCashuPaymentSent(true) fires, so reaching it means every receipt
+      // retry has already failed.
+      await waitFor(
+        () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+        { timeout: 20000 }
+      );
+      expect(mockSendGiftWrappedMessageEvent).toHaveBeenCalled();
+
+      const receiptFilings = addNewlyCreatedMessageEvent.mock.calls.filter(
+        ([event]) =>
+          (event as { tags?: string[][] }).tags?.some(
+            (tag) => tag[0] === "subject" && tag[1] === "order-receipt"
+          )
+      );
+      expect(receiptFilings).toHaveLength(0);
+    } finally {
+      consoleErrorSpy.mockRestore();
+      mockSendGiftWrappedMessageEvent.mockResolvedValue(undefined);
+    }
+  }, 30000);
 });

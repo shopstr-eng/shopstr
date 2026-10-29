@@ -1654,6 +1654,86 @@ describe("buyer receipt filing into chat history (checkout path)", () => {
       mockConstructGiftWrappedEvent.mockImplementation(defaultImpl!);
     }
   }, 30000);
+
+  it("never files a phantom order-receipt rumor into chatsContext when the receipt send fails", async () => {
+    // sendGiftWrappedMessageEvent rejects for the receipt wrap. Unlike the
+    // product card, the cart files its buyer receipt through a single-attempt
+    // send whose failure aborts the checkout (reported as a payment failure),
+    // so the signal that the receipt send has run its course is
+    // setCashuPaymentFailed(true).
+    //
+    // The rejection is scoped to order-receipt wraps: the seller payment
+    // message goes out through the same non-retrying path earlier in the
+    // flow, and failing it too would abort the checkout before the receipt
+    // is ever attempted, which is not what this test exercises.
+    // constructGiftWrappedEvent tags receipt rumors with a sentinel so the
+    // send mock can recognize them inside the gift wrap.
+    const defaultConstructImpl =
+      mockConstructGiftWrappedEvent.getMockImplementation();
+    mockConstructGiftWrappedEvent.mockImplementation(
+      async (
+        sender: unknown,
+        receiver: unknown,
+        message: unknown,
+        subject: unknown,
+        options: Record<string, unknown> = {}
+      ) => {
+        const rumor = await defaultConstructImpl!(
+          sender,
+          receiver,
+          message,
+          subject,
+          options
+        );
+        if (subject === "order-receipt") {
+          (rumor as Record<string, unknown>).__isReceipt = true;
+        }
+        return rumor;
+      }
+    );
+    mockSendGiftWrappedMessageEvent.mockImplementation(
+      async (_nostr: unknown, giftWrappedEvent: { content?: unknown }) => {
+        if (String(giftWrappedEvent?.content ?? "").includes("__isReceipt")) {
+          throw new Error("relays unreachable");
+        }
+        return undefined;
+      }
+    );
+
+    try {
+      const {
+        products,
+        setCashuPaymentFailed,
+        addNewlyCreatedMessageEvent,
+      } = renderCashuReadyToPay();
+      mockFetchJsonOnce(makeCartQuoteResponse(products));
+
+      fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+      await waitFor(
+        () => expect(setCashuPaymentFailed).toHaveBeenCalledWith(true),
+        { timeout: 20000 }
+      );
+      const receiptSendAttempts =
+        mockSendGiftWrappedMessageEvent.mock.calls.filter(([, event]) =>
+          String((event as { content?: unknown })?.content ?? "").includes(
+            "__isReceipt"
+          )
+        );
+      expect(receiptSendAttempts.length).toBeGreaterThan(0);
+
+      const receiptFilings = addNewlyCreatedMessageEvent.mock.calls.filter(
+        ([event]) =>
+          (event as { tags?: string[][] }).tags?.some(
+            (tag) => tag[0] === "subject" && tag[1] === "order-receipt"
+          )
+      );
+      expect(receiptFilings).toHaveLength(0);
+    } finally {
+      mockConstructGiftWrappedEvent.mockImplementation(defaultConstructImpl!);
+      mockSendGiftWrappedMessageEvent.mockResolvedValue(undefined);
+    }
+  }, 30000);
 });
 
 describe("failure callbacks (handleLightningPayment/handleCashuPayment catches)", () => {
