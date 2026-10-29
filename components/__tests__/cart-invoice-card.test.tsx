@@ -19,7 +19,10 @@ import {
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { resolveSellerCheckoutProfile } from "@/utils/cashu/p2pk-checkout";
-import { constructGiftWrappedEvent } from "@/utils/nostr/gift-wrap";
+import {
+  constructGiftWrappedEvent,
+  sendGiftWrappedMessageEvent,
+} from "@/utils/nostr/gift-wrap";
 import { recoverProofsToBuyerWallet } from "@/utils/cashu/wallet-recovery";
 import { getPendingSellerLightningPayouts } from "@/utils/payments/pending-lightning-payouts";
 import { NostrWebLNProvider } from "@getalby/sdk";
@@ -242,6 +245,8 @@ const mockSafeMeltProofs = safeMeltProofs as jest.Mock;
 const mockResolveSellerCheckoutProfile =
   resolveSellerCheckoutProfile as jest.Mock;
 const mockConstructGiftWrappedEvent = constructGiftWrappedEvent as jest.Mock;
+const mockSendGiftWrappedMessageEvent =
+  sendGiftWrappedMessageEvent as jest.Mock;
 const mockRecoverProofsToBuyerWallet = recoverProofsToBuyerWallet as jest.Mock;
 const mockNostrWebLNProvider = NostrWebLNProvider as unknown as jest.Mock;
 
@@ -1533,6 +1538,70 @@ describe("onFormSubmit catch", () => {
       screen.queryByText(/Total price is less than 1 sat/)
     ).not.toBeInTheDocument();
   });
+});
+
+describe("buyer receipt filing into chat history (checkout path)", () => {
+  function renderCashuReadyToPay() {
+    const addNewlyCreatedMessageEvent = jest.fn();
+    const products = [
+      makeCartProduct({ id: "prod-a", pubkey: "seller_a", price: 1000 }),
+    ];
+    mockGetLocalStorageData.mockReturnValue({
+      ...DEFAULT_LOCAL_STORAGE_DATA,
+      tokens: [{ id: "ks1", amount: 1000, secret: "s1" }],
+    });
+    const rendered = renderCartInvoiceCard(
+      products,
+      {},
+      { chats: { addNewlyCreatedMessageEvent } }
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Online order/i }));
+    return { ...rendered, products, addNewlyCreatedMessageEvent };
+  }
+
+  it("files the order receipt rumor into chatsContext after a successful checkout message send", async () => {
+    const { products, setCashuPaymentSent, addNewlyCreatedMessageEvent } =
+      renderCashuReadyToPay();
+    mockFetchJsonOnce(makeCartQuoteResponse(products));
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(
+      () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+      { timeout: 9000 }
+    );
+    await waitFor(
+      () =>
+        expect(addNewlyCreatedMessageEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            sig: "",
+            read: false,
+            tags: expect.arrayContaining([
+              ["p", BUYER_PUBKEY],
+              ["subject", "order-receipt"],
+            ]),
+          }),
+          true
+        ),
+      { timeout: 9000 }
+    );
+  }, 20000);
+
+  it("delivers checkout order messages non-strictly (no durable-cache or relay-delivery requirements)", async () => {
+    const { products, setCashuPaymentSent } = renderCashuReadyToPay();
+    mockFetchJsonOnce(makeCartQuoteResponse(products));
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+    await waitFor(
+      () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+      { timeout: 9000 }
+    );
+    expect(mockSendGiftWrappedMessageEvent).toHaveBeenCalled();
+    for (const call of mockSendGiftWrappedMessageEvent.mock.calls) {
+      expect(call[3]).toBeUndefined();
+    }
+  }, 20000);
 });
 
 describe("failure callbacks (handleLightningPayment/handleCashuPayment catches)", () => {
