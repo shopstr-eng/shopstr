@@ -25,6 +25,7 @@ import { getPendingSellerLightningPayouts } from "@/utils/payments/pending-light
 import { NostrWebLNProvider } from "@getalby/sdk";
 import type { ProductData } from "@/utils/parsers/product-parser-functions";
 import type { ProductTotalsInSats } from "@/utils/cart-totals";
+import type { ShopProfile } from "@/utils/types/types";
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -274,6 +275,7 @@ interface RenderCartOptions {
   appliedDiscounts?: Record<string, number>;
   discountCodes?: Record<string, string>;
   onBackToCart?: () => void;
+  shopProfiles?: Map<string, ShopProfile>;
 }
 
 function renderCartInvoiceCard(
@@ -310,6 +312,7 @@ function renderCartInvoiceCard(
       appliedDiscounts={options.appliedDiscounts}
       discountCodes={options.discountCodes}
       onBackToCart={onBackToCart}
+      shopProfiles={options.shopProfiles}
       setInvoiceIsPaid={setInvoiceIsPaid}
       setInvoiceGenerationFailed={setInvoiceGenerationFailed}
       setCashuPaymentSent={setCashuPaymentSent}
@@ -1570,5 +1573,113 @@ describe("failure callbacks (handleLightningPayment/handleCashuPayment catches)"
       expect(setCashuPaymentFailed).toHaveBeenCalledWith(true)
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+describe("cost breakdown shipping display (pre-payment form and invoice screen)", () => {
+  it("multiplies shipping cost by item quantity on the payment invoice screen", async () => {
+    const product = makeCartProduct({
+      id: "prod-qty-ship",
+      title: "Handmade Mug",
+      price: 1000,
+      shippingCost: 50,
+      shippingType: "Added Cost",
+      currency: "sats",
+    });
+
+    renderCartInvoiceCard([product], { quantities: { "prod-qty-ship": 3 } });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Online order with shipping/ })
+    );
+
+    fillShippingForm({
+      Name: "Alice Developer",
+      Address: "123 Main St",
+      City: "Austin",
+      "Postal Code": "78701",
+      "State/Province": "TX",
+      Country: "USA",
+    });
+
+    // 3 * 1000 + 3 * 50 = 3150 sats
+    mockFetchJsonOnce(
+      makeCartQuoteResponse([product], {
+        breakdown: { "prod-qty-ship": 3150 },
+        amount: 3150,
+      })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Lightning/ }));
+
+    expect(await screen.findByText("Lightning Invoice")).toBeInTheDocument();
+
+    // On invoice screen, shipping cost must be 50 * 3 = 150 sats, not 50 sats
+    expect(screen.getByText("150 sats")).toBeInTheDocument();
+    expect(screen.queryByText("50 sats")).not.toBeInTheDocument();
+  });
+
+  it("hides shipping cost on the invoice screen when seller free shipping threshold is met", async () => {
+    const sellerPubkey = "seller-free-ship-pubkey";
+    const product = makeCartProduct({
+      id: "prod-free-ship",
+      pubkey: sellerPubkey,
+      title: "Mechanical Keyboard",
+      price: 2000,
+      shippingCost: 100,
+      shippingType: "Added Cost",
+      currency: "sats",
+    });
+
+    const shopProfiles = new Map<string, ShopProfile>([
+      [
+        sellerPubkey,
+        {
+          pubkey: sellerPubkey,
+          content: {
+            name: "Free Ship Store",
+            about: "",
+            ui: { picture: "", banner: "", theme: "", darkMode: false },
+            merchants: [],
+            freeShippingThreshold: 1500,
+            freeShippingCurrency: "sats",
+          },
+          created_at: 1000,
+        },
+      ],
+    ]);
+
+    renderCartInvoiceCard([product], { shopProfiles });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /^Online order with shipping/ })
+    );
+
+    // In pre-payment checkout form, shipping cost should be hidden because threshold (1500) is met (subtotal = 2000)
+    expect(screen.queryByText(/Shipping cost:/i)).not.toBeInTheDocument();
+
+    fillShippingForm({
+      Name: "Bob Builder",
+      Address: "456 Market St",
+      City: "Denver",
+      "Postal Code": "80202",
+      "State/Province": "CO",
+      Country: "USA",
+    });
+
+    // Free shipping waived: total is 2000 sats without shipping
+    mockFetchJsonOnce(
+      makeCartQuoteResponse([product], {
+        breakdown: { "prod-free-ship": 2000 },
+        amount: 2000,
+      })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Lightning/ }));
+
+    expect(await screen.findByText("Lightning Invoice")).toBeInTheDocument();
+
+    // On invoice screen, waived shipping cost must not reappear
+    expect(screen.queryByText(/Shipping cost:/i)).not.toBeInTheDocument();
   });
 });

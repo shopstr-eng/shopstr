@@ -2745,6 +2745,17 @@ export default function CartInvoiceCard({
                           ? basePrice * (1 - discount / 100)
                           : basePrice;
 
+                      // Determine if shipping should be shown for this product
+                      const productShippingType = shippingTypes[product.id];
+                      const shouldShowShipping =
+                        !sellerFreeShippingStatus[product.pubkey]?.qualifies &&
+                        (formType === "shipping" ||
+                          (formType === "combined" &&
+                            (productShippingType === "Added Cost" ||
+                              productShippingType === "Free" ||
+                              (productShippingType === "Free/Pickup" &&
+                                shippingPickupPreference === "shipping"))));
+
                       return (
                         <div
                           key={product.id}
@@ -2796,7 +2807,8 @@ export default function CartInvoiceCard({
                               </div>
                             </>
                           )}
-                          {product.shippingCost! > 0 &&
+                          {shouldShowShipping &&
+                            product.shippingCost! > 0 &&
                             ((formType === "combined" &&
                               shippingPickupPreference === "shipping") ||
                               formType === "shipping") && (
@@ -2804,7 +2816,8 @@ export default function CartInvoiceCard({
                                 <span className="ml-2">Shipping cost:</span>
                                 <span>
                                   {formatWithCommas(
-                                    product.shippingCost!,
+                                    product.shippingCost! *
+                                      (quantities[product.id] || 1),
                                     product.currency
                                   )}
                                 </span>
@@ -2982,12 +2995,13 @@ export default function CartInvoiceCard({
                     // Determine if shipping should be shown for this product
                     const productShippingType = shippingTypes[product.id];
                     const shouldShowShipping =
-                      formType === "shipping" ||
-                      (formType === "combined" &&
-                        (productShippingType === "Added Cost" ||
-                          productShippingType === "Free" ||
-                          (productShippingType === "Free/Pickup" &&
-                            shippingPickupPreference === "shipping")));
+                      !sellerFreeShippingStatus[product.pubkey]?.qualifies &&
+                      (formType === "shipping" ||
+                        (formType === "combined" &&
+                          (productShippingType === "Added Cost" ||
+                            productShippingType === "Free" ||
+                            (productShippingType === "Free/Pickup" &&
+                              shippingPickupPreference === "shipping"))));
 
                     return (
                       <div
