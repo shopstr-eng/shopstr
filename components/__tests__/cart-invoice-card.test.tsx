@@ -1602,6 +1602,58 @@ describe("buyer receipt filing into chat history (checkout path)", () => {
       expect(call[3]).toBeUndefined();
     }
   }, 20000);
+
+  it("still completes the buyer receipt and payment bookkeeping when the inquiry DM fails after payout", async () => {
+    // Every inquiry attempt fails (seller + buyer copy, all retries). The
+    // failure must stay contained in sendInquiryDM: the buyer's receipt must
+    // still be filed into chats and checkout must still report success.
+    const defaultImpl = mockConstructGiftWrappedEvent.getMockImplementation();
+    mockConstructGiftWrappedEvent.mockImplementation(
+      async (
+        sender: unknown,
+        receiver: unknown,
+        message: unknown,
+        subject: unknown,
+        options: Record<string, unknown> = {}
+      ) => {
+        if (subject === "listing-inquiry") {
+          throw new Error("relays unreachable");
+        }
+        return defaultImpl!(sender, receiver, message, subject, options);
+      }
+    );
+
+    try {
+      const { products, setCashuPaymentSent, addNewlyCreatedMessageEvent } =
+        renderCashuReadyToPay();
+      mockFetchJsonOnce(makeCartQuoteResponse(products));
+
+      fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
+
+      // Inquiry retries with backoff before the receipt send, so allow time.
+      await waitFor(
+        () => expect(setCashuPaymentSent).toHaveBeenCalledWith(true),
+        { timeout: 20000 }
+      );
+      await waitFor(
+        () =>
+          expect(addNewlyCreatedMessageEvent).toHaveBeenCalledWith(
+            expect.objectContaining({
+              sig: "",
+              read: false,
+              tags: expect.arrayContaining([
+                ["p", BUYER_PUBKEY],
+                ["subject", "order-receipt"],
+              ]),
+            }),
+            true
+          ),
+        { timeout: 9000 }
+      );
+    } finally {
+      mockConstructGiftWrappedEvent.mockImplementation(defaultImpl!);
+    }
+  }, 30000);
 });
 
 describe("failure callbacks (handleLightningPayment/handleCashuPayment catches)", () => {
