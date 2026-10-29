@@ -34,6 +34,9 @@ import { isSellerP2pkEscrowActive } from "@/utils/cashu/p2pk-checkout";
 import { mapWithConcurrency } from "@/utils/concurrency";
 import {
   computeProductPricing,
+  computeSellerFreeShippingStatus,
+  getCartUnitShippingCost,
+  getFreeShippingThresholdsToConvert,
   ProductPricingResult,
 } from "@/utils/cart-totals";
 import { normalizeStoredProductImages } from "@/utils/images";
@@ -175,26 +178,59 @@ export default function Component() {
     return nip19.npubEncode(pubkey);
   };
 
-  const getSellerSubtotalInCurrency = (sellerPubkey: string): number => {
-    const sellerProducts = productsBySeller[sellerPubkey] || [];
-    let total = 0;
-    for (const product of sellerProducts) {
-      const basePrice =
-        product.bulkPrice !== undefined
-          ? product.bulkPrice
-          : product.volumePrice !== undefined
-            ? product.volumePrice
-            : product.weightPrice !== undefined
-              ? product.weightPrice
-              : (product.price ?? 0);
-      const qty = quantities[product.id] || 1;
-      const discount = appliedDiscounts[product.pubkey] || 0;
-      const discountedPrice =
-        discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
-      total += discountedPrice * qty;
-    }
-    return total;
-  };
+  const [freeShippingThresholdsInSats, setFreeShippingThresholdsInSats] =
+    useState<Record<string, number>>({});
+
+  // Thresholds in a different currency than the seller's products are
+  // compared in sats, matching the server-side cart pricing route.
+  useEffect(() => {
+    let cancelled = false;
+    const convertThresholds = async () => {
+      const converted: Record<string, number> = {};
+      const thresholds = getFreeShippingThresholdsToConvert({
+        products,
+        getShopProfileContent: (pubkey) =>
+          shopContext.shopData.get(pubkey)?.content,
+      });
+      for (const { pubkey, threshold, currency } of thresholds) {
+        const lower = currency.toLowerCase();
+        if (lower === "sats" || lower === "sat") {
+          converted[pubkey] = threshold;
+          continue;
+        }
+        if (!currencySelection.hasOwnProperty(currency.toUpperCase())) {
+          continue;
+        }
+        try {
+          converted[pubkey] = Math.round(
+            await getSatoshiValue({ amount: threshold, currency })
+          );
+        } catch (err) {
+          // Without a rate the seller simply doesn't qualify, so shipping is
+          // charged rather than silently waived.
+          console.warn("Failed to convert free-shipping threshold:", err);
+        }
+      }
+      if (!cancelled) setFreeShippingThresholdsInSats(converted);
+    };
+    convertThresholds();
+    return () => {
+      cancelled = true;
+    };
+  }, [products, shopContext.shopData]);
+
+  const sellerFreeShippingStatus = computeSellerFreeShippingStatus({
+    products: products.map((product) => ({
+      ...product,
+      price: product.price ?? 0,
+    })),
+    quantities,
+    appliedDiscounts,
+    getShopProfileContent: (pubkey) =>
+      shopContext.shopData.get(pubkey)?.content,
+    productTotalsInSats,
+    freeShippingThresholdsInSats,
+  });
 
   const router = useRouter();
 
@@ -575,7 +611,7 @@ export default function Component() {
   const convertShippingToSats = async (
     product: ProductData
   ): Promise<number> => {
-    const shippingCost = product.shippingCost ? product.shippingCost : 0;
+    const shippingCost = getCartUnitShippingCost(product);
     if (
       product.currency.toLowerCase() === "sats" ||
       product.currency.toLowerCase() === "sat"
@@ -800,16 +836,14 @@ export default function Component() {
                             )}
                           </div>
                           {(() => {
-                            const shopProfile =
-                              shopContext.shopData.get(sellerPubkey);
-                            const threshold =
-                              shopProfile?.content?.freeShippingThreshold;
-                            const thresholdCurrency =
-                              shopProfile?.content?.freeShippingCurrency ||
-                              "USD";
-                            if (!threshold || threshold <= 0) return null;
-                            const sellerSubtotal =
-                              getSellerSubtotalInCurrency(sellerPubkey);
+                            const freeShippingStatus =
+                              sellerFreeShippingStatus[sellerPubkey];
+                            if (!freeShippingStatus) return null;
+                            const {
+                              threshold,
+                              currency: thresholdCurrency,
+                              sellerSubtotal,
+                            } = freeShippingStatus;
                             const progress = Math.min(
                               (sellerSubtotal / threshold) * 100,
                               100
@@ -818,7 +852,7 @@ export default function Component() {
                               threshold - sellerSubtotal,
                               0
                             );
-                            const isFreeShipping = sellerSubtotal >= threshold;
+                            const isFreeShipping = freeShippingStatus.qualifies;
                             const sellerName = getSellerName(sellerPubkey);
                             return (
                               <div className="bg-light-fg dark:bg-dark-fg rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700">
@@ -932,6 +966,7 @@ export default function Component() {
                   appliedDiscounts={appliedDiscounts}
                   discountCodes={discountCodes}
                   shopProfiles={shopContext.shopData}
+                  freeShippingThresholdsInSats={freeShippingThresholdsInSats}
                   onBackToCart={toggleCheckout}
                   setInvoiceIsPaid={setInvoiceIsPaid}
                   setInvoiceGenerationFailed={setInvoiceGenerationFailed}

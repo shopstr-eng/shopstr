@@ -125,7 +125,9 @@ import {
   buildShippingAdjustedProductTotals,
   cartHasMixedShippingWithPickup,
   computeSellerFreeShippingStatus,
+  computeWaivedShippingInSats,
   getCartShippingPredicate,
+  getCartUnitShippingCost,
   ProductTotalsInSats,
   sumProductTotalsInSats,
 } from "@/utils/cart-totals";
@@ -143,6 +145,7 @@ export default function CartInvoiceCard({
   appliedDiscounts = {},
   discountCodes = {},
   shopProfiles,
+  freeShippingThresholdsInSats,
   onBackToCart,
   setInvoiceIsPaid,
   setInvoiceGenerationFailed,
@@ -157,6 +160,7 @@ export default function CartInvoiceCard({
   appliedDiscounts?: { [key: string]: number };
   discountCodes?: { [key: string]: string };
   shopProfiles?: Map<string, ShopProfile>;
+  freeShippingThresholdsInSats?: Record<string, number>;
   onBackToCart?: () => void;
   setInvoiceIsPaid: (invoiceIsPaid: boolean) => void;
   setInvoiceGenerationFailed: (invoiceGenerationFailed: boolean) => void;
@@ -261,23 +265,7 @@ export default function CartInvoiceCard({
             ? String(p.selectedBulkOption)
             : undefined,
         }));
-        const anyFreeShipping = Object.values(sellerFreeShippingStatus).some(
-          (s) => s.qualifies
-        );
-        let originalShipping = 0;
-        if (anyFreeShipping) {
-          const sellersSeen = new Set<string>();
-          products.forEach((p) => {
-            if (sellersSeen.has(p.pubkey)) return;
-            sellersSeen.add(p.pubkey);
-            if (sellerFreeShippingStatus[p.pubkey]?.qualifies) {
-              const { highestShippingCost } = getConsolidatedShippingForSeller(
-                p.pubkey
-              );
-              originalShipping += highestShippingCost;
-            }
-          });
-        }
+        const freeShippingApplied = waivedShippingInSats > 0;
         storage.setSessionJson(STORAGE_KEYS.ORDER_SUMMARY, {
           productTitle: pendingOrderRef.current.productTitle,
           productImage: products[0]?.images?.[0] || "",
@@ -290,9 +278,9 @@ export default function CartInvoiceCard({
           sellerPubkey: pendingOrderRef.current.sellerPubkey,
           isCart: true,
           cartItems,
-          freeShippingApplied: anyFreeShipping,
-          originalShippingCost: anyFreeShipping
-            ? String(originalShipping)
+          freeShippingApplied,
+          originalShippingCost: freeShippingApplied
+            ? String(waivedShippingInSats)
             : undefined,
         });
       } catch {}
@@ -321,28 +309,18 @@ export default function CartInvoiceCard({
         quantities,
         appliedDiscounts,
         getShopProfileContent: (pubkey) => shopProfiles?.get(pubkey)?.content,
+        productTotalsInSats,
+        freeShippingThresholdsInSats,
       }),
-    [products, quantities, appliedDiscounts, shopProfiles]
+    [
+      products,
+      quantities,
+      appliedDiscounts,
+      shopProfiles,
+      productTotalsInSats,
+      freeShippingThresholdsInSats,
+    ]
   );
-
-  const getConsolidatedShippingForSeller = (
-    sellerPubkey: string
-  ): {
-    highestShippingProduct: ProductData | null;
-    highestShippingCost: number;
-  } => {
-    const sellerProducts = products.filter((p) => p.pubkey === sellerPubkey);
-    let highestShippingCost = 0;
-    let highestShippingProduct: ProductData | null = null;
-    sellerProducts.forEach((product) => {
-      const cost = product.shippingCost || 0;
-      if (cost > highestShippingCost) {
-        highestShippingCost = cost;
-        highestShippingProduct = product;
-      }
-    });
-    return { highestShippingProduct, highestShippingCost };
-  };
 
   // Shared with product-invoice-card via sendListingInquiry so the two
   // checkout inquiry flows (message text, retry policy, chat filing) can't
@@ -385,6 +363,7 @@ export default function CartInvoiceCard({
   const [currentProductTotalsInSats, setCurrentProductTotalsInSats] =
     useState<ProductTotalsInSats>(productTotalsInSats);
   const [totalCost, setTotalCost] = useState<number>(subtotalCost);
+  const [waivedShippingInSats, setWaivedShippingInSats] = useState(0);
 
   const {
     handleSubmit: handleFormSubmit,
@@ -401,10 +380,7 @@ export default function CartInvoiceCard({
   }, [shippingTypes]);
 
   const hasShippingPickupProducts = useMemo(() => {
-    return (
-      Object.values(shippingTypes).includes("Free/Pickup") ||
-      Object.values(shippingTypes).includes("Added Cost/Pickup")
-    );
+    return Object.values(shippingTypes).includes("Free/Pickup");
   }, [shippingTypes]);
 
   const hasMixedShippingWithPickup = useMemo(
@@ -1029,6 +1005,7 @@ export default function CartInvoiceCard({
   const resetCurrentProductTotals = () => {
     setCurrentProductTotalsInSats(productTotalsInSats);
     setTotalCost(subtotalCost);
+    setWaivedShippingInSats(0);
   };
 
   const buildShippingCostsInSats = async () => {
@@ -1046,18 +1023,22 @@ export default function CartInvoiceCard({
   ) => {
     try {
       const shippingCostsInSats = await buildShippingCostsInSats();
-      const updatedProductTotalsInSats = buildShippingAdjustedProductTotals({
+      const shippingParams = {
         products,
-        baseProductTotalsInSats: productTotalsInSats,
         quantities,
         shippingTypes,
         shippingCostsInSats,
         sellerFreeShippingStatus,
         shouldAddShipping,
+      };
+      const updatedProductTotalsInSats = buildShippingAdjustedProductTotals({
+        ...shippingParams,
+        baseProductTotalsInSats: productTotalsInSats,
       });
 
       setCurrentProductTotalsInSats(updatedProductTotalsInSats);
       setTotalCost(sumProductTotalsInSats(updatedProductTotalsInSats));
+      setWaivedShippingInSats(computeWaivedShippingInSats(shippingParams));
 
       return true;
     } catch (err) {
@@ -1853,19 +1834,15 @@ export default function CartInvoiceCard({
       const shouldUseShipping =
         formType === "shipping" ||
         (formType === "combined" &&
-          ((productShippingType !== "Free/Pickup" &&
-            productShippingType !== "Added Cost/Pickup") ||
-            ((productShippingType === "Free/Pickup" ||
-              productShippingType === "Added Cost/Pickup") &&
-              shippingPickupPreference === "shipping")));
+          (productShippingType !== "Free/Pickup" ||
+            shippingPickupPreference === "shipping"));
 
       const shouldUseContact =
         formType === "contact" ||
         (formType === "combined" &&
           (productShippingType === "N/A" ||
             productShippingType === "Pickup" ||
-            ((productShippingType === "Free/Pickup" ||
-              productShippingType === "Added Cost/Pickup") &&
+            (productShippingType === "Free/Pickup" &&
               shippingPickupPreference === "contact")));
 
       if (
@@ -1881,8 +1858,7 @@ export default function CartInvoiceCard({
         if (
           productShippingType === "Added Cost" ||
           productShippingType === "Free" ||
-          productShippingType === "Free/Pickup" ||
-          productShippingType === "Added Cost/Pickup"
+          productShippingType === "Free/Pickup"
         ) {
           // Add pickup location if available for this specific product
           const pickupLocation =
@@ -1950,8 +1926,7 @@ export default function CartInvoiceCard({
         shouldUseContact &&
         (productShippingType === "N/A" ||
           productShippingType === "Pickup" ||
-          productShippingType === "Free/Pickup" ||
-          productShippingType === "Added Cost/Pickup")
+          productShippingType === "Free/Pickup")
       ) {
         await sendInquiryDM(pubkey, title);
 
@@ -2033,7 +2008,7 @@ export default function CartInvoiceCard({
   const convertShippingToSats = async (
     product: ProductData
   ): Promise<number> => {
-    const shippingCost = product.shippingCost || 0;
+    const shippingCost = getCartUnitShippingCost(product);
 
     if (
       product.currency.toLowerCase() === "sats" ||
@@ -2708,7 +2683,7 @@ export default function CartInvoiceCard({
                               </div>
                             </>
                           )}
-                          {product.shippingCost! > 0 &&
+                          {getCartUnitShippingCost(product) > 0 &&
                             ((formType === "combined" &&
                               shippingPickupPreference === "shipping") ||
                               formType === "shipping") && (
@@ -2716,7 +2691,7 @@ export default function CartInvoiceCard({
                                 <span className="ml-2">Shipping cost:</span>
                                 <span>
                                   {formatWithCommas(
-                                    product.shippingCost!,
+                                    getCartUnitShippingCost(product),
                                     product.currency
                                   )}
                                 </span>
@@ -2966,7 +2941,7 @@ export default function CartInvoiceCard({
                           </>
                         )}
                         {shouldShowShipping &&
-                          product.shippingCost! > 0 &&
+                          getCartUnitShippingCost(product) > 0 &&
                           ((formType === "combined" &&
                             shippingPickupPreference === "shipping") ||
                             formType === "shipping") && (
@@ -2974,7 +2949,7 @@ export default function CartInvoiceCard({
                               <span className="ml-2">Shipping cost:</span>
                               <span>
                                 {formatWithCommas(
-                                  product.shippingCost! *
+                                  getCartUnitShippingCost(product) *
                                     (quantities[product.id] || 1),
                                   product.currency
                                 )}
@@ -3031,8 +3006,7 @@ export default function CartInvoiceCard({
                     </button>
                   </>
                 ) : uniqueShippingTypes.length === 1 &&
-                  (uniqueShippingTypes[0] === "Free/Pickup" ||
-                    uniqueShippingTypes[0] === "Added Cost/Pickup") ? (
+                  uniqueShippingTypes[0] === "Free/Pickup" ? (
                   <>
                     {/* All products have Free/Pickup - show shipping and contact options */}
                     <button
