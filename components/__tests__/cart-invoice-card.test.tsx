@@ -406,7 +406,7 @@ describe("order-type button visibility (uniqueShippingTypes branching)", () => {
   it("shows only a single 'Mixed delivery' button when the cart has multiple distinct shippingTypes", () => {
     renderCartInvoiceCard([
       makeCartProduct({ id: "prod-a", shippingType: "Free/Pickup" }),
-      makeCartProduct({ id: "prod-b", shippingType: "Added Cost/Pickup" }),
+      makeCartProduct({ id: "prod-b", shippingType: "Added Cost" }),
     ]);
 
     expect(
@@ -423,7 +423,7 @@ describe("order-type button visibility (uniqueShippingTypes branching)", () => {
   it("reveals the free-pickup preference sub-screen after choosing 'Mixed delivery' when the mix includes a pickup-capable type", () => {
     renderCartInvoiceCard([
       makeCartProduct({ id: "prod-a", shippingType: "Free/Pickup" }),
-      makeCartProduct({ id: "prod-b", shippingType: "Added Cost/Pickup" }),
+      makeCartProduct({ id: "prod-b", shippingType: "Added Cost" }),
     ]);
 
     fireEvent.click(screen.getByRole("button", { name: /^Mixed delivery/ }));
@@ -548,10 +548,12 @@ describe("handleOrderTypeSelection", () => {
     expect(
       screen.queryByText("Shipping/Pickup Products Preference")
     ).not.toBeInTheDocument();
+    // prod-a: 1000 + 100 shipping; prod-b is "Free", so its tagged 50 is
+    // never charged: 1000 + 100 + 500 = 1600
     const totalRow = await screen.findByText("Total:");
     await waitFor(() =>
       expect(
-        within(totalRow.closest("div")!).getByText("1,650 sats")
+        within(totalRow.closest("div")!).getByText("1,600 sats")
       ).toBeInTheDocument()
     );
   });
@@ -1312,7 +1314,7 @@ describe("shouldUseShipping / shouldUseContact — combined-mode routing", () =>
       id: "pickup-item",
       pubkey: "seller_pickup",
       title: "Bakery Box",
-      shippingType: "Added Cost/Pickup",
+      shippingType: "Free/Pickup",
     });
     const products = [shipped, pickup];
     mockGetLocalStorageData.mockReturnValue({
@@ -1332,7 +1334,7 @@ describe("shouldUseShipping / shouldUseContact — combined-mode routing", () =>
     return rendered;
   }
 
-  it("routes an Added Cost/Pickup item to the contact/pickup path (not shipping) when the buyer picks Pickup", async () => {
+  it("routes a Free/Pickup item to the contact/pickup path (not shipping) when the buyer picks Pickup", async () => {
     const { products, setCashuPaymentSent } =
       renderMixedShippingAndPickupCart();
 
@@ -1369,7 +1371,7 @@ describe("shouldUseShipping / shouldUseContact — combined-mode routing", () =>
     expect(shipCall).toBeUndefined();
   }, 12000);
 
-  it("still routes an Added Cost/Pickup item to the shipping path when the buyer picks Free shipping", async () => {
+  it("still routes a Free/Pickup item to the shipping path when the buyer picks Free shipping", async () => {
     const { products, setCashuPaymentSent } =
       renderMixedShippingAndPickupCart();
 

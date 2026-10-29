@@ -1,6 +1,11 @@
 import {
   buildShippingAdjustedProductTotals,
+  cartHasMixedShippingWithPickup,
   computeProductPricing,
+  computeSellerFreeShippingStatus,
+  computeWaivedShippingInSats,
+  getCartUnitShippingCost,
+  getFreeShippingThresholdsToConvert,
   sumProductTotalsInSats,
 } from "../cart-totals";
 
@@ -174,6 +179,183 @@ describe("cart totals helpers", () => {
         price: 1710,
         shipping: 40,
       });
+    });
+  });
+
+  describe("getCartUnitShippingCost", () => {
+    it("charges the listed cost only for Added Cost listings", () => {
+      expect(
+        getCartUnitShippingCost({
+          shippingType: "Added Cost",
+          shippingCost: 15,
+        })
+      ).toBe(15);
+    });
+
+    it("never charges shipping for free, pickup, or untyped listings", () => {
+      for (const shippingType of ["Free", "Free/Pickup", "Pickup", "N/A"]) {
+        expect(
+          getCartUnitShippingCost({ shippingType, shippingCost: 15 })
+        ).toBe(0);
+      }
+      expect(getCartUnitShippingCost({ shippingCost: 15 })).toBe(0);
+    });
+  });
+
+  describe("cartHasMixedShippingWithPickup", () => {
+    it("is true only for a mixed cart that includes Free/Pickup", () => {
+      expect(
+        cartHasMixedShippingWithPickup({ a: "Added Cost", b: "Free/Pickup" })
+      ).toBe(true);
+      expect(
+        cartHasMixedShippingWithPickup({ a: "Added Cost", b: "Pickup" })
+      ).toBe(false);
+      expect(
+        cartHasMixedShippingWithPickup({ a: "Free/Pickup", b: "Free/Pickup" })
+      ).toBe(false);
+    });
+  });
+
+  describe("computeWaivedShippingInSats", () => {
+    it("sums cost x quantity for every shipped product of qualifying sellers", () => {
+      expect(
+        computeWaivedShippingInSats({
+          products,
+          quantities: { "product-1": 2, "product-2": 1, "product-3": 3 },
+          shippingTypes: {
+            "product-1": "Added Cost",
+            "product-2": "Added Cost",
+            "product-3": "Added Cost",
+          },
+          shippingCostsInSats: {
+            "product-1": 15,
+            "product-2": 20,
+            "product-3": 25,
+          },
+          sellerFreeShippingStatus: { "seller-a": { qualifies: true } },
+          shouldAddShipping: () => true,
+        })
+      ).toBe(15 * 2 + 25 * 3);
+    });
+
+    it("waives nothing for products the order type does not ship", () => {
+      expect(
+        computeWaivedShippingInSats({
+          products,
+          quantities: {},
+          shippingTypes: { "product-1": "Added Cost" },
+          shippingCostsInSats: { "product-1": 15, "product-3": 25 },
+          sellerFreeShippingStatus: { "seller-a": { qualifies: true } },
+          shouldAddShipping: () => false,
+        })
+      ).toBe(0);
+    });
+  });
+
+  describe("computeSellerFreeShippingStatus", () => {
+    const profile =
+      (freeShippingThreshold: number, freeShippingCurrency?: string) => () => ({
+        freeShippingThreshold,
+        freeShippingCurrency,
+        name: "Shop",
+      });
+
+    it("compares exactly in the threshold currency when the products share it", () => {
+      const status = computeSellerFreeShippingStatus({
+        products: [
+          { id: "p1", pubkey: "seller-a", price: 25, currency: "USD" },
+        ],
+        quantities: { p1: 2 },
+        appliedDiscounts: {},
+        getShopProfileContent: profile(50, "USD"),
+      });
+      expect(status["seller-a"]).toMatchObject({
+        qualifies: true,
+        sellerSubtotal: 50,
+        currency: "USD",
+      });
+    });
+
+    it("keeps comparing in raw units when the seller set no threshold currency", () => {
+      const status = computeSellerFreeShippingStatus({
+        products: [
+          { id: "p1", pubkey: "seller-a", price: 2000, currency: "sats" },
+        ],
+        quantities: {},
+        appliedDiscounts: {},
+        getShopProfileContent: profile(1500),
+      });
+      expect(status["seller-a"]?.qualifies).toBe(true);
+    });
+
+    it("does not let a sats cart meet a USD threshold by raw number", () => {
+      // 2,000 sats is far below 50 USD (~50,000 sats here)
+      const status = computeSellerFreeShippingStatus({
+        products: [
+          { id: "p1", pubkey: "seller-a", price: 2000, currency: "sats" },
+        ],
+        quantities: {},
+        appliedDiscounts: {},
+        getShopProfileContent: profile(50, "USD"),
+        productTotalsInSats: { p1: 2000 },
+        freeShippingThresholdsInSats: { "seller-a": 50000 },
+      });
+      expect(status["seller-a"]).toMatchObject({
+        qualifies: false,
+        sellerSubtotal: 2,
+        currency: "USD",
+      });
+    });
+
+    it("qualifies across currencies once the sats subtotal reaches the converted threshold", () => {
+      const status = computeSellerFreeShippingStatus({
+        products: [
+          { id: "p1", pubkey: "seller-a", price: 30000, currency: "sats" },
+          { id: "p2", pubkey: "seller-a", price: 20000, currency: "sats" },
+        ],
+        quantities: {},
+        appliedDiscounts: {},
+        getShopProfileContent: profile(50, "USD"),
+        productTotalsInSats: { p1: 30000, p2: 20000 },
+        freeShippingThresholdsInSats: { "seller-a": 50000 },
+      });
+      expect(status["seller-a"]?.qualifies).toBe(true);
+    });
+
+    it("never qualifies when a cross-currency threshold could not be converted", () => {
+      const status = computeSellerFreeShippingStatus({
+        products: [
+          { id: "p1", pubkey: "seller-a", price: 999999, currency: "sats" },
+        ],
+        quantities: {},
+        appliedDiscounts: {},
+        getShopProfileContent: profile(50, "USD"),
+        productTotalsInSats: { p1: 999999 },
+      });
+      expect(status["seller-a"]?.qualifies).toBe(false);
+    });
+  });
+
+  describe("getFreeShippingThresholdsToConvert", () => {
+    it("lists only sellers with a threshold in a different currency than a product", () => {
+      const profiles: Record<
+        string,
+        { freeShippingThreshold: number; freeShippingCurrency?: string }
+      > = {
+        "seller-a": { freeShippingThreshold: 50, freeShippingCurrency: "USD" },
+        "seller-b": { freeShippingThreshold: 50, freeShippingCurrency: "USD" },
+        "seller-c": { freeShippingThreshold: 1500 },
+      };
+      expect(
+        getFreeShippingThresholdsToConvert({
+          products: [
+            { pubkey: "seller-a", currency: "sats" },
+            { pubkey: "seller-b", currency: "usd" },
+            { pubkey: "seller-c", currency: "sats" },
+          ],
+          getShopProfileContent: (pubkey) => profiles[pubkey],
+        })
+      ).toEqual([{ pubkey: "seller-a", threshold: 50, currency: "USD" }]);
     });
   });
 });

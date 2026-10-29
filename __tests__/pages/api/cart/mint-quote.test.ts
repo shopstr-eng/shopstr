@@ -143,15 +143,27 @@ const productC = makeProductEvent({
   shippingType: "Free/Pickup",
 });
 
+// A "Free" listing whose shipping tag still carries a cost.
+const productD = makeProductEvent({
+  id: "prod-d",
+  pubkey: "seller-2",
+  dTag: "d-d",
+  price: 70,
+  shippingType: "Free",
+  shippingCost: 30,
+});
+
 const eventsById: Record<string, unknown> = {
   "prod-a": productA,
   "prod-b": productB,
   "prod-c": productC,
+  "prod-d": productD,
 };
 const eventsByDTag: Record<string, unknown> = {
   "d-a": productA,
   "d-b": productB,
   "d-c": productC,
+  "d-d": productD,
 };
 
 describe("/api/cart/mint-quote", () => {
@@ -247,6 +259,99 @@ describe("/api/cart/mint-quote", () => {
     expect(res.statusCode).toBe(200);
     expect(createMintQuoteBolt11Mock).toHaveBeenCalledWith(400);
     expect(res.jsonBody.breakdown).toEqual({ "prod-a": 200, "prod-b": 200 });
+  });
+
+  it("compares a fiat free-shipping threshold in sats for sats-priced products", async () => {
+    fetchShopProfileByPubkeyFromDbMock.mockImplementation(
+      async (pubkey: string) =>
+        pubkey === "seller-1"
+          ? {
+              id: "profile-1",
+              pubkey,
+              created_at: 1,
+              kind: 30019,
+              tags: [],
+              sig: "sig",
+              content: JSON.stringify({
+                name: "Seller One",
+                freeShippingThreshold: 50,
+                freeShippingCurrency: "USD",
+              }),
+            }
+          : null
+    );
+    // 50 USD -> 50,000 sats, far above the 400-sat seller subtotal
+    getSatoshiValueMock.mockResolvedValue(50000);
+    const res = createResponse();
+
+    await handler(
+      createRequest({
+        items: [
+          { productId: "prod-a", quantity: 2 },
+          { productId: "prod-b", quantity: 1 },
+        ],
+        formType: "shipping",
+      }),
+      res as unknown as NextApiResponse
+    );
+
+    // 400 >= 50 by raw number, but 400 sats < 50 USD, so shipping is charged
+    expect(res.statusCode).toBe(200);
+    expect(getSatoshiValueMock).toHaveBeenCalledWith({
+      amount: 50,
+      currency: "USD",
+    });
+    expect(createMintQuoteBolt11Mock).toHaveBeenCalledWith(420);
+    expect(res.jsonBody.breakdown).toEqual({ "prod-a": 220, "prod-b": 200 });
+  });
+
+  it("charges shipping instead of failing when a threshold currency cannot be converted", async () => {
+    fetchShopProfileByPubkeyFromDbMock.mockImplementation(
+      async (pubkey: string) =>
+        pubkey === "seller-1"
+          ? {
+              id: "profile-1",
+              pubkey,
+              created_at: 1,
+              kind: 30019,
+              tags: [],
+              sig: "sig",
+              content: JSON.stringify({
+                freeShippingThreshold: 1,
+                freeShippingCurrency: "NOTACURRENCY",
+              }),
+            }
+          : null
+    );
+    const res = createResponse();
+
+    await handler(
+      createRequest({
+        items: [{ productId: "prod-a", quantity: 2 }],
+        formType: "shipping",
+      }),
+      res as unknown as NextApiResponse
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(createMintQuoteBolt11Mock).toHaveBeenCalledWith(220);
+  });
+
+  it("never charges the tagged shipping cost of a Free listing", async () => {
+    const res = createResponse();
+
+    await handler(
+      createRequest({
+        items: [{ productId: "prod-d", quantity: 2 }],
+        formType: "shipping",
+      }),
+      res as unknown as NextApiResponse
+    );
+
+    // 70 * 2, and the 30-sat cost on the "Free" tag is ignored
+    expect(res.statusCode).toBe(200);
+    expect(createMintQuoteBolt11Mock).toHaveBeenCalledWith(140);
+    expect(res.jsonBody.breakdown).toEqual({ "prod-d": 140 });
   });
 
   it("applies validated discount codes per seller with cart rounding", async () => {
