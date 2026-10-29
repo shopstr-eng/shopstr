@@ -59,8 +59,17 @@ export default async function handler(
     if (!verifyEvent(event as Event)) {
       return res.status(401).json({ error: "Invalid or unsigned Nostr event" });
     }
-    await cacheEventStrict(event);
-    res.status(200).json({ success: true });
+    const stored = await cacheEventStrict(event);
+    if (!stored) {
+      // Still 200 so existing callers keep working, but flagged so a caller can
+      // tell its write was dropped in favour of a newer cached event.
+      return res.status(200).json({
+        success: true,
+        stored: false,
+        reason: "A newer or deleted version of this event is already cached",
+      });
+    }
+    res.status(200).json({ success: true, stored: true });
   } catch (error) {
     console.error("Failed to cache event:", error);
     res.status(500).json({ error: "Failed to cache event" });

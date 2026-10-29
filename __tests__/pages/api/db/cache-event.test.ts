@@ -124,9 +124,50 @@ describe("/api/db/cache-event", () => {
     });
   });
 
+  it("reports stored: true when the event was written", async () => {
+    verifyEventMock.mockReturnValue(true);
+    cacheEventStrictMock.mockResolvedValue(true);
+
+    const req = createRequest("POST", {
+      id: "evt-fresh",
+      pubkey: "seller-pubkey",
+      kind: 30019,
+      content: "{}",
+    });
+    const res = createResponse();
+
+    await cacheEventHandler(req, res as unknown as NextApiResponse);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonBody).toEqual({ success: true, stored: true });
+  });
+
+  it("reports stored: false when a newer event already holds the slot", async () => {
+    verifyEventMock.mockReturnValue(true);
+    cacheEventStrictMock.mockResolvedValue(false);
+
+    const req = createRequest("POST", {
+      id: "evt-stale",
+      pubkey: "seller-pubkey",
+      kind: 30019,
+      content: "{}",
+    });
+    const res = createResponse();
+
+    await cacheEventHandler(req, res as unknown as NextApiResponse);
+
+    expect(cacheEventStrictMock).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonBody).toEqual({
+      success: true,
+      stored: false,
+      reason: "A newer or deleted version of this event is already cached",
+    });
+  });
+
   it("throttles per pubkey, not per IP, so NAT-shared buyers don't trip each other", async () => {
     verifyEventMock.mockReturnValue(true);
-    cacheEventStrictMock.mockResolvedValue(undefined);
+    cacheEventStrictMock.mockResolvedValue(true);
 
     const makeReq = (pubkey: string) => {
       const r = createRequest("POST", {
@@ -168,7 +209,7 @@ describe("/api/db/cache-event", () => {
 
   it("enforces a coarse per-IP ceiling as a DoS backstop", async () => {
     verifyEventMock.mockReturnValue(true);
-    cacheEventStrictMock.mockResolvedValue(undefined);
+    cacheEventStrictMock.mockResolvedValue(true);
 
     // Rotate pubkeys per request so we only trip the IP limit (2000/min),
     // not the per-pubkey limit.

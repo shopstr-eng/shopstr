@@ -1,9 +1,6 @@
 import { Pool, PoolClient } from "pg";
 import { NostrEvent } from "../types/types";
-import {
-  pickPreferredReplaceableEvent,
-  selectPreferredReplaceableEvent,
-} from "../nostr/replaceable-events";
+import { selectPreferredReplaceableEvent } from "../nostr/replaceable-events";
 import { findListingBySlug } from "../url-slugs";
 import {
   PRODUCT_KIND,
@@ -699,50 +696,102 @@ function buildEventUpsertQuery(table: string, event: NostrEvent) {
   };
 }
 
-async function fetchExistingReplaceableEvents(
-  client: PoolClient,
-  table: string,
-  pubkey: string,
-  kind: number
-): Promise<NostrEvent[]> {
-  const result = await client.query(
-    `SELECT id, pubkey, created_at, kind, tags, content, sig
-     FROM ${table}
-     WHERE pubkey = $1 AND kind = $2
-     ORDER BY created_at DESC, id ASC
-     FOR UPDATE`,
-    [pubkey, kind]
-  );
+// Kinds where each "d" tag is its own slot (NIP-01 addressable events), so a
+// pubkey can hold many of them at once. Every other keep-latest kind has a
+// single slot per pubkey.
+const D_TAG_SCOPED_KINDS: ReadonlySet<number> = new Set([34550, 31555]);
 
-  return result.rows.map(mapCachedEventRow);
+type ReplaceableScope = { dTag?: string };
+
+// Describes the slot an event replaces, or null when the kind just accumulates
+// (a plain upsert by id). Per NIP-01 a missing d tag means d = "", so those
+// events share one slot per pubkey instead of piling up as separate rows.
+function getReplaceableScope(event: NostrEvent): ReplaceableScope | null {
+  if (D_TAG_SCOPED_KINDS.has(event.kind)) {
+    return { dTag: event.tags.find((tag) => tag[0] === "d")?.[1] ?? "" };
+  }
+  return shouldKeepOnlyLatest(event.kind) ? {} : null;
 }
 
-async function cachePreferredReplaceableEvent(
+// Rows in the d = "" slot: no d tag at all, or a d tag whose value is empty.
+// `tags @> [["d",""]]` alone would miss the first case.
+const EMPTY_D_TAG_SLOT_SQL = `COALESCE((
+  SELECT e.elem->>1
+  FROM jsonb_array_elements(tags) WITH ORDINALITY AS e(elem, ord)
+  WHERE e.elem->>0 = 'd'
+  ORDER BY e.ord
+  LIMIT 1
+), '') = ''`;
+
+function getReplaceableSlotKey(
+  event: NostrEvent,
+  scope: ReplaceableScope
+): string {
+  return `${event.pubkey}:${event.kind}:${scope.dTag ?? ""}`;
+}
+
+// Stores `event` only if it is the newest of its slot, using the NIP-01 rule
+// (highest created_at, lowest id on a tie). Older rows are dropped; an older
+// incoming event is ignored. Returns whether the event was stored. Must run
+// inside a transaction: the advisory lock serializes writers of the same slot,
+// which row locks cannot do when the slot is still empty.
+async function cacheNewestReplaceableEvent(
   client: PoolClient,
   table: string,
-  event: NostrEvent
-): Promise<void> {
-  const existingEvents = await fetchExistingReplaceableEvents(
-    client,
-    table,
-    event.pubkey,
-    event.kind
-  );
-  const preferredEvent = pickPreferredReplaceableEvent([
-    event,
-    ...existingEvents,
+  event: NostrEvent,
+  scope: ReplaceableScope
+): Promise<boolean> {
+  const dTagFilter = scope.dTag ? buildReviewDTagFilter(scope.dTag) : undefined;
+  const emptyDTagSlot = scope.dTag === "" ? ` AND ${EMPTY_D_TAG_SLOT_SQL}` : "";
+
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+    `${table}:${getReplaceableSlotKey(event, scope)}`,
   ]);
 
-  if (!preferredEvent) return;
+  const deleteValues: (string | number)[] = [event.pubkey, event.kind];
+  if (dTagFilter) deleteValues.push(dTagFilter);
+  const idParam = `$${deleteValues.length + 1}`;
+  const createdAtParam = `$${deleteValues.length + 2}::bigint`;
+  deleteValues.push(event.id, event.created_at);
+  await client.query({
+    text: `DELETE FROM ${table}
+           WHERE pubkey = $1 AND kind = $2${dTagFilter ? " AND tags @> $3::jsonb" : ""}${emptyDTagSlot}
+             AND id != ${idParam}
+             AND (created_at < ${createdAtParam}
+                  OR (created_at = ${createdAtParam} AND id > ${idParam}))`,
+    values: deleteValues,
+  });
 
-  await client.query(
-    `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND id != $3`,
-    [event.pubkey, event.kind, preferredEvent.id] as any[]
-  );
-
-  if (preferredEvent.id === event.id) {
-    await client.query(buildEventUpsertQuery(table, event));
-  }
+  const insertValues: (string | number)[] = [
+    event.id,
+    event.pubkey,
+    event.created_at,
+    event.kind,
+    JSON.stringify(event.tags),
+    event.content,
+    event.sig,
+  ];
+  if (dTagFilter) insertValues.push(dTagFilter);
+  const result = await client.query({
+    text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
+           SELECT $1::text, $2::text, $3::bigint, $4::integer, $5::jsonb, $6::text, $7::text
+           WHERE NOT EXISTS (
+             SELECT 1 FROM ${table}
+             WHERE pubkey = $2 AND kind = $4${dTagFilter ? " AND tags @> $8::jsonb" : ""}${emptyDTagSlot}
+               AND id != $1
+               AND (created_at > $3 OR (created_at = $3 AND id < $1))
+           )
+           ON CONFLICT (id) DO UPDATE SET
+             pubkey = EXCLUDED.pubkey,
+             created_at = EXCLUDED.created_at,
+             tags = EXCLUDED.tags,
+             content = EXCLUDED.content,
+             sig = EXCLUDED.sig,
+             cached_at = CURRENT_TIMESTAMP
+           RETURNING id`,
+    values: insertValues,
+  });
+  return (result.rowCount ?? 0) > 0;
 }
 
 async function recordProductTombstone(
@@ -934,16 +983,16 @@ async function cacheDeletionEvent(
 async function cacheEventInternal(
   event: NostrEvent,
   throwOnError: boolean
-): Promise<void> {
+): Promise<boolean> {
   if (event.kind === 5) {
     await cacheDeletionEvent(event, throwOnError);
-    return;
+    return true;
   }
 
   const table = getTableForKind(event.kind);
   if (!table) {
     console.warn(`No table mapping for event kind ${event.kind}`);
-    return;
+    return false;
   }
 
   const dbPool =
@@ -954,104 +1003,26 @@ async function cacheEventInternal(
 
   try {
     client = await dbPool.connect();
-
     if (event.kind === PRODUCT_KIND) {
       const tombstones = await fetchProductTombstones(client, [event]);
-      if (isProductTombstoned(event, tombstones)) return;
+      if (isProductTombstoned(event, tombstones)) return false;
     }
 
-    // For events that should only keep the latest version per pubkey
-    if (shouldKeepOnlyLatest(event.kind)) {
+    const scope = getReplaceableScope(event);
+    if (scope) {
       await client.query("BEGIN");
-
-      if (event.kind === 3) {
-        await cachePreferredReplaceableEvent(client, table, event);
-      } else {
-        // Keep existing latest-only semantics for non-follow event kinds.
-        const deleteQuery = {
-          text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2`,
-          values: [event.pubkey, event.kind] as any[],
-        };
-        await client.query(deleteQuery);
-
-        const insertQuery = {
-          text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          values: [
-            event.id,
-            event.pubkey,
-            event.created_at,
-            event.kind,
-            JSON.stringify(event.tags),
-            event.content,
-            event.sig,
-          ] as any[],
-        };
-        await client.query(insertQuery);
-      }
-
+      const stored = await cacheNewestReplaceableEvent(
+        client,
+        table,
+        event,
+        scope
+      );
       await client.query("COMMIT");
-    } else if (isReviewEvent(event.kind)) {
-      // For reviews, keep only the latest per pubkey per product
-      await client.query("BEGIN");
-
-      // Extract the product identifier from the 'd' tag (format: "30402:merchant_pubkey:product_d_tag")
-      const dTag = event.tags.find((tag) => tag[0] === "d")?.[1];
-
-      if (dTag) {
-        // Delete older reviews from the same pubkey for the same product
-        const deleteQuery = {
-          text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags @> $3::jsonb`,
-          values: [
-            event.pubkey,
-            event.kind,
-            buildReviewDTagFilter(dTag),
-          ] as any[],
-        };
-        await client.query(deleteQuery);
-      }
-
-      // Insert the new review
-      const insertQuery = {
-        text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        values: [
-          event.id,
-          event.pubkey,
-          event.created_at,
-          event.kind,
-          JSON.stringify(event.tags),
-          event.content,
-          event.sig,
-        ] as any[],
-      };
-      await client.query(insertQuery);
-
-      await client.query("COMMIT");
-    } else {
-      // For other events, use the normal upsert behavior
-      const query = {
-        text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
-               ON CONFLICT (id) DO UPDATE SET
-                 pubkey = EXCLUDED.pubkey,
-                 created_at = EXCLUDED.created_at,
-                 tags = EXCLUDED.tags,
-                 content = EXCLUDED.content,
-                 sig = EXCLUDED.sig,
-                 cached_at = CURRENT_TIMESTAMP`,
-        values: [
-          event.id,
-          event.pubkey,
-          event.created_at,
-          event.kind,
-          JSON.stringify(event.tags),
-          event.content,
-          event.sig,
-        ] as any[],
-      };
-      await client.query(query);
+      return stored;
     }
+
+    await client.query(buildEventUpsertQuery(table, event));
+    return true;
   } catch (error) {
     if (client) {
       try {
@@ -1062,6 +1033,7 @@ async function cacheEventInternal(
     }
     console.error("Failed to cache event %s:", event.id, error);
     if (throwOnError) throw error;
+    return false;
   } finally {
     if (client) {
       client.release();
@@ -1075,8 +1047,10 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
 }
 
 // Fail-closed cache used before security-sensitive delivery side effects.
-export async function cacheEventStrict(event: NostrEvent): Promise<void> {
-  await cacheEventInternal(event, true);
+// Resolves to false when the event was valid but not stored: a newer event
+// already holds its replaceable slot, or the listing was deleted (NIP-09).
+export async function cacheEventStrict(event: NostrEvent): Promise<boolean> {
+  return cacheEventInternal(event, true);
 }
 
 // Cache multiple events in a batch with retry logic for deadlocks
@@ -1150,153 +1124,38 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
     }
 
     for (const [table, tableEvents] of eventsByTable.entries()) {
-      // Group events by type
-      const latestOnlyEvents = tableEvents.filter((e) =>
-        shouldKeepOnlyLatest(e.kind)
-      );
-      const reviewEvents = tableEvents.filter((e) => isReviewEvent(e.kind));
-      const regularEvents = tableEvents.filter(
-        (e) => !shouldKeepOnlyLatest(e.kind) && !isReviewEvent(e.kind)
-      );
-
-      // Handle latest-only events (per pubkey) - batch by pubkey+kind to reduce queries
-      const latestContactListByPubkeyKind = new Map<string, NostrEvent>();
-      const latestByPubkeyKind = new Map<string, NostrEvent>();
-      for (const event of latestOnlyEvents) {
-        const key = `${event.pubkey}:${event.kind}`;
-        if (event.kind === 3) {
-          const existing = latestContactListByPubkeyKind.get(key);
-          latestContactListByPubkeyKind.set(
-            key,
-            existing ? selectPreferredReplaceableEvent(event, existing) : event
-          );
+      // Keep one candidate per slot; the database copy is compared below.
+      const newestBySlot = new Map<
+        string,
+        { event: NostrEvent; scope: ReplaceableScope }
+      >();
+      const regularEvents: NostrEvent[] = [];
+      for (const event of tableEvents) {
+        const scope = getReplaceableScope(event);
+        if (!scope) {
+          regularEvents.push(event);
           continue;
         }
 
-        const existing = latestByPubkeyKind.get(key);
+        const slot = getReplaceableSlotKey(event, scope);
+        const current = newestBySlot.get(slot);
         if (
-          !existing ||
-          Number(event.created_at) > Number(existing.created_at)
+          !current ||
+          selectPreferredReplaceableEvent(event, current.event) === event
         ) {
-          latestByPubkeyKind.set(key, event);
+          newestBySlot.set(slot, { event, scope });
         }
       }
 
-      for (const event of latestContactListByPubkeyKind.values()) {
-        await cachePreferredReplaceableEvent(client, table, event);
+      // Fixed order so concurrent batches take their slot locks in the same
+      // order and cannot deadlock each other.
+      for (const slot of Array.from(newestBySlot.keys()).sort()) {
+        const { event, scope } = newestBySlot.get(slot)!;
+        await cacheNewestReplaceableEvent(client, table, event, scope);
       }
 
-      for (const event of latestByPubkeyKind.values()) {
-        // First, lock and delete old rows
-        await client.query(
-          `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND id != $3`,
-          [event.pubkey, event.kind, event.id] as any[]
-        );
-
-        // Then insert/update with ON CONFLICT
-        const upsertQuery = {
-          text: `
-            INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (id) DO UPDATE SET
-              pubkey = EXCLUDED.pubkey,
-              created_at = EXCLUDED.created_at,
-              tags = EXCLUDED.tags,
-              content = EXCLUDED.content,
-              sig = EXCLUDED.sig,
-              cached_at = CURRENT_TIMESTAMP
-          `,
-          values: [
-            event.id,
-            event.pubkey,
-            event.created_at,
-            event.kind,
-            JSON.stringify(event.tags),
-            event.content,
-            event.sig,
-          ] as any[],
-        };
-        await client.query(upsertQuery);
-      }
-
-      // Handle review events (latest per pubkey per product) - batch by pubkey+dtag
-      const latestReviewByPubkeyDtag = new Map<string, NostrEvent>();
-      for (const event of reviewEvents) {
-        const dTag = event.tags.find((tag) => tag[0] === "d")?.[1];
-        if (dTag) {
-          const key = `${event.pubkey}:${dTag}`;
-          const existing = latestReviewByPubkeyDtag.get(key);
-          if (!existing || event.created_at > existing.created_at) {
-            latestReviewByPubkeyDtag.set(key, event);
-          }
-        }
-      }
-
-      for (const event of latestReviewByPubkeyDtag.values()) {
-        const dTag = event.tags.find((tag) => tag[0] === "d")?.[1];
-
-        if (dTag) {
-          // First, lock and delete old rows
-          await client.query(
-            `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags @> $3::jsonb AND id != $4`,
-            [
-              event.pubkey,
-              event.kind,
-              buildReviewDTagFilter(dTag),
-              event.id,
-            ] as any[]
-          );
-
-          // Then insert/update with ON CONFLICT
-          const upsertQuery = {
-            text: `
-              INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-              VALUES ($1, $2, $3, $4, $5, $6, $7)
-              ON CONFLICT (id) DO UPDATE SET
-                pubkey = EXCLUDED.pubkey,
-                created_at = EXCLUDED.created_at,
-                tags = EXCLUDED.tags,
-                content = EXCLUDED.content,
-                sig = EXCLUDED.sig,
-                cached_at = CURRENT_TIMESTAMP
-            `,
-            values: [
-              event.id,
-              event.pubkey,
-              event.created_at,
-              event.kind,
-              JSON.stringify(event.tags),
-              event.content,
-              event.sig,
-            ] as any[],
-          };
-          await client.query(upsertQuery);
-        }
-      }
-
-      // Handle regular events with upsert
       for (const event of regularEvents) {
-        const query = {
-          text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                 ON CONFLICT (id) DO UPDATE SET
-                   pubkey = EXCLUDED.pubkey,
-                   created_at = EXCLUDED.created_at,
-                   tags = EXCLUDED.tags,
-                   content = EXCLUDED.content,
-                   sig = EXCLUDED.sig,
-                   cached_at = CURRENT_TIMESTAMP`,
-          values: [
-            event.id,
-            event.pubkey,
-            event.created_at,
-            event.kind,
-            JSON.stringify(event.tags),
-            event.content,
-            event.sig,
-          ] as any[],
-        };
-        await client.query(query);
+        await client.query(buildEventUpsertQuery(table, event));
       }
     }
 
