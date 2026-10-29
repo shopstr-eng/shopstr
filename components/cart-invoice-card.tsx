@@ -91,7 +91,6 @@ import {
   saveAddress,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
-  sendOrderMessage,
   sendOrderMessageWithRetries,
   type OrderMessageEphemeralKeys,
 } from "@/utils/payments/send-order-message";
@@ -788,7 +787,8 @@ export default function CartInvoiceCard({
     address?: string,
     pickup?: string,
     donationAmountValue?: number,
-    donationPercentageValue?: number
+    donationPercentageValue?: number,
+    retryCount: number = 3
   ) => {
     if (!keys) {
       setFailureText("Message keys are required!");
@@ -815,7 +815,11 @@ export default function CartInvoiceCard({
       donationPercentageValue
     );
 
-    const rumor = await sendOrderMessage({
+    // Retry with backoff like the product card. The caller-supplied keys are
+    // reused across attempts so a retried message keeps the same sender
+    // identity. Still throws after the final attempt so callers keep their
+    // existing failure handling.
+    await sendOrderMessageWithRetries({
       nostr: nostr!,
       signer,
       recipientPubkey: pubkeyToReceiveMessage,
@@ -824,18 +828,21 @@ export default function CartInvoiceCard({
       messageOptions,
       keys: ephemeralKeys,
       strictDelivery: false,
+      maxAttempts: retryCount,
+      failureLabel: "Order message",
+      onSuccess: (rumor) => {
+        if (isReceipt) {
+          chatsContext.addNewlyCreatedMessageEvent(
+            {
+              ...rumor,
+              sig: "",
+              read: false,
+            },
+            true
+          );
+        }
+      },
     });
-
-    if (isReceipt) {
-      chatsContext.addNewlyCreatedMessageEvent(
-        {
-          ...rumor,
-          sig: "",
-          read: false,
-        },
-        true
-      );
-    }
   };
 
   const validatePaymentData = (

@@ -1656,14 +1656,15 @@ describe("buyer receipt filing into chat history (checkout path)", () => {
   }, 30000);
 
   it("never files a phantom order-receipt rumor into chatsContext when the receipt send fails", async () => {
-    // sendGiftWrappedMessageEvent rejects for the receipt wrap. Unlike the
-    // product card, the cart files its buyer receipt through a single-attempt
-    // send whose failure aborts the checkout (reported as a payment failure),
-    // so the signal that the receipt send has run its course is
+    // sendGiftWrappedMessageEvent rejects for the receipt wrap. The cart
+    // files its buyer receipt through the retrying order-message path, so the
+    // receipt send is attempted maxAttempts (3) times with backoff before its
+    // failure aborts the checkout (reported as a payment failure) — the
+    // signal that the receipt send has run its course is
     // setCashuPaymentFailed(true).
     //
     // The rejection is scoped to order-receipt wraps: the seller payment
-    // message goes out through the same non-retrying path earlier in the
+    // message goes out through the same retrying path earlier in the
     // flow, and failing it too would abort the checkout before the receipt
     // is ever attempted, which is not what this test exercises.
     // constructGiftWrappedEvent tags receipt rumors with a sentinel so the
@@ -1714,13 +1715,14 @@ describe("buyer receipt filing into chat history (checkout path)", () => {
         () => expect(setCashuPaymentFailed).toHaveBeenCalledWith(true),
         { timeout: 20000 }
       );
+      // All 3 retry attempts run (and fail) before the checkout aborts.
       const receiptSendAttempts =
         mockSendGiftWrappedMessageEvent.mock.calls.filter(([, event]) =>
           String((event as { content?: unknown })?.content ?? "").includes(
             "__isReceipt"
           )
         );
-      expect(receiptSendAttempts.length).toBeGreaterThan(0);
+      expect(receiptSendAttempts.length).toBe(3);
 
       const receiptFilings = addNewlyCreatedMessageEvent.mock.calls.filter(
         ([event]) =>
