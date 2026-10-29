@@ -1263,6 +1263,47 @@ describe("handleCashuPayment", () => {
     });
   });
 
+  describe("proof amounts", () => {
+    // cashu-ts 4 decodes proof amounts as Amount objects, not numbers.
+    const amountObject = (value: number) => ({
+      toNumber: () => value,
+      toString: () => String(value),
+    });
+
+    it("adds up Amount proofs as numbers instead of joining them as text", async () => {
+      // Worth 127 sats. Joined as text this reads as "06432168421".
+      getDecodedTokenMock.mockReturnValueOnce({
+        mint: VALID_MINT,
+        proofs: [64, 32, 16, 8, 4, 2, 1].map((n) => ({
+          amount: amountObject(n),
+        })),
+      });
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toMatchObject({
+        error: "Insufficient Cashu token amount",
+        provided: 127,
+        required: 1000,
+      });
+      expect(withMintRetryMock).not.toHaveBeenCalled();
+    });
+
+    it("accepts Amount proofs that add up to the order total", async () => {
+      getDecodedTokenMock.mockReturnValueOnce({
+        mint: VALID_MINT,
+        proofs: [512, 256, 128, 64, 32, 8].map((n) => ({
+          amount: amountObject(n),
+        })),
+      });
+
+      const res = await createCashuOrder();
+
+      expect(res.statusCode).toBe(201);
+    });
+  });
+
   describe("mint allowlist", () => {
     it("rejects a token whose decoded mint URL does not equal the trusted mint, listing supportedMints, without calling withMintRetry", async () => {
       getDecodedTokenMock.mockReturnValueOnce(

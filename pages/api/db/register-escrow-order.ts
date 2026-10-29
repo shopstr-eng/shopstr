@@ -1,10 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getDecodedToken, type Proof } from "@cashu/cashu-ts";
 import { applyRateLimit } from "@/utils/rate-limit";
 import { verifyNip98Request } from "@/utils/nostr/nip98-auth";
 import { registerP2pkEscrowOrder } from "@/utils/db/db-service";
 import { hashEscrowToken } from "@/utils/cashu/escrow-order-commitment";
 import { sumProofAmounts } from "@/utils/cashu/proof-amount";
+import { decodeTokenProofs } from "@/utils/cashu/token-proofs";
 import {
   getArbiterPubkey,
   normalizeCashuPubkey,
@@ -58,15 +58,6 @@ function isRegistrationBody(
     typeof value.buyerCashuPubkey === "string" &&
     HEX_32_BYTE.test(value.buyerCashuPubkey)
   );
-}
-
-function decodeTokenProofs(token: string): Proof[] | null {
-  try {
-    const decodedToken = getDecodedToken(token, []);
-    return Array.isArray(decodedToken?.proofs) ? decodedToken.proofs : null;
-  } catch {
-    return null;
-  }
 }
 
 type CommitmentDerivation =
