@@ -325,12 +325,22 @@ const OrdersDashboard = ({
         }
       }
 
-      if (orderIdSet.size > 0) {
+      if (orderIdSet.size > 0 && signer) {
         try {
+          const body = JSON.stringify({ orderIds: Array.from(orderIdSet) });
+          const authHeader = await createNip98AuthorizationHeader(
+            signer,
+            `${window.location.origin}/api/db/get-order-statuses`,
+            "POST",
+            body
+          );
           const response = await fetch("/api/db/get-order-statuses", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ orderIds: Array.from(orderIdSet) }),
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: authHeader,
+            },
+            body,
           });
           if (response.ok) {
             const data = await response.json();
@@ -343,7 +353,7 @@ const OrdersDashboard = ({
     }
 
     loadCachedStatuses();
-  }, [chatsContext?.isLoading, chatsContext?.chatsMap]);
+  }, [chatsContext?.isLoading, chatsContext?.chatsMap, signer]);
 
   useEffect(() => {
     async function loadOrders() {

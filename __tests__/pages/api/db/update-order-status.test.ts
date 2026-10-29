@@ -44,6 +44,7 @@ describe("/api/db/update-order-status", () => {
     getOrderParticipantsMock.mockResolvedValue({
       buyerPubkey: "buyer-on-target-order",
       sellerPubkey: "seller-on-target-order",
+      source: "order_participants",
     });
 
     const req = {
@@ -66,5 +67,25 @@ describe("/api/db/update-order-status", () => {
       error:
         "You are not allowed to set this order status for the current order role.",
     });
+  });
+
+  it("returns 404 when the order has no authoritative participant record", async () => {
+    verifyNip98RequestMock.mockResolvedValue({
+      ok: true,
+      pubkey: "buyer-on-target-order",
+    });
+    getOrderParticipantsMock.mockResolvedValue(null);
+
+    const req = {
+      method: "POST",
+      headers: {},
+      body: { orderId: "order-123", status: "canceled" },
+    } as any;
+    const res = createResponse();
+
+    await handler(req, res as any);
+
+    expect(updateOrderStatusMock).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(404);
   });
 });

@@ -98,6 +98,7 @@ import {
 } from "@/utils/nostr/gift-wrap";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
+import { registerOrderParticipantsOnServer } from "@/utils/db/order-participants-client";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { NostrWebLNProvider } from "@getalby/sdk";
@@ -1582,6 +1583,9 @@ export default function CartInvoiceCard({
       if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
         pendingOrderRef.current.orderId = orderId;
       }
+
+      // Before any token or DM carries the order id to the seller.
+      await registerOrderParticipantsOnServer(signer, orderId, product);
 
       const sellerProfile = await resolveSellerCheckoutProfile({
         sellerPubkey: pubkey,
