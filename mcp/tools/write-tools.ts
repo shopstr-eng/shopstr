@@ -270,7 +270,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .string()
         .optional()
         .describe(
-          "URL slug for the storefront (e.g. 'fresh-farm' for milk.market/shop/fresh-farm). Must be lowercase alphanumeric with hyphens."
+          "URL slug for the storefront (e.g. 'fresh-farm' for shopstr.market/shop/fresh-farm). Must be lowercase alphanumeric with hyphens."
         ),
       storefrontFontHeading: z
         .string()
@@ -548,7 +548,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
   reg(
     "register_shop_slug",
-    "Register, update, or delete your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. milk.market/shop/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words (shop, admin, api, etc.) are not allowed. To delete, set action to 'delete'.",
+    "Register, update, or delete your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. shopstr.market/shop/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words (shop, admin, api, etc.) are not allowed. To delete, set action to 'delete'.",
     {
       slug: z
         .string()
@@ -898,7 +898,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const handlerDTag = uuidv4();
         const origin =
-          process.env.NEXT_PUBLIC_BASE_URL || "https://milk.market";
+          process.env.NEXT_PUBLIC_BASE_URL || "https://shopstr.market";
 
         const handlerEvent: EventTemplate = {
           kind: 31990,
@@ -2671,7 +2671,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
   reg(
     "manage_custom_domain",
-    "Verify and register a custom domain for your Milk Market storefront. Checks that the domain's CNAME or A record points to milk.market, then records the mapping in the database.",
+    "Verify and register a custom domain for your Shopstr storefront. Checks that the domain's CNAME or A record points to shopstr.market, then records the mapping in the database.",
     {
       domain: z
         .string()
@@ -2694,8 +2694,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       const signer = await getSigner(apiKey);
       if (!signer) return noSignerError();
 
-      const TARGET_CNAME = "milk.market";
-      const TARGET_IPS = ["75.2.60.5"];
+      const TARGET_CNAME = "shopstr.market";
+      const TARGET_CNAMES = ["shopstr.market", "shopstr.store"];
+      const TARGET_IPS = ["34.111.179.208"];
 
       try {
         const pubkey = signer.getPubKey();
@@ -2722,8 +2723,11 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           resolvedCname = cnames[0] || null;
           cnameOk =
             !!resolvedCname &&
-            (resolvedCname === TARGET_CNAME ||
-              resolvedCname.endsWith("." + TARGET_CNAME));
+            TARGET_CNAMES.some(
+              (target) =>
+                resolvedCname!.toLowerCase() === target ||
+                resolvedCname!.toLowerCase().endsWith("." + target)
+            );
         } catch {}
 
         if (!cnameOk) {

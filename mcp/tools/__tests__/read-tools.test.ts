@@ -28,12 +28,18 @@ type DbEventRow = {
 
 const TEST_PUBKEY = "a".repeat(64);
 
+const readToolRegistry = new Map<
+  string,
+  { options: any; callback: ToolCallback }
+>();
+
 function registerToolsForTest() {
   const callbacks = new Map<string, ToolCallback>();
   const server = {
     registerTool: jest.fn(
-      (name: string, _options: unknown, callback: ToolCallback) => {
+      (name: string, options: unknown, callback: ToolCallback) => {
         callbacks.set(name, callback);
+        readToolRegistry.set(name, { options: options as any, callback });
       }
     ),
   };
@@ -1802,6 +1808,17 @@ describe("get_storefront", () => {
     expect(textPayload(result)).toMatchObject({
       error: "DB fetch failed",
       code: "DB_ERROR",
+    });
+  });
+
+  describe("tool schema and descriptions", () => {
+    it("registers get_storefront referencing shopstr.market and not milk.market in slug description", () => {
+      registerToolsForTest();
+      const toolDef = readToolRegistry.get("get_storefront");
+      expect(toolDef).toBeDefined();
+      const slugDesc = toolDef!.options.inputSchema.slug?.description;
+      expect(slugDesc).toContain("shopstr.market/shop/fresh-farm");
+      expect(slugDesc).not.toContain("milk.market");
     });
   });
 });

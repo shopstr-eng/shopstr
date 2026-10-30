@@ -128,12 +128,18 @@ function makeApiKey(overrides: Partial<ApiKeyRecord> = {}): ApiKeyRecord {
 const fullAccessApiKey = makeApiKey();
 const readOnlyApiKey = makeApiKey({ permissions: "read" });
 
+const toolRegistry = new Map<
+  string,
+  { options: any; callback: ToolCallback }
+>();
+
 function registerToolsForTest(apiKey: ApiKeyRecord) {
   const callbacks = new Map<string, ToolCallback>();
   const server = {
     registerTool: jest.fn(
-      (name: string, _options: unknown, callback: ToolCallback) => {
+      (name: string, options: unknown, callback: ToolCallback) => {
         callbacks.set(name, callback);
+        toolRegistry.set(name, { options: options as any, callback });
       }
     ),
   };
@@ -791,6 +797,35 @@ describe("registerWriteTools — (core listing & shop lifecycle)", () => {
         .mocked(signAndPublishEvent)
         .mock.calls.map((call) => (call[1] as any).kind);
       expect(kinds).toEqual([30402, 31989, 31990]);
+
+      const handlerCall = jest
+        .mocked(signAndPublishEvent)
+        .mock.calls.find((call) => (call[1] as any).kind === 31990);
+      expect(handlerCall).toBeDefined();
+      const webTags = (handlerCall![1] as any).tags.filter(
+        (t: string[]) => t[0] === "web"
+      );
+      expect(webTags[0][1]).toContain("https://shopstr.market");
+    });
+
+    it("uses process.env.NEXT_PUBLIC_BASE_URL for NIP-89 handler if defined, defaulting to https://shopstr.market", async () => {
+      const originalEnv = process.env.NEXT_PUBLIC_BASE_URL;
+      try {
+        process.env.NEXT_PUBLIC_BASE_URL = "https://custom.shopstr.market";
+        const tool = getCallback();
+        await tool(baseParams);
+
+        const handlerCall = jest
+          .mocked(signAndPublishEvent)
+          .mock.calls.find((call) => (call[1] as any).kind === 31990);
+        expect(handlerCall).toBeDefined();
+        const webTags = (handlerCall![1] as any).tags.filter(
+          (t: string[]) => t[0] === "web"
+        );
+        expect(webTags[0][1]).toContain("https://custom.shopstr.market");
+      } finally {
+        process.env.NEXT_PUBLIC_BASE_URL = originalEnv;
+      }
     });
 
     it("does not fail the tool call when the fire-and-forget rec/handler publishes reject", async () => {
@@ -3692,7 +3727,13 @@ describe("registerWriteTools — (custom domain)", () => {
       });
     });
 
-    it.each(["milk.market", "edge.milk.market"])(
+    it.each([
+      "shopstr.market",
+      "edge.shopstr.market",
+      "shopstr.store",
+      "edge.shopstr.store",
+      "SHOPSTR.MARKET",
+    ])(
       "treats a resolved CNAME of '%s' as a valid match and skips the A-record lookup",
       async (cname) => {
         mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
@@ -3717,7 +3758,7 @@ describe("registerWriteTools — (custom domain)", () => {
         cb(null, [])
       );
       mockDnsResolve4.mockImplementationOnce((_domain: string, cb: any) =>
-        cb(null, ["75.2.60.5"])
+        cb(null, ["34.111.179.208"])
       );
       const tool = getCallback();
 
@@ -3734,7 +3775,7 @@ describe("registerWriteTools — (custom domain)", () => {
 
     it("falls back to the A-record lookup when the CNAME lookup fails", async () => {
       mockDnsResolve4.mockImplementationOnce((_domain: string, cb: any) =>
-        cb(null, ["75.2.60.5"])
+        cb(null, ["34.111.179.208"])
       );
       const tool = getCallback();
 
@@ -3750,12 +3791,12 @@ describe("registerWriteTools — (custom domain)", () => {
       expect(mockDnsResolve4).toHaveBeenCalledTimes(1);
     });
 
-    it("falls back to the A-record lookup when the CNAME resolves but doesn't match milk.market", async () => {
+    it("falls back to the A-record lookup when the CNAME resolves but doesn't match shopstr.market", async () => {
       mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
-        cb(null, ["notmilkmarket.example.com"])
+        cb(null, ["notshopstrmarket.example.com"])
       );
       mockDnsResolve4.mockImplementationOnce((_domain: string, cb: any) =>
-        cb(null, ["75.2.60.5"])
+        cb(null, ["34.111.179.208"])
       );
       const tool = getCallback();
 
@@ -3784,7 +3825,11 @@ describe("registerWriteTools — (custom domain)", () => {
       const payload = textPayload(result);
       expect(payload.dnsOk).toBe(false);
       expect(payload.aOk).toBe(false);
-      expect(payload.instructions).toMatch(/Please add a CNAME record/);
+      expect(payload.instructions).toBe(
+        "Please add a CNAME record pointing shop.example.com to shopstr.market, or an A record pointing to 34.111.179.208."
+      );
+      expect(payload.instructions).not.toContain("milk.market");
+      expect(payload.instructions).not.toContain("75.2.60.5");
     });
 
     it("action='verify' never writes to the database, regardless of DNS pass/fail", async () => {
@@ -3797,7 +3842,7 @@ describe("registerWriteTools — (custom domain)", () => {
       expect(pool.query).not.toHaveBeenCalled();
     });
 
-    it("action='register' rejects with 'DNS verification failed' when DNS does not point to milk.market, without querying the db", async () => {
+    it("action='register' rejects with 'DNS verification failed' when DNS does not point to shopstr.market, without querying the db", async () => {
       const pool = { query: jest.fn() };
       jest.mocked(getDbPool).mockReturnValue(pool as any);
       const tool = getCallback();
@@ -3810,6 +3855,10 @@ describe("registerWriteTools — (custom domain)", () => {
 
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("DNS verification failed");
+      expect(textPayload(result).details).toBe(
+        "Domain shop.example.com does not point to shopstr.market. Please configure your DNS first."
+      );
+      expect(textPayload(result).details).not.toContain("milk.market");
       expect(pool.query).not.toHaveBeenCalled();
     });
 
@@ -3817,7 +3866,7 @@ describe("registerWriteTools — (custom domain)", () => {
       const pool = { query: jest.fn() };
       jest.mocked(getDbPool).mockReturnValue(pool as any);
       mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
-        cb(null, ["milk.market"])
+        cb(null, ["shopstr.market"])
       );
       const tool = getCallback();
 
@@ -3835,7 +3884,7 @@ describe("registerWriteTools — (custom domain)", () => {
       const pool = { query: jest.fn().mockResolvedValue({ rowCount: 0 }) };
       jest.mocked(getDbPool).mockReturnValue(pool as any);
       mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
-        cb(null, ["milk.market"])
+        cb(null, ["shopstr.market"])
       );
       const tool = getCallback();
 
@@ -3853,7 +3902,7 @@ describe("registerWriteTools — (custom domain)", () => {
       const pool = { query: jest.fn().mockResolvedValue({ rowCount: 1 }) };
       jest.mocked(getDbPool).mockReturnValue(pool as any);
       mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
-        cb(null, ["milk.market"])
+        cb(null, ["shopstr.market"])
       );
       const tool = getCallback();
 
@@ -3877,7 +3926,7 @@ describe("registerWriteTools — (custom domain)", () => {
 
     it("returns 'Invalid action' for an unrecognized action value (defensive fallback)", async () => {
       mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
-        cb(null, ["milk.market"])
+        cb(null, ["shopstr.market"])
       );
       const tool = getCallback();
 
@@ -3917,6 +3966,38 @@ describe("registerWriteTools — (custom domain)", () => {
       });
 
       expect(textPayload(result).details).toBe("Unknown error");
+    });
+  });
+
+  describe("domain & storefront tool descriptions", () => {
+    beforeEach(() => {
+      registerToolsForTest(fullAccessApiKey);
+    });
+
+    it("registers manage_custom_domain with shopstr.market description and no milk.market references", () => {
+      const toolDef = toolRegistry.get("manage_custom_domain");
+      expect(toolDef).toBeDefined();
+      expect(toolDef!.options.description).toContain("Shopstr storefront");
+      expect(toolDef!.options.description).toContain("shopstr.market");
+      expect(toolDef!.options.description).not.toContain("milk.market");
+      expect(toolDef!.options.description).not.toContain("Milk Market");
+    });
+
+    it("registers register_shop_slug referencing shopstr.market in tool description", () => {
+      const toolDef = toolRegistry.get("register_shop_slug");
+      expect(toolDef).toBeDefined();
+      expect(toolDef!.options.description).toContain(
+        "shopstr.market/shop/your-slug"
+      );
+      expect(toolDef!.options.description).not.toContain("milk.market");
+    });
+
+    it("registers set_shop_profile referencing shopstr.market in shopSlug description", () => {
+      const toolDef = toolRegistry.get("set_shop_profile");
+      expect(toolDef).toBeDefined();
+      const shopSlugDesc = toolDef!.options.inputSchema.shopSlug?.description;
+      expect(shopSlugDesc).toContain("shopstr.market/shop/fresh-farm");
+      expect(shopSlugDesc).not.toContain("milk.market");
     });
   });
 });
