@@ -646,33 +646,59 @@ export default function CartInvoiceCard({
   // Single sender for every cart checkout message. Callers that already
   // hold an order's keys pass them in (reused across retry attempts so a
   // retried message keeps the same sender identity); without keys a fresh
-  // pair is generated.
-  const sendPaymentAndContactMessage = async (
-    pubkeyToReceiveMessage: string,
-    message: string,
-    product: ProductData,
-    isPayment?: boolean,
-    isReceipt?: boolean,
-    isDonation?: boolean,
-    orderId?: string,
-    paymentType?: string,
-    paymentReference?: string,
-    paymentProof?: string,
-    messageAmount?: number,
-    productQuantity?: number,
+  // pair is generated. Takes an options object — with this many fields,
+  // positional parameters can be silently swapped at a call site.
+  type SendPaymentAndContactMessageOptions = {
+    pubkeyToReceiveMessage: string;
+    message: string;
+    product: ProductData;
+    isPayment?: boolean;
+    isReceipt?: boolean;
+    isDonation?: boolean;
+    orderId?: string;
+    paymentType?: string;
+    paymentReference?: string;
+    paymentProof?: string;
+    messageAmount?: number;
+    productQuantity?: number;
     keys?: {
       senderNpub: string;
       senderNsec: string;
       receiverNpub: string;
       receiverNsec: string;
-    },
-    contact?: string,
-    address?: string,
-    pickup?: string,
-    donationAmountValue?: number,
-    donationPercentageValue?: number,
-    retryCount: number = 3
+    };
+    contact?: string;
+    address?: string;
+    pickup?: string;
+    donationAmountValue?: number;
+    donationPercentageValue?: number;
+    retryCount?: number;
+  };
+
+  const sendPaymentAndContactMessage = async (
+    options: SendPaymentAndContactMessageOptions
   ) => {
+    const {
+      pubkeyToReceiveMessage,
+      message,
+      product,
+      isPayment,
+      isReceipt,
+      isDonation,
+      orderId,
+      paymentType,
+      paymentReference,
+      paymentProof,
+      messageAmount,
+      productQuantity,
+      keys,
+      contact,
+      address,
+      pickup,
+      donationAmountValue,
+      donationPercentageValue,
+      retryCount = 3,
+    } = options;
     let rawKeys = keys;
     if (!rawKeys) {
       const newKeys = await generateNewKeys();
@@ -1630,28 +1656,25 @@ export default function CartInvoiceCard({
             quantity: quantities[product.id],
           });
           const pickupLocationForLightning = pickupLocation;
-          await sendPaymentAndContactMessage(
-            pubkey,
-            paymentMessage,
+          await sendPaymentAndContactMessage({
+            pubkeyToReceiveMessage: pubkey,
+            message: paymentMessage,
             product,
-            true,
-            false,
-            false,
+            isPayment: true,
             orderId,
-            "lightning",
-            lnurl,
-            undefined,
-            meltAmount,
-            quantities[product.id] && quantities[product.id]! > 1
-              ? quantities[product.id]
-              : 1,
-            orderKeys,
-            undefined,
-            shippingAddressTag,
-            pickupLocationForLightning || undefined,
-            donationAmount,
-            donationPercentage
-          );
+            paymentType: "lightning",
+            paymentReference: lnurl,
+            messageAmount: meltAmount,
+            productQuantity:
+              quantities[product.id] && quantities[product.id]! > 1
+                ? quantities[product.id]
+                : 1,
+            keys: orderKeys,
+            address: shippingAddressTag,
+            pickup: pickupLocationForLightning || undefined,
+            donationAmountValue: donationAmount,
+            donationPercentageValue: donationPercentage,
+          });
 
           if (changeAmount >= 1 && changeProofs.length > 0) {
             // Add delay between messages to prevent browser throttling
@@ -1663,21 +1686,17 @@ export default function CartInvoiceCard({
             });
             const changeMessage = "Overpaid fee change: " + encodedChange;
             try {
-              await sendPaymentAndContactMessage(
-                pubkey,
-                changeMessage,
+              await sendPaymentAndContactMessage({
+                pubkeyToReceiveMessage: pubkey,
+                message: changeMessage,
                 product,
-                true,
-                false,
-                false,
+                isPayment: true,
                 orderId,
-                "ecash",
-                encodedChange,
-                undefined,
-                changeAmount,
-                undefined,
-                orderKeys
-              );
+                paymentType: "ecash",
+                paymentReference: encodedChange,
+                messageAmount: changeAmount,
+                keys: orderKeys,
+              });
               await new Promise((resolve) => setTimeout(resolve, 500));
             } catch (error) {
               console.error("Failed to send change message:", error);
@@ -1765,28 +1784,25 @@ export default function CartInvoiceCard({
             token: sellerToken,
             quantity: quantities[product.id],
           });
-          await sendPaymentAndContactMessage(
-            pubkey,
-            paymentMessage,
+          await sendPaymentAndContactMessage({
+            pubkeyToReceiveMessage: pubkey,
+            message: paymentMessage,
             product,
-            true,
-            false,
-            false,
+            isPayment: true,
             orderId,
-            "ecash",
-            sellerToken,
-            undefined,
-            ecashPayoutAmount,
-            quantities[product.id] && quantities[product.id]! > 1
-              ? quantities[product.id]
-              : 1,
-            orderKeys,
-            undefined,
-            shippingAddressTag,
-            pickupLocation || undefined,
-            donationAmount,
-            donationPercentage
-          );
+            paymentType: "ecash",
+            paymentReference: sellerToken,
+            messageAmount: ecashPayoutAmount,
+            productQuantity:
+              quantities[product.id] && quantities[product.id]! > 1
+                ? quantities[product.id]
+                : 1,
+            keys: orderKeys,
+            address: shippingAddressTag,
+            pickup: pickupLocation || undefined,
+            donationAmountValue: donationAmount,
+            donationPercentageValue: donationPercentage,
+          });
         }
       }
 
@@ -1794,14 +1810,13 @@ export default function CartInvoiceCard({
       if (donationToken) {
         const donationMessage = "Sale donation: " + donationToken;
         try {
-          await sendPaymentAndContactMessage(
-            "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
-            donationMessage,
+          await sendPaymentAndContactMessage({
+            pubkeyToReceiveMessage:
+              "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
+            message: donationMessage,
             product,
-            false,
-            false,
-            true
-          );
+            isDonation: true,
+          });
           await new Promise((resolve) => setTimeout(resolve, 500));
         } catch (error) {
           console.error("Failed to send donation message:", error);
@@ -1816,26 +1831,15 @@ export default function CartInvoiceCard({
         const additionalMessage =
           "Additional customer information: " + data.additionalInfo;
         try {
-          await sendPaymentAndContactMessage(
-            pubkey,
-            additionalMessage,
+          await sendPaymentAndContactMessage({
+            pubkeyToReceiveMessage: pubkey,
+            message: additionalMessage,
             product,
-            false,
-            false,
-            false,
             orderId,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            orderKeys,
-            undefined,
-            undefined,
-            undefined,
-            donationAmount,
-            donationPercentage
-          );
+            keys: orderKeys,
+            donationAmountValue: donationAmount,
+            donationPercentageValue: donationPercentage,
+          });
           await new Promise((resolve) => setTimeout(resolve, 500));
         } catch (error) {
           console.error("Failed to send additional info message:", error);
@@ -1904,26 +1908,17 @@ export default function CartInvoiceCard({
             shippingAddr
           );
           const addressTagForShipping = buildShippingAddressTag(shippingAddr);
-          await sendPaymentAndContactMessage(
-            pubkey,
-            contactMessage,
+          await sendPaymentAndContactMessage({
+            pubkeyToReceiveMessage: pubkey,
+            message: contactMessage,
             product,
-            false,
-            false,
-            false,
             orderId,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            orderKeys,
-            undefined,
-            addressTagForShipping,
-            pickupLocation || undefined,
-            donationAmount,
-            donationPercentage
-          );
+            keys: orderKeys,
+            address: addressTagForShipping,
+            pickup: pickupLocation || undefined,
+            donationAmountValue: donationAmount,
+            donationPercentageValue: donationPercentage,
+          });
 
           if (userPubkey) {
             const receiptMessage = buildOrderProcessedReceiptMessage(
@@ -1935,26 +1930,18 @@ export default function CartInvoiceCard({
             // Add delay between messages
             await new Promise((resolve) => setTimeout(resolve, 500));
 
-            await sendPaymentAndContactMessage(
-              userPubkey,
-              receiptMessage,
+            await sendPaymentAndContactMessage({
+              pubkeyToReceiveMessage: userPubkey,
+              message: receiptMessage,
               product,
-              false,
-              true,
-              false,
+              isReceipt: true,
               orderId,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              orderKeys,
-              undefined,
-              shippingAddressTag,
-              pickupLocation || undefined,
-              donationAmount,
-              donationPercentage
-            );
+              keys: orderKeys,
+              address: shippingAddressTag,
+              pickup: pickupLocation || undefined,
+              donationAmountValue: donationAmount,
+              donationPercentageValue: donationPercentage,
+            });
           }
         }
       } else if (
@@ -1987,26 +1974,18 @@ export default function CartInvoiceCard({
           // Add delay between messages
           await new Promise((resolve) => setTimeout(resolve, 500));
 
-          await sendPaymentAndContactMessage(
-            userPubkey,
-            receiptMessage,
+          await sendPaymentAndContactMessage({
+            pubkeyToReceiveMessage: userPubkey,
+            message: receiptMessage,
             product,
-            false,
-            true,
-            false,
+            isReceipt: true,
             orderId,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            orderKeys,
-            undefined,
-            shippingAddressTag,
-            pickupLocation || undefined,
-            donationAmount,
-            donationPercentage
-          );
+            keys: orderKeys,
+            address: shippingAddressTag,
+            pickup: pickupLocation || undefined,
+            donationAmountValue: donationAmount,
+            donationPercentageValue: donationPercentage,
+          });
         }
       } else {
         // Step 5: Always send final receipt message
@@ -2027,26 +2006,18 @@ export default function CartInvoiceCard({
           productDetails,
           nip19.npubEncode(product.pubkey)
         );
-        await sendPaymentAndContactMessage(
-          userPubkey!,
-          receiptMessage,
+        await sendPaymentAndContactMessage({
+          pubkeyToReceiveMessage: userPubkey!,
+          message: receiptMessage,
           product,
-          false,
-          true,
-          false,
+          isReceipt: true,
           orderId,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          orderKeys,
-          undefined,
-          shippingAddressTag,
-          pickupLocation || undefined,
-          donationAmount,
-          donationPercentage
-        );
+          keys: orderKeys,
+          address: shippingAddressTag,
+          pickup: pickupLocation || undefined,
+          donationAmountValue: donationAmount,
+          donationPercentageValue: donationPercentage,
+        });
       }
     }
 
