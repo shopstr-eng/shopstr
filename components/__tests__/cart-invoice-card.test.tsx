@@ -1682,4 +1682,66 @@ describe("cost breakdown shipping display (pre-payment form and invoice screen)"
     // On invoice screen, waived shipping cost must not reappear
     expect(screen.queryByText(/Shipping cost:/i)).not.toBeInTheDocument();
   });
+
+  it("shows quantity-adjusted shipping for Added Cost items in a mixed cart when Pickup is chosen", async () => {
+    const prodA = makeCartProduct({
+      id: "prod-a",
+      title: "Shipped Item",
+      price: 1000,
+      shippingCost: 50,
+      shippingType: "Added Cost",
+      currency: "sats",
+    });
+    const prodB = makeCartProduct({
+      id: "prod-b",
+      title: "Pickup Item",
+      price: 500,
+      shippingType: "Free/Pickup",
+      currency: "sats",
+    });
+    const products = [prodA, prodB];
+
+    renderCartInvoiceCard(products, {
+      quantities: { "prod-a": 2, "prod-b": 1 },
+      shippingTypes: {
+        "prod-a": "Added Cost",
+        "prod-b": "Free/Pickup",
+      },
+    });
+
+    // Step 1: Mixed delivery button
+    fireEvent.click(screen.getByRole("button", { name: /^Mixed delivery/ }));
+
+    // Step 2: Choose Pickup for pickup-capable items
+    fireEvent.click(screen.getByRole("button", { name: /^Pickup/ }));
+
+    // On pre-payment checkout form screen:
+    // prodA must show 50 * 2 = 100 sats shipping cost
+    expect(screen.getByText("100 sats")).toBeInTheDocument();
+
+    fillShippingForm({
+      Name: "Alice Developer",
+      Address: "123 Main St",
+      City: "Austin",
+      "Postal Code": "78701",
+      "State/Province": "TX",
+      Country: "USA",
+    });
+
+    // 2 * 1000 + 100 (shipping) = 2100 for prodA; 500 for prodB. Total = 2600 sats
+    mockFetchJsonOnce(
+      makeCartQuoteResponse(products, {
+        breakdown: { "prod-a": 2100, "prod-b": 500 },
+        amount: 2600,
+      })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Pay with Lightning/ }));
+
+    expect(await screen.findByText("Lightning Invoice")).toBeInTheDocument();
+
+    // On payment invoice screen:
+    // prodA must still show 50 * 2 = 100 sats shipping cost
+    expect(screen.getByText("100 sats")).toBeInTheDocument();
+  });
 });
