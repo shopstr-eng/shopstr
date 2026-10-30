@@ -1449,6 +1449,11 @@ describe("payment-confirmed session summary", () => {
     await waitFor(() => expect(setInvoiceIsPaid).toHaveBeenCalledWith(true), {
       timeout: 8000,
     });
+    // The summary is written by an effect after the paymentConfirmed render
+    // commits, which can land after setInvoiceIsPaid is observed.
+    await waitFor(() =>
+      expect(sessionStorage.getItem("orderSummary")).not.toBeNull()
+    );
 
     const summary = JSON.parse(sessionStorage.getItem("orderSummary")!);
     expect(summary.productTitle).toBe(productData.title);
