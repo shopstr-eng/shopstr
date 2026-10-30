@@ -2749,6 +2749,17 @@ export default function CartInvoiceCard({
                           ? basePrice * (1 - discount / 100)
                           : basePrice;
 
+                      // Determine if shipping should be shown for this product
+                      const shouldShowShipping =
+                        !sellerFreeShippingStatus[product.pubkey]?.qualifies &&
+                        formType !== null &&
+                        getCartShippingPredicate({
+                          formType,
+                          hasMixedShippingWithPickup,
+                          shippingPickupPreference:
+                            shippingPickupPreference ?? undefined,
+                        })(shippingTypes[product.id]);
+
                       return (
                         <div
                           key={product.id}
@@ -2800,20 +2811,18 @@ export default function CartInvoiceCard({
                               </div>
                             </>
                           )}
-                          {product.shippingCost! > 0 &&
-                            ((formType === "combined" &&
-                              shippingPickupPreference === "shipping") ||
-                              formType === "shipping") && (
-                              <div className="flex justify-between text-sm">
-                                <span className="ml-2">Shipping cost:</span>
-                                <span>
-                                  {formatWithCommas(
-                                    product.shippingCost!,
-                                    product.currency
-                                  )}
-                                </span>
-                              </div>
-                            )}
+                          {shouldShowShipping && product.shippingCost! > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="ml-2">Shipping cost:</span>
+                              <span>
+                                {formatWithCommas(
+                                  product.shippingCost! *
+                                    (quantities[product.id] || 1),
+                                  product.currency
+                                )}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -2984,14 +2993,15 @@ export default function CartInvoiceCard({
                         : basePrice;
 
                     // Determine if shipping should be shown for this product
-                    const productShippingType = shippingTypes[product.id];
                     const shouldShowShipping =
-                      formType === "shipping" ||
-                      (formType === "combined" &&
-                        (productShippingType === "Added Cost" ||
-                          productShippingType === "Free" ||
-                          (productShippingType === "Free/Pickup" &&
-                            shippingPickupPreference === "shipping")));
+                      !sellerFreeShippingStatus[product.pubkey]?.qualifies &&
+                      formType !== null &&
+                      getCartShippingPredicate({
+                        formType,
+                        hasMixedShippingWithPickup,
+                        shippingPickupPreference:
+                          shippingPickupPreference ?? undefined,
+                      })(shippingTypes[product.id]);
 
                     return (
                       <div
@@ -3057,22 +3067,18 @@ export default function CartInvoiceCard({
                             </div>
                           </>
                         )}
-                        {shouldShowShipping &&
-                          product.shippingCost! > 0 &&
-                          ((formType === "combined" &&
-                            shippingPickupPreference === "shipping") ||
-                            formType === "shipping") && (
-                            <div className="flex justify-between text-sm">
-                              <span className="ml-2">Shipping cost:</span>
-                              <span>
-                                {formatWithCommas(
-                                  product.shippingCost! *
-                                    (quantities[product.id] || 1),
-                                  product.currency
-                                )}
-                              </span>
-                            </div>
-                          )}
+                        {shouldShowShipping && product.shippingCost! > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="ml-2">Shipping cost:</span>
+                            <span>
+                              {formatWithCommas(
+                                product.shippingCost! *
+                                  (quantities[product.id] || 1),
+                                product.currency
+                              )}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
