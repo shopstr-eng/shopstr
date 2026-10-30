@@ -43,6 +43,7 @@ import {
 import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
+import { getDonationRecipientPubkey } from "@/utils/payments/donation-recipient";
 import {
   buildProductDetailsSuffix,
   splitDonationAndSellerAmount,
@@ -1345,7 +1346,10 @@ export default function ProductInvoiceCard({
       );
     }
 
-    const donationPercentage = sellerProfile?.content?.shopstr_donation ?? 2.1;
+    const donationRecipientPubkey = getDonationRecipientPubkey();
+    const donationPercentage = donationRecipientPubkey
+      ? sellerProfile?.content?.shopstr_donation ?? 2.1
+      : 0;
     const { donationAmount, sellerAmount } = splitDonationAndSellerAmount(
       totalPrice,
       donationPercentage
@@ -1591,12 +1595,11 @@ export default function ProductInvoiceCard({
     }
 
     // Step 2: Send donation message
-    if (donationToken) {
+    if (donationToken && donationRecipientPubkey) {
       const donationMessage = "Sale donation: " + donationToken;
       try {
         await sendPaymentAndContactMessage({
-          pubkeyToReceiveMessage:
-            "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
+          pubkeyToReceiveMessage: donationRecipientPubkey,
           message: donationMessage,
           isDonation: true,
         });

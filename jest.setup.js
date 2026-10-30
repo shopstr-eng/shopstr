@@ -4,6 +4,12 @@ import { TextEncoder, TextDecoder } from "util";
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
 
+// Donation recipient is read from configuration at checkout. Existing tests
+// exercise the default 2.1% donation split, so provide a recipient here.
+// Individual tests can override/delete it to cover the unset behavior.
+process.env.NEXT_PUBLIC_DONATION_NOSTR_PUBKEY =
+  "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33";
+
 // cashu-ts v3+ uses Amount class with .toNumber(). Production code converts
 // at library boundaries (Choice B). Test mocks return raw numbers, so shim
 // Number.prototype.toNumber to keep mock data compatible.
