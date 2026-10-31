@@ -74,6 +74,44 @@ describe("sendServerGiftWrappedDm", () => {
     expect(relayManager.publish).toHaveBeenCalledWith(giftWrap);
   });
 
+  it("sends plain text content with extra rumor tags", async () => {
+    const relayManager = {
+      publish: jest.fn().mockResolvedValue(undefined),
+      close: jest.fn(),
+    } as any;
+
+    await sendServerGiftWrappedDm({
+      senderPrivkeyHexOrNsec: SENDER_PRIVKEY,
+      recipientPubkey: RECIPIENT_PUBKEY,
+      content: "You have a new order",
+      tags: [
+        ["subject", "order-payment"],
+        ["order", "order-1"],
+      ],
+      relayManager,
+    });
+
+    const giftWrap = cacheEventStrictMock.mock.calls[0]![0];
+    const seal = JSON.parse(
+      nip44.decrypt(
+        giftWrap.content,
+        nip44.getConversationKey(RECIPIENT_PRIVKEY_BYTES, giftWrap.pubkey)
+      )
+    );
+    const rumor = JSON.parse(
+      nip44.decrypt(
+        seal.content,
+        nip44.getConversationKey(RECIPIENT_PRIVKEY_BYTES, seal.pubkey)
+      )
+    );
+    expect(rumor.content).toBe("You have a new order");
+    expect(rumor.tags).toEqual([
+      ["p", RECIPIENT_PUBKEY],
+      ["subject", "order-payment"],
+      ["order", "order-1"],
+    ]);
+  });
+
   it("does not report delivery or publish when durable caching fails", async () => {
     const relayManager = {
       publish: jest.fn().mockResolvedValue(undefined),
