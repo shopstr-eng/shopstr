@@ -5,7 +5,7 @@ description: Replit deploy builds fetch npm packages through a firewall that 403
 
 # Deploy package firewall blocks CVE'd versions
 
-Deploy builds resolve npm tarballs through `package-firewall.replit.internal`, which returns **403 "Blocked by Security Policy" (Critical CVE)** for affected versions. This killed a deploy on `next@16.3.1`; the fix was bumping to `16.3.5` (16.3.3 is the patched floor for the critical RCE advisories). Local dev had a stale `node_modules` at 16.2.7, so everything looked fine locally.
+Deploy builds resolve npm tarballs through `package-firewall.replit.internal`, which returns **403 "Blocked by Security Policy" (Critical CVE)** for affected versions. A previous fix later became vulnerable to new advisories, so never treat an old recorded patched floor as permanently safe: consult the current audit ranges. Stale local `node_modules` previously hid a vulnerable locked version.
 
 **Why:** the block only fires in the deploy's fresh `npm install`/`npm ci`; a stale local tree never downloads the pinned tarball, so the failure is invisible until publish.
 

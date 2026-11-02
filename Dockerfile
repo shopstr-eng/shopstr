@@ -4,6 +4,8 @@ WORKDIR /app
 
 # Install dependencies first (layer cache)
 COPY package.json package-lock.json .npmrc ./
+COPY packages/minimatch-compat/ packages/minimatch-compat/
+COPY packages/deepmerge-safe/ packages/deepmerge-safe/
 RUN npm ci --prefer-offline --no-audit --no-fund
 
 # Build the app

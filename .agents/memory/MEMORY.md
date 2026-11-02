@@ -1,5 +1,5 @@
 - [HeroUI version pin](heroui-version-pin.md) — keep @heroui/react on v2.8.10; v3 removes ModalContent/useDisclosure; deploy npm ci installs the lockfile exactly, so stale node_modules hides the break.
-- [Deploy package firewall](deploy-package-firewall.md) — deploy 403s npm versions with critical CVEs (next must be ≥16.3.3, on 16.3.5); after npm install on Replit, scrub package-firewall URLs and restore libc fields in the lockfile before committing.
+- [Deploy package firewall](deploy-package-firewall.md) — critical CVEs block installs; use current audit ranges, scrub internal lockfile URLs and preserve libc fields.
 - [Dependency vuln workflow](dependency-vuln-workflow.md) — fix transitive vulns via scoped overrides pins; packages/shopstr-mcp has an independent lockfile that root audit/overrides don't cover; npm audit's major "fixes" can be downgrades in disguise.
 - [Zap receipt validation](zap-receipt-validation.md) — purchase flow stays strict (preimage binding); inventory counts min-amount receipts from any client's p-tag; freshness upper bound is now-based, not startTime-based.
 - [Relay connection handling](relay-connection-handling.md) — never cache ensureRelay promises, never await all-relay connects before subscribing, always bound connect timeouts, fetch resolves partial on timeout.

@@ -1,0 +1,11 @@
+{
+  "name": "@shopstr/minimatch-compat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Callable CommonJS compatibility facade over patched minimatch",
+  "main": "index.cjs",
+  "license": "GPL-3.0-only",
+  "dependencies": {
+    "minimatch-patched": "npm:minimatch@11.0.4"
+  }
+}
