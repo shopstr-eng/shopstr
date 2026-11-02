@@ -171,6 +171,123 @@ export async function updateMcpOrderPayment(
   }
 }
 
+export interface McpLightningPayment {
+  order_id: string;
+  quote_id: string;
+  mint_url: string;
+  amount_sats: number;
+  product_address: string;
+  selected_specs: Record<string, any> | null;
+  /** The minted payment, kept until the seller has it. */
+  seller_token: string | null;
+  /** Seconds since the mint was claimed, or null if no one claimed it. */
+  claim_age_seconds: number | null;
+}
+
+export async function saveMcpLightningPayment(payment: {
+  orderId: string;
+  quoteId: string;
+  mintUrl: string;
+  amountSats: number;
+  productAddress: string;
+  selectedSpecs?: Record<string, any>;
+}): Promise<void> {
+  const pool = getDbPool();
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query(
+      `INSERT INTO mcp_lightning_payments (order_id, quote_id, mint_url, amount_sats, product_address, selected_specs)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        payment.orderId,
+        payment.quoteId,
+        payment.mintUrl,
+        payment.amountSats,
+        payment.productAddress,
+        payment.selectedSpecs ? JSON.stringify(payment.selectedSpecs) : null,
+      ] as any[]
+    );
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getMcpLightningPayment(
+  orderId: string
+): Promise<McpLightningPayment | null> {
+  const pool = getDbPool();
+  let client;
+  try {
+    client = await pool.connect();
+    const result = await client.query(
+      `SELECT *, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - claimed_at)) AS claim_age_seconds
+       FROM mcp_lightning_payments WHERE order_id = $1`,
+      [orderId]
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return {
+      ...row,
+      claim_age_seconds:
+        row.claim_age_seconds === null ? null : Number(row.claim_age_seconds),
+    };
+  } finally {
+    if (client) client.release();
+  }
+}
+
+// Only one request may mint a paid quote. The mint cannot be repeated, so the
+// claim is taken before minting and only one caller gets true.
+export async function claimMcpLightningMint(orderId: string): Promise<boolean> {
+  const pool = getDbPool();
+  let client;
+  try {
+    client = await pool.connect();
+    const result = await client.query(
+      `UPDATE mcp_lightning_payments SET claimed_at = CURRENT_TIMESTAMP
+       WHERE order_id = $1 AND claimed_at IS NULL AND seller_token IS NULL
+       RETURNING order_id`,
+      [orderId]
+    );
+    return result.rows.length > 0;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function releaseMcpLightningClaim(orderId: string): Promise<void> {
+  const pool = getDbPool();
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query(
+      `UPDATE mcp_lightning_payments SET claimed_at = NULL
+       WHERE order_id = $1 AND seller_token IS NULL`,
+      [orderId]
+    );
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function setMcpLightningToken(
+  orderId: string,
+  token: string | null
+): Promise<void> {
+  const pool = getDbPool();
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query(
+      `UPDATE mcp_lightning_payments SET seller_token = $1 WHERE order_id = $2`,
+      [token, orderId]
+    );
+  } finally {
+    if (client) client.release();
+  }
+}
+
 export async function updateMcpOrderStatus(
   orderId: string,
   orderStatus: string,

@@ -24,6 +24,7 @@ import {
 import { recordRequest } from "@/utils/mcp/metrics";
 import {
   createMcpOrder,
+  saveMcpLightningPayment,
   updateMcpOrderPayment,
   getMcpOrder,
   listMcpOrders,
@@ -41,11 +42,6 @@ import { getTrustedMintUrl } from "@/utils/cashu/trusted-mints";
 // mint quote pipeline.
 const RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
 const PER_KEY_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-
-const pendingLightningPayments = new Map<
-  string,
-  { quote: string; mintUrl: string; amount: number; orderId: string }
->();
 
 let tablesReady = false;
 
@@ -400,6 +396,41 @@ async function convertOrderTotalToSats(
   return toCashuMintAmountSats(Math.round(sats));
 }
 
+// Escrow sellers need a locked token and an arbiter registration, which this
+// endpoint cannot make, so they are refused before any funds move. The buyer
+// and seller are also registered, so the seller's later status updates are
+// trusted by the orders dashboard. Returns the listing address, or null after
+// sending the error response.
+async function prepareSellerPayment(
+  res: NextApiResponse,
+  orderId: string,
+  buyerPubkey: string,
+  product: any
+): Promise<string | null> {
+  const sellerProfile = await getSellerProfile(product.pubkey);
+  if (isSellerP2pkEscrowActive(sellerProfile?.p2pk)) {
+    res.status(400).json({
+      error:
+        "This seller requires dispute escrow, which is not supported for MCP orders yet.",
+    });
+    return null;
+  }
+
+  if (!product.d) {
+    res.status(500).json({ error: "Failed to parse product data" });
+    return null;
+  }
+  const productAddress = `30402:${product.pubkey}:${product.d}`;
+
+  await registerOrderParticipants({
+    orderId,
+    buyerPubkey,
+    sellerPubkey: product.pubkey,
+    productAddress,
+  });
+  return productAddress;
+}
+
 async function handleLightningPayment(
   res: NextApiResponse,
   orderId: string,
@@ -417,6 +448,14 @@ async function handleLightningPayment(
   const amountInSats = await convertOrderTotalToSats(totalAmount, currency);
 
   try {
+    const productAddress = await prepareSellerPayment(
+      res,
+      orderId,
+      buyerPubkey,
+      product
+    );
+    if (!productAddress) return;
+
     const cashuMint = new CashuMint(mint);
     const wallet = new CashuWallet(cashuMint);
     await wallet.loadMint();
@@ -436,12 +475,24 @@ async function handleLightningPayment(
       `ln_${mintQuote.quote}`
     );
 
-    pendingLightningPayments.set(orderId, {
-      quote: mintQuote.quote,
-      mintUrl: mint,
-      amount: amountInSats,
-      orderId,
-    });
+    // Kept in the database so the payment can be confirmed after a restart
+    // or on another server instance.
+    try {
+      await saveMcpLightningPayment({
+        orderId,
+        quoteId: mintQuote.quote,
+        mintUrl: mint,
+        amountSats: amountInSats,
+        productAddress,
+        selectedSpecs: pricingBlock.selectedSpecs,
+      });
+    } catch (error) {
+      await updateMcpOrderPayment(orderId, `failed_${orderId}`, "failed").catch(
+        (updateError) =>
+          console.error("Failed to mark order as failed:", updateError)
+      );
+      throw error;
+    }
 
     return res.status(402).json({
       status: "payment_required",
@@ -550,29 +601,13 @@ async function handleCashuPayment(
       });
     }
 
-    // Escrow sellers need a locked token and an arbiter registration. This
-    // endpoint cannot make those, so refuse before taking any funds.
-    const sellerProfile = await getSellerProfile(product.pubkey);
-    if (isSellerP2pkEscrowActive(sellerProfile?.p2pk)) {
-      return res.status(400).json({
-        error:
-          "This seller requires dispute escrow, which is not supported for MCP orders yet.",
-      });
-    }
-
-    if (!product.d) {
-      return res.status(500).json({ error: "Failed to parse product data" });
-    }
-    const productAddress = `30402:${product.pubkey}:${product.d}`;
-
-    // The server vouches for who the buyer and seller are, so the seller's
-    // later status updates are trusted by the orders dashboard.
-    await registerOrderParticipants({
+    const productAddress = await prepareSellerPayment(
+      res,
       orderId,
       buyerPubkey,
-      sellerPubkey: product.pubkey,
-      productAddress,
-    });
+      product
+    );
+    if (!productAddress) return;
 
     const settlement = await swapCashuPayment(
       cashuToken,
@@ -739,5 +774,3 @@ async function handleListOrders(
     return res.status(500).json({ error: "Failed to list orders" });
   }
 }
-
-export { pendingLightningPayments };

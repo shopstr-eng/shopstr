@@ -17,6 +17,7 @@ const listMcpOrdersMock = jest.fn();
 const listMcpOrdersAsSellerMock = jest.fn();
 const formatOrderForResponseMock = jest.fn();
 const updateMcpOrderPaymentMock = jest.fn();
+const saveMcpLightningPaymentMock = jest.fn();
 
 const getTokenMetadataMock = jest.fn();
 const registerOrderParticipantsMock = jest.fn();
@@ -69,6 +70,8 @@ jest.mock("@/mcp/tools/purchase-tools", () => ({
     formatOrderForResponseMock(...args),
   updateMcpOrderPayment: (...args: unknown[]) =>
     updateMcpOrderPaymentMock(...args),
+  saveMcpLightningPayment: (...args: unknown[]) =>
+    saveMcpLightningPaymentMock(...args),
 }));
 
 jest.mock("@cashu/cashu-ts", () => ({
@@ -103,7 +106,10 @@ function makeProductEvent(
     pubkey: SELLER_PUBKEY,
     created_at: Math.floor(Date.now() / 1000),
     kind: 30402,
-    tags,
+    tags:
+      !tags || tags.some((tag) => tag[0] === "d")
+        ? tags
+        : [["d", "listing-1"], ...tags],
     content: "",
     sig: "sig",
     ...overrides,
@@ -181,7 +187,6 @@ function createMockResponse(): MockResponse {
 }
 
 let handler: typeof import("@/pages/api/mcp/create-order").default;
-let pendingLightningPayments: typeof import("@/pages/api/mcp/create-order").pendingLightningPayments;
 let callOrder: string[];
 
 beforeEach(async () => {
@@ -252,7 +257,8 @@ beforeEach(async () => {
 
   const mod = await import("@/pages/api/mcp/create-order");
   handler = mod.default;
-  pendingLightningPayments = mod.pendingLightningPayments;
+  saveMcpLightningPaymentMock.mockResolvedValue(undefined);
+  registerOrderParticipantsMock.mockResolvedValue("created");
 });
 
 async function createOrder(body: Record<string, unknown>) {
@@ -1029,7 +1035,7 @@ describe("handleLightningPayment", () => {
     );
   });
 
-  it("stores the pending payment (quote/mintUrl/amount/orderId) in pendingLightningPayments keyed by the generated orderId", async () => {
+  it("saves the quote, mint, amount and listing in the database", async () => {
     withPricedProduct();
     walletCreateMintQuoteBolt11Mock.mockResolvedValue({
       quote: "quote-7",
@@ -1040,12 +1046,67 @@ describe("handleLightningPayment", () => {
     await createOrder({ productId: "product-1" });
 
     const orderId = createMcpOrderMock.mock.calls[0]?.[0] as string;
-    expect(pendingLightningPayments.get(orderId)).toEqual({
-      quote: "quote-7",
-      mintUrl: "https://mint.example.com",
-      amount: 1000,
+    expect(saveMcpLightningPaymentMock).toHaveBeenCalledWith({
       orderId,
+      quoteId: "quote-7",
+      mintUrl: "https://mint.example.com",
+      amountSats: 1000,
+      productAddress: `30402:${SELLER_PUBKEY}:listing-1`,
+      selectedSpecs: undefined,
     });
+  });
+
+  it("registers the buyer and seller before creating the invoice", async () => {
+    withPricedProduct();
+
+    await createOrder({ productId: "product-1" });
+
+    const orderId = createMcpOrderMock.mock.calls[0]?.[0] as string;
+    expect(registerOrderParticipantsMock).toHaveBeenCalledWith({
+      orderId,
+      buyerPubkey: BUYER_PUBKEY,
+      sellerPubkey: SELLER_PUBKEY,
+      productAddress: `30402:${SELLER_PUBKEY}:listing-1`,
+    });
+    expect(
+      registerOrderParticipantsMock.mock.invocationCallOrder[0]
+    ).toBeLessThan(
+      walletCreateMintQuoteBolt11Mock.mock.invocationCallOrder[0]!
+    );
+  });
+
+  it("refuses sellers with dispute escrow before creating an invoice", async () => {
+    withPricedProduct();
+    fetchAllProfilesFromDbMock.mockResolvedValue([
+      {
+        pubkey: SELLER_PUBKEY,
+        kind: 0,
+        content: JSON.stringify({
+          p2pk: { enabled: true, pubkey: "f".repeat(64), refundDelayDays: 7 },
+        }),
+      },
+    ]);
+
+    const res = await createOrder({ productId: "product-1" });
+
+    expect(res.statusCode).toBe(400);
+    expect(walletCreateMintQuoteBolt11Mock).not.toHaveBeenCalled();
+    expect(createMcpOrderMock).not.toHaveBeenCalled();
+  });
+
+  it("marks the order failed and returns 500 when the quote cannot be saved", async () => {
+    withPricedProduct();
+    saveMcpLightningPaymentMock.mockRejectedValueOnce(new Error("db down"));
+
+    const res = await createOrder({ productId: "product-1" });
+
+    const orderId = createMcpOrderMock.mock.calls[0]?.[0] as string;
+    expect(res.statusCode).toBe(500);
+    expect(updateMcpOrderPaymentMock).toHaveBeenCalledWith(
+      orderId,
+      `failed_${orderId}`,
+      "failed"
+    );
   });
 
   it("returns 402 payment_required with the bolt11 invoice, quoteId, amount, mintUrl, and a ~10-minute expiresAt", async () => {
