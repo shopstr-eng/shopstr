@@ -79,6 +79,21 @@ export async function swapCashuPayment(
   };
 }
 
+/**
+ * Mints the proofs of a paid Lightning quote and returns them as one token.
+ * A quote can only be minted once, so this is never retried.
+ */
+export async function mintPaidQuote(
+  mintUrl: string,
+  quoteId: string,
+  amount: number
+): Promise<string> {
+  const wallet = new CashuWallet(new CashuMint(mintUrl));
+  await wallet.loadMint();
+  const proofs = await wallet.mintProofsBolt11(amount, quoteId);
+  return getEncodedToken({ mint: mintUrl, proofs, unit: "sat" });
+}
+
 type OrderPaymentDm = {
   orderId: string;
   buyerPubkey: string;

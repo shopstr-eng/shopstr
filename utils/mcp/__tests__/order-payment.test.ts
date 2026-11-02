@@ -4,6 +4,7 @@
 
 const loadMintMock = jest.fn();
 const decodeTokenMock = jest.fn();
+const mintProofsMock = jest.fn();
 const getEncodedTokenMock = jest.fn();
 const safeSwapMock = jest.fn();
 const sendServerGiftWrappedDmMock = jest.fn();
@@ -14,6 +15,7 @@ jest.mock("@cashu/cashu-ts", () => ({
   Wallet: jest.fn().mockImplementation(() => ({
     loadMint: (...args: unknown[]) => loadMintMock(...args),
     decodeToken: (...args: unknown[]) => decodeTokenMock(...args),
+    mintProofsBolt11: (...args: unknown[]) => mintProofsMock(...args),
   })),
   getEncodedToken: (...args: unknown[]) => getEncodedTokenMock(...args),
 }));
@@ -33,6 +35,7 @@ jest.mock("@/utils/nostr/server-gift-wrap", () => ({
 
 import {
   OrderPaymentError,
+  mintPaidQuote,
   sendOrderPaymentDm,
   swapCashuPayment,
 } from "../order-payment";
@@ -211,5 +214,37 @@ describe("sendOrderPaymentDm", () => {
     sendServerGiftWrappedDmMock.mockRejectedValue(new Error("cache down"));
 
     await expect(sendOrderPaymentDm(baseParams)).rejects.toThrow("cache down");
+  });
+});
+
+describe("mintPaidQuote", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    loadMintMock.mockResolvedValue(undefined);
+    getEncodedTokenMock.mockReturnValue("cashuBminted");
+  });
+
+  it("mints the quote once and returns the proofs as a token", async () => {
+    mintProofsMock.mockResolvedValue([proof(1000, "m")]);
+
+    const token = await mintPaidQuote(MINT, "quote-1", 1000);
+
+    expect(mintProofsMock).toHaveBeenCalledTimes(1);
+    expect(mintProofsMock).toHaveBeenCalledWith(1000, "quote-1");
+    expect(getEncodedTokenMock).toHaveBeenCalledWith({
+      mint: MINT,
+      proofs: [proof(1000, "m")],
+      unit: "sat",
+    });
+    expect(token).toBe("cashuBminted");
+  });
+
+  it("does not retry when the mint fails", async () => {
+    mintProofsMock.mockRejectedValue(new Error("mint down"));
+
+    await expect(mintPaidQuote(MINT, "quote-1", 1000)).rejects.toThrow(
+      "mint down"
+    );
+    expect(mintProofsMock).toHaveBeenCalledTimes(1);
   });
 });
