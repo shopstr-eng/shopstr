@@ -1,19 +1,31 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { randomBytes } from "crypto";
-import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  getTokenMetadata,
+} from "@cashu/cashu-ts";
 import { getSatoshiValue } from "@getalby/lightning-tools";
-import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
 import { sumProofAmounts } from "@/utils/cashu/proof-amount";
+import { isSellerP2pkEscrowActive } from "@/utils/cashu/p2pk-checkout";
+import {
+  OrderPaymentError,
+  sendOrderPaymentDm,
+  swapCashuPayment,
+} from "@/utils/mcp/order-payment";
 import { authenticateRequest, initializeApiKeysTable } from "@/utils/mcp/auth";
 import {
   fetchAllProductsFromDb,
   fetchAllProfilesFromDb,
+  registerOrderParticipants,
   validateDiscountCode,
 } from "@/utils/db/db-service";
 import { recordRequest } from "@/utils/mcp/metrics";
 import {
   createMcpOrder,
+  saveMcpLightningPayment,
+  updateMcpOrderPayment,
   getMcpOrder,
   listMcpOrders,
   listMcpOrdersAsSeller,
@@ -30,11 +42,6 @@ import { getTrustedMintUrl } from "@/utils/cashu/trusted-mints";
 // mint quote pipeline.
 const RATE_LIMIT = { limit: 60, windowMs: 60 * 1000 };
 const PER_KEY_LIMIT = { limit: 30, windowMs: 60 * 1000 };
-
-const pendingLightningPayments = new Map<
-  string,
-  { quote: string; mintUrl: string; amount: number; orderId: string }
->();
 
 let tablesReady = false;
 
@@ -105,7 +112,13 @@ export default async function handler(
   };
 
   if (req.method === "POST") {
-    return await handleCreateOrder(req, res, apiKey.id, apiKey.pubkey);
+    return await handleCreateOrder(
+      req,
+      res,
+      apiKey.id,
+      apiKey.pubkey,
+      apiKey.encrypted_nsec
+    );
   }
 
   if (req.method === "GET") {
@@ -123,7 +136,8 @@ async function handleCreateOrder(
   req: NextApiRequest,
   res: NextApiResponse,
   apiKeyId: number,
-  buyerPubkey: string
+  buyerPubkey: string,
+  encryptedNsec?: string | null
 ) {
   const {
     productId,
@@ -339,7 +353,8 @@ async function handleCreateOrder(
         currency,
         shippingAddress || null,
         pricingBlock,
-        cashuToken
+        cashuToken,
+        encryptedNsec
       );
     }
 
@@ -381,6 +396,41 @@ async function convertOrderTotalToSats(
   return toCashuMintAmountSats(Math.round(sats));
 }
 
+// Escrow sellers need a locked token and an arbiter registration, which this
+// endpoint cannot make, so they are refused before any funds move. The buyer
+// and seller are also registered, so the seller's later status updates are
+// trusted by the orders dashboard. Returns the listing address, or null after
+// sending the error response.
+async function prepareSellerPayment(
+  res: NextApiResponse,
+  orderId: string,
+  buyerPubkey: string,
+  product: any
+): Promise<string | null> {
+  const sellerProfile = await getSellerProfile(product.pubkey);
+  if (isSellerP2pkEscrowActive(sellerProfile?.p2pk)) {
+    res.status(400).json({
+      error:
+        "This seller requires dispute escrow, which is not supported for MCP orders yet.",
+    });
+    return null;
+  }
+
+  if (!product.d) {
+    res.status(500).json({ error: "Failed to parse product data" });
+    return null;
+  }
+  const productAddress = `30402:${product.pubkey}:${product.d}`;
+
+  await registerOrderParticipants({
+    orderId,
+    buyerPubkey,
+    sellerPubkey: product.pubkey,
+    productAddress,
+  });
+  return productAddress;
+}
+
 async function handleLightningPayment(
   res: NextApiResponse,
   orderId: string,
@@ -398,6 +448,14 @@ async function handleLightningPayment(
   const amountInSats = await convertOrderTotalToSats(totalAmount, currency);
 
   try {
+    const productAddress = await prepareSellerPayment(
+      res,
+      orderId,
+      buyerPubkey,
+      product
+    );
+    if (!productAddress) return;
+
     const cashuMint = new CashuMint(mint);
     const wallet = new CashuWallet(cashuMint);
     await wallet.loadMint();
@@ -417,12 +475,24 @@ async function handleLightningPayment(
       `ln_${mintQuote.quote}`
     );
 
-    pendingLightningPayments.set(orderId, {
-      quote: mintQuote.quote,
-      mintUrl: mint,
-      amount: amountInSats,
-      orderId,
-    });
+    // Kept in the database so the payment can be confirmed after a restart
+    // or on another server instance.
+    try {
+      await saveMcpLightningPayment({
+        orderId,
+        quoteId: mintQuote.quote,
+        mintUrl: mint,
+        amountSats: amountInSats,
+        productAddress,
+        selectedSpecs: pricingBlock.selectedSpecs,
+      });
+    } catch (error) {
+      await updateMcpOrderPayment(orderId, `failed_${orderId}`, "failed").catch(
+        (updateError) =>
+          console.error("Failed to mark order as failed:", updateError)
+      );
+      throw error;
+    }
 
     return res.status(402).json({
       status: "payment_required",
@@ -467,7 +537,8 @@ async function handleCashuPayment(
   currency: string,
   shippingAddress: Record<string, string> | null,
   pricingBlock: any,
-  cashuToken?: string
+  cashuToken?: string,
+  encryptedNsec?: string | null
 ) {
   if (!cashuToken) {
     return res.status(400).json({
@@ -480,17 +551,29 @@ async function handleCashuPayment(
     });
   }
 
+  let metadata: ReturnType<typeof getTokenMetadata>;
   try {
-    const { getDecodedToken } = await import("@cashu/cashu-ts");
-    const decoded = getDecodedToken(cashuToken, []);
+    // Reads the token without the mint's keysets, so tokens from v2 keyset
+    // mints decode too.
+    metadata = getTokenMetadata(cashuToken);
+  } catch {
+    return res.status(400).json({ error: "Invalid Cashu token" });
+  }
 
-    if (!decoded || !decoded.proofs || decoded.proofs.length === 0) {
-      return res.status(400).json({
-        error: "Invalid Cashu token: no proofs found",
-      });
-    }
+  if (metadata.incompleteProofs.length === 0) {
+    return res.status(400).json({
+      error: "Invalid Cashu token: no proofs found",
+    });
+  }
 
-    const tokenAmount = sumProofAmounts(decoded.proofs);
+  if (metadata.unit !== "sat") {
+    return res.status(400).json({
+      error: `Only sat tokens are accepted, got "${metadata.unit}"`,
+    });
+  }
+
+  try {
+    const tokenAmount = sumProofAmounts(metadata.incompleteProofs);
 
     const requiredAmount = await convertOrderTotalToSats(totalAmount, currency);
 
@@ -503,7 +586,7 @@ async function handleCashuPayment(
       });
     }
 
-    const tokenMintUrl = decoded.mint;
+    const tokenMintUrl = metadata.mint;
     const trustedMint = getTrustedMintUrl();
 
     // The token's embedded mint URL must match the server-controlled trusted mint.
@@ -518,67 +601,110 @@ async function handleCashuPayment(
       });
     }
 
-    try {
-      const cashuMint = new CashuMint(tokenMintUrl);
-      const wallet = new CashuWallet(cashuMint);
-      await wallet.loadMint();
-      await withMintRetry(() => wallet.receive(cashuToken), {
-        maxAttempts: 4,
-        perAttemptTimeoutMs: 20000,
-        totalTimeoutMs: 90000,
-      });
-    } catch (redeemError) {
-      console.error("Cashu token redemption failed:", redeemError);
-      return res.status(400).json({
-        error:
-          "Failed to redeem Cashu token. It may be invalid or already spent.",
-        details:
-          redeemError instanceof Error ? redeemError.message : "Unknown error",
-      });
-    }
-
-    const order = await createMcpOrder(
+    const productAddress = await prepareSellerPayment(
+      res,
       orderId,
-      apiKeyId,
       buyerPubkey,
-      product.pubkey,
-      productId,
-      product.title,
-      quantity,
-      totalAmount,
-      currency,
-      shippingAddress,
-      `cashu_${orderId}`
+      product
+    );
+    if (!productAddress) return;
+
+    const settlement = await swapCashuPayment(
+      cashuToken,
+      tokenMintUrl,
+      requiredAmount
     );
 
-    await updateOrderPaymentStatus(orderId, "paid");
+    // From here the buyer's token is spent. If the order cannot be finished,
+    // the buyer gets everything back in `refundToken`.
+    const refund = (error: string) =>
+      res.status(502).json({
+        error,
+        refundToken: settlement.refundToken,
+        refundAmount: settlement.refundAmount,
+        currency: "sats",
+      });
+
+    let order;
+    try {
+      order = await createMcpOrder(
+        orderId,
+        apiKeyId,
+        buyerPubkey,
+        product.pubkey,
+        productId,
+        product.title,
+        quantity,
+        totalAmount,
+        currency,
+        shippingAddress,
+        `cashu_${orderId}`
+      );
+    } catch (error) {
+      console.error("Failed to record Cashu order:", error);
+      return refund(
+        "Order could not be recorded. Use refundToken to recover your sats."
+      );
+    }
+
+    try {
+      await sendOrderPaymentDm({
+        orderId,
+        buyerPubkey,
+        sellerPubkey: product.pubkey,
+        productAddress,
+        productTitle: product.title,
+        quantity,
+        amount: requiredAmount,
+        token: settlement.sellerToken,
+        selectedSpecs: pricingBlock.selectedSpecs,
+        shippingAddress,
+        encryptedNsec,
+      });
+    } catch (error) {
+      console.error("Failed to send Cashu payment to seller:", error);
+      await updateMcpOrderPayment(orderId, `failed_${orderId}`, "failed").catch(
+        (updateError) =>
+          console.error("Failed to mark order as failed:", updateError)
+      );
+      return refund(
+        "Payment could not be delivered to the seller. Use refundToken to recover your sats."
+      );
+    }
+
+    // The seller already has the payment, so a failed status write must not
+    // turn a completed order into an error.
+    try {
+      await updateMcpOrderPayment(orderId, `paid_${orderId}`, "paid");
+    } catch (error) {
+      console.error("Failed to mark Cashu order as paid:", error);
+    }
 
     return res.status(201).json({
       success: true,
       paymentMethod: "cashu",
-      message: "Payment received via Cashu tokens. Order confirmed.",
+      message: "Payment sent to the seller. Order confirmed.",
       order: formatOrderForResponse({ ...order, payment_status: "paid" }),
       payment: {
         method: "cashu",
         amount: tokenAmount,
         required: requiredAmount,
         status: "paid",
-        change: tokenAmount > requiredAmount ? tokenAmount - requiredAmount : 0,
+        change: settlement.changeAmount,
+        changeToken: settlement.changeToken,
       },
       pricing: pricingBlock,
     });
   } catch (error) {
+    if (error instanceof OrderPaymentError) {
+      return res.status(error.status).json({ error: error.message });
+    }
     console.error("Cashu payment failed:", error);
     return res.status(500).json({
       error: "Failed to process Cashu payment",
       details: error instanceof Error ? error.message : "Unknown error",
     });
   }
-}
-
-async function updateOrderPaymentStatus(orderId: string, status: string) {
-  const { updateMcpOrderPayment } = await import("@/mcp/tools/purchase-tools");
-  await updateMcpOrderPayment(orderId, `${status}_${orderId}`, status);
 }
 
 async function handleGetOrder(
@@ -648,5 +774,3 @@ async function handleListOrders(
     return res.status(500).json({ error: "Failed to list orders" });
   }
 }
-
-export { pendingLightningPayments };

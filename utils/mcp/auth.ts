@@ -131,6 +131,18 @@ export async function initializeApiKeysTable(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_order_id ON mcp_orders(order_id);
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_buyer_pubkey ON mcp_orders(buyer_pubkey);
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_api_key_id ON mcp_orders(api_key_id);
+
+      CREATE TABLE IF NOT EXISTS mcp_lightning_payments (
+        order_id TEXT PRIMARY KEY REFERENCES mcp_orders(order_id),
+        quote_id TEXT NOT NULL,
+        mint_url TEXT NOT NULL,
+        amount_sats INTEGER NOT NULL,
+        product_address TEXT NOT NULL,
+        selected_specs JSONB,
+        seller_token TEXT,
+        claimed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     try {
