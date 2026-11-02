@@ -5,7 +5,10 @@ jest.mock("@/utils/nostr/nip98-auth", () => ({
     createNip98AuthorizationHeaderMock(...args),
 }));
 
-import { registerOrderParticipantsOnServer } from "../order-participants-client";
+import {
+  fetchOrderParticipants,
+  registerOrderParticipantsOnServer,
+} from "../order-participants-client";
 
 const SELLER = "2".repeat(64);
 const ORDER_ID = "7f0c1a52-3d4e-4b6f-8a9b-0c1d2e3f4a5b";
@@ -105,5 +108,83 @@ describe("registerOrderParticipantsOnServer", () => {
     await expect(
       registerOrderParticipantsOnServer(signer, ORDER_ID, listing)
     ).resolves.toBe(false);
+  });
+});
+
+describe("fetchOrderParticipants", () => {
+  const fetchMock = jest.fn();
+  let warnSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    createNip98AuthorizationHeaderMock.mockResolvedValue("Nostr auth");
+    global.fetch = fetchMock as any;
+    warnSpy = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  it("requests participants with a NIP-98 header over each batch", async () => {
+    const participants = {
+      [ORDER_ID]: {
+        buyerPubkey: "1".repeat(64),
+        sellerPubkey: SELLER,
+        source: "order_participants",
+      },
+    };
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ participants }),
+    });
+
+    await expect(fetchOrderParticipants(signer, [ORDER_ID])).resolves.toEqual(
+      participants
+    );
+
+    const body = JSON.stringify({ orderIds: [ORDER_ID] });
+    expect(createNip98AuthorizationHeaderMock).toHaveBeenCalledWith(
+      signer,
+      `${window.location.origin}/api/db/get-order-participants`,
+      "POST",
+      body
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/db/get-order-participants",
+      expect.objectContaining({ method: "POST", body })
+    );
+  });
+
+  it("splits large requests into batches the server accepts", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ participants: {} }),
+    });
+    const orderIds = Array.from(
+      { length: 450 },
+      (_, index) => `order-${index}`
+    );
+
+    await fetchOrderParticipants(signer, orderIds);
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("treats failed batches as unresolved instead of throwing", async () => {
+    fetchMock
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({}),
+      });
+    const orderIds = Array.from(
+      { length: 201 },
+      (_, index) => `order-${index}`
+    );
+
+    await expect(fetchOrderParticipants(signer, orderIds)).resolves.toEqual({});
+    expect(warnSpy).toHaveBeenCalledTimes(2);
   });
 });

@@ -54,6 +54,15 @@ import {
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { createNip98AuthorizationHeader } from "@/utils/nostr/nip98-auth";
+import {
+  fetchOrderParticipants,
+  type TrustedOrderParticipants,
+} from "@/utils/db/order-participants-client";
+import {
+  canActorSetOrderStatus,
+  getOrderStatusPriority,
+  getTrustedOrderStatus,
+} from "@/utils/orders/order-status-rules";
 import { getSatoshiValue } from "@getalby/lightning-tools";
 import currencySelection from "@/public/currencySelection.json";
 import {
@@ -88,6 +97,9 @@ interface OrderData {
   amount: number;
   timestamp: number;
   status: string;
+  // Whether `status` came from a message whose sender may set it for the
+  // order's trusted participants. Only trusted statuses are persisted.
+  statusTrusted: boolean;
   messageEvent: NostrMessageEvent;
   address?: string;
   pickupLocation?: string;
@@ -132,6 +144,9 @@ const OrdersDashboard = ({
   const [cachedStatuses, setCachedStatuses] = useState<Record<string, string>>(
     {}
   );
+  const [trustedParticipants, setTrustedParticipants] = useState<
+    Record<string, TrustedOrderParticipants>
+  >({});
   const [selectedProduct, setSelectedProduct] = useState<ProductData | null>(
     null
   );
@@ -356,6 +371,31 @@ const OrdersDashboard = ({
   }, [chatsContext?.isLoading, chatsContext?.chatsMap, signer]);
 
   useEffect(() => {
+    async function loadTrustedParticipants() {
+      if (!chatsContext || chatsContext.isLoading || !signer) return;
+
+      const orderTags = new Set<string>();
+      for (const entry of chatsContext.chatsMap) {
+        const chat = entry[1] as NostrMessageEvent[];
+        for (const messageEvent of chat) {
+          const orderTag = messageEvent.tags.find(
+            (tag) => tag[0] === "order"
+          )?.[1];
+          if (orderTag) orderTags.add(orderTag);
+        }
+      }
+
+      if (orderTags.size > 0) {
+        setTrustedParticipants(
+          await fetchOrderParticipants(signer, Array.from(orderTags))
+        );
+      }
+    }
+
+    loadTrustedParticipants();
+  }, [chatsContext?.isLoading, chatsContext?.chatsMap, signer]);
+
+  useEffect(() => {
     async function loadOrders() {
       if (!chatsContext || chatsContext.isLoading) {
         return;
@@ -394,8 +434,20 @@ const OrdersDashboard = ({
             const quantity = itemTag && itemTag[2] ? parseInt(itemTag[2]) : 1;
             const amountStr = tagsMap.get("amount") || "0";
             const amount = parseFloat(amountStr);
-            const status = tagsMap.get("status") || "pending";
-            const buyerPubkey = tagsMap.get("b") || "";
+            // Status, buyer and seller come from the server's trusted
+            // participant record, never from tags the sender wrote. Without
+            // one, the message is shown but does not change the status.
+            const participants = orderTag
+              ? trustedParticipants[orderTag]
+              : undefined;
+            const trustedStatus = getTrustedOrderStatus(
+              messageEvent.pubkey,
+              tagsMap.get("status") || "pending",
+              participants
+            );
+            const status = trustedStatus ?? "pending";
+            const buyerPubkey =
+              participants?.buyerPubkey ?? (tagsMap.get("b") || "");
             const address = tagsMap.get("address");
             const pickupLocation = tagsMap.get("pickup");
             const selectedSize = tagsMap.get("size");
@@ -455,7 +507,8 @@ const OrdersDashboard = ({
             let productPrice = 0;
             const addressParts = productAddress.split(":");
             const merchantPubkey =
-              addressParts.length >= 2 ? addressParts[1] : null;
+              participants?.sellerPubkey ??
+              (addressParts.length >= 2 ? addressParts[1] : null);
             if (merchantPubkey && merchantPubkey === userPubkey) {
               isSale = true;
             }
@@ -489,6 +542,7 @@ const OrdersDashboard = ({
               amount: finalAmount,
               timestamp: messageEvent.created_at,
               status,
+              statusTrusted: trustedStatus !== null,
               messageEvent,
               address,
               pickupLocation,
@@ -539,17 +593,8 @@ const OrdersDashboard = ({
 
         if (!existing) {
           const cachedStatus = getCachedStatusForOrder(order);
-          const statusPriorityInit: Record<string, number> = {
-            canceled: 5,
-            completed: 4,
-            shipped: 3,
-            confirmed: 2,
-            pending: 1,
-          };
-          const cachedPriority = cachedStatus
-            ? statusPriorityInit[cachedStatus] || 0
-            : 0;
-          const orderPriority = statusPriorityInit[order.status] || 0;
+          const cachedPriority = getOrderStatusPriority(cachedStatus);
+          const orderPriority = getOrderStatusPriority(order.status);
           consolidatedOrdersMap.set(consolidationKey, {
             ...order,
             orderId: order.orderTag || order.orderId,
@@ -564,25 +609,19 @@ const OrdersDashboard = ({
             consolidationKey
           );
         } else {
-          const statusPriority: Record<string, number> = {
-            canceled: 5,
-            completed: 4,
-            shipped: 3,
-            confirmed: 2,
-            pending: 1,
-          };
-          const existingPriority = statusPriority[existing.status] || 0;
-          const newPriority = statusPriority[order.status] || 0;
+          const existingPriority = getOrderStatusPriority(existing.status);
+          const newPriority = getOrderStatusPriority(order.status);
           const cachedStatus = getCachedStatusForOrder(order);
-          const cachedPriority = cachedStatus
-            ? statusPriority[cachedStatus] || 0
-            : 0;
+          const cachedPriority = getOrderStatusPriority(cachedStatus);
 
-          let finalStatus =
-            newPriority > existingPriority ? order.status : existing.status;
+          const newWins = newPriority > existingPriority;
+          let finalStatus = newWins ? order.status : existing.status;
+          const finalStatusTrusted = newWins
+            ? order.statusTrusted
+            : existing.statusTrusted;
           if (
             cachedStatus &&
-            cachedPriority > (statusPriority[finalStatus] || 0)
+            cachedPriority > getOrderStatusPriority(finalStatus)
           ) {
             finalStatus = cachedStatus;
           }
@@ -597,6 +636,7 @@ const OrdersDashboard = ({
             orderId: existing.orderTag || order.orderTag || existing.orderId,
             statusLookupKeys: mergedStatusLookupKeys,
             status: finalStatus,
+            statusTrusted: finalStatusTrusted,
             address: order.address || existing.address,
             pickupLocation: order.pickupLocation || existing.pickupLocation,
             selectedSize: order.selectedSize || existing.selectedSize,
@@ -703,15 +743,21 @@ const OrdersDashboard = ({
       setTotalOrders(finalOrders.length);
       setIsLoading(false);
 
-      const statusPriorityForPersist: Record<string, number> = {
-        canceled: 5,
-        completed: 4,
-        shipped: 3,
-        confirmed: 2,
-        pending: 1,
-      };
       for (const order of consolidatedOrders) {
-        if (order.status && order.orderId && signer) {
+        // Persist only statuses from authorized senders, and only ones this
+        // user may set themselves (the server would reject the rest).
+        const orderParticipants = order.orderTag
+          ? trustedParticipants[order.orderTag]
+          : undefined;
+        if (
+          order.status &&
+          order.orderId &&
+          signer &&
+          userPubkey &&
+          order.statusTrusted &&
+          orderParticipants &&
+          canActorSetOrderStatus(userPubkey, orderParticipants, order.status)
+        ) {
           const statusPersistKey = `${order.orderId}:${
             order.messageEvent?.id ?? ""
           }:${order.status}`;
@@ -721,13 +767,11 @@ const OrdersDashboard = ({
           if (order.subject === "order-receipt" && order.hasP2pkEscrowRecord) {
             continue;
           }
-          const currentPriority = statusPriorityForPersist[order.status] || 0;
+          const currentPriority = getOrderStatusPriority(order.status);
           const cachedStatusValue = order.statusLookupKeys
             .map((lookupKey) => cachedStatuses[lookupKey])
             .find((status): status is string => Boolean(status));
-          const cachedPriority = cachedStatusValue
-            ? statusPriorityForPersist[cachedStatusValue] || 0
-            : 0;
+          const cachedPriority = getOrderStatusPriority(cachedStatusValue);
           if (currentPriority > cachedPriority) {
             const body = JSON.stringify({
               orderId: order.orderId,
@@ -765,7 +809,14 @@ const OrdersDashboard = ({
     }
 
     loadOrders();
-  }, [chatsContext, productContext, cachedStatuses, signer]);
+  }, [
+    chatsContext,
+    productContext,
+    cachedStatuses,
+    trustedParticipants,
+    signer,
+    userPubkey,
+  ]);
 
   const convertToSats = (amount: number, currency: string): number => {
     const curr = currency?.toLowerCase() || "sats";

@@ -63,3 +63,32 @@ export function canActorSetOrderStatus(
   }
   return false;
 }
+
+// Higher wins when several messages or the server report a status for the
+// same order.
+const ORDER_STATUS_PRIORITY: Record<OrderStatus, number> = {
+  pending: 1,
+  confirmed: 2,
+  shipped: 3,
+  completed: 4,
+  canceled: 5,
+};
+
+export function getOrderStatusPriority(status: string | undefined): number {
+  return isOrderStatus(status) ? ORDER_STATUS_PRIORITY[status] : 0;
+}
+
+// The status an order message may apply, or null when it must not change the
+// order: the sender is not allowed to set that status, or the order's
+// participants are not known from a trusted source. Message timestamps and
+// tags (including `b`) play no part, since the sender controls them.
+export function getTrustedOrderStatus(
+  senderPubkey: string,
+  status: string,
+  participants: { buyerPubkey: string; sellerPubkey: string } | undefined
+): OrderStatus | null {
+  if (!participants || !isOrderStatus(status)) return null;
+  return canActorSetOrderStatus(senderPubkey, participants, status)
+    ? status
+    : null;
+}
