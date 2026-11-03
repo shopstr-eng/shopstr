@@ -1576,7 +1576,7 @@ export default function CartInvoiceCard({
       }
       const donationRecipientPubkey = getDonationRecipientPubkey();
       const donationPercentage = donationRecipientPubkey
-        ? sellerProfile?.content?.shopstr_donation ?? 2.1
+        ? (sellerProfile?.content?.shopstr_donation ?? 2.1)
         : 0;
       const { donationAmount, sellerAmount } = splitDonationAndSellerAmount(
         tokenAmount,
