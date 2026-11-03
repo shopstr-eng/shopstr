@@ -15,11 +15,12 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 interface AddressChangeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (newAddress: string) => Promise<void>;
+  onSubmit: (newAddress: string) => Promise<void | boolean>;
   isLoading: boolean;
   orderId?: string;
   productTitle?: string;
   currentAddress?: string;
+  error?: string;
 }
 
 const AddressChangeModal = ({
@@ -30,6 +31,7 @@ const AddressChangeModal = ({
   orderId,
   productTitle,
   currentAddress,
+  error,
 }: AddressChangeModalProps) => {
   const { handleSubmit, control, reset } = useForm({
     defaultValues: {
@@ -43,8 +45,7 @@ const AddressChangeModal = ({
   };
 
   const handleFormSubmit = async (data: { newAddress: string }) => {
-    await onSubmit(data.newAddress);
-    reset();
+    if ((await onSubmit(data.newAddress)) !== false) reset();
   };
 
   return (
@@ -68,6 +69,11 @@ const AddressChangeModal = ({
         </ModalHeader>
         <form onSubmit={handleSubmit(handleFormSubmit)}>
           <ModalBody>
+            {error && (
+              <p role="alert" className="text-red-500">
+                {error}
+              </p>
+            )}
             {(orderId || productTitle || currentAddress) && (
               <div className="mb-4 rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
                 {orderId && (

@@ -1,0 +1,44 @@
+// Shopstr's subset of LND lnrpc/lightning.proto. See README.md.
+syntax = "proto3";
+package lnrpc;
+
+message Invoice {
+  bytes r_preimage = 3;
+  bytes r_hash = 4;
+  enum InvoiceState {
+    OPEN = 0;
+    SETTLED = 1;
+    CANCELED = 2;
+    ACCEPTED = 3;
+  }
+  InvoiceState state = 21;
+  repeated InvoiceHTLC htlcs = 22;
+}
+message Payment {
+  string payment_hash = 1;
+  string payment_preimage = 6;
+  enum PaymentStatus {
+    UNKNOWN = 0 [deprecated = true];
+    IN_FLIGHT = 1;
+    SUCCEEDED = 2;
+    FAILED = 3;
+    INITIATED = 4;
+  }
+  PaymentStatus status = 10;
+  PaymentFailureReason failure_reason = 16;
+}
+enum PaymentFailureReason {
+  FAILURE_REASON_NONE = 0;
+  FAILURE_REASON_TIMEOUT = 1;
+  FAILURE_REASON_NO_ROUTE = 2;
+  FAILURE_REASON_ERROR = 3;
+  FAILURE_REASON_INCORRECT_PAYMENT_DETAILS = 4;
+  FAILURE_REASON_INSUFFICIENT_BALANCE = 5;
+  FAILURE_REASON_CANCELED = 6;
+}
+
+service Lightning { rpc GetInfo (GetInfoRequest) returns (GetInfoResponse); }
+message GetInfoRequest {}
+message GetInfoResponse { uint32 block_height = 6; bool synced_to_chain = 9; }
+enum InvoiceHTLCState { ACCEPTED = 0; SETTLED = 1; CANCELED = 2; }
+message InvoiceHTLC { int64 accept_time = 5; int32 expiry_height = 7; InvoiceHTLCState state = 8; }
