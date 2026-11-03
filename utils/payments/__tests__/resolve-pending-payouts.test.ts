@@ -736,13 +736,16 @@ describe("resolvePendingSellerLightningPayout", () => {
     ).resolves.toEqual({ status: "recovered", recoveredAmount: 17 });
 
     const secrets = storedSecrets();
-    expect(secrets.filter((secret) => secret === "quarantined-secret")).toHaveLength(1);
-    expect(secrets.filter((secret) => secret === "recoverable-secret")).toHaveLength(1);
+    expect(
+      secrets.filter((secret) => secret === "quarantined-secret")
+    ).toHaveLength(1);
+    expect(
+      secrets.filter((secret) => secret === "recoverable-secret")
+    ).toHaveLength(1);
     expect(getPendingSellerLightningPayouts()).toHaveLength(0);
   });
 
   it("retry after a partial restore is idempotent and never double-counts proofs", async () => {
-
     seedRecord();
     storage.setJson(STORAGE_KEYS.TOKENS, [recoverableProof]);
     mockCheckMeltQuoteBolt11.mockResolvedValue({ state: "UNPAID" });
@@ -873,12 +876,10 @@ describe("seller notification delivery through the recovery flow", () => {
   it("completes once the DM is durably cached and at least one relay accepts it", async () => {
     const record = seedHexRecord();
     ((global as any).fetch as jest.Mock).mockResolvedValue({ ok: true });
-    const publish = jest
-      .fn()
-      .mockResolvedValue([
-        { status: "rejected", reason: new Error("blocked") },
-        { status: "fulfilled", value: "wss://relay.one" },
-      ]);
+    const publish = jest.fn().mockResolvedValue([
+      { status: "rejected", reason: new Error("blocked") },
+      { status: "fulfilled", value: "wss://relay.one" },
+    ]);
 
     const result = await resolvePendingSellerLightningPayout(
       record,
