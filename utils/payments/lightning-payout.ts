@@ -26,29 +26,99 @@ export type LightningPayoutOutcome =
       changeAmount: number;
     };
 
+function toNumericAmount(val: unknown): number {
+  if (
+    typeof val === "object" &&
+    val !== null &&
+    "toNumber" in val &&
+    typeof (val as { toNumber: () => number }).toNumber === "function"
+  ) {
+    return (val as { toNumber: () => number }).toNumber();
+  }
+  return Number(val);
+}
+
 export async function executeSellerLightningPayout(
   wallet: CashuWallet,
   lnurl: string,
   sellerAmount: number,
   sellerProofs: Proof[]
 ): Promise<LightningPayoutOutcome> {
+  const fallbackAmount = sumProofAmounts(sellerProofs);
+
+  if (!lnurl || typeof lnurl !== "string" || !lnurl.trim()) {
+    return {
+      status: "fallback",
+      reason: "no-quote",
+      fallbackProofs: sellerProofs,
+      fallbackAmount,
+      errorMessage: "No valid Lightning address provided",
+    };
+  }
+
   const newAmount = Math.floor(sellerAmount * 0.98 - 2);
-  const ln = new LightningAddress(lnurl);
-  await wallet.loadMint();
-  await ln.fetch();
-  const invoice = await ln.requestInvoice({ satoshi: newAmount });
-  const meltQuote = await wallet.createMeltQuoteBolt11(invoice.paymentRequest);
+  if (newAmount <= 0) {
+    return {
+      status: "fallback",
+      reason: "no-quote",
+      fallbackProofs: sellerProofs,
+      fallbackAmount,
+      errorMessage: `Seller payout amount after fee deduction is too low for Lightning payout (${newAmount} sats)`,
+    };
+  }
+
+  let meltQuote;
+  try {
+    const ln = new LightningAddress(lnurl.trim());
+    await wallet.loadMint();
+    await ln.fetch();
+    const invoice = await ln.requestInvoice({ satoshi: newAmount });
+    if (!invoice?.paymentRequest) {
+      return {
+        status: "fallback",
+        reason: "no-quote",
+        fallbackProofs: sellerProofs,
+        fallbackAmount,
+        errorMessage: "Lightning address returned an empty invoice",
+      };
+    }
+    meltQuote = await wallet.createMeltQuoteBolt11(invoice.paymentRequest);
+  } catch (error) {
+    return {
+      status: "fallback",
+      reason: "no-quote",
+      fallbackProofs: sellerProofs,
+      fallbackAmount,
+      errorMessage:
+        error instanceof Error
+          ? error.message
+          : "Failed to obtain Lightning melt quote",
+    };
+  }
+
   if (!meltQuote) {
     return {
       status: "fallback",
       reason: "no-quote",
       fallbackProofs: sellerProofs,
-      fallbackAmount: sumProofAmounts(sellerProofs),
+      fallbackAmount,
     };
   }
 
-  const meltQuoteTotal =
-    meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
+  const quoteAmount = toNumericAmount(meltQuote.amount);
+  const quoteFeeReserve = toNumericAmount(meltQuote.fee_reserve);
+  const meltQuoteTotal = quoteAmount + quoteFeeReserve;
+
+  if (!Number.isFinite(meltQuoteTotal) || meltQuoteTotal <= 0) {
+    return {
+      status: "fallback",
+      reason: "no-quote",
+      fallbackProofs: sellerProofs,
+      fallbackAmount,
+      errorMessage: "Invalid melt quote total amount",
+    };
+  }
+
   const swapOutcome = await safeSwap(wallet, meltQuoteTotal, sellerProofs, {
     sendConfig: { includeFees: true },
   });
@@ -97,7 +167,7 @@ export async function executeSellerLightningPayout(
     };
   }
 
-  const meltAmount = meltOutcome.meltQuote.amount.toNumber();
+  const meltAmount = toNumericAmount(meltOutcome.meltQuote.amount);
   const changeProofs = [...keep, ...meltOutcome.changeProofs];
   const changeAmount =
     changeProofs.length > 0 ? sumProofAmounts(changeProofs) : 0;
