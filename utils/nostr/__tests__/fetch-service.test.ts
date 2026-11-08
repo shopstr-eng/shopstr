@@ -4733,6 +4733,104 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     expect(chatMap.get(senderPubkey)[0].content).toBe("Hello!");
   });
 
+  it("keeps loading the inbox when another gift wrap is malformed or forged", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const sellerPubkey = "seller-pubkey";
+    const rumor = (pubkey: string) =>
+      JSON.stringify({
+        kind: 14,
+        pubkey,
+        content: "Your order shipped",
+        created_at: 1000,
+        tags: [
+          ["p", userPubkey],
+          ["subject", "shipping-info"],
+        ],
+      });
+    const plainTexts: Record<string, string> = {
+      "legit-seal": JSON.stringify({
+        kind: 13,
+        pubkey: sellerPubkey,
+        content: "legit-rumor",
+      }),
+      "legit-rumor": rumor(sellerPubkey),
+      "forged-seal": JSON.stringify({
+        kind: 13,
+        pubkey: "attacker-pubkey",
+        content: "forged-rumor",
+      }),
+      "forged-rumor": rumor(sellerPubkey),
+      "wrong-kind-seal": JSON.stringify({
+        kind: 1,
+        pubkey: "attacker-pubkey",
+        content: "legit-rumor",
+      }),
+      "not-json-seal": "{oops",
+    };
+    const wrapEvent = (id: string, content: string) => ({
+      id,
+      kind: 1059,
+      pubkey: "eph",
+      content,
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValue([
+          wrapEvent("garbage", "not-nip44"),
+          wrapEvent("forged", "forged-seal"),
+          wrapEvent("wrong-kind", "wrong-kind-seal"),
+          wrapEvent("not-json", "not-json-seal"),
+          wrapEvent("legit", "legit-seal"),
+        ]),
+    };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest.fn(async (_pubkey: string, cipherText: string) => {
+        const plainText = plainTexts[cipherText];
+        if (plainText === undefined) throw new Error("invalid payload length");
+        return plainText;
+      }),
+    };
+    const editChatContext = jest.fn();
+
+    const result = await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(result.profileSetFromChats).toEqual(new Set([sellerPubkey]));
+    const [chatMap] = editChatContext.mock.calls[0];
+    expect(chatMap.get(sellerPubkey)).toHaveLength(1);
+    expect(chatMap.get(sellerPubkey)[0].wrappedEventId).toBe("legit");
+  });
+
   it("filters out events whose subject is not in the allowed set", async () => {
     const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
     jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));

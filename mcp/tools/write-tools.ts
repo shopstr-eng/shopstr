@@ -29,6 +29,7 @@ import {
 } from "@/utils/nostr/request-auth";
 import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
 import { createGiftWrapEvent } from "@/utils/nostr/gift-wrap";
+import { unwrapGiftWrap } from "@/utils/nostr/unwrap-gift-wrap";
 import {
   AgentWalletError,
   getAgentWalletBalance,
@@ -2043,34 +2044,16 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           if (decryptedMessages.length >= limit) break;
 
           try {
-            const innerContent = signer.decrypt(msg.pubkey, msg.content);
-            let sealEvent: any;
-            try {
-              sealEvent = JSON.parse(innerContent);
-            } catch {
-              continue;
-            }
-
-            if (!sealEvent || !sealEvent.content) continue;
-
-            let innerMessage: any;
-            try {
-              const sealContent = signer.decrypt(
-                sealEvent.pubkey,
-                sealEvent.content
-              );
-              innerMessage = JSON.parse(sealContent);
-            } catch {
-              continue;
-            }
-
+            // Rejects rumors whose pubkey does not match the seal signer,
+            // so the reported sender cannot be forged.
+            const innerMessage = await unwrapGiftWrap(msg, signer);
             if (!innerMessage) continue;
 
-            const tags = innerMessage.tags || [];
+            const tags = innerMessage.tags;
             const tagsMap = new Map<string, string>();
             for (const tag of tags) {
               if (tag.length >= 2) {
-                tagsMap.set(tag[0], tag[1]);
+                tagsMap.set(tag[0]!, tag[1]!);
               }
             }
 

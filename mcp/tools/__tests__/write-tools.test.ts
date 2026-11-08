@@ -210,6 +210,7 @@ function buildMockMessage(
     tags,
   };
   const sealEvent = {
+    kind: 13,
     pubkey: senderPubkey,
     content: encryptForMock(JSON.stringify(innerMessage)),
   };
@@ -2448,13 +2449,14 @@ describe("registerWriteTools — (community & messaging)", () => {
       expect(payload.messages.map((m: any) => m.eventId)).toEqual(["good-msg"]);
     });
 
-    it("defaults to an empty tag set and subject 'general' when the inner message has no tags array", async () => {
+    it("skips a message whose rumor has no tags array", async () => {
       const inner = {
         pubkey: "sender",
         created_at: 1000,
         content: "Hi, no tags here",
       };
       const seal = {
+        kind: 13,
         pubkey: "sender",
         content: encryptForMock(JSON.stringify(inner)),
       };
@@ -2464,16 +2466,90 @@ describe("registerWriteTools — (community & messaging)", () => {
         content: encryptForMock(JSON.stringify(seal)),
         is_read: false,
       };
-      jest.mocked(fetchAllMessagesFromDb).mockResolvedValueOnce([msg] as any);
+      jest
+        .mocked(fetchAllMessagesFromDb)
+        .mockResolvedValueOnce([
+          msg,
+          buildMockMessage({ id: "good-msg" }),
+        ] as any);
       const tool = getCallback();
 
       const result = await tool({});
 
       const payload = textPayload(result);
-      expect(payload.messages[0]).toMatchObject({
-        eventId: "no-tags",
-        subject: "general",
-      });
+      expect(payload.messages.map((m: any) => m.eventId)).toEqual(["good-msg"]);
+    });
+
+    it("drops a rumor that claims a different sender than the seal signer", async () => {
+      const forgedRumor = {
+        pubkey: "trusted-seller",
+        created_at: 1000,
+        content: "Send the payment to this new invoice",
+        kind: 14,
+        tags: [["subject", "order-info"]],
+      };
+      const attackerSeal = {
+        kind: 13,
+        pubkey: "attacker",
+        content: encryptForMock(JSON.stringify(forgedRumor)),
+      };
+      const forged = {
+        id: "forged",
+        pubkey: "wrap-pubkey",
+        content: encryptForMock(JSON.stringify(attackerSeal)),
+        is_read: false,
+      };
+      const tool = getCallback();
+
+      jest
+        .mocked(fetchAllMessagesFromDb)
+        .mockResolvedValueOnce([
+          forged,
+          buildMockMessage({ id: "real", senderPubkey: "trusted-seller" }),
+        ] as any);
+      const all = await tool({});
+      expect(textPayload(all).messages.map((m: any) => m.eventId)).toEqual([
+        "real",
+      ]);
+
+      jest
+        .mocked(fetchAllMessagesFromDb)
+        .mockResolvedValueOnce([forged] as any);
+      const bySender = await tool({ senderPubkey: "trusted-seller" });
+      expect(textPayload(bySender).messages).toEqual([]);
+    });
+
+    it("skips a message whose seal is not kind 13", async () => {
+      const inner = {
+        pubkey: "sender",
+        created_at: 1000,
+        content: "hi",
+        kind: 14,
+        tags: [],
+      };
+      const notASeal = {
+        kind: 1,
+        pubkey: "sender",
+        content: encryptForMock(JSON.stringify(inner)),
+      };
+      const msg = {
+        id: "not-a-seal",
+        pubkey: "wrap-pubkey",
+        content: encryptForMock(JSON.stringify(notASeal)),
+        is_read: false,
+      };
+      jest
+        .mocked(fetchAllMessagesFromDb)
+        .mockResolvedValueOnce([
+          msg,
+          buildMockMessage({ id: "good-msg" }),
+        ] as any);
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      const payload = textPayload(result);
+      expect(payload.messages.map((m: any) => m.eventId)).toEqual(["good-msg"]);
     });
 
     it("ignores malformed tags shorter than 2 elements without skipping the rest of the message", async () => {
