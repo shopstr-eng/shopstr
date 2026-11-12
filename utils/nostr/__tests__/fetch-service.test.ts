@@ -9162,7 +9162,7 @@ describe("fetchReviews", () => {
       created_at: 100,
       tags: [
         ["d", productAddress],
-        ["rating", "1", "overall"],
+        ["rating", "0", "overall"],
       ],
     });
     // Relay has newer review with higher rating
@@ -9172,7 +9172,7 @@ describe("fetchReviews", () => {
       created_at: 200,
       tags: [
         ["d", productAddress],
-        ["rating", "5", "overall"],
+        ["rating", "1", "overall"],
       ],
     });
 
@@ -9191,8 +9191,8 @@ describe("fetchReviews", () => {
       editReviewsContext
     );
 
-    // Score must reflect the newer review (rating 5 → 2.5), not the older (rating 1 → 0.5)
-    expect(result.merchantScoresMap.get("seller-a")).toEqual([2.5]);
+    // Score must reflect the newer review (1), not the older one (0)
+    expect(result.merchantScoresMap.get("seller-a")).toEqual([1]);
   });
 
   it("aggregates merchant scores using calculateWeightedScore of the review tags", async () => {
@@ -9205,7 +9205,8 @@ describe("fetchReviews", () => {
       id: "score-review",
       tags: [
         ["d", productAddress],
-        ["rating", "4", "overall"],
+        ["rating", "1", "thumb"],
+        ["rating", "0", "quality"],
       ],
     });
 
@@ -9224,7 +9225,144 @@ describe("fetchReviews", () => {
       editReviewsContext
     );
 
-    expect(result.merchantScoresMap.get("seller-a")).toEqual([2]);
+    expect(result.merchantScoresMap.get("seller-a")).toEqual([0.5]);
+  });
+
+  describe("review integrity", () => {
+    async function run(dbEvents: unknown[], relayEvents: unknown[]) {
+      jest.doMock("@/utils/db/db-client", () => ({
+        cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+      }));
+      const { fetchReviews } = await import("../fetch-service");
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => dbEvents,
+      }) as typeof global.fetch;
+      const nostr = { fetch: jest.fn().mockResolvedValue(relayEvents) };
+      return fetchReviews(
+        nostr as any,
+        ["wss://relay.example"],
+        [product as any],
+        jest.fn()
+      );
+    }
+
+    const positive = (pubkey: string) =>
+      makeReviewEvent({
+        id: `r-${pubkey}`,
+        pubkey,
+        tags: [
+          ["d", productAddress],
+          ["rating", "1", "thumb"],
+        ],
+      });
+
+    it("keeps scores between 0 and 1 when a review has forged ratings", async () => {
+      const honest = ["a", "b", "c", "d", "e"].map(positive);
+      const huge = makeReviewEvent({
+        id: "huge",
+        pubkey: "attacker-1",
+        tags: [
+          ["d", productAddress],
+          ["rating", "-1e9", "thumb"],
+        ],
+      });
+      const text = makeReviewEvent({
+        id: "text",
+        pubkey: "attacker-2",
+        tags: [
+          ["d", productAddress],
+          ["rating", "great", "thumb"],
+        ],
+      });
+
+      const result = await run([], [...honest, huge, text]);
+      const scores = result.merchantScoresMap.get("seller-a")!;
+
+      expect(scores).toHaveLength(6);
+      expect(scores.every((s) => s >= 0 && s <= 1)).toBe(true);
+    });
+
+    it("skips reviews that have no valid rating", async () => {
+      const noRating = makeReviewEvent({
+        id: "none",
+        tags: [["d", productAddress]],
+      });
+      const result = await run([], [noRating]);
+      expect(result.merchantScoresMap.size).toBe(0);
+      expect(result.productReviewsMap.size).toBe(0);
+    });
+
+    it("ignores a seller's review of their own product", async () => {
+      const result = await run([], [positive("seller-a")]);
+      expect(result.merchantScoresMap.size).toBe(0);
+    });
+
+    it("ignores relay reviews for products that were not requested", async () => {
+      const other = makeReviewEvent({
+        id: "other",
+        tags: [
+          ["d", "a:30402:other-seller:other-listing"],
+          ["rating", "1", "thumb"],
+        ],
+      });
+      const result = await run([], [other]);
+      expect(result.merchantScoresMap.size).toBe(0);
+    });
+
+    it("shows the text and ratings of the newest review", async () => {
+      const older = makeReviewEvent({
+        id: "old",
+        created_at: 100,
+        content: "old text",
+        tags: [
+          ["d", productAddress],
+          ["rating", "1", "thumb"],
+        ],
+      });
+      const newer = makeReviewEvent({
+        id: "new",
+        created_at: 300,
+        content: "new text",
+        tags: [
+          ["d", productAddress],
+          ["rating", "0", "thumb"],
+        ],
+      });
+
+      const result = await run([older], [newer]);
+      const shown = result.productReviewsMap
+        .get("seller-a")!
+        .get("listing-1")!
+        .get("reviewer-1")!;
+
+      expect(shown).toEqual([
+        ["comment", "new text"],
+        ["rating", "0", "thumb"],
+      ]);
+      expect(result.merchantScoresMap.get("seller-a")).toEqual([0]);
+    });
+
+    it("does not let an older relay copy replace a newer cached review", async () => {
+      const newer = makeReviewEvent({
+        id: "new",
+        created_at: 300,
+        content: "new text",
+      });
+      const older = makeReviewEvent({
+        id: "old",
+        created_at: 100,
+        content: "old text",
+      });
+
+      const result = await run([newer], [older]);
+      const shown = result.productReviewsMap
+        .get("seller-a")!
+        .get("listing-1")!
+        .get("reviewer-1")!;
+
+      expect(shown[0]).toEqual(["comment", "new text"]);
+    });
   });
 
   it("strips internal created_at entries from review payloads before resolving", async () => {
@@ -9365,7 +9503,7 @@ describe("fetchReviews", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it("updates existing review's created_at via map() when a newer relay review supersedes it (lines 1175-1178)", async () => {
+  it("uses the newer relay review when two relay reviews come from the same reviewer", async () => {
     const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
     jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
 
@@ -9377,7 +9515,7 @@ describe("fetchReviews", () => {
       created_at: 200,
       tags: [
         ["d", productAddress],
-        ["rating", "3", "overall"],
+        ["rating", "0", "overall"],
       ],
       sig: "sig-first-relay",
     });
@@ -9387,7 +9525,7 @@ describe("fetchReviews", () => {
       created_at: 300,
       tags: [
         ["d", productAddress],
-        ["rating", "5", "overall"],
+        ["rating", "1", "overall"],
       ],
       sig: "sig-second-relay",
     });
@@ -9409,7 +9547,7 @@ describe("fetchReviews", () => {
       editReviewsContext
     );
 
-    expect(result.merchantScoresMap.get("seller-a")).toEqual([2.5]);
+    expect(result.merchantScoresMap.get("seller-a")).toEqual([1]);
   });
 
   it("logs cache rejection for valid relay reviews and still resolves (line 1276)", async () => {
