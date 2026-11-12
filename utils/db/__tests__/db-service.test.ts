@@ -3270,9 +3270,8 @@ describe("db-service helpers", () => {
     test("updateOrderStatus with messageId links message to order and updates status", async () => {
       const queries: { text: string; params?: any[] }[] = [];
       const client: MockDbClient = {
-        query: jest.fn(async (q: QueryInput, values?: any[]) => {
+        query: jest.fn(async (q: QueryInput, params?: any[]) => {
           const text = typeof q === "string" ? q : q.text || "";
-          const params = typeof q === "string" ? values : q.values;
           queries.push({ text, params });
           return { rows: [], rowCount: 1 };
         }),
