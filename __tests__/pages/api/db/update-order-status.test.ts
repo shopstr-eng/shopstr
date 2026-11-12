@@ -88,4 +88,79 @@ describe("/api/db/update-order-status", () => {
     expect(updateOrderStatusMock).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(404);
   });
+
+  it("updates order status when seller sets shipped with messageId", async () => {
+    verifyNip98RequestMock.mockResolvedValue({
+      ok: true,
+      pubkey: "seller-on-target-order",
+    });
+    getOrderParticipantsMock.mockResolvedValue({
+      buyerPubkey: "buyer-on-target-order",
+      sellerPubkey: "seller-on-target-order",
+      source: "order_participants",
+    });
+
+    const req = {
+      method: "POST",
+      headers: {},
+      body: {
+        orderId: "order-123",
+        status: "shipped",
+        messageId: "order-msg-1",
+      },
+    } as any;
+    const res = createResponse();
+
+    await handler(req, res as any);
+
+    expect(updateOrderStatusMock).toHaveBeenCalledWith(
+      "order-123",
+      "shipped",
+      "seller-on-target-order",
+      "order-msg-1"
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonBody).toEqual({
+      success: true,
+      orderId: "order-123",
+      status: "shipped",
+    });
+  });
+
+  it("updates order status when buyer sets canceled without messageId", async () => {
+    verifyNip98RequestMock.mockResolvedValue({
+      ok: true,
+      pubkey: "buyer-on-target-order",
+    });
+    getOrderParticipantsMock.mockResolvedValue({
+      buyerPubkey: "buyer-on-target-order",
+      sellerPubkey: "seller-on-target-order",
+      source: "order_participants",
+    });
+
+    const req = {
+      method: "POST",
+      headers: {},
+      body: {
+        orderId: "order-123",
+        status: "canceled",
+      },
+    } as any;
+    const res = createResponse();
+
+    await handler(req, res as any);
+
+    expect(updateOrderStatusMock).toHaveBeenCalledWith(
+      "order-123",
+      "canceled",
+      "buyer-on-target-order",
+      undefined
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonBody).toEqual({
+      success: true,
+      orderId: "order-123",
+      status: "canceled",
+    });
+  });
 });
