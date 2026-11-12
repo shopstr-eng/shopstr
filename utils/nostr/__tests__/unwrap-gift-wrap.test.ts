@@ -4,6 +4,7 @@ import {
   getPublicKey,
   nip44,
 } from "nostr-tools";
+import { createGiftWrapEvent } from "../gift-wrap";
 import { unwrapGiftWrap } from "../unwrap-gift-wrap";
 
 const recipientSk = generateSecretKey();
@@ -99,6 +100,16 @@ describe("unwrapGiftWrap", () => {
     await expect(unwrapGiftWrap(wrap("{oops"), decrypter)).resolves.toBeNull();
   });
 
+  it("returns null when tag items are not strings or kind is not a number", async () => {
+    const badTags = { ...rumorFrom(senderPk), tags: [["p", 5]] };
+    const badKind = { ...rumorFrom(senderPk), kind: "14" };
+    for (const rumor of [badTags, badKind]) {
+      await expect(
+        unwrapGiftWrap(wrap(seal(rumor, senderSk)), decrypter)
+      ).resolves.toBeNull();
+    }
+  });
+
   it("returns null when the rumor has malformed tags", async () => {
     const rumor = { ...rumorFrom(senderPk), tags: ["subject", "x"] };
     await expect(
@@ -113,5 +124,32 @@ describe("unwrapGiftWrap", () => {
     await expect(
       unwrapGiftWrap(wrap(seal(rumorFrom(senderPk), senderSk)), rejecting)
     ).resolves.toBeNull();
+  });
+
+  describe("wraps built by createGiftWrapEvent", () => {
+    // Mirrors how the MCP tools send: the agent signs the seal with its own key.
+    const agentSigner = {
+      encrypt: (pubkey: string, text: string) =>
+        nip44.encrypt(text, nip44.getConversationKey(senderSk, pubkey)),
+      sign: (template: any) => finalizeEvent(template, senderSk),
+    };
+
+    it("opens a wrap sealed with the sender's signer", async () => {
+      const rumor = rumorFrom(senderPk);
+      const event = await createGiftWrapEvent(
+        JSON.stringify(rumor),
+        recipientPk,
+        { signer: agentSigner as any }
+      );
+      await expect(unwrapGiftWrap(event, decrypter)).resolves.toEqual(rumor);
+    });
+
+    it("drops a wrap sealed with a random key, which cannot prove the sender", async () => {
+      const event = await createGiftWrapEvent(
+        JSON.stringify(rumorFrom(senderPk)),
+        recipientPk
+      );
+      await expect(unwrapGiftWrap(event, decrypter)).resolves.toBeNull();
+    });
   });
 });

@@ -1496,7 +1496,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         const senderWrap = await createGiftWrapEvent(
           stringifiedInner,
           senderPubkey,
-          { relayHint }
+          { signer, relayHint }
         );
 
         const relayManager = new McpRelayManager(withBlastr(defaultRelays));
@@ -1597,7 +1597,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const sellerWrap = await createGiftWrapEvent(
           JSON.stringify(fullInnerEvent),
-          params.sellerPubkey
+          params.sellerPubkey,
+          { signer }
         );
 
         const relayManager = new McpRelayManager(withBlastr(defaultRelays));
@@ -1735,7 +1736,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const buyerWrap = await createGiftWrapEvent(
           JSON.stringify(fullInnerEvent),
-          order.buyer_pubkey
+          order.buyer_pubkey,
+          { signer }
         );
 
         const relayManager = new McpRelayManager(withBlastr(defaultRelays));
@@ -1956,7 +1958,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
             const wrapEvent = await createGiftWrapEvent(
               JSON.stringify(fullInnerEvent),
-              recipientPubkey
+              recipientPubkey,
+              { signer }
             );
 
             const relayManager = new McpRelayManager(withBlastr(defaultRelays));

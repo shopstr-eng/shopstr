@@ -1530,6 +1530,14 @@ describe("registerWriteTools — (community & messaging)", () => {
       const calls = jest.mocked(createGiftWrapEvent).mock.calls;
       expect(calls[0]![1]).toBe("recipient-pubkey");
       expect(calls[1]![1]).toBe(TEST_PUBKEY);
+      // Both wraps must be sealed with the agent's real key, otherwise the
+      // rumor/seal pubkey check drops them when they are read back.
+      expect(calls[0]![2]).toEqual(
+        expect.objectContaining({ signer: mockSigner })
+      );
+      expect(calls[1]![2]).toEqual(
+        expect.objectContaining({ signer: mockSigner })
+      );
       expect(mockRelayManagerMethods.publish).toHaveBeenCalledTimes(2);
     });
 
@@ -1615,7 +1623,8 @@ describe("registerWriteTools — (community & messaging)", () => {
 
       expect(createGiftWrapEvent).toHaveBeenCalledWith(
         expect.stringContaining("456 New St"),
-        "seller-pubkey"
+        "seller-pubkey",
+        expect.objectContaining({ signer: expect.anything() })
       );
       expect(mockRelayManagerMethods.publish).toHaveBeenCalledTimes(1);
       const payload = textPayload(result);
@@ -1737,6 +1746,24 @@ describe("registerWriteTools — (community & messaging)", () => {
       expect(payload.status).toBe("shipped");
       expect(payload.etaTimestamp).toBeGreaterThan(
         Math.floor(Date.now() / 1000)
+      );
+    });
+
+    it("seals the buyer message with the agent signer", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: TEST_PUBKEY,
+        buyer_pubkey: "buyer-pubkey",
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "shipped" } as any);
+      const tool = getCallback();
+
+      await tool(baseParams);
+
+      expect(jest.mocked(createGiftWrapEvent).mock.calls[0]![2]).toEqual(
+        expect.objectContaining({ signer: mockSigner })
       );
     });
 
@@ -2048,7 +2075,8 @@ describe("registerWriteTools — (community & messaging)", () => {
       expect(textPayload(result).notificationSent).toBe(true);
       expect(createGiftWrapEvent).toHaveBeenCalledWith(
         expect.any(String),
-        "actual-seller"
+        "actual-seller",
+        expect.objectContaining({ signer: expect.anything() })
       );
       const innerEvent = JSON.parse(
         jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
@@ -2113,7 +2141,8 @@ describe("registerWriteTools — (community & messaging)", () => {
       expect(textPayload(result).notificationSent).toBe(true);
       expect(createGiftWrapEvent).toHaveBeenCalledWith(
         expect.any(String),
-        "actual-seller"
+        "actual-seller",
+        expect.objectContaining({ signer: expect.anything() })
       );
       const innerEvent = JSON.parse(
         jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
@@ -2233,7 +2262,8 @@ describe("registerWriteTools — (community & messaging)", () => {
       expect(textPayload(result).notificationSent).toBe(true);
       expect(createGiftWrapEvent).toHaveBeenCalledWith(
         expect.any(String),
-        "actual-buyer"
+        "actual-buyer",
+        expect.objectContaining({ signer: expect.anything() })
       );
       const innerEvent = JSON.parse(
         jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
