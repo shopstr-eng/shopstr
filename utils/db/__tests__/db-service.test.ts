@@ -3267,6 +3267,54 @@ describe("db-service helpers", () => {
       expect(client.release).toHaveBeenCalled();
     });
 
+    test("updateOrderStatus with messageId links message to order and updates status", async () => {
+      const queries: { text: string; params?: any[] }[] = [];
+      const client: MockDbClient = {
+        query: jest.fn(async (q: QueryInput, values?: any[]) => {
+          const text = typeof q === "string" ? q : q.text || "";
+          const params = typeof q === "string" ? values : q.values;
+          queries.push({ text, params });
+          return { rows: [], rowCount: 1 };
+        }),
+        release: jest.fn(),
+      };
+
+      await withMockedDbService(client, async (mod) => {
+        await expect(
+          mod.updateOrderStatus("order-1", "shipped", "seller-1", "message-1")
+        ).resolves.toBeUndefined();
+      });
+
+      const messageUpdateQuery = queries.find(
+        (q) =>
+          q.text.includes("SET order_status = $1,") &&
+          q.text.includes("order_id = $3")
+      );
+      expect(messageUpdateQuery).toBeDefined();
+      expect(messageUpdateQuery?.params).toEqual([
+        "shipped",
+        "message-1",
+        "order-1",
+        "seller-1",
+      ]);
+      expect(
+        messageUpdateQuery?.text.includes("(order_id IS NULL OR order_id = $3)")
+      ).toBe(true);
+
+      const orderUpdateQuery = queries.find(
+        (q) =>
+          q.text.includes("UPDATE message_events") &&
+          q.text.includes("WHERE order_id = $2")
+      );
+      expect(orderUpdateQuery).toBeDefined();
+      expect(orderUpdateQuery?.params).toEqual([
+        "shipped",
+        "order-1",
+        "seller-1",
+      ]);
+      expect(client.release).toHaveBeenCalled();
+    });
+
     test("profile and wallet fetch helpers map event rows", async () => {
       const client: MockDbClient = {
         query: jest.fn(async (q: QueryInput) => {
