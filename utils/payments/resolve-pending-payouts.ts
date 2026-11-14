@@ -1,4 +1,8 @@
-import { Mint as CashuMint, Wallet as CashuWallet, Proof } from "@cashu/cashu-ts";
+import {
+  Mint as CashuMint,
+  Wallet as CashuWallet,
+  Proof,
+} from "@cashu/cashu-ts";
 import { recoverProofsToBuyerWallet } from "@/utils/cashu/wallet-recovery";
 import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
@@ -38,9 +42,7 @@ export interface ResolvePendingPayoutOptions {
    * with notifiedAt, so a retry after a failed record removal skips this
    * callback instead of sending the seller a duplicate DM.
    */
-  notifySeller?: (
-    record: PendingSellerLightningPayout
-  ) => Promise<void>;
+  notifySeller?: (record: PendingSellerLightningPayout) => Promise<void>;
   /**
    * Invoked in the PAID branch after the seller notification succeeds, to
    * send the buyer the order-receipt DM the normal checkout path sends.
@@ -51,9 +53,7 @@ export interface ResolvePendingPayoutOptions {
    * record removal re-sends only a receipt that previously failed and never
    * sends one twice.
    */
-  notifyBuyer?: (
-    record: PendingSellerLightningPayout
-  ) => Promise<void>;
+  notifyBuyer?: (record: PendingSellerLightningPayout) => Promise<void>;
 }
 
 const DEFAULT_MINT_TIMEOUT_MS = 15_000;
@@ -336,8 +336,7 @@ export async function resolvePendingSellerLightningPayout(
         // record — keeping it would re-send the seller DM on every retry.
         // receiptSentAt stays unset, so if the removal below fails the
         // retry re-attempts the receipt without touching the seller DM.
-        receiptError =
-          error instanceof Error ? error.message : String(error);
+        receiptError = error instanceof Error ? error.message : String(error);
       }
     }
     if (!tryRemoveRecord(record.meltQuoteId)) {
@@ -415,9 +414,7 @@ export async function resolvePendingSellerLightningPayout(
         "The mint reports the payout as unpaid, but quarantined proof(s) are spent. Do not retry this order; reconcile with the mint.",
     };
   }
-  if (
-    check.states.some((state) => state !== "UNSPENT" && state !== "SPENT")
-  ) {
+  if (check.states.some((state) => state !== "UNSPENT" && state !== "SPENT")) {
     return {
       status: "needs-attention",
       reason:
@@ -449,7 +446,7 @@ export async function resolvePendingSellerLightningPayout(
         status: "unknown",
         reason:
           "The wallet write for the recovered proofs could not be confirmed. The record was kept; check again.",
-        };
+      };
     }
     inserted = result;
   }
