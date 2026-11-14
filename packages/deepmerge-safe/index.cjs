@@ -26,7 +26,11 @@ function defaultArrayMerge(target, source, options) {
 
 function getKeys(object) {
   return Object.keys(object)
-    .concat(Object.getOwnPropertySymbols(object).filter((key) => enumerable(object, key)))
+    .concat(
+      Object.getOwnPropertySymbols(object).filter((key) =>
+        enumerable(object, key)
+      )
+    )
     .filter((key) => !blocked.has(key));
 }
 
@@ -53,7 +57,11 @@ function mergeObject(target, source, options) {
   const destination = {};
   if (options.isMergeableObject(target)) {
     for (const key of getKeys(target)) {
-      write(destination, key, cloneUnlessOtherwiseSpecified(target[key], options));
+      write(
+        destination,
+        key,
+        cloneUnlessOtherwiseSpecified(target[key], options)
+      );
     }
   }
   for (const key of getKeys(source)) {
@@ -63,12 +71,19 @@ function mergeObject(target, source, options) {
     ) {
       continue;
     }
-    if (propertyIsOnObject(target, key) && options.isMergeableObject(source[key])) {
+    if (
+      propertyIsOnObject(target, key) &&
+      options.isMergeableObject(source[key])
+    ) {
       const custom = options.customMerge && options.customMerge(key);
       const merge = typeof custom === "function" ? custom : deepmerge;
       write(destination, key, merge(target[key], source[key], options));
     } else {
-      write(destination, key, cloneUnlessOtherwiseSpecified(source[key], options));
+      write(
+        destination,
+        key,
+        cloneUnlessOtherwiseSpecified(source[key], options)
+      );
     }
   }
   return destination;
@@ -77,7 +92,8 @@ function mergeObject(target, source, options) {
 function deepmerge(target, source, options) {
   options = { ...options };
   options.arrayMerge = options.arrayMerge || defaultArrayMerge;
-  options.isMergeableObject = options.isMergeableObject || defaultIsMergeableObject;
+  options.isMergeableObject =
+    options.isMergeableObject || defaultIsMergeableObject;
   options.cloneUnlessOtherwiseSpecified = cloneUnlessOtherwiseSpecified;
   const sourceIsArray = Array.isArray(source);
   if (sourceIsArray !== Array.isArray(target)) {
@@ -89,8 +105,12 @@ function deepmerge(target, source, options) {
 }
 
 deepmerge.all = function (array, options) {
-  if (!Array.isArray(array)) throw new Error("first argument should be an array");
-  return array.reduce((previous, next) => deepmerge(previous, next, options), {});
+  if (!Array.isArray(array))
+    throw new Error("first argument should be an array");
+  return array.reduce(
+    (previous, next) => deepmerge(previous, next, options),
+    {}
+  );
 };
 
 module.exports = deepmerge;

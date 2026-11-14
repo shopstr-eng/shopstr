@@ -7,7 +7,12 @@ import {
 import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
 import { resolveSafeMintUrl } from "@/utils/cashu/mint-url-safety";
-import { getTokenMetadata, Wallet, OutputData, getEncodedToken } from "@cashu/cashu-ts";
+import {
+  getTokenMetadata,
+  Wallet,
+  OutputData,
+  getEncodedToken,
+} from "@cashu/cashu-ts";
 import {
   AgentWalletError,
   getAgentWalletBalance,
@@ -588,7 +593,11 @@ describe("payInvoiceFromAgentWallet", () => {
         inputs: ["send-old"],
         outputs: [{ fake: "output-data" }],
       };
-      seed(storedEvent("staged-old", MINT, [proof("keep-old", 5000)], 7375, [oldEntry]));
+      seed(
+        storedEvent("staged-old", MINT, [proof("keep-old", 5000)], 7375, [
+          oldEntry,
+        ])
+      );
       walletMock.checkMeltQuoteBolt11.mockResolvedValue({
         quote: "old-quote",
         state: "PENDING",
@@ -770,7 +779,10 @@ describe("payInvoiceFromAgentWallet", () => {
       // Simulates: the final save succeeded but the staged event's deletion
       // failed, so both events remain holding some of the same proofs.
       seed(
-        storedEvent("final", MINT, [proof("keep1", 600), proof("change1", 500)]),
+        storedEvent("final", MINT, [
+          proof("keep1", 600),
+          proof("change1", 500),
+        ]),
         storedEvent("staged", MINT, [proof("keep1", 600), proof("send1", 1010)])
       );
 
@@ -790,8 +802,17 @@ describe("payInvoiceFromAgentWallet", () => {
       // carries its pendingChange entry for a melt whose change the final
       // event already holds.
       seed(
-        storedEvent("final", MINT, [proof("keep1", 600), proof("change1", 500)]),
-        storedEvent("staged", MINT, [proof("keep1", 600), proof("send1", 1010)], 7375, [entry])
+        storedEvent("final", MINT, [
+          proof("keep1", 600),
+          proof("change1", 500),
+        ]),
+        storedEvent(
+          "staged",
+          MINT,
+          [proof("keep1", 600), proof("send1", 1010)],
+          7375,
+          [entry]
+        )
       );
       walletMock.checkMeltQuoteBolt11.mockResolvedValue({
         quote: "old-quote",
@@ -800,7 +821,9 @@ describe("payInvoiceFromAgentWallet", () => {
       });
       // Deterministic unblinding yields the SAME change1 proof the final
       // event already holds.
-      walletMock.createMeltChangeProofs.mockReturnValue([proof("change1", 500)]);
+      walletMock.createMeltChangeProofs.mockReturnValue([
+        proof("change1", 500),
+      ]);
       jest.mocked(safeMeltProofs).mockResolvedValue({
         status: "paid",
         meltQuote: { quote: "melt-quote", change: [] },

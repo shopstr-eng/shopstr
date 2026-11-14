@@ -113,9 +113,8 @@ export async function safeMeltProofs(
     // answer with the quote still PENDING or UNPAID. Never label those
     // "paid" — the caller would treat unsettled inputs as spent and retire
     // the change-recovery data for a payment still in flight.
-    const responseState = (
-      meltResponse.quote as { state?: string } | undefined
-    )?.state;
+    const responseState = (meltResponse.quote as { state?: string } | undefined)
+      ?.state;
     if (responseState === "PENDING") {
       return {
         status: "pending",

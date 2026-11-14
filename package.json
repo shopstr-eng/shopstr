@@ -20,7 +20,7 @@
     "format:check": "prettier --check .",
     "pretype-check": "npm run sync:mcp-canonical",
     "type-check": "tsc --noEmit",
-    "lint-all": "npm run type-check && npm run lint",
+    "lint-all": "npm run type-check && npm run lint && npm run format:check",
     "test": "jest",
     "test:ci": "jest --ci --runInBand",
     "test:coverage": "jest --coverage --ci --runInBand",

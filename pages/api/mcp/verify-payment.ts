@@ -9,6 +9,8 @@ import { getMcpOrder, updateMcpOrderPayment } from "@/mcp/tools/purchase-tools";
 import { recordRequest } from "@/utils/mcp/metrics";
 import { pendingLightningPayments } from "./create-order";
 import { applyRateLimit } from "@/utils/rate-limit";
+import { getTrustedMintUrl } from "@/utils/cashu/trusted-mints";
+import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 
 // Polled by clients waiting for invoice settlement; the cap is generous
 // because polling cadence + retries can stack, but bounded so an open
@@ -69,7 +71,7 @@ export default async function handler(
     return originalEnd(...args);
   };
 
-  const { orderId } = req.body;
+  const { orderId } = req.body || {};
 
   if (!orderId) {
     return res.status(400).json({ error: "orderId is required" });
@@ -81,7 +83,10 @@ export default async function handler(
       return res.status(404).json({ error: "Order not found" });
     }
 
-    if (order.buyer_pubkey !== apiKey.pubkey) {
+    if (
+      order.buyer_pubkey !== apiKey.pubkey &&
+      order.seller_pubkey !== apiKey.pubkey
+    ) {
       return res
         .status(403)
         .json({ error: "Not authorized to verify this order" });
@@ -97,7 +102,14 @@ export default async function handler(
     }
 
     const pending = pendingLightningPayments.get(orderId);
-    if (!pending) {
+    let quote = pending?.quote;
+    if (!quote && order.payment_ref) {
+      quote = order.payment_ref.startsWith("ln_")
+        ? order.payment_ref.slice(3)
+        : order.payment_ref;
+    }
+
+    if (!quote) {
       return res.status(400).json({
         error:
           "No pending Lightning payment found for this order. It may have expired.",
@@ -105,16 +117,30 @@ export default async function handler(
       });
     }
 
-    const cashuMint = new CashuMint(pending.mintUrl);
+    const mintUrl =
+      pending?.mintUrl ||
+      (typeof req.body?.mintUrl === "string" ? req.body.mintUrl : undefined) ||
+      getTrustedMintUrl();
+
+    const cashuMint = new CashuMint(mintUrl);
     const wallet = new CashuWallet(cashuMint);
     await wallet.loadMint();
-    const quoteStatus = await wallet.checkMintQuoteBolt11(pending.quote);
+    const quoteStatus = await withMintRetry(
+      () => wallet.checkMintQuoteBolt11(quote!),
+      { maxAttempts: 2, perAttemptTimeoutMs: 5000 }
+    );
+
+    const amount =
+      pending?.amount ??
+      (typeof quoteStatus.amount !== "undefined"
+        ? Number(quoteStatus.amount)
+        : Math.round(Number(order.amount_total)));
 
     if (
       quoteStatus.state === MintQuoteState.PAID ||
       quoteStatus.state === MintQuoteState.ISSUED
     ) {
-      await updateMcpOrderPayment(orderId, `ln_${pending.quote}`, "paid");
+      await updateMcpOrderPayment(orderId, `ln_${quote}`, "paid");
       pendingLightningPayments.delete(orderId);
 
       return res.status(200).json({
@@ -125,9 +151,9 @@ export default async function handler(
         orderId,
         payment: {
           method: "lightning",
-          amount: pending.amount,
+          amount,
           currency: "sats",
-          quoteId: pending.quote,
+          quoteId: quote,
         },
       });
     }
@@ -139,10 +165,10 @@ export default async function handler(
       orderId,
       payment: {
         method: "lightning",
-        amount: pending.amount,
+        amount,
         currency: "sats",
-        quoteId: pending.quote,
-        mintUrl: pending.mintUrl,
+        quoteId: quote,
+        mintUrl,
       },
     });
   } catch (error) {
