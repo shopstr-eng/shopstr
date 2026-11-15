@@ -2150,9 +2150,10 @@ export async function updateOrderStatus(
     if (messageId) {
       await client.query(
         `UPDATE message_events
-         SET order_status = $1
+         SET order_status = $1,
+             order_id = $3
          WHERE id = $2
-         AND order_id = $3
+         AND (order_id IS NULL OR order_id = $3)
          AND (
            pubkey = $4
            OR EXISTS (

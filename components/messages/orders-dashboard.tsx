@@ -776,7 +776,8 @@ const OrdersDashboard = ({
             const body = JSON.stringify({
               orderId: order.orderId,
               status: order.status,
-              messageId: order.messageEvent?.id,
+              messageId:
+                order.messageEvent?.wrappedEventId || order.messageEvent?.id,
             });
             createNip98AuthorizationHeader(
               signer!,
@@ -1056,6 +1057,9 @@ const OrdersDashboard = ({
       const body = JSON.stringify({
         orderId: selectedOrder.orderId,
         status: "shipped",
+        messageId:
+          selectedOrder.messageEvent?.wrappedEventId ||
+          selectedOrder.messageEvent?.id,
       });
       const authHeader = await createNip98AuthorizationHeader(
         signer,
