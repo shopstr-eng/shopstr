@@ -920,3 +920,45 @@ test("get_reviews rejects malformed and mismatched cursors before relay work", a
   assert.equal(mismatchedBody.retryable, false);
   assert.equal(ctx.calls.length, 0);
 });
+
+test("get_reviews keeps the response bounded when reviewers publish oversized reviews", async () => {
+  // 50 reviewers, each with ~60 KB of content and 300 distinct rating keys.
+  const oversized = Array.from({ length: 50 }, (_, index) =>
+    reviewEvent({
+      id: index.toString(16).padStart(64, "0"),
+      pubkey: (index + 1).toString(16).padStart(64, "0"),
+      created_at: 200 + index,
+      tags: [
+        ["d", `a:${productAddress}`],
+        ["a", productAddress],
+        ...Array.from({ length: 300 }, (_unused, key) => [
+          "rating",
+          "1",
+          `k${index}_${key}`,
+        ]),
+      ],
+      content: "A".repeat(60_000),
+    })
+  );
+  const ctx = context(() => oversized);
+
+  const response = await handleGetReviews({ productAddress }, ctx);
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.count, 50);
+  assert.equal(
+    body.reviews.every(
+      (review) =>
+        review.content.length <= 1_000 &&
+        review.contentTruncated === true &&
+        Object.keys(review.ratings).length <= 10
+    ),
+    true
+  );
+  assert.equal(
+    Object.keys(body.ratingsSummary.ratingBreakdown).length <= 500,
+    true
+  );
+  // Unbounded, this response is ~3 MB.
+  assert.equal(response.content[0].text.length < 200_000, true);
+});

@@ -144,7 +144,9 @@ async function loadProofEvents(
         seenSecrets.add(proof.secret);
         return true;
       });
-      const pendingChange: PendingChange[] = Array.isArray(parsed?.pendingChange)
+      const pendingChange: PendingChange[] = Array.isArray(
+        parsed?.pendingChange
+      )
         ? parsed.pendingChange.filter(
             (entry: unknown): entry is PendingChange => {
               if (
@@ -328,9 +330,7 @@ async function reconcilePendingChange(
       if (quote.state === "PAID") {
         // PAID means the mint consumed the melt's inputs; drop them so a
         // later payment cannot select already-spent proofs.
-        proofs = proofs.filter(
-          (proof) => !entry.inputs.includes(proof.secret)
-        );
+        proofs = proofs.filter((proof) => !entry.inputs.includes(proof.secret));
         const blinded =
           (quote as { change?: SerializedBlindedSignature[] }).change ?? [];
         if (blinded.length > 0) {
@@ -543,7 +543,12 @@ export async function payInvoiceFromAgentWallet(
     if (stored.length === 0) throw noProofs();
 
     const wallet = await openWallet(mint, title);
-    const reconciled = await reconcilePendingChange(signer, wallet, mint, stored);
+    const reconciled = await reconcilePendingChange(
+      signer,
+      wallet,
+      mint,
+      stored
+    );
     const events = await pruneSpentProofs(signer, wallet, mint, reconciled);
     // Inputs of unresolved melts stay quarantined until their quote
     // resolves: they may already be spent at the mint.
@@ -673,8 +678,7 @@ export async function payInvoiceFromAgentWallet(
       const blinded =
         (
           melt.meltQuote as
-            | { change?: SerializedBlindedSignature[] }
-            | undefined
+            { change?: SerializedBlindedSignature[] } | undefined
         )?.change ?? [];
       if (blinded.length > 0) {
         try {
