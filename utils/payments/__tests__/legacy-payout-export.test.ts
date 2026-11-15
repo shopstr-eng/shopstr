@@ -62,9 +62,7 @@ describe("buildLegacyPayoutExportToken", () => {
 
   it("refuses to export a record bound to an account, even the owner's", () => {
     expect(() =>
-      buildLegacyPayoutExportToken(
-        makeRecord({ buyerPubkey: "buyer-pubkey" })
-      )
+      buildLegacyPayoutExportToken(makeRecord({ buyerPubkey: "buyer-pubkey" }))
     ).toThrow(/bound to an account/);
     expect(mockGetEncodedToken).not.toHaveBeenCalled();
   });
