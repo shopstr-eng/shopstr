@@ -97,6 +97,8 @@ export type ReviewResponse = {
   pubkey: string;
   d?: string;
   content: string;
+  /** Present only when content was shortened to the review content cap. */
+  contentTruncated?: boolean;
   ratings: Record<string, number>;
   createdAt: number;
   /**
