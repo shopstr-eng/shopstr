@@ -103,10 +103,8 @@ export default async function handler(
 
     const pending = pendingLightningPayments.get(orderId);
     let quote = pending?.quote;
-    if (!quote && order.payment_ref) {
-      quote = order.payment_ref.startsWith("ln_")
-        ? order.payment_ref.slice(3)
-        : order.payment_ref;
+    if (!quote && order.payment_ref?.startsWith("ln_")) {
+      quote = order.payment_ref.slice(3);
     }
 
     if (!quote) {
@@ -117,10 +115,7 @@ export default async function handler(
       });
     }
 
-    const mintUrl =
-      pending?.mintUrl ||
-      (typeof req.body?.mintUrl === "string" ? req.body.mintUrl : undefined) ||
-      getTrustedMintUrl();
+    const mintUrl = pending?.mintUrl ?? getTrustedMintUrl();
 
     const cashuMint = new CashuMint(mintUrl);
     const wallet = new CashuWallet(cashuMint);

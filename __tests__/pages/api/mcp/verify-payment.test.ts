@@ -52,8 +52,13 @@ jest.mock("@/utils/cashu/mint-retry-service", () => ({
   withMintRetry: (...args: unknown[]) => withMintRetryMock(...args),
 }));
 
+const cashuMintConstructorMock = jest.fn();
+
 jest.mock("@cashu/cashu-ts", () => ({
-  Mint: jest.fn().mockImplementation(() => ({})),
+  Mint: jest.fn().mockImplementation((...args: unknown[]) => {
+    cashuMintConstructorMock(...args);
+    return {};
+  }),
   Wallet: jest.fn().mockImplementation(() => ({
     loadMint: (...args: unknown[]) => walletLoadMintMock(...args),
     checkMintQuoteBolt11: (...args: unknown[]) =>
@@ -522,7 +527,7 @@ describe("POST /api/mcp/verify-payment", () => {
       );
     });
 
-    it("respects mintUrl passed in req.body on cold start fallback", async () => {
+    it("ignores untrusted mintUrl passed in req.body on cold start fallback and uses getTrustedMintUrl", async () => {
       getMcpOrderMock.mockResolvedValueOnce(
         makeOrder({
           payment_ref: "ln_quote_body_mint",
@@ -538,7 +543,7 @@ describe("POST /api/mcp/verify-payment", () => {
       const req = createMockRequest({
         body: {
           orderId: "order-123",
-          mintUrl: "https://mint-from-request.test",
+          mintUrl: "https://evil-untrusted-mint.test",
         },
       });
       const res = createMockResponse();
@@ -547,11 +552,36 @@ describe("POST /api/mcp/verify-payment", () => {
 
       expect(res.statusCode).toBe(200);
       expect((res.jsonBody as { status?: string }).status).toBe("paid");
+      expect(cashuMintConstructorMock).toHaveBeenCalledWith(DEFAULT_MINT);
+      expect(cashuMintConstructorMock).not.toHaveBeenCalledWith(
+        "https://evil-untrusted-mint.test"
+      );
       expect(updateMcpOrderPaymentMock).toHaveBeenCalledWith(
         "order-123",
         "ln_quote_body_mint",
         "paid"
       );
+    });
+
+    it("returns 400 when order.payment_ref does not start with ln_ (e.g. cashu_ or failed_)", async () => {
+      getMcpOrderMock.mockResolvedValueOnce(
+        makeOrder({
+          payment_ref: "cashu_token_receipt_123",
+        })
+      );
+
+      const req = createMockRequest();
+      const res = createMockResponse();
+
+      await handler(req, res as unknown as NextApiResponse);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toEqual({
+        error:
+          "No pending Lightning payment found for this order. It may have expired.",
+        orderId: "order-123",
+      });
+      expect(withMintRetryMock).not.toHaveBeenCalled();
     });
 
     it("returns 400 if pending payment is missing from map and order has no payment_ref quote", async () => {
