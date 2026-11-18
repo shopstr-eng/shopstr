@@ -240,7 +240,7 @@ const PendingPayouts = () => {
                   type="button"
                   disabled={resolvingId !== null}
                   onClick={() => handleResolve(record)}
-                  className="rounded-md bg-shopstr-purple px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-shopstr-yellow dark:text-black"
+                  className="bg-shopstr-purple dark:bg-shopstr-yellow rounded-md px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:text-black"
                 >
                   {resolvingId === record.meltQuoteId
                     ? "Checking…"
@@ -250,7 +250,7 @@ const PendingPayouts = () => {
                 <button
                   type="button"
                   onClick={() => handleExport(record)}
-                  className="rounded-md border border-shopstr-purple px-3 py-2 text-sm font-medium text-shopstr-purple dark:border-shopstr-yellow dark:text-shopstr-yellow"
+                  className="border-shopstr-purple text-shopstr-purple dark:border-shopstr-yellow dark:text-shopstr-yellow rounded-md border px-3 py-2 text-sm font-medium"
                 >
                   Export proofs
                 </button>
@@ -259,11 +259,11 @@ const PendingPayouts = () => {
             {!record.buyerPubkey && (
               <div className="mt-2">
                 <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Recorded before payouts were bound to an account, so it
-                  cannot be recovered into this wallet. Export the proofs as a
-                  Cashu token and redeem them in any Cashu wallet that
-                  supports {mintHost(record.mintUrl)} (proofs already in this
-                  wallet are left out).
+                  Recorded before payouts were bound to an account, so it cannot
+                  be recovered into this wallet. Export the proofs as a Cashu
+                  token and redeem them in any Cashu wallet that supports{" "}
+                  {mintHost(record.mintUrl)} (proofs already in this wallet are
+                  left out).
                 </p>
                 {exportTokens[record.meltQuoteId] && (
                   <div className="mt-2 rounded-md border border-gray-200 p-3 dark:border-gray-700">
@@ -272,13 +272,13 @@ const PendingPayouts = () => {
                       rows={3}
                       value={exportTokens[record.meltQuoteId]}
                       onFocus={(event) => event.currentTarget.select()}
-                      className="text-light-text dark:text-dark-text w-full resize-none break-all rounded-md border border-gray-300 bg-gray-50 p-2 font-mono text-xs dark:border-gray-600 dark:bg-gray-900"
+                      className="text-light-text dark:text-dark-text w-full resize-none rounded-md border border-gray-300 bg-gray-50 p-2 font-mono text-xs break-all dark:border-gray-600 dark:bg-gray-900"
                     />
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => handleCopyToken(record)}
-                        className="rounded-md bg-shopstr-purple px-3 py-1.5 text-xs font-medium text-white dark:bg-shopstr-yellow dark:text-black"
+                        className="bg-shopstr-purple dark:bg-shopstr-yellow rounded-md px-3 py-1.5 text-xs font-medium text-white dark:text-black"
                       >
                         {copiedId === record.meltQuoteId
                           ? "Copied!"

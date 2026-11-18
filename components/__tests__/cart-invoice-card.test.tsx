@@ -1702,11 +1702,8 @@ describe("buyer receipt filing into chat history (checkout path)", () => {
     );
 
     try {
-      const {
-        products,
-        setCashuPaymentFailed,
-        addNewlyCreatedMessageEvent,
-      } = renderCashuReadyToPay();
+      const { products, setCashuPaymentFailed, addNewlyCreatedMessageEvent } =
+        renderCashuReadyToPay();
       mockFetchJsonOnce(makeCartQuoteResponse(products));
 
       fireEvent.click(screen.getByRole("button", { name: /Pay with Cashu/ }));
