@@ -28,7 +28,7 @@ const mockConstructMessageSeal = constructMessageSeal as jest.MockedFunction<
 const mockConstructMessageGiftWrap =
   constructMessageGiftWrap as jest.MockedFunction<
     typeof constructMessageGiftWrap
->;
+  >;
 const mockSendGiftWrappedMessageEvent =
   sendGiftWrappedMessageEvent as jest.MockedFunction<
     typeof sendGiftWrappedMessageEvent
