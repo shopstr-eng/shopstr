@@ -354,13 +354,18 @@ const DisplayProducts = ({
       const product = productEventContext.productEvents.find(
         (event) => event.id === productId
       );
+      const kind = product?.kind ?? 30402;
       const dTag = product?.tags.find((tag) => tag[0] === "d")?.[1];
+      // Only addressable kinds (30000-39999) have an address. Zapsnag notes are kind 1.
+      const isAddressable = kind >= 30000 && kind < 40000;
       await deleteEvent(
         nostr!,
         signer!,
         [productId],
-        30402,
-        product && dTag ? [`30402:${product.pubkey}:${dTag}`] : []
+        kind,
+        product && dTag && isAddressable
+          ? [`${kind}:${product.pubkey}:${dTag}`]
+          : []
       );
       productEventContext.removeDeletedProductEvent(productId);
     } catch {
