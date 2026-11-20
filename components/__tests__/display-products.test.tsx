@@ -928,6 +928,29 @@ describe("DisplayProducts deletion", () => {
     jest.mocked(deleteEvent).mockClear();
   });
 
+  it("deletes a kind-1 zapsnag note with a d tag by event id only", async () => {
+    const nostr = await deleteOwnProduct({
+      id: "zapsnag-note",
+      pubkey: "viewer-pubkey",
+      created_at: 10,
+      kind: 1,
+      tags: [
+        ["t", "shopstr-zapsnag"],
+        ["d", "coffee"],
+      ],
+      content: "Coffee beans price: 100 sats #zapsnag",
+      sig: "zapsnag-sig",
+    } as NostrEvent);
+
+    expect(deleteEvent).toHaveBeenCalledWith(
+      nostr,
+      undefined,
+      ["zapsnag-note"],
+      1,
+      []
+    );
+  });
+
   it("deletes a listing by event id and address", async () => {
     const nostr = await deleteOwnProduct({
       id: "listing",
