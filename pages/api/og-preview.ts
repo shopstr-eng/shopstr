@@ -33,6 +33,23 @@ type OGData = {
 
 const cache = new Map<string, { data: OGData; timestamp: number }>();
 const CACHE_TTL = 1000 * 60 * 30;
+// Every distinct path + query string on an allowed host is its own cache key,
+// so without a cap a client could grow this map for the life of the process
+// by varying the query string. Map iteration order is insertion order, so the
+// first key is always the oldest entry.
+const MAX_CACHE_ENTRIES = 500;
+
+function setCachedPreview(key: string, data: OGData): void {
+  cache.delete(key);
+  const now = Date.now();
+  for (const [cachedKey, entry] of cache) {
+    if (cache.size < MAX_CACHE_ENTRIES && now - entry.timestamp < CACHE_TTL) {
+      break;
+    }
+    cache.delete(cachedKey);
+  }
+  cache.set(key, { data, timestamp: now });
+}
 
 function isPrivateIPv4(ip: string): boolean {
   const parts = ip.split(".").map(Number);
@@ -133,18 +150,25 @@ function extractMeta(
   return undefined;
 }
 
-function normalizeHttpUrl(value: string | undefined, baseUrl: string): string {
-  if (!value) return baseUrl;
+function resolveHttpUrl(
+  value: string | undefined,
+  baseUrl: string
+): string | undefined {
+  if (!value) return undefined;
 
   try {
     const parsed = new URL(value.trim(), baseUrl);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return baseUrl;
+      return undefined;
     }
     return parsed.toString();
   } catch {
-    return baseUrl;
+    return undefined;
   }
+}
+
+function normalizeHttpUrl(value: string | undefined, baseUrl: string): string {
+  return resolveHttpUrl(value, baseUrl) ?? baseUrl;
 }
 
 export default async function handler(
@@ -234,20 +258,20 @@ export default async function handler(
       extractMeta(html, "og:image:url") ??
       extractMeta(html, "twitter:image");
 
-    if (rawImage) {
-      if (rawImage.startsWith("//")) {
-        ogData.image = "https:" + rawImage;
-      } else if (rawImage.startsWith("/")) {
-        ogData.image = `${parsedUrl.protocol}//${parsedUrl.host}${rawImage}`;
-      } else {
-        ogData.image = rawImage;
-      }
+    // Resolve against the fetched page like og:url: relative paths such as
+    // "images/card.png" would otherwise be loaded relative to the Shopstr
+    // page rendering the preview, and non-http(s) schemes are dropped.
+    const image = rawImage?.startsWith("//")
+      ? resolveHttpUrl(`https:${rawImage}`, normalizedUrl)
+      : resolveHttpUrl(rawImage, normalizedUrl);
+    if (image) {
+      ogData.image = image;
     }
 
     ogData.url = normalizeHttpUrl(extractMeta(html, "og:url"), normalizedUrl);
 
     if (ogData.title) {
-      cache.set(normalizedUrl, { data: ogData, timestamp: Date.now() });
+      setCachedPreview(normalizedUrl, ogData);
     }
 
     res.setHeader("Cache-Control", "public, max-age=1800");
