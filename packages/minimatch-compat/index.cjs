@@ -12,9 +12,13 @@ function compatibleClass(Parent) {
       // providing just the legacy metadata/protocol that glob needs.
       for (const row of this.set) {
         for (const part of row) {
-          if (part && typeof part === "object" && typeof part.test === "function") {
+          if (
+            part &&
+            typeof part === "object" &&
+            typeof part.test === "function"
+          ) {
             part._glob = part.pattern;
-            part[Symbol.match] = (input) => part.test(input) ? [input] : null;
+            part[Symbol.match] = (input) => (part.test(input) ? [input] : null);
           }
         }
       }

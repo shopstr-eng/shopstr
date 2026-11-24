@@ -151,9 +151,7 @@ export function markPendingSellerLightningPayoutReceiptSent(
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
 }
 
-export function removePendingSellerLightningPayout(
-  meltQuoteId: string
-): void {
+export function removePendingSellerLightningPayout(meltQuoteId: string): void {
   if (typeof window === "undefined") return;
 
   const remaining = getPendingSellerLightningPayouts().filter(
