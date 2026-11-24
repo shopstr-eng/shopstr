@@ -2074,6 +2074,7 @@ describe("fetchProfile", () => {
   });
 
   it("keeps the latest kind 0 profile from the DB and ignores shop profile rows", async () => {
+    const chatPubkey = "f".repeat(64);
     const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
     const cacheEventsToDatabase = jest.fn();
 
@@ -2126,6 +2127,10 @@ describe("fetchProfile", () => {
           }),
           sig: "sig-older-user-profile",
         }),
+        makeProfileEvent({
+          pubkey: chatPubkey,
+          content: '{"name":"Chat contact"}',
+        }),
       ])
     ) as typeof global.fetch;
 
@@ -2137,10 +2142,13 @@ describe("fetchProfile", () => {
     const { profileMap } = await fetchProfile(
       nostr,
       ["wss://relay.example"],
-      [pubkey],
+      [pubkey, chatPubkey],
       editProfileContext
     );
 
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith("/api/db/fetch-profiles");
+    expect(profileMap.get(chatPubkey)?.content.name).toBe("Chat contact");
     expect(profileMap.get(pubkey)).toMatchObject({
       pubkey,
       created_at: 300,
@@ -2152,6 +2160,46 @@ describe("fetchProfile", () => {
     expect(profileMap.get(pubkey)?.content.about).toBeUndefined();
     expect(editProfileContext).toHaveBeenLastCalledWith(profileMap, false);
     expect(cacheEventsToDatabase).not.toHaveBeenCalled();
+  });
+
+  it("requests only explicitly scoped public authors in bounded batches", async () => {
+    const { fetchProfile } = await import("../fetch-service");
+    const requested = Array.from({ length: 101 }, (_, index) =>
+      (index + 1).toString(16).padStart(64, "0")
+    );
+    const lastPubkey = requested[100]!;
+    const cachedProfile = makeProfileEvent({
+      pubkey: lastPubkey,
+      content: '{"name":"Cached profile"}',
+    });
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce(makeDbPayload([cachedProfile]));
+    global.fetch = fetchMock;
+    const nostr = new NostrManager();
+    jest.spyOn(nostr, "fetch").mockResolvedValue([]);
+
+    const { profileMap } = await fetchProfile(
+      nostr,
+      [],
+      [...requested, "f".repeat(64)],
+      jest.fn(),
+      new Map(),
+      { mode: "public-listing-authors", pubkeys: [...requested, lastPubkey] }
+    ).finally(() => nostr.close());
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/db/fetch-profiles?kind=0&pubkeys=" +
+        encodeURIComponent(requested.slice(0, 100).join(","))
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/db/fetch-profiles?kind=0&pubkeys=" + lastPubkey
+    );
+    expect(profileMap.get(lastPubkey)?.content.name).toBe("Cached profile");
   });
 
   it("returns the preserved existing map without network access when pubkeyProfilesToFetch is empty", async () => {
@@ -8021,13 +8069,14 @@ describe("fetchShopProfile", () => {
     expect(editShopContext).toHaveBeenCalledWith(new Map(), false);
   });
 
-  it("hydrates shop profiles from DB before querying relays", async () => {
+  it("hydrates shop profiles from the unfiltered DB request before querying relays", async () => {
     const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
     jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
 
     const { fetchShopProfile } = await import("../fetch-service");
 
-    const pubkey = "seller-shop-db";
+    const pubkey = "a".repeat(64);
+    const chatPubkey = "b".repeat(64);
     const shopEvent = makeShopEvent({
       id: "shop-event-db",
       pubkey,
@@ -8036,9 +8085,15 @@ describe("fetchShopProfile", () => {
       sig: "sig-shop-db",
     });
 
-    global.fetch = jest
-      .fn()
-      .mockResolvedValue(makeDbPayload([shopEvent])) as typeof global.fetch;
+    global.fetch = jest.fn().mockResolvedValue(
+      makeDbPayload([
+        shopEvent,
+        makeShopEvent({
+          pubkey: chatPubkey,
+          content: '{"name":"Chat contact shop"}',
+        }),
+      ])
+    ) as typeof global.fetch;
 
     const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
     const editShopContext = jest.fn();
@@ -8046,17 +8101,40 @@ describe("fetchShopProfile", () => {
     const { shopProfileMap } = await fetchShopProfile(
       nostr,
       ["wss://relay.example"],
-      [pubkey],
+      [pubkey, chatPubkey],
       editShopContext
     );
 
+    expect(global.fetch).toHaveBeenCalledTimes(1);
     expect(global.fetch).toHaveBeenCalledWith("/api/db/fetch-profiles");
+    expect(shopProfileMap.get(chatPubkey)?.content.name).toBe(
+      "Chat contact shop"
+    );
     expect(shopProfileMap.get(pubkey)).toMatchObject({
       pubkey,
       created_at: 100,
       content: { name: "DB Shop" },
     });
     expect(cacheEventsToDatabase).not.toHaveBeenCalled();
+  });
+
+  it("limits the scoped shop cache request to public listing authors", async () => {
+    const { fetchShopProfile } = await import("../fetch-service");
+    const sellerPubkey = "a".repeat(64);
+    const chatPubkey = "b".repeat(64);
+    global.fetch = jest.fn().mockResolvedValue(makeDbPayload([]));
+    const nostr = new NostrManager();
+    jest.spyOn(nostr, "fetch").mockResolvedValue([]);
+
+    await fetchShopProfile(nostr, [], [sellerPubkey, chatPubkey], jest.fn(), {
+      mode: "public-listing-authors",
+      pubkeys: [sellerPubkey],
+    }).finally(() => nostr.close());
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/db/fetch-profiles?kind=30019&pubkeys=" + sellerPubkey
+    );
   });
 
   it("relay results overwrite DB results for the same pubkey", async () => {
