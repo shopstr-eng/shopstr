@@ -1,7 +1,9 @@
 import {
+  __getRateLimitBucketSize,
   __resetRateLimitBuckets,
   checkRateLimit,
   getRequestIp,
+  MAX_KEYS_PER_BUCKET,
 } from "@/utils/rate-limit";
 
 describe("checkRateLimit", () => {
@@ -47,6 +49,105 @@ describe("checkRateLimit", () => {
     } finally {
       Date.now = realNow;
     }
+  });
+});
+
+describe("checkRateLimit memory bounds", () => {
+  const realNow = Date.now;
+  let current: number;
+
+  beforeEach(() => {
+    __resetRateLimitBuckets();
+    current = 1_000_000;
+    Date.now = () => current;
+  });
+
+  afterEach(() => {
+    Date.now = realNow;
+  });
+
+  it("drops expired keys when a new key arrives after the sweep interval", () => {
+    const opts = { limit: 5, windowMs: 1_000 };
+    for (let i = 0; i < 100; i++) {
+      checkRateLimit("bucket", `ip-${i}`, opts);
+    }
+    expect(__getRateLimitBucketSize("bucket")).toBe(100);
+
+    current += 61_000;
+    checkRateLimit("bucket", "fresh-ip", opts);
+
+    expect(__getRateLimitBucketSize("bucket")).toBe(1);
+  });
+
+  it("does not sweep on every insert, only once per sweep interval", () => {
+    const opts = { limit: 5, windowMs: 1_000 };
+    checkRateLimit("bucket", "ip-a", opts);
+
+    current += 5_000; // ip-a is expired but the sweep interval has not elapsed
+    checkRateLimit("bucket", "ip-b", opts);
+
+    expect(__getRateLimitBucketSize("bucket")).toBe(2);
+  });
+
+  it("keeps unexpired counters intact while sweeping expired keys", () => {
+    const longWindow = { limit: 1, windowMs: 10 * 60_000 };
+    const shortWindow = { limit: 5, windowMs: 1_000 };
+    expect(checkRateLimit("bucket", "limited-ip", longWindow).ok).toBe(true);
+    for (let i = 0; i < 50; i++) {
+      checkRateLimit("bucket", `ip-${i}`, shortWindow);
+    }
+
+    current += 61_000;
+    checkRateLimit("bucket", "fresh-ip", shortWindow); // triggers the sweep
+
+    expect(__getRateLimitBucketSize("bucket")).toBe(2);
+    expect(checkRateLimit("bucket", "limited-ip", longWindow).ok).toBe(false);
+  });
+
+  it("starts a fresh window for a key whose entry was swept", () => {
+    const opts = { limit: 1, windowMs: 1_000 };
+    expect(checkRateLimit("bucket", "ip-a", opts).ok).toBe(true);
+    expect(checkRateLimit("bucket", "ip-a", opts).ok).toBe(false);
+
+    current += 61_000;
+    checkRateLimit("bucket", "ip-b", opts); // sweeps ip-a
+
+    expect(checkRateLimit("bucket", "ip-a", opts).ok).toBe(true);
+  });
+
+  it("caps the number of keys per bucket when many distinct keys arrive in one window", () => {
+    const opts = { limit: 1, windowMs: 60 * 60_000 };
+    const total = MAX_KEYS_PER_BUCKET + 250;
+    for (let i = 0; i < total; i++) {
+      checkRateLimit("bucket", `ip-${i}`, opts);
+    }
+
+    expect(__getRateLimitBucketSize("bucket")).toBe(MAX_KEYS_PER_BUCKET);
+  });
+
+  it("evicts the oldest keys first when the cap is reached", () => {
+    const opts = { limit: 1, windowMs: 60 * 60_000 };
+    for (let i = 0; i < MAX_KEYS_PER_BUCKET + 1; i++) {
+      checkRateLimit("bucket", `ip-${i}`, opts);
+    }
+
+    // The newest key is still tracked (second hit is denied)...
+    expect(checkRateLimit("bucket", `ip-${MAX_KEYS_PER_BUCKET}`, opts).ok).toBe(
+      false
+    );
+    // ...while the oldest was evicted and starts over.
+    expect(checkRateLimit("bucket", "ip-0", opts).ok).toBe(true);
+  });
+
+  it("bounds each bucket independently", () => {
+    const opts = { limit: 1, windowMs: 60 * 60_000 };
+    for (let i = 0; i < MAX_KEYS_PER_BUCKET + 10; i++) {
+      checkRateLimit("bucket-a", `ip-${i}`, opts);
+    }
+    checkRateLimit("bucket-b", "ip-a", opts);
+
+    expect(__getRateLimitBucketSize("bucket-a")).toBe(MAX_KEYS_PER_BUCKET);
+    expect(__getRateLimitBucketSize("bucket-b")).toBe(1);
   });
 });
 
