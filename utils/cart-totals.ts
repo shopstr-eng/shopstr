@@ -1,3 +1,5 @@
+import { getEffectiveShippingCost } from "@/utils/parsers/product-tag-helpers";
+
 export interface CartTotalsProduct {
   id: string;
   pubkey: string;
@@ -30,57 +32,97 @@ export const sumProductTotalsInSats = (
     0
   );
 
+/**
+ * Per-unit shipping cost the cart may charge for a listing, in the listing's
+ * own currency. Only "Added Cost" listings carry a fee: every other shipping
+ * type is free by definition, even if its shipping tag holds a non-zero cost.
+ */
+export const getCartUnitShippingCost = (product: {
+  shippingType?: string;
+  shippingCost?: number;
+}): number =>
+  getEffectiveShippingCost(product.shippingType, product.shippingCost) ?? 0;
+
+type ProductShippingParams = Omit<
+  BuildShippingAdjustedProductTotalsParams,
+  "products" | "baseProductTotalsInSats"
+>;
+
+/**
+ * Shipping (in sats) a product would cost before any free-shipping waiver,
+ * or 0 when the chosen order type does not ship it.
+ */
+const getShippingBeforeWaiverInSats = (
+  product: CartTotalsProduct,
+  {
+    quantities,
+    shippingTypes,
+    shippingCostsInSats,
+    shouldAddShipping,
+  }: Omit<ProductShippingParams, "sellerFreeShippingStatus">
+): number => {
+  if (!shouldAddShipping(shippingTypes[product.id])) return 0;
+  const quantity = quantities[product.id] || 1;
+  return Math.ceil((shippingCostsInSats[product.id] || 0) * quantity);
+};
+
 export const buildShippingAdjustedProductTotals = ({
   products,
   baseProductTotalsInSats,
-  quantities,
-  shippingTypes,
-  shippingCostsInSats,
-  sellerFreeShippingStatus,
-  shouldAddShipping,
+  ...shippingParams
 }: BuildShippingAdjustedProductTotalsParams): ProductTotalsInSats => {
   const updatedProductTotalsInSats = { ...baseProductTotalsInSats };
 
   for (const product of products) {
     const baseProductTotal = baseProductTotalsInSats[product.id] || 0;
 
-    if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
+    if (shippingParams.sellerFreeShippingStatus[product.pubkey]?.qualifies) {
       updatedProductTotalsInSats[product.id] = baseProductTotal;
       continue;
     }
 
-    if (!shouldAddShipping(shippingTypes[product.id])) {
-      updatedProductTotalsInSats[product.id] = baseProductTotal;
-      continue;
-    }
-
-    const quantity = quantities[product.id] || 1;
-    const shippingTotal = Math.ceil(
-      (shippingCostsInSats[product.id] || 0) * quantity
-    );
-
-    updatedProductTotalsInSats[product.id] = baseProductTotal + shippingTotal;
+    updatedProductTotalsInSats[product.id] =
+      baseProductTotal + getShippingBeforeWaiverInSats(product, shippingParams);
   }
 
   return updatedProductTotalsInSats;
 };
+
+/**
+ * Total shipping (in sats) removed by free-shipping thresholds: what the
+ * buyer would have paid for the shipped products of qualifying sellers.
+ */
+export const computeWaivedShippingInSats = ({
+  products,
+  ...shippingParams
+}: Omit<
+  BuildShippingAdjustedProductTotalsParams,
+  "baseProductTotalsInSats"
+>): number =>
+  products.reduce(
+    (waived, product) =>
+      shippingParams.sellerFreeShippingStatus[product.pubkey]?.qualifies
+        ? waived + getShippingBeforeWaiverInSats(product, shippingParams)
+        : waived,
+    0
+  );
 
 export type CartOrderFormType = "shipping" | "contact" | "combined";
 export type ShippingPickupPreference = "shipping" | "contact";
 
 /**
  * True when the cart mixes multiple shipping types AND at least one product
- * offers a pickup option — the case where the buyer is asked to choose
- * between shipping and pickup for the pickup-capable products.
+ * is "Free/Pickup" — the case where the buyer is asked to choose between
+ * shipping and pickup for those products.
  */
 export const cartHasMixedShippingWithPickup = (
   shippingTypes: ProductShippingTypes
 ): boolean => {
   const uniqueShippingTypes = Array.from(new Set(Object.values(shippingTypes)));
-  const hasShippingPickupProducts =
-    uniqueShippingTypes.includes("Free/Pickup") ||
-    uniqueShippingTypes.includes("Added Cost/Pickup");
-  return uniqueShippingTypes.length > 1 && hasShippingPickupProducts;
+  return (
+    uniqueShippingTypes.length > 1 &&
+    uniqueShippingTypes.includes("Free/Pickup")
+  );
 };
 
 /**
@@ -124,6 +166,7 @@ export interface FreeShippingProductInput {
   id: string;
   pubkey: string;
   price: number;
+  currency?: string;
   bulkPrice?: number;
   volumePrice?: number;
   weightPrice?: number;
@@ -139,21 +182,70 @@ export interface FreeShippingStatusEntry {
   qualifies: boolean;
   threshold: number;
   currency: string;
+  /** The seller's discounted subtotal, expressed in the threshold currency. */
   sellerSubtotal: number;
   sellerName: string;
 }
 
+const normalizeCurrency = (currency?: string) => {
+  const lower = (currency || "").trim().toLowerCase();
+  return lower === "sat" ? "sats" : lower;
+};
+
 /**
- * Per-seller free-shipping qualification, extracted verbatim from the cart
- * checkout UI so the server-side cart pricing route computes the exact same
- * qualification the buyer saw (the seller subtotal is intentionally summed
- * in raw product-currency units, mirroring the existing UI behavior).
+ * Sellers whose free-shipping threshold is in a different currency than at
+ * least one of their cart products. Only these thresholds need converting to
+ * sats; a seller whose products all share the threshold currency (or who set
+ * no threshold currency) is compared exactly in that currency.
+ */
+export const getFreeShippingThresholdsToConvert = ({
+  products,
+  getShopProfileContent,
+}: {
+  products: Array<{ pubkey: string; currency?: string }>;
+  getShopProfileContent: (
+    pubkey: string
+  ) => ShopProfileFreeShippingContent | undefined;
+}): Array<{ pubkey: string; threshold: number; currency: string }> => {
+  const toConvert = new Map<
+    string,
+    { pubkey: string; threshold: number; currency: string }
+  >();
+  for (const product of products) {
+    if (toConvert.has(product.pubkey)) continue;
+    const content = getShopProfileContent(product.pubkey);
+    const threshold = content?.freeShippingThreshold;
+    const currency = content?.freeShippingCurrency;
+    if (!threshold || threshold <= 0 || !currency) continue;
+    if (normalizeCurrency(product.currency) !== normalizeCurrency(currency)) {
+      toConvert.set(product.pubkey, {
+        pubkey: product.pubkey,
+        threshold,
+        currency,
+      });
+    }
+  }
+  return Array.from(toConvert.values());
+};
+
+/**
+ * Per-seller free-shipping qualification, shared by the cart UI and the
+ * server-side cart pricing route so both compute the same result.
+ *
+ * When all of a seller's products are priced in the threshold currency, the
+ * discounted subtotal is compared exactly in that currency. When currencies
+ * differ, both sides are compared in sats: the seller's discounted product
+ * totals (`productTotalsInSats`) against the threshold converted to sats
+ * (`freeShippingThresholdsInSats`). A threshold that could not be converted
+ * never qualifies, so shipping is charged rather than silently waived.
  */
 export const computeSellerFreeShippingStatus = ({
   products,
   quantities,
   appliedDiscounts,
   getShopProfileContent,
+  productTotalsInSats = {},
+  freeShippingThresholdsInSats = {},
 }: {
   products: FreeShippingProductInput[];
   quantities: ProductQuantities;
@@ -161,6 +253,8 @@ export const computeSellerFreeShippingStatus = ({
   getShopProfileContent: (
     pubkey: string
   ) => ShopProfileFreeShippingContent | undefined;
+  productTotalsInSats?: ProductTotalsInSats;
+  freeShippingThresholdsInSats?: Record<string, number>;
 }): Record<string, FreeShippingStatusEntry> => {
   const statusMap: Record<string, FreeShippingStatusEntry> = {};
   const productsBySeller: Record<string, FreeShippingProductInput[]> = {};
@@ -173,28 +267,62 @@ export const computeSellerFreeShippingStatus = ({
     const content = getShopProfileContent(pubkey);
     if (!content?.freeShippingThreshold || content.freeShippingThreshold <= 0)
       return;
-    let sellerSubtotal = 0;
-    sellerProducts.forEach((product) => {
-      const discount = appliedDiscounts[pubkey] || 0;
-      const basePrice =
-        product.bulkPrice !== undefined
-          ? product.bulkPrice
-          : product.volumePrice !== undefined
-            ? product.volumePrice
-            : product.weightPrice !== undefined
-              ? product.weightPrice
-              : product.price;
-      const qty = quantities[product.id] || 1;
-      const discountedPrice =
-        discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
-      sellerSubtotal += discountedPrice * qty;
-    });
+    const threshold = content.freeShippingThreshold;
+    const thresholdCurrency = content.freeShippingCurrency;
+    const sellerName = content.name || pubkey.substring(0, 8);
+
+    const isSameCurrency =
+      !thresholdCurrency ||
+      sellerProducts.every(
+        (product) =>
+          normalizeCurrency(product.currency) ===
+          normalizeCurrency(thresholdCurrency)
+      );
+
+    if (isSameCurrency) {
+      let sellerSubtotal = 0;
+      sellerProducts.forEach((product) => {
+        const discount = appliedDiscounts[pubkey] || 0;
+        const basePrice =
+          product.bulkPrice !== undefined
+            ? product.bulkPrice
+            : product.volumePrice !== undefined
+              ? product.volumePrice
+              : product.weightPrice !== undefined
+                ? product.weightPrice
+                : product.price;
+        const qty = quantities[product.id] || 1;
+        const discountedPrice =
+          discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
+        sellerSubtotal += discountedPrice * qty;
+      });
+      statusMap[pubkey] = {
+        qualifies: sellerSubtotal >= threshold,
+        threshold,
+        currency: thresholdCurrency || "USD",
+        sellerSubtotal,
+        sellerName,
+      };
+      return;
+    }
+
+    const thresholdInSats = freeShippingThresholdsInSats[pubkey];
+    const sellerSubtotalInSats = sellerProducts.reduce(
+      (sum, product) => sum + (productTotalsInSats[product.id] || 0),
+      0
+    );
+    const canCompare =
+      thresholdInSats !== undefined &&
+      Number.isFinite(thresholdInSats) &&
+      thresholdInSats > 0;
     statusMap[pubkey] = {
-      qualifies: sellerSubtotal >= content.freeShippingThreshold,
-      threshold: content.freeShippingThreshold,
-      currency: content.freeShippingCurrency || "USD",
-      sellerSubtotal,
-      sellerName: content.name || pubkey.substring(0, 8),
+      qualifies: canCompare && sellerSubtotalInSats >= thresholdInSats,
+      threshold,
+      currency: thresholdCurrency,
+      sellerSubtotal: canCompare
+        ? (sellerSubtotalInSats / thresholdInSats) * threshold
+        : 0,
+      sellerName,
     };
   });
   return statusMap;

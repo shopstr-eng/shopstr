@@ -7,6 +7,8 @@ import {
   computeProductPricing,
   computeSellerFreeShippingStatus,
   getCartShippingPredicate,
+  getCartUnitShippingCost,
+  getFreeShippingThresholdsToConvert,
   ProductQuantities,
   ProductShippingTypes,
   ProductTotalsInSats,
@@ -249,7 +251,7 @@ export async function computeCartPricing(
 
     const priceSats = await convertCartAmountToSats(unitPrice, currency);
     const shippingSats = await convertCartAmountToSats(
-      product.shippingCost ?? 0,
+      getCartUnitShippingCost(product),
       currency
     );
     shippingCostsInSats[product.id] = shippingSats;
@@ -267,15 +269,46 @@ export async function computeCartPricing(
     baseProductTotalsInSats[product.id] = pricing.price;
   }
 
+  const freeShippingProducts = resolved.map((entry) => ({
+    id: entry.product.id,
+    pubkey: entry.product.pubkey,
+    price: entry.unitPrice,
+    currency: entry.currency,
+  }));
+  const getShopProfileContent = (pubkey: string) =>
+    shopProfileContents.get(pubkey);
+
+  const freeShippingThresholdsInSats: Record<string, number> = {};
+  for (const {
+    pubkey,
+    threshold,
+    currency,
+  } of getFreeShippingThresholdsToConvert({
+    products: freeShippingProducts,
+    getShopProfileContent,
+  })) {
+    try {
+      freeShippingThresholdsInSats[pubkey] = await convertCartAmountToSats(
+        threshold,
+        currency
+      );
+    } catch (error) {
+      // An unconvertible threshold (e.g. an unsupported currency in the
+      // seller's profile) means no free shipping, never a failed checkout.
+      console.warn(
+        `Could not convert free-shipping threshold for ${pubkey}:`,
+        error
+      );
+    }
+  }
+
   const sellerFreeShippingStatus = computeSellerFreeShippingStatus({
-    products: resolved.map((entry) => ({
-      id: entry.product.id,
-      pubkey: entry.product.pubkey,
-      price: entry.unitPrice,
-    })),
+    products: freeShippingProducts,
     quantities,
     appliedDiscounts,
-    getShopProfileContent: (pubkey) => shopProfileContents.get(pubkey),
+    getShopProfileContent,
+    productTotalsInSats: baseProductTotalsInSats,
+    freeShippingThresholdsInSats,
   });
 
   const breakdown = buildShippingAdjustedProductTotals({
