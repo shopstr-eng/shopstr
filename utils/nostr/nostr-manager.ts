@@ -207,64 +207,32 @@ export class NostrManager {
     if (urls.length === 0) return { events: [], complete: false };
     return await newPromiseWithTimeout(
       async (resolve, _reject, abortSignal) => {
-        if (!params) {
-          params = {};
-        }
+        const onEvent = params?.onevent ?? (() => {});
+        const onEose = params?.oneose ?? (() => {});
+        const onClose = params?.onclose;
+        const fetchedEvents: NostrEvent[] = [];
+        const seen = new Set<string>();
+        const ended = new Set<string>();
+        const subscriptions: NostrSub[] = [];
+        let resolved = false;
+        let failed = false;
 
-        if (!params.onevent) {
-          params.onevent = () => {};
-        }
-
-        if (!params.oneose) {
-          params.oneose = () => {};
-        }
-
-        const onEvent = params.onevent;
-        const onEose = params.oneose;
-        const fetchedEvents: Array<NostrEvent> = [];
-        let sub: NostrSub | undefined;
-        let didCloseSub = false;
-        let didResolve = false;
-
-        const resolveFetchedEvents = () => {
-          if (!didResolve) {
-            didResolve = true;
-            resolve(fetchedEvents);
-          }
+        const closeSubscriptions = () => {
+          Promise.all(subscriptions.map((subscription) => subscription.close()))
+            .then(() => undefined)
+            .catch(console.error);
         };
 
-        const closeSubIfNeeded = async () => {
-          if (!sub || didCloseSub) return;
-          didCloseSub = true;
-          await sub.close();
+        const finish = (complete: boolean) => {
+          if (resolved) return;
+          resolved = true;
+          resolve({ events: fetchedEvents, complete });
+          closeSubscriptions();
         };
 
-        abortSignal.addEventListener("abort", () => {
-          closeSubIfNeeded().catch(console.error);
-          // If the aggregate timeout fires, return whatever events were
-          // already collected from the relays that did respond instead of
-          // discarding them. The abort listener runs synchronously before
-          // the timeout's reject(), so resolving here wins.
-          if (!didResolve) {
-            didResolve = true;
-            resolve({ events: fetchedEvents, complete: false });
-          }
-        });
-
-        params.onevent = (event: NostrEvent) => {
-          fetchedEvents.push(event);
-          return onEvent!(event);
-        };
-
-        params.oneose = () => {
-          closeSubIfNeeded().catch(console.error);
-          if (!didResolve) {
-            didResolve = true;
-            resolve({ events: fetchedEvents, complete: true });
-          }
-          return onEose!();
-        };
+        // On timeout, preserve events already received from healthy relays.
         abortSignal.addEventListener("abort", () => finish(false));
+
         await Promise.all(
           urls.map(async (url) => {
             const sub = await this.subscribe(
@@ -278,7 +246,7 @@ export class NostrManager {
                   if (resolved || seen.has(event.id)) return;
                   seen.add(event.id);
                   fetchedEvents.push(event);
-                  params?.onevent?.(event);
+                  onEvent(event);
                 },
                 oneose: () => {
                   // subscribeMap also synthesizes EOSE immediately BEFORE onclose
@@ -289,7 +257,7 @@ export class NostrManager {
                     ended.add(url);
                     if (ended.size === urls.length) {
                       finish(!failed);
-                      if (!failed) params?.oneose?.();
+                      if (!failed) onEose();
                     }
                   });
                 },
@@ -297,7 +265,7 @@ export class NostrManager {
                   if (resolved || ended.has(url)) return;
                   failed = true;
                   ended.add(url);
-                  params?.onclose?.(reasons);
+                  onClose?.(reasons);
                   if (ended.size === urls.length) finish(false);
                 },
               },
