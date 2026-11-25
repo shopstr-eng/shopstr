@@ -21,7 +21,8 @@ export default function SectionReviews({
 
   if (ratings.length === 0) return null;
 
-  const avgRating = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+  // Scores are between 0 and 1. Show them on a 5 star scale.
+  const avgRating = (ratings.reduce((a, b) => a + b, 0) / ratings.length) * 5;
 
   return (
     <div
