@@ -72,6 +72,7 @@ function orderMessage(
     status?: string;
     buyerTag?: string;
     createdAt?: number;
+    wrappedEventId?: string;
   } = {}
 ): NostrMessageEvent {
   messageCounter += 1;
@@ -84,6 +85,7 @@ function orderMessage(
   if (options.status) tags.push(["status", options.status]);
   return {
     id: messageCounter.toString(16).padStart(64, "0"),
+    wrappedEventId: options.wrappedEventId,
     pubkey: sender,
     created_at: options.createdAt ?? 1_700_000_000 + messageCounter,
     kind: 14,
@@ -274,5 +276,43 @@ describe("OrdersDashboard status trust", () => {
     await expectStatus("pending");
     expect(screen.queryByText("shipped")).not.toBeInTheDocument();
     expect(updateStatusCalls()).toEqual([]);
+  });
+
+  it("carries the outer wrap ID (wrappedEventId) in the update-order-status request body", async () => {
+    const wrapId = "wrap_1059_event_id_abc123";
+    renderDashboard(ALICE, [
+      orderMessage(ALICE, { subject: "order-payment" }),
+      orderMessage(ALICE, { status: "canceled", wrappedEventId: wrapId }),
+    ]);
+
+    await expectStatus("canceled");
+    await waitFor(() =>
+      expect(updateStatusCalls()).toContainEqual({
+        orderId: ORDER_ID,
+        status: "canceled",
+        messageId: wrapId,
+      })
+    );
+  });
+
+  it("falls back to messageEvent.id in the update-order-status request body when wrappedEventId is absent", async () => {
+    const paymentMsg = orderMessage(ALICE, {
+      subject: "order-payment",
+      createdAt: 1_700_000_000,
+    });
+    const cancelMsg = orderMessage(ALICE, {
+      status: "canceled",
+      createdAt: 1_700_000_100,
+    });
+    renderDashboard(ALICE, [paymentMsg, cancelMsg]);
+
+    await expectStatus("canceled");
+    await waitFor(() =>
+      expect(updateStatusCalls()).toContainEqual({
+        orderId: ORDER_ID,
+        status: "canceled",
+        messageId: cancelMsg.id,
+      })
+    );
   });
 });
