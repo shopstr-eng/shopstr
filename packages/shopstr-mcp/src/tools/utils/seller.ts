@@ -1,5 +1,6 @@
 import {
   getParameterizedReplaceableCoordinate,
+  keepBestEventPerKey,
   mergeAndDeduplicateProducts,
   mergeAndDeduplicateProfiles,
   mergeAndDeduplicateReviews,
@@ -341,8 +342,16 @@ export async function fetchSellerReviews(
     }
   }
 
-  const reviewEvents = mergeAndDeduplicateReviews(events).filter((event) =>
-    reviewMatchesSeller(event, sellerPubkey, allProductAddresses)
+  // The generic review identity is reviewer + the first target tag on the
+  // event, which the reviewer chooses. Within one seller's reputation that is
+  // not enough: a single key could vary an unrelated leading #e/#a tag and be
+  // counted once per event. Re-key on what the review means for this seller.
+  const reviewEvents = keepBestEventPerKey(
+    mergeAndDeduplicateReviews(events).filter((event) =>
+      reviewMatchesSeller(event, sellerPubkey, allProductAddresses)
+    ),
+    (event) =>
+      getSellerScopedReviewIdentity(event, sellerPubkey, allProductAddresses)
   );
   const reviews = reviewEvents.map((event) =>
     parseReviewEvent(
@@ -469,6 +478,22 @@ function reviewMatchesSeller(
   if (hasTag(event, "p", sellerPubkey)) return true;
   if (eventReferencesSeller(event, sellerPubkey)) return true;
   return productAddresses.some((address) => hasProductAddress(event, address));
+}
+
+/**
+ * One review per reviewer per product of this seller, plus at most one
+ * seller-level review per reviewer.
+ */
+function getSellerScopedReviewIdentity(
+  event: NostrEvent,
+  sellerPubkey: string,
+  productAddresses: readonly string[]
+): string {
+  const productAddress = getSellerProductAddressReferences(
+    event,
+    sellerPubkey
+  ).find((address) => productAddresses.includes(address));
+  return `${event.pubkey}:${productAddress ?? "seller"}`;
 }
 
 function getSellerProductAddressReferences(

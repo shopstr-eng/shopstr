@@ -110,6 +110,27 @@ export function mergeAndDeduplicateReviews(
   return Array.from(byId.values()).sort(compareNewestThenId);
 }
 
+/**
+ * Keep the best event per caller-defined key, using the same newest-wins and
+ * future-skew rules as the other merge helpers. Output is newest first.
+ */
+export function keepBestEventPerKey(
+  events: readonly NostrEvent[],
+  getKey: (event: NostrEvent) => string
+): NostrEvent[] {
+  const bestByKey = new Map<string, NostrEvent>();
+
+  for (const event of events) {
+    const key = getKey(event);
+    const existing = bestByKey.get(key);
+    if (!existing || isBetterEvent(event, existing)) {
+      bestByKey.set(key, event);
+    }
+  }
+
+  return Array.from(bestByKey.values()).sort(compareNewestThenId);
+}
+
 export function mergeAndDeduplicateProfiles(
   events: readonly NostrEvent[]
 ): NostrEvent[] {
