@@ -1,4 +1,5 @@
 import { useCallback, useContext, useState, useEffect, useRef } from "react";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 import {
   CashuWalletContext,
   ChatsContext,
@@ -28,15 +29,33 @@ import {
   Keyset as MintKeyset,
   Proof,
 } from "@cashu/cashu-ts";
-import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
 import { safeSwap } from "@/utils/cashu/swap-retry-service";
-import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import {
-  isSellerP2pkEscrowActive,
   resolveP2pkCheckoutOutputConfig,
+  resolveSellerCheckoutProfile,
 } from "@/utils/cashu/p2pk-checkout";
+import { executeSellerLightningPayout } from "@/utils/payments/lightning-payout";
+import {
+  isUnresolvedSellerLightningPayoutError,
+  recordPendingSellerLightningPayout,
+  UnresolvedSellerLightningPayoutError,
+} from "@/utils/payments/pending-lightning-payouts";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
+import { getDonationRecipientPubkey } from "@/utils/payments/donation-recipient";
+import {
+  buildProductDetailsSuffix,
+  splitDonationAndSellerAmount,
+  isEligibleForLightningPayout,
+  buildLightningPaymentMessage,
+  buildEcashPaymentMessage,
+  buildShipProductMessage,
+  buildShippingAddressTag,
+  buildOrderProcessedReceiptMessage,
+  buildThankYouReceiptMessage,
+  buildPaymentEventOptions,
+} from "@/utils/payments/checkout-messages";
 import {
   recordPendingMintQuote,
   markMintQuoteClaimed,
@@ -49,7 +68,10 @@ import {
   withDeadline,
   isTimeoutError,
 } from "@/utils/cashu/wallet-recovery";
-import { persistBuyerP2pkEscrowRecord } from "@/utils/cashu/p2pk-escrow-records";
+import {
+  createBuyerP2pkEscrowRecord,
+  persistBuyerP2pkEscrowRecord,
+} from "@/utils/cashu/p2pk-escrow-records";
 import { generateKeys } from "@/utils/nostr/key-utilities";
 import {
   getLocalStorageData,
@@ -57,14 +79,13 @@ import {
   getSavedAddresses,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
-  constructGiftWrappedEvent,
-  constructMessageSeal,
-  constructMessageGiftWrap,
-  sendGiftWrappedMessageEvent,
-} from "@/utils/nostr/gift-wrap";
-import { LightningAddress } from "@getalby/lightning-tools";
+  sendOrderMessageWithRetries,
+  type OrderMessageEphemeralKeys,
+} from "@/utils/payments/send-order-message";
+import { sendListingInquiry } from "@/utils/payments/send-inquiry-message";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
+import { registerOrderParticipantsOnServer } from "@/utils/db/order-participants-client";
 import { nip19 } from "nostr-tools";
 import { NostrWebLNProvider } from "@getalby/sdk";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
@@ -78,6 +99,7 @@ import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
 import AddressPicker from "./utility-components/address-picker";
 import {
   NostrContext,
+  NWCContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import {
@@ -86,6 +108,7 @@ import {
   SavedAddress,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 type ListingMintQuoteResponse = {
   request: string;
@@ -143,13 +166,16 @@ export default function ProductInvoiceCard({
   const profileContext = useContext(ProfileMapContext);
 
   const { nostr } = useContext(NostrContext);
+  const { nwcInfo, hasStoredConnection, ensureUnlocked } =
+    useContext(NWCContext);
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [invoice, setInvoice] = useState("");
-  const [copiedToClipboard, setCopiedToClipboard] = useState(false);
+  const { copied: copiedToClipboard, copy: copyToClipboard } =
+    useCopyToClipboard();
 
   // Tracks the in-flight invoice polling so a "Back" click or unmount can
   // signal the polling loop to exit cleanly instead of letting it complete
@@ -212,95 +238,21 @@ export default function ProductInvoiceCard({
   const [showOrderTypeSelection, setShowOrderTypeSelection] = useState(true);
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
 
+  // Shared with cart-invoice-card via sendListingInquiry so the two
+  // checkout inquiry flows (message text, retry policy, chat filing) can't
+  // drift apart again.
   const sendInquiryDM = async (sellerPubkey: string, productTitle: string) => {
-    if (!signer || !nostr || !userPubkey) return;
-
-    try {
-      const inquiryMessage = `I just placed an order for your ${productTitle} listing on Shopstr! Please check your Shopstr order dashboard for any relevant information.`;
-
-      const { nsec: nsecForSellerReceiver, npub: npubForSellerReceiver } =
-        await generateKeys();
-      const decodedRandomPubkeyForSellerReceiver = nip19.decode(
-        npubForSellerReceiver
-      );
-      const decodedRandomPrivkeyForSellerReceiver = nip19.decode(
-        nsecForSellerReceiver
-      );
-      const { nsec: nsecForBuyerReceiver, npub: npubForBuyerReceiver } =
-        await generateKeys();
-      const decodedRandomPubkeyForBuyerReceiver =
-        nip19.decode(npubForBuyerReceiver);
-      const decodedRandomPrivkeyForBuyerReceiver =
-        nip19.decode(nsecForBuyerReceiver);
-
-      // Send to seller
-      const giftWrappedMessageEventForSeller = await constructGiftWrappedEvent(
-        userPubkey,
-        sellerPubkey,
-        inquiryMessage,
-        "listing-inquiry"
-      );
-      // Also send a copy to the buyer
-      const giftWrappedMessageEventForBuyer = await constructGiftWrappedEvent(
-        userPubkey,
-        userPubkey,
-        inquiryMessage,
-        "listing-inquiry"
-      );
-
-      const sealedEventForSeller = await constructMessageSeal(
-        signer,
-        giftWrappedMessageEventForSeller,
-        userPubkey,
-        sellerPubkey
-      );
-      const sealedEventForBuyer = await constructMessageSeal(
-        signer,
-        giftWrappedMessageEventForBuyer,
-        userPubkey,
-        userPubkey
-      );
-
-      const giftWrappedEventForSeller = await constructMessageGiftWrap(
-        sealedEventForSeller,
-        decodedRandomPubkeyForSellerReceiver.data as string,
-        decodedRandomPrivkeyForSellerReceiver.data as Uint8Array,
-        sellerPubkey
-      );
-      const giftWrappedEventForBuyer = await constructMessageGiftWrap(
-        sealedEventForBuyer,
-        decodedRandomPubkeyForBuyerReceiver.data as string,
-        decodedRandomPrivkeyForBuyerReceiver.data as Uint8Array,
-        userPubkey
-      );
-
-      await sendGiftWrappedMessageEvent(
-        nostr,
-        giftWrappedEventForSeller,
-        signer
-      );
-      await sendGiftWrappedMessageEvent(
-        nostr,
-        giftWrappedEventForBuyer,
-        signer
-      );
-
-      // Add to local context for immediate UI feedback
-      chatsContext.addNewlyCreatedMessageEvent(
-        {
-          ...giftWrappedMessageEventForBuyer,
-          sig: "",
-          read: false,
-        },
-        true
-      );
-    } catch (error) {
-      console.error("Failed to send inquiry DM:", error);
-    }
+    await sendListingInquiry({
+      nostr: nostr!,
+      signer,
+      userPubkey,
+      sellerPubkey,
+      productTitle,
+      addNewlyCreatedMessageEvent: chatsContext.addNewlyCreatedMessageEvent,
+    });
   };
 
   const [isNwcLoading, setIsNwcLoading] = useState(false);
-  const [nwcInfo, setNwcInfo] = useState<any | null>(null);
 
   // State for failure modal
   const [showFailureModal, setShowFailureModal] = useState(false);
@@ -309,29 +261,26 @@ export default function ProductInvoiceCard({
   useEffect(() => {
     if (paymentConfirmed && pendingOrderRef.current) {
       try {
-        sessionStorage.setItem(
-          "orderSummary",
-          JSON.stringify({
-            productTitle: pendingOrderRef.current.productTitle,
-            productImage: productData.images[0] || "",
-            amount: pendingOrderRef.current.amount,
-            currency: pendingOrderRef.current.currency,
-            paymentMethod: pendingOrderRef.current.paymentMethod,
-            orderId: pendingOrderRef.current.orderId,
-            shippingCost: productData.shippingCost
-              ? String(productData.shippingCost)
-              : undefined,
-            selectedSize,
-            selectedVolume,
-            selectedWeight,
-            selectedBulkOption: selectedBulkOption
-              ? String(selectedBulkOption)
-              : undefined,
-            shippingAddress: pendingOrderRef.current.shippingAddress,
-            pickupLocation: selectedPickupLocation || undefined,
-            sellerPubkey: pendingOrderRef.current.sellerPubkey,
-          })
-        );
+        storage.setSessionJson(STORAGE_KEYS.ORDER_SUMMARY, {
+          productTitle: pendingOrderRef.current.productTitle,
+          productImage: productData.images[0] || "",
+          amount: pendingOrderRef.current.amount,
+          currency: pendingOrderRef.current.currency,
+          paymentMethod: pendingOrderRef.current.paymentMethod,
+          orderId: pendingOrderRef.current.orderId,
+          shippingCost: productData.shippingCost
+            ? String(productData.shippingCost)
+            : undefined,
+          selectedSize,
+          selectedVolume,
+          selectedWeight,
+          selectedBulkOption: selectedBulkOption
+            ? String(selectedBulkOption)
+            : undefined,
+          shippingAddress: pendingOrderRef.current.shippingAddress,
+          pickupLocation: selectedPickupLocation || undefined,
+          sellerPubkey: pendingOrderRef.current.sellerPubkey,
+        });
       } catch {}
     }
   }, [paymentConfirmed]);
@@ -369,7 +318,7 @@ export default function ProductInvoiceCard({
   // Extract discount and current price from props
   const appliedDiscount = discountPercentage || 0;
   const currentPrice =
-    originalPrice !== undefined ? originalPrice : productData.price;
+    originalPrice !== undefined ? originalPrice : (productData.price ?? 0);
 
   useEffect(() => {
     const fetchKeys = async () => {
@@ -384,27 +333,6 @@ export default function ProductInvoiceCard({
 
     fetchKeys();
   }, []);
-
-  useEffect(() => {
-    const loadNwcInfo = () => {
-      const { nwcInfo: infoString } = getLocalStorageData();
-      if (infoString) {
-        try {
-          const info = JSON.parse(infoString);
-          setNwcInfo(info);
-        } catch (e) {
-          console.error("Failed to parse NWC info", e);
-          setNwcInfo(null);
-        }
-      } else {
-        setNwcInfo(null);
-      }
-    };
-    loadNwcInfo();
-    // Listen for storage changes (e.g., user disconnects wallet in settings)
-    window.addEventListener("storage", loadNwcInfo);
-    return () => window.removeEventListener("storage", loadNwcInfo);
-  }, [productData.pubkey, profileContext.profileData]);
 
   // Load saved addresses on mount
   useEffect(() => {
@@ -453,53 +381,70 @@ export default function ProductInvoiceCard({
     selectedPickupLocation,
   ]);
 
-  const sendPaymentAndContactMessage = async (
-    pubkeyToReceiveMessage: string,
-    message: string,
-    isPayment?: boolean,
-    isReceipt?: boolean,
-    isDonation?: boolean,
-    orderId?: string,
-    paymentType?: string,
-    paymentReference?: string,
-    paymentProof?: string,
-    messageAmount?: number,
-    contact?: string,
-    address?: string,
-    pickup?: string,
-    donationAmountValue?: number,
-    donationPercentageValue?: number,
-    retryCount: number = 3
-  ) => {
-    const decodedRandomPubkeyForSender = nip19.decode(
-      randomNpubForSenderRef.current
-    );
-    const decodedRandomPrivkeyForSender = nip19.decode(
-      randomNsecForSenderRef.current
-    );
-    const decodedRandomPubkeyForReceiver = nip19.decode(
-      randomNpubForReceiverRef.current
-    );
-    const decodedRandomPrivkeyForReceiver = nip19.decode(
-      randomNsecForReceiverRef.current
-    );
+  // Takes an options object — with this many fields, positional parameters
+  // can be silently swapped at a call site.
+  type SendPaymentAndContactMessageOptions = {
+    pubkeyToReceiveMessage: string;
+    message: string;
+    isPayment?: boolean;
+    isReceipt?: boolean;
+    isDonation?: boolean;
+    orderId?: string;
+    paymentType?: string;
+    paymentReference?: string;
+    paymentProof?: string;
+    messageAmount?: number;
+    contact?: string;
+    address?: string;
+    pickup?: string;
+    donationAmountValue?: number;
+    donationPercentageValue?: number;
+    retryCount?: number;
+  };
 
-    const buyerPubkey = signer
-      ? await signer.getPubKey?.()
-      : (decodedRandomPubkeyForSender.data as string);
+  const sendPaymentAndContactMessage = async (
+    options: SendPaymentAndContactMessageOptions
+  ) => {
+    const {
+      pubkeyToReceiveMessage,
+      message,
+      isPayment,
+      isReceipt,
+      isDonation,
+      orderId,
+      paymentType,
+      paymentReference,
+      paymentProof,
+      messageAmount,
+      contact,
+      address,
+      pickup,
+      donationAmountValue,
+      donationPercentageValue,
+      retryCount = 3,
+    } = options;
+    const keys: OrderMessageEphemeralKeys = {
+      senderPubkey: nip19.decode(randomNpubForSenderRef.current).data as string,
+      senderPrivkey: nip19.decode(randomNsecForSenderRef.current)
+        .data as Uint8Array,
+      receiverPubkey: nip19.decode(randomNpubForReceiverRef.current)
+        .data as string,
+      receiverPrivkey: nip19.decode(randomNsecForReceiverRef.current)
+        .data as Uint8Array,
+    };
+
+    const buyerPubkey = signer ? await signer.getPubKey?.() : keys.senderPubkey;
 
     let messageSubject = "";
     let messageOptions: any = {};
     if (isPayment) {
       messageSubject = "order-payment";
-      messageOptions = {
-        isOrder: true,
-        type: 2,
+      messageOptions = buildPaymentEventOptions({
         orderAmount: messageAmount
           ? messageAmount
           : formType === "shipping"
             ? productData.totalCost
-            : productData.price,
+            : (productData.price ?? 0),
         orderId,
         productData: {
           ...productData,
@@ -508,8 +453,10 @@ export default function ProductInvoiceCard({
           selectedWeight,
           selectedBulkOption,
         },
+        quantity: 1,
         paymentType,
         paymentReference,
+        paymentProof,
         contact,
         address,
         pickup,
@@ -520,13 +467,13 @@ export default function ProductInvoiceCard({
         buyerPubkey,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
-      };
+      });
     } else if (isReceipt) {
       messageSubject = "order-receipt";
       messageOptions = {
         isOrder: true,
         type: 4,
-        orderAmount: messageAmount ? messageAmount : productData.totalCost,
+        orderAmount: messageAmount ?? productData.totalCost ?? 0,
         orderId,
         productData: {
           ...productData,
@@ -556,7 +503,7 @@ export default function ProductInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 1,
-        orderAmount: messageAmount ? messageAmount : productData.totalCost,
+        orderAmount: messageAmount ?? productData.totalCost ?? 0,
         orderId,
         productData: {
           ...productData,
@@ -579,61 +526,35 @@ export default function ProductInvoiceCard({
       };
     }
 
-    for (let attempt = 0; attempt < retryCount; attempt++) {
-      try {
-        const giftWrappedMessageEvent = await constructGiftWrappedEvent(
-          decodedRandomPubkeyForSender.data as string,
-          pubkeyToReceiveMessage,
-          message,
-          messageSubject,
-          messageOptions
-        );
-        const sealedEvent = await constructMessageSeal(
-          signer || ({} as any),
-          giftWrappedMessageEvent,
-          decodedRandomPubkeyForSender.data as string,
-          pubkeyToReceiveMessage,
-          decodedRandomPrivkeyForSender.data as Uint8Array
-        );
-        const giftWrappedEvent = await constructMessageGiftWrap(
-          sealedEvent,
-          decodedRandomPubkeyForReceiver.data as string,
-          decodedRandomPrivkeyForReceiver.data as Uint8Array,
-          pubkeyToReceiveMessage
-        );
-
-        await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent, signer);
-
-        if (isReceipt) {
-          chatsContext.addNewlyCreatedMessageEvent(
-            {
-              ...giftWrappedMessageEvent,
-              sig: "",
-              read: false,
-            },
-            true
-          );
-        }
-
-        // If we get here, the message was sent successfully
-        return;
-      } catch (error) {
-        console.warn(
-          `Attempt ${attempt + 1} failed for message sending:`,
-          error
-        );
-
-        if (attempt === retryCount - 1) {
-          // This was the last attempt, log the error but don't throw
-          console.error("Failed to send message after all retries:", error);
-          return; // Continue with the flow instead of breaking it
-        }
-
-        // Wait before retrying (exponential backoff)
-        await new Promise((resolve) =>
-          setTimeout(resolve, Math.pow(2, attempt) * 1000)
-        );
-      }
+    try {
+      await sendOrderMessageWithRetries({
+        nostr: nostr!,
+        signer,
+        recipientPubkey: pubkeyToReceiveMessage,
+        message,
+        subject: messageSubject,
+        messageOptions,
+        keys,
+        strictDelivery: false,
+        maxAttempts: retryCount,
+        failureLabel: "Order message",
+        onSuccess: (rumor) => {
+          if (isReceipt) {
+            chatsContext.addNewlyCreatedMessageEvent(
+              {
+                ...rumor,
+                sig: "",
+                read: false,
+              },
+              true
+            );
+          }
+        },
+      });
+    } catch (error) {
+      // This was the last attempt, log the error but don't throw — continue
+      // with the checkout flow instead of breaking it.
+      console.error("Failed to send message after all retries:", error);
     }
   };
 
@@ -1012,7 +933,7 @@ export default function ProductInvoiceCard({
       });
       invoicePollRef.current = { cancelled: false, activeQuoteId: hash };
 
-      const { nwcString } = getLocalStorageData();
+      const nwcString = await ensureUnlocked?.();
       if (!nwcString) throw new Error("NWC connection not found.");
 
       nwc = new NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
@@ -1270,21 +1191,30 @@ export default function ProductInvoiceCard({
                 setInvoiceIsPaid(true);
                 break;
               } catch (handoffError) {
-                await recoverProofsToBuyerWallet(
-                  nostr!,
-                  signer!,
-                  mintUrl,
-                  proofs,
-                  newPrice
-                );
+                const unresolvedPayout =
+                  isUnresolvedSellerLightningPayoutError(handoffError);
+                const proofsToRecover = unresolvedPayout
+                  ? handoffError.recoverableProofs
+                  : proofs;
+                if (proofsToRecover.length > 0) {
+                  await recoverProofsToBuyerWallet(
+                    nostr!,
+                    signer!,
+                    mintUrl,
+                    proofsToRecover,
+                    sumProofAmounts(proofsToRecover)
+                  );
+                }
                 markMintQuoteClaimed(hash);
                 setShowInvoiceCard(false);
                 setInvoice("");
                 setQrCodeUrl(null);
                 setFailureText(
-                  isTimeoutError(handoffError)
-                    ? "Your payment was received but delivery to the seller timed out. Your sats have been credited to your wallet — please try the order again."
-                    : "Your payment was received but couldn't be delivered to the seller. Your sats have been credited to your wallet — please try the order again."
+                  unresolvedPayout
+                    ? handoffError.message
+                    : isTimeoutError(handoffError)
+                      ? "Your payment was received but delivery to the seller timed out. Your sats have been credited to your wallet — please try the order again."
+                      : "Your payment was received but couldn't be delivered to the seller. Your sats have been credited to your wallet — please try the order again."
                 );
                 setShowFailureModal(true);
                 console.warn(
@@ -1386,8 +1316,20 @@ export default function ProductInvoiceCard({
     let remainingProofs = proofs;
     let sellerToken;
     let donationToken;
+    let donationProofs: Proof[] = [];
+    const orderId = uuidv4();
 
-    const sellerProfile = profileContext.profileData.get(productData.pubkey);
+    if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
+      pendingOrderRef.current.orderId = orderId;
+    }
+
+    // Before any token or DM carries the order id to the seller.
+    await registerOrderParticipantsOnServer(signer, orderId, productData);
+
+    const sellerProfile = await resolveSellerCheckoutProfile({
+      sellerPubkey: productData.pubkey,
+      cachedProfile: profileContext.profileData.get(productData.pubkey),
+    });
     const buyerProfile = profileContext.profileData.get(userPubkey!);
     const sellerP2pk = sellerProfile?.content?.p2pk;
     const p2pkOutputConfig = await resolveP2pkCheckoutOutputConfig({
@@ -1396,11 +1338,22 @@ export default function ProductInvoiceCard({
       mintUrl: mints[0],
       buyerContent: buyerProfile?.content,
       buyerCashuPubkey: cashuPubkey,
+      orderId,
     });
+    if (p2pkOutputConfig && !signer) {
+      throw new Error(
+        "A Nostr identity is required to register dispute escrow securely."
+      );
+    }
 
-    const donationPercentage = sellerProfile?.content?.shopstr_donation ?? 2.1;
-    const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
-    const sellerAmount = totalPrice - donationAmount;
+    const donationRecipientPubkey = getDonationRecipientPubkey();
+    const donationPercentage = donationRecipientPubkey
+      ? (sellerProfile?.content?.shopstr_donation ?? 2.1)
+      : 0;
+    const { donationAmount, sellerAmount } = splitDonationAndSellerAmount(
+      totalPrice,
+      donationPercentage
+    );
     let sellerProofs: Proof[] = [];
 
     if (sellerAmount > 0) {
@@ -1447,314 +1400,209 @@ export default function ProductInvoiceCard({
         mint: tokenMintUrl,
         proofs: send,
       });
+      donationProofs = send;
       remainingProofs = keep;
     }
 
-    const orderId = uuidv4();
-
-    if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
-      pendingOrderRef.current.orderId = orderId;
-    }
-
     if (p2pkOutputConfig && sellerToken) {
-      await persistBuyerP2pkEscrowRecord(nostr, signer, {
-        orderId,
-        mint: mints[0]!,
-        token: sellerToken,
-        amount: sellerAmount,
-        sellerPubkey: p2pkOutputConfig.send.options.pubkey,
-        locktime: p2pkOutputConfig.send.options.locktime,
-        refundKeys: p2pkOutputConfig.send.options.refundKeys,
-        createdAt: Math.floor(Date.now() / 1000),
-      });
+      await persistBuyerP2pkEscrowRecord(
+        nostr,
+        signer,
+        createBuyerP2pkEscrowRecord({
+          orderId,
+          mint: tokenMintUrl,
+          token: sellerToken,
+          amount: sellerAmount,
+          sellerNostrPubkey: productData.pubkey,
+          outputConfig: p2pkOutputConfig,
+          createdAt: Math.floor(Date.now() / 1000),
+        })
+      );
     }
 
     const paymentPreference =
       sellerProfile?.content?.payment_preference || "ecash";
     const lnurl = sellerProfile?.content?.lud16 || "";
+    const isLightningPayout = isEligibleForLightningPayout({
+      sellerP2pk: sellerProfile?.content?.p2pk,
+      paymentPreference,
+      lnurl,
+    });
+    let shouldSendEcashPayout = !isLightningPayout;
+    let ecashPayoutAmount = sellerAmount;
 
     // Step 1: Send payment message
-    if (
-      !isSellerP2pkEscrowActive(sellerProfile?.content?.p2pk) &&
-      paymentPreference === "lightning" &&
-      lnurl &&
-      lnurl !== "" &&
-      !lnurl.includes("@zeuspay.com") &&
-      sellerProofs
-    ) {
-      const newAmount = Math.floor(sellerAmount * 0.98 - 2);
-      const ln = new LightningAddress(lnurl);
-      await wallet.loadMint();
-      await ln.fetch();
-      const invoice = await ln.requestInvoice({ satoshi: newAmount });
-      const invoicePaymentRequest = invoice.paymentRequest;
-      const meltQuote = await wallet.createMeltQuoteBolt11(
-        invoicePaymentRequest
+    if (isLightningPayout && sellerProofs) {
+      const payoutOutcome = await executeSellerLightningPayout(
+        wallet,
+        lnurl,
+        sellerAmount,
+        sellerProofs
       );
-      if (meltQuote) {
-        const meltQuoteTotal =
-          meltQuote.amount.toNumber() + meltQuote.fee_reserve.toNumber();
-        const swapOutcome = await safeSwap(
-          wallet,
-          meltQuoteTotal,
-          sellerProofs,
-          { sendConfig: { includeFees: true } }
-        );
-        if (swapOutcome.status !== "swapped") {
-          throw new Error(
-            swapOutcome.errorMessage ??
-              `Pre-melt swap did not complete (${swapOutcome.status})`
-          );
-        }
-        const { keep, send } = swapOutcome;
-        const meltOutcome = await safeMeltProofs(wallet, meltQuote, send);
-        if (meltOutcome.status !== "paid") {
-          throw new Error(
-            meltOutcome.errorMessage ??
-              `Melt did not complete (${meltOutcome.status})`
-          );
-        }
-        if (meltOutcome.meltQuote) {
-          const meltAmount = meltOutcome.meltQuote.amount.toNumber();
-          const changeProofs = [...keep, ...meltOutcome.changeProofs];
-          const changeAmount =
-            Array.isArray(changeProofs) && changeProofs.length > 0
-              ? sumProofAmounts(changeProofs)
-              : 0;
-          let productDetails = "";
-          if (selectedSize) {
-            productDetails += " in size " + selectedSize;
-          }
-          if (selectedVolume) {
-            if (productDetails) {
-              productDetails += " and a " + selectedVolume;
-            } else {
-              productDetails += " in a " + selectedVolume;
-            }
-          }
-          if (selectedWeight) {
-            if (productDetails) {
-              productDetails += " and " + selectedWeight;
-            } else {
-              productDetails += " in " + selectedWeight;
-            }
-          }
-          if (selectedBulkOption) {
-            if (productDetails) {
-              productDetails += " (bulk: " + selectedBulkOption + " units)";
-            } else {
-              productDetails += " (bulk: " + selectedBulkOption + " units)";
-            }
-          }
-          if (selectedPickupLocation) {
-            if (productDetails) {
-              productDetails += " (pickup at: " + selectedPickupLocation + ")";
-            } else {
-              productDetails += " (pickup at: " + selectedPickupLocation + ")";
-            }
-          }
-          let paymentMessage = "";
-          paymentMessage =
-            "You have received a payment from " +
-            (userNPub || "a guest buyer") +
-            " for your " +
-            productData.title +
-            " listing" +
-            productDetails +
-            " on Shopstr! Check your Lightning address (" +
-            lnurl +
-            ") for your sats.";
-          await sendPaymentAndContactMessage(
-            productData.pubkey,
-            paymentMessage,
-            true,
-            false,
-            false,
-            orderId,
-            "lightning",
-            lnurl,
-            undefined,
-            meltAmount,
-            undefined,
-            undefined,
-            selectedPickupLocation || undefined
-          );
-
-          if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
-            // Add delay between messages to prevent browser throttling
-            await new Promise((resolve) => setTimeout(resolve, 500));
-
-            const encodedChange = getEncodedToken({
-              mint: tokenMintUrl,
-              proofs: changeProofs,
-            });
-            const changeMessage = "Overpaid fee change: " + encodedChange;
-            try {
-              await sendPaymentAndContactMessage(
-                productData.pubkey,
-                changeMessage,
-                true,
-                false,
-                false,
-                orderId,
-                "ecash",
-                encodedChange,
-                undefined,
-                changeAmount
-              );
-              await new Promise((resolve) => setTimeout(resolve, 500));
-            } catch (error) {
-              console.error("Failed to send change message:", error);
-            }
-          }
-        } else {
-          const unusedProofs = [...keep, ...send, ...meltOutcome.changeProofs];
-          const unusedAmount =
-            Array.isArray(unusedProofs) && unusedProofs.length > 0
-              ? sumProofAmounts(unusedProofs)
-              : 0;
-          const unusedToken = getEncodedToken({
-            mint: tokenMintUrl,
-            proofs: unusedProofs,
-          });
-          let productDetails = "";
-          if (selectedSize) {
-            productDetails += " in size " + selectedSize;
-          }
-          if (selectedVolume) {
-            if (productDetails) {
-              productDetails += " and a " + selectedVolume;
-            } else {
-              productDetails += " in a " + selectedVolume;
-            }
-          }
-          if (selectedWeight) {
-            if (productDetails) {
-              productDetails += " and " + selectedWeight;
-            } else {
-              productDetails += " in " + selectedWeight;
-            }
-          }
-          if (selectedBulkOption) {
-            if (productDetails) {
-              productDetails += " (bulk: " + selectedBulkOption + " units)";
-            } else {
-              productDetails += " (bulk: " + selectedBulkOption + " units)";
-            }
-          }
-          if (selectedPickupLocation) {
-            if (productDetails) {
-              productDetails += " (pickup at: " + selectedPickupLocation + ")";
-            } else {
-              productDetails += " (pickup at: " + selectedPickupLocation + ")";
-            }
-          }
-          let paymentMessage = "";
-          if (unusedToken && unusedProofs) {
-            paymentMessage =
-              "This is a Cashu token payment from " +
-              (userNPub || "a guest buyer") +
-              " for your " +
-              productData.title +
-              " listing" +
-              productDetails +
-              " on Shopstr: " +
-              unusedToken;
-            await sendPaymentAndContactMessage(
-              productData.pubkey,
-              paymentMessage,
-              true,
-              false,
-              false,
-              orderId,
-              "ecash",
-              unusedToken,
-              undefined,
-              unusedAmount,
-              undefined,
-              undefined,
-              selectedPickupLocation || undefined,
-              donationAmount,
-              donationPercentage
-            );
-          }
-        }
-      }
-    } else {
-      let productDetails = "";
-      if (selectedSize) {
-        productDetails += " in size " + selectedSize;
-      }
-      if (selectedVolume) {
-        if (productDetails) {
-          productDetails += " and a " + selectedVolume;
-        } else {
-          productDetails += " in a " + selectedVolume;
-        }
-      }
-      if (selectedWeight) {
-        if (productDetails) {
-          productDetails += " and " + selectedWeight;
-        } else {
-          productDetails += " in " + selectedWeight;
-        }
-      }
-      if (selectedBulkOption) {
-        if (productDetails) {
-          productDetails += " (bulk: " + selectedBulkOption + " units)";
-        } else {
-          productDetails += " (bulk: " + selectedBulkOption + " units)";
-        }
-      }
-      if (selectedPickupLocation) {
-        if (productDetails) {
-          productDetails += " (pickup at: " + selectedPickupLocation + ")";
-        } else {
-          productDetails += " (pickup at: " + selectedPickupLocation + ")";
-        }
-      }
-      let paymentMessage = "";
-      if (sellerToken && sellerProofs) {
-        paymentMessage =
-          "This is a Cashu token payment from " +
-          (userNPub || "a guest buyer") +
-          " for your " +
-          productData.title +
-          " listing" +
-          productDetails +
-          " on Shopstr: " +
-          sellerToken;
-        await sendPaymentAndContactMessage(
-          productData.pubkey,
-          paymentMessage,
-          true,
-          false,
-          false,
+      if (payoutOutcome.status === "completed") {
+        const { meltAmount, changeProofs, changeAmount } = payoutOutcome;
+        const productDetails = buildProductDetailsSuffix({
+          selectedSize,
+          selectedVolume,
+          selectedWeight,
+          selectedBulkOption,
+          pickupLocation: selectedPickupLocation,
+        });
+        const paymentMessage = buildLightningPaymentMessage({
+          buyerNpub: userNPub,
+          title: productData.title,
+          productDetails,
+          lnurl,
+        });
+        await sendPaymentAndContactMessage({
+          pubkeyToReceiveMessage: productData.pubkey,
+          message: paymentMessage,
+          isPayment: true,
           orderId,
-          "ecash",
-          sellerToken,
-          undefined,
+          paymentType: "lightning",
+          paymentReference: lnurl,
+          messageAmount: meltAmount,
+          pickup: selectedPickupLocation || undefined,
+          donationAmountValue: donationAmount,
+          donationPercentageValue: donationPercentage,
+        });
+
+        if (changeAmount >= 1 && changeProofs.length > 0) {
+          // Add delay between messages to prevent browser throttling
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          const encodedChange = getEncodedToken({
+            mint: tokenMintUrl,
+            proofs: changeProofs,
+          });
+          const changeMessage = "Overpaid fee change: " + encodedChange;
+          try {
+            await sendPaymentAndContactMessage({
+              pubkeyToReceiveMessage: productData.pubkey,
+              message: changeMessage,
+              isPayment: true,
+              orderId,
+              paymentType: "ecash",
+              paymentReference: encodedChange,
+              messageAmount: changeAmount,
+            });
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          } catch (error) {
+            console.error("Failed to send change message:", error);
+          }
+        }
+      } else if (payoutOutcome.status === "fallback") {
+        sellerProofs = payoutOutcome.fallbackProofs;
+        ecashPayoutAmount = payoutOutcome.fallbackAmount;
+        sellerToken = getEncodedToken({
+          mint: tokenMintUrl,
+          proofs: sellerProofs,
+        });
+        shouldSendEcashPayout = true;
+      } else {
+        if (!userPubkey) {
+          // Checkout is gated on sign-in, so this is unreachable; an
+          // unbound record could never be safely resolved anyway.
+          throw new Error(
+            "Cannot record a pending seller payout without a buyer identity."
+          );
+        }
+        // Captured so a later wallet-page resolution can send the same
+        // payment-confirmation and receipt DMs checkout would have sent —
+        // including the fulfillment context that selects the receipt variant.
+        const pendingShippingAddress =
+          shippingName &&
+          shippingAddress &&
+          shippingCity &&
+          shippingPostalCode &&
+          shippingState &&
+          shippingCountry
+            ? buildShippingAddressTag({
+                name: shippingName,
+                address: shippingAddress,
+                unitNo: shippingUnitNo,
+                city: shippingCity,
+                postalCode: shippingPostalCode,
+                state: shippingState,
+                country: shippingCountry,
+              })
+            : undefined;
+        const payout = recordPendingSellerLightningPayout({
+          orderId,
+          mintUrl: tokenMintUrl,
+          sellerPubkey: productData.pubkey,
+          buyerPubkey: userPubkey,
+          lnurl,
           sellerAmount,
-          undefined,
-          undefined,
-          selectedPickupLocation || undefined,
+          status: payoutOutcome.status,
+          meltQuoteId: payoutOutcome.meltQuoteId,
+          recoverableProofs: [
+            ...remainingProofs,
+            ...donationProofs,
+            ...payoutOutcome.recoverableProofs,
+          ],
+          quarantinedProofs: payoutOutcome.quarantinedProofs,
+          errorMessage: payoutOutcome.errorMessage,
+          productTitle: productData.title,
+          productDetails: buildProductDetailsSuffix({
+            selectedSize,
+            selectedVolume,
+            selectedWeight,
+            selectedBulkOption,
+            pickupLocation: selectedPickupLocation,
+          }),
+          quantity: 1,
+          productAddress: productData.d
+            ? `30402:${productData.pubkey}:${productData.d}`
+            : undefined,
+          address: pendingShippingAddress,
+          pickup: selectedPickupLocation || undefined,
           donationAmount,
-          donationPercentage
-        );
+          donationPercentage,
+        });
+        throw new UnresolvedSellerLightningPayoutError(payout);
+      }
+    }
+
+    if (shouldSendEcashPayout) {
+      const productDetails = buildProductDetailsSuffix({
+        selectedSize,
+        selectedVolume,
+        selectedWeight,
+        selectedBulkOption,
+        pickupLocation: selectedPickupLocation,
+      });
+      if (sellerToken && sellerProofs) {
+        const paymentMessage = buildEcashPaymentMessage({
+          buyerNpub: userNPub,
+          title: productData.title,
+          productDetails,
+          token: sellerToken,
+        });
+        await sendPaymentAndContactMessage({
+          pubkeyToReceiveMessage: productData.pubkey,
+          message: paymentMessage,
+          isPayment: true,
+          orderId,
+          paymentType: "ecash",
+          paymentReference: sellerToken,
+          messageAmount: ecashPayoutAmount,
+          pickup: selectedPickupLocation || undefined,
+          donationAmountValue: donationAmount,
+          donationPercentageValue: donationPercentage,
+        });
       }
     }
 
     // Step 2: Send donation message
-    if (donationToken) {
+    if (donationToken && donationRecipientPubkey) {
       const donationMessage = "Sale donation: " + donationToken;
       try {
-        await sendPaymentAndContactMessage(
-          "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
-          donationMessage,
-          false,
-          false,
-          true
-        );
+        await sendPaymentAndContactMessage({
+          pubkeyToReceiveMessage: donationRecipientPubkey,
+          message: donationMessage,
+          isDonation: true,
+        });
         await new Promise((resolve) => setTimeout(resolve, 500));
       } catch (error) {
         console.error("Failed to send donation message:", error);
@@ -1769,23 +1617,13 @@ export default function ProductInvoiceCard({
       const additionalMessage =
         "Additional customer information: " + additionalInfo;
       try {
-        await sendPaymentAndContactMessage(
-          productData.pubkey,
-          additionalMessage,
-          false,
-          false,
-          false,
+        await sendPaymentAndContactMessage({
+          pubkeyToReceiveMessage: productData.pubkey,
+          message: additionalMessage,
           orderId,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          donationAmount,
-          donationPercentage
-        );
+          donationAmountValue: donationAmount,
+          donationPercentageValue: donationPercentage,
+        });
         await new Promise((resolve) => setTimeout(resolve, 500));
       } catch (error) {
         console.error("Failed to send additional info message:", error);
@@ -1806,127 +1644,60 @@ export default function ProductInvoiceCard({
         productData.shippingType === "Free" ||
         productData.shippingType === "Free/Pickup"
       ) {
-        let productDetails = "";
-        if (selectedSize) {
-          productDetails += " in size " + selectedSize;
-        }
-        if (selectedVolume) {
-          if (productDetails) {
-            productDetails += " and a " + selectedVolume;
-          } else {
-            productDetails += " in a " + selectedVolume;
-          }
-        }
-        if (selectedWeight) {
-          if (productDetails) {
-            productDetails += " and " + selectedWeight;
-          } else {
-            productDetails += " in " + selectedWeight;
-          }
-        }
-        if (selectedBulkOption) {
-          if (productDetails) {
-            productDetails += " (bulk: " + selectedBulkOption + " units)";
-          } else {
-            productDetails += " (bulk: " + selectedBulkOption + " units)";
-          }
-        }
-        if (selectedPickupLocation) {
-          if (productDetails) {
-            productDetails += " (pickup at: " + selectedPickupLocation + ")";
-          } else {
-            productDetails += " (pickup at: " + selectedPickupLocation + ")";
-          }
-        }
+        const productDetails = buildProductDetailsSuffix({
+          selectedSize,
+          selectedVolume,
+          selectedWeight,
+          selectedBulkOption,
+          pickupLocation: selectedPickupLocation,
+        });
 
-        let contactMessage = "";
-        if (!shippingUnitNo) {
-          contactMessage =
-            "Please ship the product" +
-            productDetails +
-            " to " +
-            shippingName +
-            " at " +
-            shippingAddress +
-            ", " +
-            shippingCity +
-            ", " +
-            shippingPostalCode +
-            ", " +
-            shippingState +
-            ", " +
-            shippingCountry +
-            ".";
-        } else {
-          contactMessage =
-            "Please ship the product" +
-            productDetails +
-            " to " +
-            shippingName +
-            " at " +
-            shippingAddress +
-            " " +
-            shippingUnitNo +
-            ", " +
-            shippingCity +
-            ", " +
-            shippingPostalCode +
-            ", " +
-            shippingState +
-            ", " +
-            shippingCountry +
-            ".";
-        }
-        const addressTagForShipping = shippingUnitNo
-          ? `${shippingName}, ${shippingAddress}, ${shippingUnitNo}, ${shippingCity}, ${shippingState}, ${shippingPostalCode}, ${shippingCountry}`
-          : `${shippingName}, ${shippingAddress}, ${shippingCity}, ${shippingState}, ${shippingPostalCode}, ${shippingCountry}`;
-        await sendPaymentAndContactMessage(
-          productData.pubkey,
-          contactMessage,
-          false,
-          false,
-          false,
-          orderId,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          addressTagForShipping,
-          undefined,
-          donationAmount,
-          donationPercentage
+        const shippingAddr = {
+          name: shippingName,
+          address: shippingAddress,
+          unitNo: shippingUnitNo,
+          city: shippingCity,
+          postalCode: shippingPostalCode,
+          state: shippingState,
+          country: shippingCountry,
+        };
+        const contactMessage = buildShipProductMessage(
+          productDetails,
+          shippingAddr
         );
+        const addressTagForShipping = buildShippingAddressTag(shippingAddr);
+        await sendPaymentAndContactMessage({
+          pubkeyToReceiveMessage: productData.pubkey,
+          message: contactMessage,
+          orderId,
+          address: addressTagForShipping,
+          donationAmountValue: donationAmount,
+          donationPercentageValue: donationPercentage,
+        });
 
         if (userPubkey) {
-          const receiptMessage =
-            "Your order for " +
-            productData.title +
-            productDetails +
-            " was processed successfully! If applicable, you should be receiving delivery information from " +
-            nip19.npubEncode(productData.pubkey) +
-            " as soon as they review your order.";
+          const receiptMessage = buildOrderProcessedReceiptMessage(
+            productData.title,
+            productDetails,
+            nip19.npubEncode(productData.pubkey)
+          );
 
           // Add delay between messages
           await new Promise((resolve) => setTimeout(resolve, 500));
 
-          await sendPaymentAndContactMessage(
-            userPubkey,
-            receiptMessage,
-            false,
-            true, // isReceipt is true
-            false,
+          await sendPaymentAndContactMessage({
+            pubkeyToReceiveMessage: userPubkey,
+            message: receiptMessage,
+            isReceipt: true,
             orderId,
-            "ecash",
-            tokenMintUrl,
-            sellerToken,
-            undefined,
-            undefined,
-            addressTagForShipping,
-            selectedPickupLocation || undefined,
-            donationAmount,
-            donationPercentage
-          );
+            paymentType: "ecash",
+            paymentReference: tokenMintUrl,
+            paymentProof: sellerToken,
+            address: addressTagForShipping,
+            pickup: selectedPickupLocation || undefined,
+            donationAmountValue: donationAmount,
+            donationPercentageValue: donationPercentage,
+          });
         }
       }
     } else if (
@@ -1936,146 +1707,84 @@ export default function ProductInvoiceCard({
     ) {
       await sendInquiryDM(productData.pubkey, productData.title);
 
-      let productDetails = "";
-      if (selectedSize) {
-        productDetails += " in size " + selectedSize;
-      }
-      if (selectedVolume) {
-        if (productDetails) {
-          productDetails += " and a " + selectedVolume;
-        } else {
-          productDetails += " in a " + selectedVolume;
-        }
-      }
-      if (selectedWeight) {
-        if (productDetails) {
-          productDetails += " and " + selectedWeight;
-        } else {
-          productDetails += " in " + selectedWeight;
-        }
-      }
-      if (selectedBulkOption) {
-        if (productDetails) {
-          productDetails += " (bulk: " + selectedBulkOption + " units)";
-        } else {
-          productDetails += " (bulk: " + selectedBulkOption + " units)";
-        }
-      }
-      if (selectedPickupLocation) {
-        if (productDetails) {
-          productDetails += " (pickup at: " + selectedPickupLocation + ")";
-        } else {
-          productDetails += " (pickup at: " + selectedPickupLocation + ")";
-        }
-      }
+      const productDetails = buildProductDetailsSuffix({
+        selectedSize,
+        selectedVolume,
+        selectedWeight,
+        selectedBulkOption,
+        pickupLocation: selectedPickupLocation,
+      });
 
       if (userPubkey) {
-        const receiptMessage =
-          "Your order for " +
-          productData.title +
-          productDetails +
-          " was processed successfully! If applicable, you should be receiving delivery information from " +
-          nip19.npubEncode(productData.pubkey) +
-          " as soon as they review your order.";
+        const receiptMessage = buildOrderProcessedReceiptMessage(
+          productData.title,
+          productDetails,
+          nip19.npubEncode(productData.pubkey)
+        );
 
         // Add delay between messages
         await new Promise((resolve) => setTimeout(resolve, 500));
 
-        await sendPaymentAndContactMessage(
-          userPubkey,
-          receiptMessage,
-          false,
-          true,
-          false,
+        await sendPaymentAndContactMessage({
+          pubkeyToReceiveMessage: userPubkey,
+          message: receiptMessage,
+          isReceipt: true,
           orderId,
-          "ecash",
-          tokenMintUrl,
-          sellerToken,
-          undefined,
-          undefined,
-          undefined,
-          selectedPickupLocation || undefined,
-          donationAmount,
-          donationPercentage
-        );
+          paymentType: "ecash",
+          paymentReference: tokenMintUrl,
+          paymentProof: sellerToken,
+          pickup: selectedPickupLocation || undefined,
+          donationAmountValue: donationAmount,
+          donationPercentageValue: donationPercentage,
+        });
       }
     } else {
-      let productDetails = "";
-      if (selectedSize) {
-        productDetails += " in size " + selectedSize;
-      }
-      if (selectedVolume) {
-        if (productDetails) {
-          productDetails += " and a " + selectedVolume;
-        } else {
-          productDetails += " in a " + selectedVolume;
-        }
-      }
-      if (selectedWeight) {
-        if (productDetails) {
-          productDetails += " and " + selectedWeight;
-        } else {
-          productDetails += " in " + selectedWeight;
-        }
-      }
-      if (selectedBulkOption) {
-        if (productDetails) {
-          productDetails += " (bulk: " + selectedBulkOption + " units)";
-        } else {
-          productDetails += " (bulk: " + selectedBulkOption + " units)";
-        }
-      }
-      if (selectedPickupLocation) {
-        if (productDetails) {
-          productDetails += " (pickup at: " + selectedPickupLocation + ")";
-        } else {
-          productDetails += " (pickup at: " + selectedPickupLocation + ")";
-        }
-      }
+      const productDetails = buildProductDetailsSuffix({
+        selectedSize,
+        selectedVolume,
+        selectedWeight,
+        selectedBulkOption,
+        pickupLocation: selectedPickupLocation,
+      });
 
-      const receiptMessage =
-        "Thank you for your purchase of " +
-        productData.title +
-        productDetails +
-        " from " +
-        nip19.npubEncode(productData.pubkey) +
-        ".";
-      await sendPaymentAndContactMessage(
-        userPubkey!,
-        receiptMessage,
-        false,
-        true, // isReceipt is true
-        false,
-        orderId,
-        "ecash",
-        tokenMintUrl,
-        sellerToken,
-        undefined,
-        undefined,
-        undefined,
-        selectedPickupLocation || undefined,
-        donationAmount,
-        donationPercentage
+      const receiptMessage = buildThankYouReceiptMessage(
+        productData.title,
+        productDetails,
+        nip19.npubEncode(productData.pubkey)
       );
+      await sendPaymentAndContactMessage({
+        pubkeyToReceiveMessage: userPubkey!,
+        message: receiptMessage,
+        isReceipt: true,
+        orderId,
+        paymentType: "ecash",
+        paymentReference: tokenMintUrl,
+        paymentProof: sellerToken,
+        pickup: selectedPickupLocation || undefined,
+        donationAmountValue: donationAmount,
+        donationPercentageValue: donationPercentage,
+      });
     }
 
     return remainingProofs;
   };
 
   const handleCopyInvoice = () => {
-    navigator.clipboard.writeText(invoice);
-    setCopiedToClipboard(true);
-    setTimeout(() => {
-      setCopiedToClipboard(false);
-    }, 2100);
+    void copyToClipboard(invoice);
   };
 
   const formattedTotalCost = formatWithCommas(
-    formType === "shipping" ? productData.totalCost : productData.price,
+    formType === "shipping" ? productData.totalCost : (productData.price ?? 0),
     productData.currency
   );
 
   const handleCashuPayment = async (price: number, data: any) => {
+    let cashuPaymentContext:
+      | {
+          currentTokens: Proof[];
+          filteredProofs: Proof[];
+        }
+      | undefined;
     try {
       if (!mints || mints.length === 0) {
         throw new Error("No Cashu mint available");
@@ -2131,6 +1840,10 @@ export default function ProductInvoiceCard({
       const filteredProofs = (currentTokens as Proof[]).filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
+      cashuPaymentContext = {
+        currentTokens: currentTokens as Proof[],
+        filteredProofs,
+      };
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
@@ -2169,18 +1882,15 @@ export default function ProductInvoiceCard({
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
-      localStorage.setItem(
-        "history",
-        JSON.stringify([
-          {
-            type: 5,
-            amount: serverAmount,
-            date: Math.floor(Date.now() / 1000),
-          },
-          ...currentHistory,
-        ])
-      );
+      storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
+      storage.setJson(STORAGE_KEYS.HISTORY, [
+        {
+          type: 5,
+          amount: serverAmount,
+          date: Math.floor(Date.now() / 1000),
+        },
+        ...currentHistory,
+      ]);
       await publishProofEvent(
         nostr!,
         signer!,
@@ -2192,7 +1902,31 @@ export default function ProductInvoiceCard({
       );
       setCashuPaymentSent(true);
       setPaymentConfirmed(true);
-    } catch {
+    } catch (error) {
+      if (
+        isUnresolvedSellerLightningPayoutError(error) &&
+        cashuPaymentContext
+      ) {
+        const consumedSecrets = new Set(
+          cashuPaymentContext.filteredProofs.map((proof) => proof.secret)
+        );
+        const unaffectedProofs = cashuPaymentContext.currentTokens.filter(
+          (proof) => !consumedSecrets.has(proof.secret)
+        );
+        try {
+          localStorage.setItem(
+            "tokens",
+            JSON.stringify([...unaffectedProofs, ...error.recoverableProofs])
+          );
+        } catch (storageError) {
+          console.warn(
+            "[product-invoice-card] failed to restore confirmed-unspent proofs to the local wallet:",
+            storageError
+          );
+        }
+        setFailureText(error.message);
+        setShowFailureModal(true);
+      }
       setCashuPaymentFailed(true);
     }
   };
@@ -2999,7 +2733,7 @@ export default function ProductInvoiceCard({
                     </Button>
                   )}
                   {/* NWC Button */}
-                  {nwcInfo && (
+                  {nwcInfo && hasStoredConnection && (
                     <Button
                       className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                         !isFormValid ? "cursor-not-allowed opacity-50" : ""

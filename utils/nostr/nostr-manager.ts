@@ -33,6 +33,10 @@ export type NostrSub = {
 export type NostrFilter = NToolFilter;
 export type NostrEvent = NToolEvent;
 export type NostrEventTemplate = NToolEvenTemplate;
+export type NostrFetchResult = {
+  events: NostrEvent[];
+  complete: boolean;
+};
 export type NostrManagerParams = {
   connectionTimeout?: number;
   keepAliveTime?: number;
@@ -182,6 +186,21 @@ export class NostrManager {
     relayUrls?: string[],
     timeout?: number
   ): Promise<NostrEvent[]> {
+    const result = await this.fetchWithStatus(
+      filters,
+      params,
+      relayUrls,
+      timeout
+    );
+    return result.events;
+  }
+
+  public async fetchWithStatus(
+    filters: NostrFilter[],
+    params?: SubscribeManyParams,
+    relayUrls?: string[],
+    timeout?: number
+  ): Promise<NostrFetchResult> {
     return await newPromiseWithTimeout(
       async (resolve, _reject, abortSignal) => {
         if (!params) {
@@ -218,9 +237,14 @@ export class NostrManager {
 
         abortSignal.addEventListener("abort", () => {
           closeSubIfNeeded().catch(console.error);
-          // Return whatever healthy relays produced before the aggregate
-          // timeout instead of discarding partial marketplace data.
-          resolveFetchedEvents();
+          // If the aggregate timeout fires, return whatever events were
+          // already collected from the relays that did respond instead of
+          // discarding them. The abort listener runs synchronously before
+          // the timeout's reject(), so resolving here wins.
+          if (!didResolve) {
+            didResolve = true;
+            resolve({ events: fetchedEvents, complete: false });
+          }
         });
 
         params.onevent = (event: NostrEvent) => {
@@ -230,7 +254,10 @@ export class NostrManager {
 
         params.oneose = () => {
           closeSubIfNeeded().catch(console.error);
-          resolveFetchedEvents();
+          if (!didResolve) {
+            didResolve = true;
+            resolve({ events: fetchedEvents, complete: true });
+          }
           return onEose!();
         };
 
@@ -243,7 +270,36 @@ export class NostrManager {
     );
   }
 
-  public async publish(event: NostrEvent, relayUrls?: string[]): Promise<void> {
+  public async fetchTransientWithStatus(
+    filters: NostrFilter[],
+    params: SubscribeManyParams | undefined,
+    relayUrls: string[],
+    timeout?: number
+  ): Promise<NostrFetchResult> {
+    const transientManager = new NostrManager(relayUrls, {
+      connectionTimeout: this.params.connectionTimeout,
+      keepAliveTime: this.params.keepAliveTime,
+      gcInterval: this.params.gcInterval,
+      readable: this.params.readable,
+      writable: false,
+    });
+
+    try {
+      return await transientManager.fetchWithStatus(
+        filters,
+        params,
+        relayUrls,
+        timeout
+      );
+    } finally {
+      transientManager.close();
+    }
+  }
+
+  public async publish(
+    event: NostrEvent,
+    relayUrls?: string[]
+  ): Promise<PromiseSettledResult<string>[]> {
     if (!this.params.writable) throw new Error("not writable");
     if (relayUrls) {
       for (const relayUrl of relayUrls) {
@@ -257,7 +313,9 @@ export class NostrManager {
     // Fire-and-forget: pool.publish() connects to each relay independently
     // with its own bounded connection timeout.
     this.keepAlive(relays).catch(console.error);
-    await Promise.allSettled(
+    // Per-relay results are returned so callers that need verifiable
+    // delivery can count how many relays accepted the event.
+    return await Promise.allSettled(
       this.pool.publish(
         relays.map((r) => r.url),
         event

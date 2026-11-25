@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 
 const verifyEventMock = jest.fn();
 const cacheEventMock = jest.fn();
+const cacheEventStrictMock = jest.fn();
 const cacheEventsMock = jest.fn();
 
 jest.mock("nostr-tools", () => ({
@@ -10,6 +11,7 @@ jest.mock("nostr-tools", () => ({
 
 jest.mock("@/utils/db/db-service", () => ({
   cacheEvent: (...args: unknown[]) => cacheEventMock(...args),
+  cacheEventStrict: (...args: unknown[]) => cacheEventStrictMock(...args),
   cacheEvents: (...args: unknown[]) => cacheEventsMock(...args),
 }));
 
@@ -48,6 +50,7 @@ describe("/api/db/cache-event", () => {
   beforeEach(() => {
     verifyEventMock.mockReset();
     cacheEventMock.mockReset();
+    cacheEventStrictMock.mockReset();
     cacheEventsMock.mockReset();
     __resetRateLimitBuckets();
   });
@@ -65,7 +68,7 @@ describe("/api/db/cache-event", () => {
 
     await cacheEventHandler(req, res as unknown as NextApiResponse);
 
-    expect(cacheEventMock).not.toHaveBeenCalled();
+    expect(cacheEventStrictMock).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(401);
     expect(res.jsonBody).toEqual({
       error: "Invalid or unsigned Nostr event",
@@ -85,7 +88,7 @@ describe("/api/db/cache-event", () => {
 
     await cacheEventHandler(req, res as unknown as NextApiResponse);
 
-    expect(cacheEventMock).not.toHaveBeenCalled();
+    expect(cacheEventStrictMock).not.toHaveBeenCalled();
     expect(verifyEventMock).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(400);
     expect(res.jsonBody).toEqual({
@@ -121,9 +124,50 @@ describe("/api/db/cache-event", () => {
     });
   });
 
+  it("reports stored: true when the event was written", async () => {
+    verifyEventMock.mockReturnValue(true);
+    cacheEventStrictMock.mockResolvedValue(true);
+
+    const req = createRequest("POST", {
+      id: "evt-fresh",
+      pubkey: "seller-pubkey",
+      kind: 30019,
+      content: "{}",
+    });
+    const res = createResponse();
+
+    await cacheEventHandler(req, res as unknown as NextApiResponse);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonBody).toEqual({ success: true, stored: true });
+  });
+
+  it("reports stored: false when a newer event already holds the slot", async () => {
+    verifyEventMock.mockReturnValue(true);
+    cacheEventStrictMock.mockResolvedValue(false);
+
+    const req = createRequest("POST", {
+      id: "evt-stale",
+      pubkey: "seller-pubkey",
+      kind: 30019,
+      content: "{}",
+    });
+    const res = createResponse();
+
+    await cacheEventHandler(req, res as unknown as NextApiResponse);
+
+    expect(cacheEventStrictMock).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(200);
+    expect(res.jsonBody).toEqual({
+      success: true,
+      stored: false,
+      reason: "A newer or deleted version of this event is already cached",
+    });
+  });
+
   it("throttles per pubkey, not per IP, so NAT-shared buyers don't trip each other", async () => {
     verifyEventMock.mockReturnValue(true);
-    cacheEventMock.mockResolvedValue(undefined);
+    cacheEventStrictMock.mockResolvedValue(true);
 
     const makeReq = (pubkey: string) => {
       const r = createRequest("POST", {
@@ -165,7 +209,7 @@ describe("/api/db/cache-event", () => {
 
   it("enforces a coarse per-IP ceiling as a DoS backstop", async () => {
     verifyEventMock.mockReturnValue(true);
-    cacheEventMock.mockResolvedValue(undefined);
+    cacheEventStrictMock.mockResolvedValue(true);
 
     // Rotate pubkeys per request so we only trip the IP limit (2000/min),
     // not the per-pubkey limit.
@@ -223,5 +267,24 @@ describe("/api/db/cache-event", () => {
     expect(res.jsonBody).toEqual({
       error: "Invalid or unsigned Nostr event",
     });
+  });
+
+  it("returns 500 when a signed event cannot be durably cached", async () => {
+    verifyEventMock.mockReturnValue(true);
+    cacheEventStrictMock.mockRejectedValue(new Error("database unavailable"));
+    const req = createRequest("POST", {
+      id: "evt-valid",
+      pubkey: "buyer-pubkey",
+      kind: 30407,
+      tags: [],
+      content: "",
+      sig: "signature",
+    });
+    const res = createResponse();
+
+    await cacheEventHandler(req, res as unknown as NextApiResponse);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.jsonBody).toEqual({ error: "Failed to cache event" });
   });
 });

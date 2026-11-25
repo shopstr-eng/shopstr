@@ -7,11 +7,13 @@ import {
 describe("cache event policy", () => {
   it("allows the hot-path Nostr event kinds that the app caches", () => {
     expect(isCacheableKind(0)).toBe(true);
+    expect(isCacheableKind(3)).toBe(true);
     expect(isCacheableKind(1059)).toBe(true);
     expect(isCacheableKind(30402)).toBe(true);
     expect(isCacheableKind(1984)).toBe(true);
     expect(isCacheableKind(7375)).toBe(true);
     expect(isCacheableKind(7376)).toBe(true);
+    expect(isCacheableKind(30407)).toBe(true);
     expect(isCacheableKind(30406)).toBe(true);
   });
 

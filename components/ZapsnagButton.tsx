@@ -13,9 +13,10 @@ import { LightningAddress } from "@getalby/lightning-tools";
 import { NostrWebLNProvider } from "@getalby/sdk";
 import {
   NostrContext,
+  NWCContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
+import { getStoredRelays } from "@/utils/nostr/nostr-helper-functions";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -25,6 +26,7 @@ import {
 import { generateSecretKey, getPublicKey } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
+import { registerOrderParticipantsOnServer } from "@/utils/db/order-participants-client";
 import {
   validateZapReceipt,
   validateSingleReceipt,
@@ -110,6 +112,8 @@ async function resolveSellerZapContext(
   };
 }
 
+import { storage, STORAGE_KEYS } from "@/utils/storage";
+
 export default function ZapsnagButton({ product }: { product: ProductData }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [loading, setLoading] = useState(false);
@@ -128,19 +132,20 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
   });
 
   const { nostr: nostrManager } = useContext(NostrContext);
+  const {
+    nwcString: unlockedNWCString,
+    hasStoredConnection,
+    ensureUnlocked,
+  } = useContext(NWCContext);
   const { signer, isLoggedIn, pubkey: userPubkey } = useContext(SignerContext);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedInfo = localStorage.getItem("shopstr_shipping_info");
-      if (savedInfo) {
-        try {
-          const parsed = JSON.parse(savedInfo);
-          setShippingInfo((prev) => ({ ...prev, ...parsed }));
-        } catch (e) {
-          console.error("Failed to load saved shipping info", e);
-        }
-      }
+    const savedInfo = storage.getJson<Partial<typeof shippingInfo> | null>(
+      STORAGE_KEYS.SHIPPING_INFO,
+      null
+    );
+    if (savedInfo) {
+      setShippingInfo((prev) => ({ ...prev, ...savedInfo }));
     }
   }, []);
 
@@ -151,10 +156,15 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
         return;
       }
 
-      if (!product.quantity || product.quantity <= 0) {
+      if (
+        !product.quantity ||
+        product.quantity <= 0 ||
+        product.price === undefined
+      ) {
         setIsCheckingInventory(false);
         return;
       }
+      const productPrice = product.price;
 
       try {
         const { zapRecipientPubkey } = await getSellerZapContext(
@@ -173,7 +183,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
             // the LNURL provider's signing key — accept both so zaps made
             // outside Shopstr still count toward inventory.
             alternateRecipientPubkeys: [product.pubkey],
-            expectedAmountSats: product.price,
+            expectedAmountSats: productPrice,
             // Buyers may tip above the listed price; require at least the
             // product price so a forged "sale" still costs a real full-price
             // zap (prevents cheap sold-out griefing). Note: sales made
@@ -213,10 +223,11 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       return;
     }
 
-    if (product.price <= 0) {
+    if (product.price === undefined || product.price <= 0) {
       alert("Could not determine a valid price. Cannot Zap.");
       return;
     }
+    const productPrice = product.price;
 
     setLoading(true);
     setStatus("Finding seller address...");
@@ -225,7 +236,11 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
         await getSellerZapContext(nostrManager, product.pubkey);
 
       originalWebLN = (window as any).webln;
-      const { nwcString } = getLocalStorageData();
+      const nwcString = unlockedNWCString
+        ? unlockedNWCString
+        : hasStoredConnection
+          ? await ensureUnlocked?.()
+          : null;
       if (nwcString) {
         const nwcProvider = new NostrWebLNProvider({
           nostrWalletConnectUrl: nwcString,
@@ -245,6 +260,8 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       const ephemeralPubHex = getPublicKey(ephemeralPrivBytes);
 
       const orderId = crypto.randomUUID();
+      // Before the order DM carries the order id to the seller.
+      await registerOrderParticipantsOnServer(signer, orderId, product);
       const shippingMessage = JSON.stringify({
         type: "zapsnag_order",
         orderId: orderId,
@@ -281,14 +298,14 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
 
       setStatus("Paying via Lightning...");
 
-      const { relays: userRelays } = getLocalStorageData();
+      const userRelays = getStoredRelays();
       const targetRelays =
         userRelays.length > 0
           ? userRelays
           : ["wss://relay.damus.io", "wss://nos.lol"];
 
       const zapArgs = {
-        satoshi: product.price,
+        satoshi: productPrice,
         comment: `Order #${orderId}`,
         e: product.id,
         relays: targetRelays,
@@ -298,17 +315,14 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       const response = await ln.zap(zapArgs);
 
       if (response.preimage) {
-        localStorage.setItem(
-          "shopstr_shipping_info",
-          JSON.stringify(shippingInfo)
-        );
+        storage.setJson(STORAGE_KEYS.SHIPPING_INFO, shippingInfo);
 
         setStatus("Verifying receipt...");
         const receiptResult = await validateZapReceipt(nostrManager, {
           productId: product.id,
           expectedRecipientPubkey: zapRecipientPubkey,
           expectedReceiptSignerPubkey: zapRecipientPubkey,
-          expectedAmountSats: product.price,
+          expectedAmountSats: productPrice,
           minTimestamp: startTime,
           expectedPreimage: response.preimage,
         });

@@ -60,6 +60,54 @@ test("get_product_details returns a product by event id via coordinate resolutio
   assert.equal(body._meta.resultCount, 1);
 });
 
+test("get_product_details returns short event content as product description", async () => {
+  const productId = hex("1");
+  const description = "Soft linen shirt with pearl buttons.";
+  const ctx = context((filters) => {
+    if (filters.some((f) => f.ids?.includes(productId))) {
+      return [productEvent({ id: productId, content: description })];
+    }
+    if (filters.some((f) => f["#d"]?.includes("product"))) {
+      return [productEvent({ id: productId, content: description })];
+    }
+    return [];
+  });
+
+  const response = await handleGetProductDetails({ productId }, ctx);
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.description, description);
+  assert.equal(
+    body._meta._hints.some((hint) => hint.startsWith("descriptionTruncated")),
+    false
+  );
+});
+
+test("get_product_details truncates long descriptions at a word boundary", async () => {
+  const productId = hex("1");
+  const description = "leather ".repeat(300);
+  const ctx = context((filters) => {
+    if (filters.some((f) => f.ids?.includes(productId))) {
+      return [productEvent({ id: productId, content: description })];
+    }
+    if (filters.some((f) => f["#d"]?.includes("product"))) {
+      return [productEvent({ id: productId, content: description })];
+    }
+    return [];
+  });
+
+  const response = await handleGetProductDetails({ productId }, ctx);
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.description.endsWith("..."), true);
+  assert.equal(body.description.endsWith("leather..."), true);
+  assert.ok(body.description.length <= 2_000);
+  assert.equal(
+    body._meta._hints.some((hint) => hint.startsWith("descriptionTruncated")),
+    true
+  );
+});
+
 test("get_product_details accepts productAddress and skips pre-flight", async () => {
   const productAddress = `30402:${hex("b")}:product`;
   let fetchCallCount = 0;
@@ -179,4 +227,259 @@ test("get_product_details skips pre-flight on second call when cache is enabled"
     1,
     "second call should skip pre-flight via cache"
   );
+});
+
+const okRelay = "wss://ok.example.com";
+const downRelay = "wss://down.example.com";
+const slowRelay = "wss://slow.example.com";
+
+// Per-relay context: `relayImpl(relay, filters)` returns { events, complete }
+// or throws to simulate a failed relay.
+function multiRelayContext(relays, relayImpl) {
+  return {
+    relays,
+    timeoutMs: 100,
+    cache: new MemoryCache(0),
+    nostr: {
+      async fetchWithStatus(filters, _params, relayUrls) {
+        return relayImpl(relayUrls[0], filters);
+      },
+    },
+  };
+}
+
+const productAddress = `30402:${hex("b")}:product`;
+
+test("get_product_details returns retryable NOT_FOUND when a relay failed and others were empty", async () => {
+  const response = await handleGetProductDetails(
+    { productAddress },
+    multiRelayContext([okRelay, downRelay], (relay) => {
+      if (relay === downRelay) {
+        throw new Error("Relay subscription closed: connection failed");
+      }
+      return { events: [], complete: true };
+    })
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, true);
+  assert.equal(body.errorCode, "NOT_FOUND");
+  assert.equal(body.retryable, true);
+  assert.equal(body.retryAfterMs, 2_000);
+  assert.equal(response._meta.retryable, true);
+  assert.equal(response._meta.retryAfterMs, 2_000);
+  assert.equal(body._meta.degraded, true);
+  assert.equal(
+    body._meta._hints[0],
+    `Not found on ${okRelay}. ${downRelay} failed and may have this product; retry later.`
+  );
+  assert.ok(
+    body._meta._hints.some((hint) => hint.startsWith("Use search_products"))
+  );
+});
+
+test("get_product_details treats a timed-out relay like a failed one when nothing is found", async () => {
+  const response = await handleGetProductDetails(
+    { productAddress },
+    multiRelayContext([okRelay, slowRelay], (relay) => ({
+      events: [],
+      complete: relay !== slowRelay,
+    }))
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.errorCode, "NOT_FOUND");
+  assert.equal(body.retryable, true);
+  assert.equal(body.retryAfterMs, 2_000);
+  assert.equal(
+    body._meta._hints[0],
+    `Not found on ${okRelay}. ${slowRelay} timed out and may have this product; retry later.`
+  );
+});
+
+test("get_product_details stays non-retryable NOT_FOUND when every relay answered empty", async () => {
+  const response = await handleGetProductDetails(
+    { productAddress },
+    multiRelayContext([okRelay, "wss://ok2.example.com"], () => ({
+      events: [],
+      complete: true,
+    }))
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.errorCode, "NOT_FOUND");
+  assert.equal(body.retryable, false);
+  assert.equal(body.retryAfterMs, undefined);
+  assert.equal(body._meta.degraded, false);
+  assert.deepEqual(body._meta._hints, [
+    "Use search_products with keyword, category, or location filters to discover products.",
+  ]);
+});
+
+test("get_product_details stays RELAY_UNAVAILABLE when every relay failed", async () => {
+  const response = await handleGetProductDetails(
+    { productAddress },
+    multiRelayContext([downRelay, "wss://down2.example.com"], () => {
+      throw new Error("connection failed");
+    })
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.errorCode, "RELAY_UNAVAILABLE");
+  assert.equal(body.retryable, true);
+});
+
+test("get_product_details uses the id fallback's relay outcomes when a relay recovers", async () => {
+  const productId = hex("1");
+  let idsRequests = 0;
+  const response = await handleGetProductDetails(
+    { productId },
+    multiRelayContext([okRelay, downRelay], (relay, filters) => {
+      assert.ok(filters.some((filter) => filter.ids?.includes(productId)));
+      idsRequests++;
+      // The relay fails only during resolution; the fallback repeats the same
+      // query and it answers empty, so nothing is left unreached.
+      if (relay === downRelay && idsRequests <= 2) {
+        throw new Error("connection failed");
+      }
+      return { events: [], complete: true };
+    })
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(
+    idsRequests,
+    4,
+    "resolve and fallback should each hit both relays"
+  );
+  assert.equal(body.errorCode, "NOT_FOUND");
+  assert.equal(body.retryable, false);
+  assert.equal(body.retryAfterMs, undefined);
+  assert.equal(body._meta.degraded, false);
+  assert.deepEqual(body._meta.relaysFailed, []);
+});
+
+test("get_product_details returns retryable NOT_FOUND when a relay fails both the productId resolve and the id fallback", async () => {
+  const productId = hex("1");
+  let idsRequests = 0;
+  const response = await handleGetProductDetails(
+    { productId },
+    multiRelayContext([okRelay, downRelay], (relay, filters) => {
+      assert.ok(filters.some((filter) => filter.ids?.includes(productId)));
+      idsRequests++;
+      if (relay === downRelay) throw new Error("connection failed");
+      return { events: [], complete: true };
+    })
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(
+    idsRequests,
+    4,
+    "resolve and fallback should each hit both relays"
+  );
+  assert.equal(body.errorCode, "NOT_FOUND");
+  assert.equal(body.retryable, true);
+  assert.equal(body.retryAfterMs, 2_000);
+  assert.equal(body._meta.degraded, true);
+  assert.deepEqual(
+    body._meta.relaysFailed.map((failure) => failure.url),
+    [downRelay]
+  );
+  assert.ok(
+    body._meta._hints.includes(
+      `Not found on ${okRelay}. ${downRelay} failed and may have this product; retry later.`
+    )
+  );
+});
+
+test("get_product_details does not serve a hidden listing by product address", async () => {
+  const hidden = productEvent({
+    tags: [
+      ["d", "product"],
+      ["title", "Unreleased Shirt"],
+      ["price", "10", "USD"],
+      ["visibility", "hidden"],
+    ],
+    content: "Internal notes that are not public yet.",
+  });
+  const ctx = context(() => [hidden]);
+
+  const response = await handleGetProductDetails(
+    { productAddress: `30402:${hex("b")}:product` },
+    ctx
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, true);
+  assert.equal(body.errorCode, "NOT_FOUND");
+  assert.equal(body.retryable, false);
+  assert.equal(response.content[0].text.includes("Unreleased Shirt"), false);
+  assert.equal(response.content[0].text.includes("Internal notes"), false);
+});
+
+test("get_product_details does not serve a hidden listing by event id", async () => {
+  const productId = hex("1");
+  const hidden = productEvent({
+    id: productId,
+    tags: [
+      ["d", "product"],
+      ["title", "Unreleased Shirt"],
+      ["price", "10", "USD"],
+      ["visibility", "HIDDEN"],
+    ],
+  });
+  const ctx = context(() => [hidden]);
+
+  const response = await handleGetProductDetails({ productId }, ctx);
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, true);
+  assert.equal(body.errorCode, "NOT_FOUND");
+  assert.equal(response.content[0].text.includes("Unreleased Shirt"), false);
+});
+
+test("get_product_details does not fall back to an older public revision once a listing is hidden", async () => {
+  const publicRevision = productEvent({ id: hex("1"), created_at: 100 });
+  const hiddenRevision = productEvent({
+    id: hex("2"),
+    created_at: 200,
+    tags: [
+      ["d", "product"],
+      ["title", "Linen Shirt"],
+      ["price", "10", "USD"],
+      ["visibility", "hidden"],
+    ],
+  });
+  // One relay still holds the stale public revision, another has the update.
+  const ctx = context(() => [publicRevision, hiddenRevision]);
+
+  const response = await handleGetProductDetails(
+    { productAddress: `30402:${hex("b")}:product` },
+    ctx
+  );
+
+  assert.equal(response.isError, true);
+  assert.equal(JSON.parse(response.content[0].text).errorCode, "NOT_FOUND");
+});
+
+test("get_product_details still serves on-sale and pre-order listings", async () => {
+  for (const visibility of ["on-sale", "pre-order"]) {
+    const event = productEvent({
+      tags: [
+        ["d", "product"],
+        ["title", "Linen Shirt"],
+        ["price", "10", "USD"],
+        ["visibility", visibility],
+      ],
+    });
+    const response = await handleGetProductDetails(
+      { productAddress: `30402:${hex("b")}:product` },
+      context(() => [event])
+    );
+    const body = JSON.parse(response.content[0].text);
+
+    assert.notEqual(response.isError, true);
+    assert.equal(body.product.visibility, visibility);
+  }
 });

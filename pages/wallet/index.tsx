@@ -6,6 +6,7 @@ import ReceiveButton from "../../components/wallet/receive-button";
 import SendButton from "../../components/wallet/send-button";
 import PayButton from "../../components/wallet/pay-button";
 import Transactions from "../../components/wallet/transactions";
+import PendingPayouts from "../../components/wallet/pending-payouts";
 import {
   Mint as CashuMint,
   Wallet as CashuWallet,
@@ -123,6 +124,8 @@ const Wallet = () => {
               </div>
             </div>
           </div>
+
+          <PendingPayouts />
 
           <div className="flex justify-center">
             <Transactions />

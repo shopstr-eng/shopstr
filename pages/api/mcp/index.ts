@@ -302,7 +302,7 @@ function registerPurchaseTools(
       limit: z
         .number()
         .optional()
-        .describe("Maximum number of orders to return (default 50)"),
+        .describe("Maximum number of orders to return (default 50, max 100)"),
       offset: z
         .number()
         .optional()
@@ -528,7 +528,9 @@ function registerPurchaseTools(
       orderLimit: z
         .number()
         .optional()
-        .describe("Max number of recent orders to return (default 10)"),
+        .describe(
+          "Max number of recent orders to return (default 10, max 100)"
+        ),
     },
     async (params) => {
       const startTime = Date.now();
@@ -621,7 +623,7 @@ function registerPurchaseTools(
       limit: z
         .number()
         .optional()
-        .describe("Max number of orders to return (default 50)"),
+        .describe("Max number of orders to return (default 50, max 100)"),
       offset: z
         .number()
         .optional()

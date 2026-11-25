@@ -628,7 +628,7 @@ export default function handler(_req: NextApiRequest, res: NextApiResponse) {
         {
           name: "receive_cashu_tokens",
           description:
-            "Receive Cashu tokens and store them as proof events (kind 7375).",
+            "Receive a Cashu token. It is swapped at its mint and the fresh proofs are stored as a proof event (kind 7375). Spent or forged tokens are rejected.",
           parameters: {
             token: {
               type: "string",
@@ -653,7 +653,7 @@ export default function handler(_req: NextApiRequest, res: NextApiResponse) {
         {
           name: "send_cashu_payment",
           description:
-            "Send a Cashu payment by melting tokens to pay a Lightning invoice.",
+            "Pay a Lightning invoice from your Cashu wallet. Only the proofs needed are spent and the change stays in your wallet.",
           parameters: {
             invoice: {
               type: "string",

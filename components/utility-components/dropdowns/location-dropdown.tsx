@@ -145,7 +145,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
     <Select
       startContent={locationAvatar(value)}
       {...props}
-      className={`text-light-text dark:text-dark-text mt-2 ${props.className ?? ""}`}
+      className={`text-light-text dark:text-dark-text ${props.className ?? ""}`}
       listboxProps={{
         topContent: (
           <Input

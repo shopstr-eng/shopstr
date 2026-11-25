@@ -19,7 +19,7 @@ import ImageCarousel from "./utility-components/image-carousel";
 import CompactCategories from "./utility-components/compact-categories";
 import { locationAvatar } from "./utility-components/dropdowns/location-dropdown";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
+import ConfirmActionModal from "./utility-components/modals/confirm-action-modal";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import SuccessModal from "./utility-components/success-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
@@ -28,7 +28,9 @@ import parseTags, {
 } from "@/utils/parsers/product-parser-functions";
 import { ProductContext } from "@/utils/context/context";
 import { getListingSlug } from "@/utils/url-slugs";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 import { NostrEvent } from "@/utils/types/types";
+import { formatTimestampParts } from "@/utils/date-display";
 
 interface ProductModalProps {
   productData: ProductData;
@@ -50,17 +52,15 @@ export default function DisplayProductModal({
 
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
+  const { copy } = useCopyToClipboard();
+
+  const [createdDate, createdTime] = formatTimestampParts(
+    productData.createdAt
+  );
+
   const isExpired = productData.expiration
     ? Date.now() / 1000 > productData.expiration
     : false;
-
-  const displayDate = (timestamp: number): [string, string] => {
-    if (timestamp == 0 || !timestamp) return ["", ""];
-    const d = new Date(timestamp * 1000);
-    const dateString = d.toLocaleString().split(",")[0]!.trim();
-    const timeString = d.toLocaleString().split(",")[1]!.trim();
-    return [dateString, timeString];
-  };
 
   const handleShare = async () => {
     const allParsed = productEventContext.productEvents
@@ -77,10 +77,10 @@ export default function DisplayProductModal({
     if (navigator.share) {
       await navigator.share(shareData);
     } else {
-      navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${listingPath}`
-      );
-      setShowSuccessModal(true);
+      const didCopy = await copy(shareData.url);
+      if (didCopy) {
+        setShowSuccessModal(true);
+      }
     }
   };
 
@@ -164,10 +164,17 @@ export default function DisplayProductModal({
             <div className="flex h-fit w-full flex-row flex-wrap items-center justify-between gap-2">
               <ProfileWithDropdown
                 pubkey={productData.pubkey}
+                hydrateMissingProfileFromRelays
                 dropDownKeys={
                   productData.pubkey === userPubkey
                     ? ["shop_profile"]
-                    : ["shop", "inquiry", "copy_npub", "report_profile"]
+                    : [
+                        "shop",
+                        "inquiry",
+                        "copy_npub",
+                        "report_profile",
+                        "follow",
+                      ]
                 }
               />
               <Chip
@@ -178,12 +185,8 @@ export default function DisplayProductModal({
               </Chip>
               <CompactCategories categories={productData.categories} />
               <div>
-                <p className="text-md">
-                  {displayDate(productData.createdAt)[0]}
-                </p>
-                <p className="text-md">
-                  {displayDate(productData.createdAt)[1]}
-                </p>
+                <p className="text-md">{createdDate}</p>
+                <p className="text-md">{createdTime}</p>
               </div>
             </div>
             <Divider />
@@ -326,7 +329,7 @@ export default function DisplayProductModal({
                   >
                     Edit Listing
                   </Button>
-                  <ConfirmActionDropdown
+                  <ConfirmActionModal
                     helpText="Are you sure you want to delete this listing?"
                     buttonLabel="Delete Listing"
                     onConfirm={beginDeleteListingProcess}
@@ -341,7 +344,7 @@ export default function DisplayProductModal({
                     >
                       Delete Listing
                     </Button>
-                  </ConfirmActionDropdown>
+                  </ConfirmActionModal>
                 </>
               )}
             </div>

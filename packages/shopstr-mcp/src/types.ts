@@ -97,8 +97,16 @@ export type ReviewResponse = {
   pubkey: string;
   d?: string;
   content: string;
+  /** Present only when content was shortened to the review content cap. */
+  contentTruncated?: boolean;
   ratings: Record<string, number>;
   createdAt: number;
+  /**
+   * Omitted means the review matched through the canonical #a product address.
+   * Present only when the event was included through legacy #d/#e/#p/seller
+   * fallback matching.
+   */
+  matchConfidence?: "legacy_fallback";
 };
 
 export type RelayFailure = {
@@ -109,6 +117,7 @@ export type RelayFailure = {
 export type RelayFetchMeta = {
   relaysQueried: string[];
   relaysSucceeded: string[];
+  relaysIncomplete: string[];
   relaysFailed: RelayFailure[];
   degraded: boolean;
   coverage: number;

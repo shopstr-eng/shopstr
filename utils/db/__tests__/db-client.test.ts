@@ -20,6 +20,7 @@ jest.mock("@/utils/nostr/request-auth", () => ({
 
 import {
   cacheEventToDatabase,
+  cacheEventToDatabaseStrict,
   cacheEventsToDatabase,
   deleteEventsFromDatabase,
   trackFailedRelayPublish,
@@ -50,6 +51,18 @@ describe("db-client", () => {
         body: JSON.stringify(event),
       })
     );
+  });
+
+  it("cacheEventToDatabaseStrict rejects failed or unavailable cache writes", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false } as Response);
+    await expect(
+      cacheEventToDatabaseStrict({ id: "strict-1" } as any)
+    ).rejects.toThrow("Failed to cache event to database");
+
+    fetchMock.mockRejectedValueOnce(new Error("network unavailable"));
+    await expect(
+      cacheEventToDatabaseStrict({ id: "strict-2" } as any)
+    ).rejects.toThrow("network unavailable");
   });
 
   it("cacheEventsToDatabase should chunk large arrays", async () => {

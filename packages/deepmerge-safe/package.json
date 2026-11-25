@@ -1,0 +1,11 @@
+{
+  "name": "@shopstr/deepmerge-safe",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hardened deepmerge v4-compatible implementation",
+  "main": "index.cjs",
+  "license": "MIT",
+  "dependencies": {
+    "is-mergeable-object": "1.1.1"
+  }
+}

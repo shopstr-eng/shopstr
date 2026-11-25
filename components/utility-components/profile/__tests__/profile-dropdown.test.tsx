@@ -7,14 +7,32 @@ import {
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { ProfileWithDropdown } from "../profile-dropdown";
-import { ProfileMapContext } from "@/utils/context/context";
-import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import {
+  FollowsContext,
+  ProfileMapContext,
+  RelaysContext,
+} from "@/utils/context/context";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
 import React from "react";
+import type { NostrManager } from "@/utils/nostr/nostr-manager";
 
 const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
+const mockFetchProfile = jest.fn();
+const mockHydrateProfileBadges = jest.fn();
+
+jest.mock("@/utils/nostr/fetch-service", () => ({
+  NIP58_BADGE_HYDRATION_RETRY_MS: 5_000,
+  fetchProfile: (...args: unknown[]) => mockFetchProfile(...args),
+  hydrateNip58ProfileBadges: (...args: unknown[]) =>
+    mockHydrateProfileBadges(...args),
+  clearNip58ProfileBadgeHydrationCache: jest.fn(),
+}));
 
 const mockRouterPush = jest.fn();
 jest.mock("next/router", () => ({
@@ -53,6 +71,8 @@ jest.mock("@heroui/react", () => {
       onOpen: mockOnOpen,
       onClose: jest.fn(),
     }),
+    addToast: jest.fn(),
+    Spinner: () => <span data-testid="spinner" />,
     Dropdown: ({
       children,
       isOpen,
@@ -89,8 +109,8 @@ jest.mock("@heroui/react", () => {
       items,
       children,
     }: {
-      items: any[];
-      children: (item: any) => React.ReactNode;
+      items: unknown[];
+      children: (item: unknown) => React.ReactNode;
     }) => {
       const { isOpen } = React.useContext(DropdownContext);
 
@@ -128,6 +148,8 @@ jest.mock("@heroicons/react/24/outline", () => ({
   ClipboardIcon: () => <div data-testid="icon-clipboard" />,
   CheckIcon: () => <div data-testid="icon-check" />,
   ExclamationTriangleIcon: () => <div data-testid="icon-report" />,
+  UserMinusIcon: () => <div data-testid="icon-user-minus" />,
+  UserPlusIcon: () => <div data-testid="icon-user-plus" />,
   CheckCircleIcon: () => <div data-testid="icon-success" />,
 }));
 
@@ -140,22 +162,82 @@ Object.defineProperty(navigator, "clipboard", {
 
 const renderWithProviders = (
   ui: React.ReactElement,
-  options: { profileData?: Map<string, any>; isLoggedIn?: boolean } = {}
+  options: {
+    profileData?: Map<string, unknown>;
+    isLoggedIn?: boolean;
+    directFollowList?: string[];
+    addFollow?: jest.Mock;
+    removeFollow?: jest.Mock;
+    nostr?: Partial<Pick<NostrManager, "fetch">>;
+    relayList?: string[];
+    isProfileLoading?: boolean;
+  } = {}
 ) => {
-  const { profileData = new Map(), isLoggedIn = false } = options;
-  return render(
-    <ProfileMapContext.Provider
-      value={{
-        profileData,
-        isLoading: false,
-        updateProfileData: jest.fn(),
-      }}
-    >
-      <SignerContext.Provider value={{ isLoggedIn }}>
-        {ui}
-      </SignerContext.Provider>
-    </ProfileMapContext.Provider>
-  );
+  const {
+    profileData = new Map(),
+    isLoggedIn = false,
+    directFollowList = [],
+    addFollow = jest.fn().mockResolvedValue({
+      ok: true,
+      event: {},
+      alreadyApplied: false,
+    }),
+    removeFollow = jest.fn().mockResolvedValue({
+      ok: true,
+      event: {},
+      alreadyApplied: false,
+    }),
+    nostr = {},
+    relayList = [],
+    isProfileLoading = false,
+  } = options;
+  const Providers = ({ children }: { children: React.ReactNode }) => {
+    const [profileDataState, setProfileDataState] = React.useState(profileData);
+
+    return (
+      <NostrContext.Provider value={{ nostr: nostr as NostrManager }}>
+        <RelaysContext.Provider
+          value={{
+            relayList,
+            readRelayList: [],
+            writeRelayList: [],
+            isLoading: false,
+          }}
+        >
+          <ProfileMapContext.Provider
+            value={{
+              profileData: profileDataState,
+              isLoading: isProfileLoading,
+              updateProfileData: (incomingProfile) => {
+                setProfileDataState((currentProfileData) => {
+                  const nextProfileData = new Map(currentProfileData);
+                  nextProfileData.set(incomingProfile.pubkey, incomingProfile);
+                  return nextProfileData;
+                });
+              },
+            }}
+          >
+            <SignerContext.Provider value={{ isLoggedIn }}>
+              <FollowsContext.Provider
+                value={{
+                  directFollowList,
+                  followList: directFollowList,
+                  firstDegreeFollowsLength: directFollowList.length,
+                  isLoading: false,
+                  addFollow,
+                  removeFollow,
+                }}
+              >
+                {children}
+              </FollowsContext.Provider>
+            </SignerContext.Provider>
+          </ProfileMapContext.Provider>
+        </RelaysContext.Provider>
+      </NostrContext.Provider>
+    );
+  };
+
+  return render(ui, { wrapper: Providers });
 };
 
 const openDropdownMenu = () => {
@@ -180,6 +262,8 @@ describe("ProfileWithDropdown", () => {
     mockRouterPush.mockClear();
     mockOnOpen.mockClear();
     mockOpenReportFlow.mockClear();
+    mockFetchProfile.mockReset().mockResolvedValue({ profileMap: new Map() });
+    mockHydrateProfileBadges.mockReset().mockResolvedValue({ retryAt: null });
     (LogOut as jest.Mock).mockClear();
     (navigator.clipboard.writeText as jest.Mock).mockClear();
     mockFetch.mockResolvedValue({
@@ -226,6 +310,444 @@ describe("ProfileWithDropdown", () => {
     );
 
     expect(screen.getByText("testuser")).toBeInTheDocument();
+  });
+
+  it("renders NIP-58 profile badge thumbnails from context", () => {
+    const profile = {
+      content: { name: "testuser", picture: "http://pic.com/img.png" },
+      badges: [
+        {
+          definitionAddress:
+            "30009:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:bravery",
+          awardEventId:
+            "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          issuerPubkey:
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          badgeDefinitionDTag: "bravery",
+          name: "Medal of Bravery",
+          description: "Awarded for demonstrating bravery",
+          image: "https://nostr.academy/awards/bravery.png",
+          thumbnail: "https://nostr.academy/awards/bravery_32.png",
+        },
+      ],
+    };
+    const profileMap = new Map();
+    profileMap.set(pubkey, profile);
+
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={[]} />,
+      { profileData: profileMap }
+    );
+
+    expect(screen.getByText("testuser")).toBeInTheDocument();
+    expect(screen.getByAltText("Medal of Bravery badge")).toHaveAttribute(
+      "src",
+      "https://nostr.academy/awards/bravery_32.png"
+    );
+    expect(
+      screen.getByTitle("Medal of Bravery: Awarded for demonstrating bravery")
+    ).toBeInTheDocument();
+  });
+
+  it("does not render unsafe NIP-58 profile badge image URLs", () => {
+    const profile = {
+      content: { name: "testuser", picture: "http://pic.com/img.png" },
+      badges: [
+        {
+          definitionAddress:
+            "30009:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:unsafe",
+          awardEventId:
+            "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          issuerPubkey:
+            "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          badgeDefinitionDTag: "unsafe",
+          name: "Unsafe Badge",
+          image: "javascript:alert(1)",
+        },
+      ],
+    };
+    const profileMap = new Map();
+    profileMap.set(pubkey, profile);
+
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={[]} />,
+      { profileData: profileMap }
+    );
+
+    expect(screen.getByText("testuser")).toBeInTheDocument();
+    expect(screen.queryByAltText("Unsafe Badge badge")).not.toBeInTheDocument();
+  });
+
+  it("hydrates missing profile data from relays so marketplace rows can show badges", async () => {
+    const sellerPubkey =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const sellerProfile = {
+      pubkey: sellerPubkey,
+      created_at: 100,
+      content: { name: "seller", picture: "http://pic.com/seller.png" },
+      nip05Verified: false,
+      badges: [
+        {
+          definitionAddress:
+            "30009:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc:bravery",
+          awardEventId:
+            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          issuerPubkey:
+            "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          badgeDefinitionDTag: "bravery",
+          name: "Medal of Bravery",
+          thumbnail: "https://nostr.academy/awards/bravery_32.png",
+        },
+      ],
+    };
+    const nostr = { fetch: jest.fn() };
+    const profileMap = new Map<string, unknown>();
+
+    mockFetchProfile.mockImplementation(
+      async (_nostr, _relays, _pubkeys, editProfileContext) => {
+        const fetchedProfileMap = new Map([[sellerPubkey, sellerProfile]]);
+        editProfileContext(fetchedProfileMap, false);
+        return { profileMap: fetchedProfileMap };
+      }
+    );
+
+    renderWithProviders(
+      <ProfileWithDropdown
+        pubkey={sellerPubkey}
+        dropDownKeys={[]}
+        hydrateMissingProfileFromRelays
+      />,
+      {
+        profileData: profileMap,
+        nostr,
+        relayList: ["wss://relay.example"],
+      }
+    );
+
+    await waitFor(() => {
+      expect(mockFetchProfile).toHaveBeenCalledWith(
+        nostr,
+        ["wss://relay.example"],
+        [sellerPubkey],
+        expect.any(Function),
+        profileMap
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByAltText("Medal of Bravery badge")).toHaveAttribute(
+        "src",
+        "https://nostr.academy/awards/bravery_32.png"
+      );
+    });
+  });
+
+  it("hydrates opted-in profile rows while global profile loading is still running", async () => {
+    const sellerPubkey =
+      "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+    const sellerProfile = {
+      pubkey: sellerPubkey,
+      created_at: 100,
+      content: { name: "seller", picture: "http://pic.com/seller.png" },
+      nip05Verified: false,
+      badges: [],
+    };
+    const nostr = { fetch: jest.fn() };
+    const profileMap = new Map<string, unknown>();
+
+    mockFetchProfile.mockImplementation(
+      async (_nostr, _relays, _pubkeys, editProfileContext) => {
+        const fetchedProfileMap = new Map([[sellerPubkey, sellerProfile]]);
+        editProfileContext(fetchedProfileMap, false);
+        return { profileMap: fetchedProfileMap };
+      }
+    );
+
+    renderWithProviders(
+      <ProfileWithDropdown
+        pubkey={sellerPubkey}
+        dropDownKeys={[]}
+        hydrateMissingProfileFromRelays
+      />,
+      {
+        profileData: profileMap,
+        isProfileLoading: true,
+        nostr,
+        relayList: ["wss://relay.example"],
+      }
+    );
+
+    await waitFor(() => {
+      expect(mockFetchProfile).toHaveBeenCalledWith(
+        nostr,
+        ["wss://relay.example"],
+        [sellerPubkey],
+        expect.any(Function),
+        profileMap
+      );
+    });
+  });
+
+  it("hydrates missing badges directly when profile metadata already exists", async () => {
+    const sellerPubkey =
+      "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+    const nostr = { fetch: jest.fn() };
+    const profileMap = new Map([
+      [
+        sellerPubkey,
+        {
+          pubkey: sellerPubkey,
+          created_at: 100,
+          content: { name: "seller" },
+        },
+      ],
+    ]);
+    localStorage.setItem("relays", JSON.stringify(["wss://stored.relay"]));
+    localStorage.setItem(
+      "readRelays",
+      JSON.stringify(["wss://stored-read.relay"])
+    );
+
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />,
+      {
+        profileData: profileMap,
+        nostr,
+      }
+    );
+
+    await waitFor(() => {
+      expect(mockHydrateProfileBadges).toHaveBeenCalledWith(
+        nostr,
+        ["wss://stored.relay", "wss://stored-read.relay"],
+        [sellerPubkey],
+        expect.any(Function),
+        profileMap
+      );
+    });
+    expect(mockFetchProfile).not.toHaveBeenCalled();
+    localStorage.removeItem("relays");
+    localStorage.removeItem("readRelays");
+  });
+
+  it("retries badge hydration immediately when the relay set changes", async () => {
+    const sellerPubkey =
+      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    const nostr = { fetch: jest.fn() };
+    const profileMap = new Map([
+      [
+        sellerPubkey,
+        {
+          pubkey: sellerPubkey,
+          created_at: 100,
+          content: { name: "seller" },
+        },
+      ],
+    ]);
+    mockHydrateProfileBadges
+      .mockRejectedValueOnce(new Error("relay unavailable"))
+      .mockResolvedValueOnce(undefined);
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    const firstRender = renderWithProviders(
+      <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />,
+      {
+        profileData: profileMap,
+        nostr,
+        relayList: ["wss://first.relay"],
+      }
+    );
+    await waitFor(() => {
+      expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(1);
+    });
+    firstRender.unmount();
+
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />,
+      {
+        profileData: profileMap,
+        nostr,
+        relayList: ["wss://second.relay"],
+      }
+    );
+
+    await waitFor(() => {
+      expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(2);
+    });
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("retries incomplete badge hydration after the bounded backoff", async () => {
+    jest.useFakeTimers();
+    mockHydrateProfileBadges.mockResolvedValue({
+      retryAt: Date.now() + 5_000,
+    });
+    const sellerPubkey =
+      "abababababababababababababababababababababababababababababababab";
+    const nostr = { fetch: jest.fn() };
+    const profileMap = new Map([
+      [
+        sellerPubkey,
+        {
+          pubkey: sellerPubkey,
+          created_at: 100,
+          content: { name: "seller" },
+        },
+      ],
+    ]);
+
+    const rendered = renderWithProviders(
+      <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />,
+      {
+        profileData: profileMap,
+        nostr,
+        relayList: ["wss://relay.example"],
+      }
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(5_000);
+      await Promise.resolve();
+    });
+    expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(2);
+    rendered.unmount();
+  });
+
+  it("does not retry when badge hydration is conclusive or absent", async () => {
+    jest.useFakeTimers();
+    const sellerPubkey =
+      "acacacacacacacacacacacacacacacacacacacacacacacacacacacacacacacac";
+    const nostr = { fetch: jest.fn() };
+    const profileMap = new Map([
+      [
+        sellerPubkey,
+        {
+          pubkey: sellerPubkey,
+          created_at: 100,
+          content: { name: "seller without badges" },
+        },
+      ],
+    ]);
+
+    const rendered = renderWithProviders(
+      <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />,
+      {
+        profileData: profileMap,
+        nostr,
+        relayList: ["wss://relay.example"],
+      }
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(20_000);
+      await Promise.resolve();
+    });
+    expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(1);
+    rendered.unmount();
+  });
+
+  it("merges hydrated badges without reverting newer profile metadata", async () => {
+    const sellerPubkey =
+      "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
+    const nostr = { fetch: jest.fn() };
+    const initialProfile = {
+      pubkey: sellerPubkey,
+      created_at: 100,
+      content: { name: "Old seller" },
+    };
+    const profileMap = new Map([[sellerPubkey, initialProfile]]);
+    let applyStaleHydration = () => {};
+    mockHydrateProfileBadges.mockImplementation(
+      async (_nostr, _relays, _pubkeys, editProfileContext) => {
+        applyStaleHydration = () => {
+          editProfileContext(
+            new Map([
+              [
+                sellerPubkey,
+                {
+                  ...initialProfile,
+                  badges: [
+                    {
+                      name: "Race-safe badge",
+                      thumbnail: "https://example.com/badge.png",
+                    },
+                  ],
+                },
+              ],
+            ]),
+            false
+          );
+        };
+      }
+    );
+    const AdvanceProfile = () => {
+      const context = React.useContext(ProfileMapContext);
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            context.updateProfileData({
+              ...initialProfile,
+              created_at: 200,
+              content: { name: "New seller" },
+            })
+          }
+        >
+          advance profile
+        </button>
+      );
+    };
+
+    renderWithProviders(
+      <>
+        <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />
+        <AdvanceProfile />
+      </>,
+      {
+        profileData: profileMap,
+        nostr,
+        relayList: ["wss://relay.example"],
+      }
+    );
+    await waitFor(() => {
+      expect(mockHydrateProfileBadges).toHaveBeenCalledTimes(1);
+    });
+    fireEvent.click(screen.getByText("advance profile"));
+    expect(screen.getByText("New seller")).toBeInTheDocument();
+
+    act(() => applyStaleHydration());
+
+    expect(screen.getByText("New seller")).toBeInTheDocument();
+    expect(screen.getByAltText("Race-safe badge badge")).toBeInTheDocument();
+  });
+
+  it("does not hydrate missing profile data from relays by default", async () => {
+    const sellerPubkey =
+      "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const nostr = { fetch: jest.fn() };
+
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={sellerPubkey} dropDownKeys={[]} />,
+      {
+        profileData: new Map(),
+        nostr,
+        relayList: ["wss://relay.example"],
+      }
+    );
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(mockFetchProfile).not.toHaveBeenCalled();
   });
 
   it('handles "Visit Seller" click', () => {
@@ -395,5 +917,54 @@ describe("ProfileWithDropdown", () => {
 
     expect(screen.getByText("Report Profile")).toBeInTheDocument();
     expect(screen.getByTestId("icon-report")).toBeInTheDocument();
+  });
+
+  it("shows a Following badge when the profile is directly followed", () => {
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["follow"]} />,
+      { directFollowList: [pubkey], isLoggedIn: true }
+    );
+
+    expect(screen.getByText("Following")).toBeInTheDocument();
+
+    openDropdownMenu();
+
+    expect(screen.getByText("Unfollow")).toBeInTheDocument();
+    expect(screen.getByTestId("icon-user-minus")).toBeInTheDocument();
+  });
+
+  it("opens sign-in instead of mutating follows when logged out", async () => {
+    const addFollow = jest.fn();
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["follow"]} />,
+      { addFollow, isLoggedIn: false }
+    );
+
+    openDropdownMenu();
+    fireEvent.click(screen.getByText("+ Follow"));
+
+    await waitFor(() => {
+      expect(mockOnOpen).toHaveBeenCalled();
+    });
+    expect(addFollow).not.toHaveBeenCalled();
+  });
+
+  it("calls addFollow from the follow menu item when logged in", async () => {
+    const addFollow = jest.fn().mockResolvedValue({
+      ok: true,
+      event: {},
+      alreadyApplied: false,
+    });
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["follow"]} />,
+      { addFollow, isLoggedIn: true }
+    );
+
+    openDropdownMenu();
+    fireEvent.click(screen.getByText("+ Follow"));
+
+    await waitFor(() => {
+      expect(addFollow).toHaveBeenCalledWith(pubkey);
+    });
   });
 });

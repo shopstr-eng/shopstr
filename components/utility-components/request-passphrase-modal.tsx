@@ -40,6 +40,9 @@ export default function PassphraseChallengeModal({
   useEffect(() => {
     if (!isOpen) {
       setIsLoading(false);
+      setPassphraseInput("");
+      setRemindToggled(false);
+      setShowPassword(false);
     }
   }, [isOpen]);
 

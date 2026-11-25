@@ -8,6 +8,7 @@ import { NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 import { getTokenMetadata } from "@cashu/cashu-ts";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 
 function isDecodableToken(token: string): boolean {
   try {
@@ -61,7 +62,9 @@ const ChatMessage = ({
   setOrderId: (orderId: string) => void;
 }) => {
   const router = useRouter();
-  const [copiedToClipboard, setCopiedToClipboard] = useState(false);
+  const { copied: copiedToClipboard, copy: copyToClipboard } =
+    useCopyToClipboard();
+  const [localOrderId, setLocalOrderId] = useState("");
   const { pubkey: userPubkey } = useContext(SignerContext);
 
   useEffect(() => {
@@ -97,6 +100,7 @@ const ChatMessage = ({
     );
     setProductAddress?.(productAddress as string);
     setOrderId?.(orderId as string);
+    setLocalOrderId(orderId as string);
   }, [messageEvent]);
 
   const cashuMatch = messageEvent.content.match(/cashu[A-Za-z]/);
@@ -122,11 +126,7 @@ const ChatMessage = ({
   } catch {}
 
   const handleCopyToken = (token: string) => {
-    navigator.clipboard.writeText(token);
-    setCopiedToClipboard(true);
-    setTimeout(() => {
-      setCopiedToClipboard(false);
-    }, 2100);
+    void copyToClipboard(token);
   };
 
   const renderMessageContent = (content: string) => {
@@ -188,7 +188,16 @@ const ChatMessage = ({
             <>
               {renderMessageContent(contentBeforeCashu!)}
               <div className="flex items-center">
-                <ClaimButton token={cashuPrefix + tokenAfterCashuVersion} />
+                <ClaimButton
+                  token={cashuPrefix + tokenAfterCashuVersion}
+                  orderId={localOrderId || undefined}
+                  buyerPubkey={messageEvent.pubkey}
+                  sellerPubkey={
+                    messageEvent.pubkey === userPubkey
+                      ? currentChatPubkey
+                      : userPubkey
+                  }
+                />
                 {copiedToClipboard ? (
                   <CheckIcon className="ml-2 h-5 w-5 text-green-400" />
                 ) : (

@@ -1,17 +1,27 @@
-import { LogOut } from "@/utils/nostr/nostr-helper-functions";
-import { ProfileMapContext, ShopMapContext } from "@/utils/context/context";
+import {
+  getStoredReadRelays,
+  getStoredRelays,
+  LogOut,
+} from "@/utils/nostr/nostr-helper-functions";
+import {
+  ProfileMapContext,
+  RelaysContext,
+  ShopMapContext,
+} from "@/utils/context/context";
 import {
   Dropdown,
   DropdownItem,
   DropdownItemProps,
   DropdownMenu,
   DropdownTrigger,
+  Spinner,
   User,
   useDisclosure,
 } from "@heroui/react";
 import { nip19 } from "nostr-tools";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { getProfileSlug } from "@/utils/url-slugs";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 import {
   ArrowRightStartOnRectangleIcon,
   BuildingStorefrontIcon,
@@ -22,12 +32,26 @@ import {
   GlobeAltIcon,
   ExclamationTriangleIcon,
   UserIcon,
+  UserMinusIcon,
+  UserPlusIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
-import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../../sign-in/SignInModal";
 import useReportEventFlow from "../use-report-event-flow";
 import { ProfileData } from "@/utils/types/types";
+import { useFollowToggle } from "@/components/hooks/use-follow-toggle";
+import {
+  clearNip58ProfileBadgeHydrationCache,
+  fetchProfile,
+  hydrateNip58ProfileBadges,
+  NIP58_BADGE_HYDRATION_RETRY_MS,
+} from "@/utils/nostr/fetch-service";
+import { getDefaultRelays } from "@/utils/nostr/relay-config";
+import { sanitizeUrl } from "@braintree/sanitize-url";
 
 type DropDownKeys =
   | "shop"
@@ -38,11 +62,17 @@ type DropDownKeys =
   | "settings"
   | "user_profile"
   | "logout"
-  | "copy_npub";
+  | "copy_npub"
+  | "follow";
 
 type DropdownActionItem = Omit<DropdownItemProps, "onClick"> & {
   label: string;
-  onClick?: () => void;
+  onClick?: () => void | Promise<void>;
+};
+type ProfileBadge = NonNullable<ProfileData["badges"]>[number];
+type VisibleProfileBadge = {
+  badge: ProfileBadge;
+  imageUrl: string;
 };
 
 const fetchedProfileContentCache = new Map<string, ProfileData["content"]>();
@@ -51,6 +81,7 @@ const inFlightProfileRequests = new Map<
   Promise<ProfileData["content"] | null>
 >();
 const MAX_PROFILE_CACHE_ENTRIES = 100;
+const MAX_VISIBLE_PROFILE_BADGES = 4;
 
 const trimProfileContentCache = () => {
   while (fetchedProfileContentCache.size > MAX_PROFILE_CACHE_ENTRIES) {
@@ -63,6 +94,21 @@ const trimProfileContentCache = () => {
 const clearProfileRequestCaches = () => {
   fetchedProfileContentCache.clear();
   inFlightProfileRequests.clear();
+  clearNip58ProfileBadgeHydrationCache();
+};
+
+const sanitizeBadgeImageUrl = (imageUrl?: string) => {
+  const sanitizedUrl = sanitizeUrl(imageUrl || "");
+  if (!sanitizedUrl || sanitizedUrl === "about:blank") return "";
+
+  try {
+    const parsedUrl = new URL(sanitizedUrl);
+    return parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:"
+      ? sanitizedUrl
+      : "";
+  } catch {
+    return "";
+  }
 };
 
 const fetchProfileContent = async (pubkey: string) => {
@@ -92,19 +138,32 @@ export const ProfileWithDropdown = ({
   baseClassname,
   nameClassname = "block",
   dropDownKeys,
+  hydrateMissingProfileFromRelays = false,
 }: {
   baseClassname?: string;
   nameClassname?: string;
   pubkey: string;
   dropDownKeys: DropDownKeys[];
+  hydrateMissingProfileFromRelays?: boolean;
 }) => {
   const [fetchedProfileContent, setFetchedProfileContent] = useState<
     ProfileData["content"] | null
   >(null);
-  const [isNPubCopied, setIsNPubCopied] = useState(false);
+  const { copied: isNPubCopied, copy: copyNPub } = useCopyToClipboard();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const profileContext = useContext(ProfileMapContext);
+  const {
+    profileData,
+    isLoading: isProfileLoading,
+    updateProfileData,
+  } = profileContext;
+  const profileDataRef = useRef(profileContext.profileData);
+  profileDataRef.current = profileContext.profileData;
+  const contextProfile = profileData.get(pubkey);
+  const [badgeHydrationRetry, setBadgeHydrationRetry] = useState(0);
   const shopMapContext = useContext(ShopMapContext);
+  const relaysContext = useContext(RelaysContext);
+  const { nostr } = useContext(NostrContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
   const { isLoggedIn } = useContext(SignerContext);
@@ -116,10 +175,26 @@ export const ProfileWithDropdown = ({
     onRequireLogin: onOpen,
   });
 
-  const handleDropdownAction = (action: () => void) => {
+  const closeDropdown = () => {
     setIsDropdownOpen(false);
-    action();
   };
+
+  const handleDropdownAction = (action: () => void | Promise<void>) => {
+    closeDropdown();
+    void action();
+  };
+
+  const {
+    isFollowing,
+    isLoading: isFollowLoading,
+    toggle: toggleFollow,
+  } = useFollowToggle(pubkey, {
+    onRequireSignIn: () => {
+      closeDropdown();
+      onOpen();
+    },
+    onSuccess: closeDropdown,
+  });
 
   useEffect(() => {
     let isCancelled = false;
@@ -127,8 +202,7 @@ export const ProfileWithDropdown = ({
     if (!pubkey) return;
     if (typeof fetch !== "function") return;
 
-    const contextProfileContent =
-      profileContext.profileData.get(pubkey)?.content;
+    const contextProfileContent = contextProfile?.content;
     if (contextProfileContent) {
       setFetchedProfileContent(contextProfileContent);
       return;
@@ -137,6 +211,11 @@ export const ProfileWithDropdown = ({
     const cachedProfileContent = fetchedProfileContentCache.get(pubkey);
     if (cachedProfileContent) {
       setFetchedProfileContent(cachedProfileContent);
+      return;
+    }
+
+    if (isProfileLoading) {
+      setFetchedProfileContent(null);
       return;
     }
 
@@ -167,9 +246,96 @@ export const ProfileWithDropdown = ({
     return () => {
       isCancelled = true;
     };
-  }, [pubkey, profileContext.profileData]);
+  }, [contextProfile?.content, isProfileLoading, pubkey]);
 
-  const profile = profileContext.profileData.get(pubkey);
+  useEffect(() => {
+    if (!pubkey || !nostr || typeof nostr.fetch !== "function") return;
+    if (isProfileLoading && !hydrateMissingProfileFromRelays) return;
+
+    if (Array.isArray(contextProfile?.badges)) return;
+    if (!contextProfile && !hydrateMissingProfileFromRelays) return;
+
+    const relays = Array.from(
+      new Set([
+        ...(relaysContext.relayList || []),
+        ...(relaysContext.readRelayList || []),
+      ])
+    );
+    const storedRelays = Array.from(
+      new Set([...getStoredRelays(), ...getStoredReadRelays()])
+    );
+    const relaysToFetch =
+      relays.length > 0
+        ? relays
+        : storedRelays.length > 0
+          ? storedRelays
+          : getDefaultRelays();
+
+    const updateProfileContext = (profileMap: Map<string, unknown>) => {
+      const profile = profileMap.get(pubkey);
+      if (profile) {
+        const incomingProfile = profile as ProfileData;
+        const currentProfile = profileDataRef.current.get(pubkey);
+        updateProfileData(
+          currentProfile && Array.isArray(incomingProfile.badges)
+            ? { ...currentProfile, badges: incomingProfile.badges }
+            : incomingProfile
+        );
+      }
+    };
+    const request = contextProfile
+      ? hydrateNip58ProfileBadges(
+          nostr,
+          relaysToFetch,
+          [pubkey],
+          updateProfileContext,
+          profileDataRef.current
+        )
+      : fetchProfile(
+          nostr,
+          relaysToFetch,
+          [pubkey],
+          updateProfileContext,
+          profileDataRef.current
+        ).then(
+          ({ badgeHydration }) =>
+            badgeHydration || Promise.resolve({ retryAt: null })
+        );
+
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    void request
+      .catch((error) => {
+        console.error("Failed to hydrate profile from relays:", error);
+        return { retryAt: Date.now() + NIP58_BADGE_HYDRATION_RETRY_MS };
+      })
+      .then((outcome) => {
+        if (cancelled || !outcome?.retryAt) return;
+        retryTimer = setTimeout(
+          () => {
+            setBadgeHydrationRetry((retry) => retry + 1);
+          },
+          Math.max(0, outcome.retryAt - Date.now())
+        );
+      });
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [
+    badgeHydrationRetry,
+    contextProfile,
+    pubkey,
+    hydrateMissingProfileFromRelays,
+    isProfileLoading,
+    nostr,
+    relaysContext.readRelayList,
+    relaysContext.relayList,
+    updateProfileData,
+  ]);
+
+  const profile = contextProfile;
   const profileContent = profile?.content ?? fetchedProfileContent;
   const displayName = (() => {
     let name =
@@ -181,6 +347,57 @@ export const ProfileWithDropdown = ({
   })();
   const pfp = profileContent?.picture || `https://robohash.org/${pubkey}`;
   const isNip05Verified = profile?.nip05Verified || false;
+  const showFollowingIndicator = dropDownKeys.includes("follow") && isFollowing;
+  const profileBadges: VisibleProfileBadge[] = Array.isArray(profile?.badges)
+    ? (profile.badges as ProfileBadge[])
+        .reduce<VisibleProfileBadge[]>((visibleBadges, badge) => {
+          const imageUrl = sanitizeBadgeImageUrl(
+            badge.thumbnail || badge.image
+          );
+          if (imageUrl) {
+            visibleBadges.push({ badge, imageUrl });
+          }
+          return visibleBadges;
+        }, [])
+        .slice(0, MAX_VISIBLE_PROFILE_BADGES)
+    : [];
+  const displayNameContent = (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span className="overflow-hidden text-ellipsis whitespace-nowrap">
+        {displayName}
+      </span>
+      {profileBadges.length > 0 ? (
+        <span className="inline-flex shrink-0 items-center -space-x-1">
+          {profileBadges.map(({ badge, imageUrl }) => {
+            return (
+              <img
+                key={`${badge.definitionAddress}:${badge.awardEventId}`}
+                src={imageUrl}
+                alt={`${badge.name} badge`}
+                title={
+                  badge.description
+                    ? `${badge.name}: ${badge.description}`
+                    : badge.name
+                }
+                className="h-4 w-4 rounded-full border border-white bg-white object-cover shadow-sm dark:border-black dark:bg-black"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+              />
+            );
+          })}
+        </span>
+      ) : null}
+      {showFollowingIndicator ? (
+        <span className="text-shopstr-purple dark:text-shopstr-yellow inline-flex shrink-0 items-center gap-1 text-[10px] font-medium">
+          <span
+            aria-hidden="true"
+            className="h-1.5 w-1.5 rounded-full bg-current"
+          />
+          Following
+        </span>
+      ) : null}
+    </span>
+  );
 
   const DropDownItems: {
     [key in DropDownKeys]: DropdownActionItem;
@@ -304,23 +521,32 @@ export const ProfileWithDropdown = ({
         <ClipboardIcon className="h-5 w-5" />
       ),
       onPress: () => {
-        handleDropdownAction(async () => {
-          try {
-            const npub = nip19.npubEncode(pubkey);
-            if (!navigator.clipboard?.writeText) {
-              throw new Error("Clipboard API is not available");
-            }
-            await navigator.clipboard.writeText(npub);
-            setIsNPubCopied(true);
-            setTimeout(() => {
-              setIsNPubCopied(false);
-            }, 2100);
-          } catch (error) {
-            console.error("Failed to copy npub to clipboard", error);
-          }
+        handleDropdownAction(() => {
+          void copyNPub(nip19.npubEncode(pubkey));
         });
       },
       label: isNPubCopied ? "Copied!" : "Copy npub",
+    },
+    follow: {
+      key: "follow",
+      color: "default",
+      className: "text-light-text dark:text-dark-text",
+      startContent: isFollowLoading ? (
+        <Spinner size="sm" />
+      ) : isFollowing ? (
+        <UserMinusIcon className="h-5 w-5" />
+      ) : (
+        <UserPlusIcon className="h-5 w-5" />
+      ),
+      onPress: () => {
+        void toggleFollow();
+      },
+      label: isFollowLoading
+        ? "Please sign..."
+        : isFollowing
+          ? "Unfollow"
+          : "+ Follow",
+      isDisabled: isFollowLoading,
     },
   };
 
@@ -363,12 +589,16 @@ export const ProfileWithDropdown = ({
                 } group-hover:underline group-hover:underline-offset-2`,
                 base: `${baseClassname}`,
               }}
-              name={displayName}
+              name={displayNameContent}
             />
           </DropdownTrigger>
           <DropdownMenu
             aria-label="User Actions"
             variant="flat"
+            // closeOnSelect is disabled so the follow item can stay open and
+            // show its spinner while signing; every OTHER item must close the
+            // menu itself (handleDropdownAction / handleReportDropdownAction).
+            closeOnSelect={false}
             items={dropDownKeys.map((key) => DropDownItems[key])}
           >
             {(item) => {
@@ -378,6 +608,7 @@ export const ProfileWithDropdown = ({
                   color={item.color}
                   className={item.className}
                   startContent={item.startContent}
+                  isDisabled={item.isDisabled}
                   onPress={
                     item.onClick
                       ? () => handleReportDropdownAction(item)

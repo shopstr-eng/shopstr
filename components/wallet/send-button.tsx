@@ -23,9 +23,10 @@ import {
 } from "@heroui/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
-  getLocalStorageData,
+  getStoredMints,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import {
   Mint as CashuMint,
   Wallet as CashuWallet,
@@ -40,12 +41,14 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 
 const SendButton = () => {
   const [showSendModal, setShowSendModal] = useState(false);
   const [showTokenCard, setShowTokenCard] = useState(false);
   const [newToken, setNewToken] = useState("");
-  const [copiedToClipboard, setCopiedToClipboard] = useState(false);
+  const { copied: copiedToClipboard, copy: copyToClipboard } =
+    useCopyToClipboard();
   const [sendFailed, setSendFailed] = useState(false);
 
   const walletContext = useContext(CashuWalletContext);
@@ -53,7 +56,9 @@ const SendButton = () => {
   const { signer } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
 
-  const { mints, tokens, history } = getLocalStorageData();
+  const mints = getStoredMints();
+  const tokens = storage.getJson<any[]>(STORAGE_KEYS.TOKENS, []);
+  const history = storage.getJson<any[]>(STORAGE_KEYS.HISTORY, []);
 
   const {
     handleSubmit: handleSendSubmit,
@@ -147,14 +152,11 @@ const SendButton = () => {
       } else {
         proofArray = [...remainingProofs];
       }
-      localStorage.setItem("tokens", JSON.stringify(proofArray));
-      localStorage.setItem(
-        "history",
-        JSON.stringify([
-          { type: 2, amount: numSats, date: Math.floor(Date.now() / 1000) },
-          ...history,
-        ])
-      );
+      storage.setJson(STORAGE_KEYS.TOKENS, proofArray);
+      storage.setJson(STORAGE_KEYS.HISTORY, [
+        { type: 2, amount: numSats, date: Math.floor(Date.now() / 1000) },
+        ...history,
+      ]);
       await publishProofEvent(
         nostr!,
         signer!,
@@ -170,11 +172,7 @@ const SendButton = () => {
   };
 
   const handleCopyTokenString = () => {
-    navigator.clipboard.writeText(newToken);
-    setCopiedToClipboard(true);
-    setTimeout(() => {
-      setCopiedToClipboard(false);
-    }, 2100);
+    void copyToClipboard(newToken);
   };
 
   return (

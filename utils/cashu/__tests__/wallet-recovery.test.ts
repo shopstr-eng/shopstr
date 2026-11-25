@@ -6,12 +6,10 @@ import {
 } from "../wallet-recovery";
 
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
-  getLocalStorageData: jest.fn(() => ({ tokens: [], history: [] })),
   publishProofEvent: jest.fn(),
 }));
 
 const helpers = jest.requireMock("@/utils/nostr/nostr-helper-functions") as {
-  getLocalStorageData: jest.Mock;
   publishProofEvent: jest.Mock;
 };
 
@@ -26,9 +24,7 @@ const mkProof = (secret: string, amount = 10): Proof =>
 describe("recoverProofsToBuyerWallet", () => {
   beforeEach(() => {
     window.localStorage.clear();
-    helpers.getLocalStorageData.mockReset();
     helpers.publishProofEvent.mockReset();
-    helpers.getLocalStorageData.mockReturnValue({ tokens: [], history: [] });
     helpers.publishProofEvent.mockResolvedValue(undefined);
   });
 
@@ -51,10 +47,14 @@ describe("recoverProofsToBuyerWallet", () => {
   });
 
   it("preserves existing wallet contents", async () => {
-    helpers.getLocalStorageData.mockReturnValue({
-      tokens: [mkProof("existing", 1)],
-      history: [{ type: 3, amount: 1, date: 1 }],
-    });
+    window.localStorage.setItem(
+      "tokens",
+      JSON.stringify([mkProof("existing", 1)])
+    );
+    window.localStorage.setItem(
+      "history",
+      JSON.stringify([{ type: 3, amount: 1, date: 1 }])
+    );
     await recoverProofsToBuyerWallet(
       {} as never,
       {} as never,

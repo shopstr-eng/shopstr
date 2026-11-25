@@ -21,6 +21,7 @@ import {
   ExclamationCircleIcon,
   InformationCircleIcon,
 } from "@heroicons/react/24/outline";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 
 interface ApiKeyItem {
   id: number;
@@ -41,7 +42,7 @@ const ApiKeysPage = () => {
   const [newKeyPermission, setNewKeyPermission] = useState("read");
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [showCreatedKey, setShowCreatedKey] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -173,9 +174,7 @@ const ApiKeysPage = () => {
   };
 
   const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    void copy(text);
   };
 
   const formatDate = (dateStr: string | null) => {

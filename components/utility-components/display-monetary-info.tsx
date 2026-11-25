@@ -1,11 +1,9 @@
-import { ShippingOptionsType } from "@/utils/STATIC-VARIABLES";
+import {
+  calculateTotalCost,
+  type ProductMonetaryInfo,
+} from "@/utils/parsers/product-tag-helpers";
 
-type ProductMonetaryInfo = {
-  shippingType?: ShippingOptionsType;
-  shippingCost?: number;
-  price: number;
-  currency: string;
-};
+export { calculateTotalCost };
 
 export default function CompactPriceDisplay({
   monetaryInfo,
@@ -44,7 +42,7 @@ export function DisplayCheckoutCost({
 }) {
   const { shippingType, price, currency } = monetaryInfo;
 
-  const formattedPrice = formatWithCommas(price, currency);
+  const formattedPrice = formatWithCommas(price ?? 0, currency);
 
   return (
     <div>
@@ -59,15 +57,6 @@ export function DisplayCheckoutCost({
     </div>
   );
 }
-
-export const calculateTotalCost = (
-  productMonetaryInfo: ProductMonetaryInfo
-) => {
-  const { price, shippingCost } = productMonetaryInfo;
-  let total = price;
-  total += shippingCost ? shippingCost : 0;
-  return total;
-};
 
 export function formatWithCommas(amount: number, currency: string) {
   if (!amount || amount === 0) {

@@ -1,8 +1,10 @@
 import {
   buildP2pkOutputConfig,
   checkMintP2pkSupport,
+  getArbiterPubkey,
   getBuyerReclaimKeys,
   getP2pkCheckoutPolicyError,
+  isP2pkMintAllowlistConfigured,
   isP2pkMintAllowed,
   mintInfoSupportsP2pk,
   mintKeysetsHaveZeroInputFees,
@@ -11,6 +13,7 @@ import {
   pubkeysEqual,
   resolveP2pkCheckoutOutputConfig,
 } from "../p2pk-checkout";
+import * as p2pkCheckout from "../p2pk-checkout";
 
 const BUYER_CASHU_PUBKEY = "a".repeat(64);
 const BUYER_EXTRA_RECLAIM_KEY = `03${"b".repeat(64)}`;
@@ -18,6 +21,8 @@ const NORMALIZED_BUYER_EXTRA_RECLAIM_KEY = "b".repeat(64);
 const BUYER_NOSTR_PUBKEY = "c".repeat(64);
 const SELLER_CASHU_PUBKEY = `02${"d".repeat(64)}`;
 const NORMALIZED_SELLER_CASHU_PUBKEY = "d".repeat(64);
+const ARBITER_CASHU_PUBKEY = `03${"f".repeat(64)}`;
+const NORMALIZED_ARBITER_CASHU_PUBKEY = "f".repeat(64);
 
 const buyerContent = (reclaimKeys?: string[]) =>
   ({
@@ -34,11 +39,17 @@ const buildP2pkProof = ({
   pubkey = SELLER_CASHU_PUBKEY,
   locktime = Math.floor(Date.now() / 1000) + 60,
   refundKeys = [BUYER_CASHU_PUBKEY],
+  pubkeys,
+  nSigs,
+  shopstrOrderId,
   id = "proof-id",
 }: {
   pubkey?: string;
   locktime?: number;
   refundKeys?: string[];
+  pubkeys?: string[];
+  nSigs?: number;
+  shopstrOrderId?: string;
   id?: string;
 } = {}) =>
   ({
@@ -53,6 +64,9 @@ const buildP2pkProof = ({
         tags: [
           ["locktime", locktime.toString()],
           ["refund", ...refundKeys],
+          ...(pubkeys ? [["pubkeys", ...pubkeys]] : []),
+          ...(nSigs !== undefined ? [["n_sigs", nSigs.toString()]] : []),
+          ...(shopstrOrderId ? [["shopstr_order", shopstrOrderId]] : []),
         ],
       },
     ]),
@@ -63,7 +77,10 @@ describe("p2pk-checkout", () => {
 
   beforeEach(() => {
     jest.restoreAllMocks();
-    process.env = { ...envBackup };
+    process.env = {
+      ...envBackup,
+      NEXT_PUBLIC_ARBITER_PUBKEY: ARBITER_CASHU_PUBKEY,
+    };
   });
 
   afterAll(() => {
@@ -112,16 +129,52 @@ describe("p2pk-checkout", () => {
       expect(buildP2pkOutputConfig(sellerP2pk, undefined)).toBeUndefined();
     });
 
-    it("uses the seller profile pubkey as the locked redeem path", () => {
+    it("returns undefined when the arbiter pubkey is not configured", () => {
+      delete process.env.NEXT_PUBLIC_ARBITER_PUBKEY;
+
+      expect(
+        buildP2pkOutputConfig(sellerP2pk, undefined, BUYER_CASHU_PUBKEY)
+      ).toBeUndefined();
+    });
+
+    it("uses the seller profile pubkey as the primary locked redeem path", () => {
       const outputConfig = buildP2pkOutputConfig(
         sellerP2pk,
         undefined,
         BUYER_CASHU_PUBKEY
       );
 
-      expect(outputConfig?.send.options.pubkey).toBe(
+      expect(outputConfig?.send.options.pubkey[0]).toBe(
         NORMALIZED_SELLER_CASHU_PUBKEY
       );
+    });
+
+    it("builds cashu-ts 2-of-3 lock options for seller, buyer, and arbiter", () => {
+      const outputConfig = buildP2pkOutputConfig(
+        sellerP2pk,
+        undefined,
+        BUYER_CASHU_PUBKEY
+      );
+
+      expect(outputConfig?.send.options.pubkey).toEqual([
+        NORMALIZED_SELLER_CASHU_PUBKEY,
+        BUYER_CASHU_PUBKEY,
+        NORMALIZED_ARBITER_CASHU_PUBKEY,
+      ]);
+      expect(outputConfig?.send.options.requiredSignatures).toBe(2);
+    });
+
+    it("binds new escrow proofs to the checkout order id", () => {
+      const outputConfig = buildP2pkOutputConfig(
+        sellerP2pk,
+        undefined,
+        BUYER_CASHU_PUBKEY,
+        "order-1"
+      );
+
+      expect(outputConfig?.send.options.additionalTags).toEqual([
+        ["shopstr_order", "order-1"],
+      ]);
     });
 
     it("sets refundKeys from profile reclaim keys plus the buyer Cashu pubkey", () => {
@@ -186,6 +239,7 @@ describe("p2pk-checkout", () => {
     });
 
     it("allows P2PK mints by default when no allowlist is configured", () => {
+      expect(isP2pkMintAllowlistConfigured()).toBe(false);
       expect(isP2pkMintAllowed("https://mint.example")).toBe(true);
     });
 
@@ -193,6 +247,7 @@ describe("p2pk-checkout", () => {
       process.env.NEXT_PUBLIC_P2PK_ESCROW_ALLOWED_MINTS =
         "https://cashu.example.com, https://mint.example/path/";
 
+      expect(isP2pkMintAllowlistConfigured()).toBe(true);
       expect(isP2pkMintAllowed("https://cashu.example.com/")).toBe(true);
       expect(isP2pkMintAllowed("https://mint.example/path")).toBe(true);
       expect(isP2pkMintAllowed("https://other.example")).toBe(false);
@@ -470,11 +525,72 @@ describe("p2pk-checkout", () => {
         send: {
           type: "p2pk",
           options: expect.objectContaining({
-            pubkey: NORMALIZED_SELLER_CASHU_PUBKEY,
+            pubkey: [
+              NORMALIZED_SELLER_CASHU_PUBKEY,
+              BUYER_CASHU_PUBKEY,
+              NORMALIZED_ARBITER_CASHU_PUBKEY,
+            ],
+            requiredSignatures: 2,
             refundKeys: [BUYER_CASHU_PUBKEY],
           }),
         },
       });
+    });
+
+    it("fails with an explicit arbiter-not-configured error when escrow is active but the arbiter pubkey is not configured", async () => {
+      process.env.NEXT_PUBLIC_P2PK_ESCROW_ENABLED = "true";
+      delete process.env.NEXT_PUBLIC_ARBITER_PUBKEY;
+
+      await expect(
+        resolveP2pkCheckoutOutputConfig({
+          sellerP2pk,
+          amountSats: 10,
+          mintUrl: "https://mint.example",
+          buyerContent: undefined,
+          buyerCashuPubkey: BUYER_CASHU_PUBKEY,
+          fetchImpl: goodMintFetch(),
+        })
+      ).rejects.toThrow(
+        "Escrow checkout is unavailable: the dispute arbiter is not configured on this server. Please contact the marketplace operator."
+      );
+    });
+  });
+
+  describe("resolveSellerCheckoutProfile", () => {
+    it("loads the seller profile at payment time when the in-memory profile map missed it", async () => {
+      const fetchedProfile = {
+        pubkey: BUYER_NOSTR_PUBKEY,
+        content: {
+          payment_preference: "ecash",
+          p2pk: sellerP2pk,
+        },
+        created_at: 123,
+      };
+      const fetchImpl = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ profile: fetchedProfile }),
+      });
+
+      const resolveSellerCheckoutProfile = (
+        p2pkCheckout as unknown as {
+          resolveSellerCheckoutProfile: (params: {
+            sellerPubkey: string;
+            cachedProfile?: unknown;
+            fetchImpl: typeof fetch;
+          }) => Promise<unknown>;
+        }
+      ).resolveSellerCheckoutProfile;
+
+      await expect(
+        resolveSellerCheckoutProfile({
+          sellerPubkey: BUYER_NOSTR_PUBKEY,
+          cachedProfile: undefined,
+          fetchImpl,
+        })
+      ).resolves.toEqual(fetchedProfile);
+      expect(fetchImpl).toHaveBeenCalledWith(
+        `/api/db/fetch-profile?pubkey=${BUYER_NOSTR_PUBKEY}`
+      );
     });
   });
 
@@ -491,6 +607,35 @@ describe("p2pk-checkout", () => {
         NORMALIZED_BUYER_EXTRA_RECLAIM_KEY,
         BUYER_CASHU_PUBKEY,
       ]);
+    });
+
+    it("leaves pubkeys and nSigs undefined for legacy single-key proofs", () => {
+      const parsed = parseP2PK(buildP2pkProof());
+
+      expect(parsed?.pubkeys).toBeUndefined();
+      expect(parsed?.nSigs).toBeUndefined();
+    });
+
+    it("parses the pubkeys and n_sigs tags from a 2-of-3 multisig proof", () => {
+      const parsed = parseP2PK(
+        buildP2pkProof({
+          pubkeys: [BUYER_CASHU_PUBKEY, ARBITER_CASHU_PUBKEY],
+          nSigs: 2,
+        })
+      );
+
+      expect(parsed?.pubkey).toBe(NORMALIZED_SELLER_CASHU_PUBKEY);
+      expect(parsed?.pubkeys).toEqual([
+        BUYER_CASHU_PUBKEY,
+        NORMALIZED_ARBITER_CASHU_PUBKEY,
+      ]);
+      expect(parsed?.nSigs).toBe(2);
+    });
+
+    it("parses the Shopstr order binding tag from P2PK proofs", () => {
+      const parsed = parseP2PK(buildP2pkProof({ shopstrOrderId: "order-1" }));
+
+      expect(parsed?.shopstrOrderId).toBe("order-1");
     });
 
     it("compares x-only and compressed pubkeys consistently", () => {
@@ -535,6 +680,150 @@ describe("p2pk-checkout", () => {
         p2pk: null,
         invalidReason: "Token contains inconsistent P2PK proof locks.",
       });
+    });
+
+    it("rejects proof sets that mix different Shopstr order bindings", () => {
+      const locktime = Math.floor(Date.now() / 1000) + 60;
+      const result = parseP2PKProofSet([
+        buildP2pkProof({ id: "one", locktime, shopstrOrderId: "order-1" }),
+        buildP2pkProof({ id: "two", locktime, shopstrOrderId: "order-2" }),
+      ]);
+
+      expect(result).toEqual({
+        p2pk: null,
+        invalidReason: "Token contains inconsistent P2PK proof locks.",
+      });
+    });
+
+    it("parses a consistent 2-of-3 multisig proof set", () => {
+      const locktime = Math.floor(Date.now() / 1000) + 60;
+      const multisigProof = (id: string) =>
+        buildP2pkProof({
+          id,
+          locktime,
+          pubkeys: [BUYER_CASHU_PUBKEY, ARBITER_CASHU_PUBKEY],
+          nSigs: 2,
+        });
+
+      const result = parseP2PKProofSet([
+        multisigProof("one"),
+        multisigProof("two"),
+      ]);
+
+      expect(result.invalidReason).toBeUndefined();
+      expect(result.p2pk?.pubkeys).toEqual([
+        BUYER_CASHU_PUBKEY,
+        NORMALIZED_ARBITER_CASHU_PUBKEY,
+      ]);
+      expect(result.p2pk?.nSigs).toBe(2);
+      expect(result.p2pk?.proofCount).toBe(2);
+    });
+
+    it("rejects proof sets with mismatched nSigs thresholds", () => {
+      const locktime = Math.floor(Date.now() / 1000) + 60;
+      const pubkeys = [BUYER_CASHU_PUBKEY, ARBITER_CASHU_PUBKEY];
+
+      const result = parseP2PKProofSet([
+        buildP2pkProof({ id: "one", locktime, pubkeys, nSigs: 2 }),
+        buildP2pkProof({ id: "two", locktime, pubkeys, nSigs: 3 }),
+      ]);
+
+      expect(result).toEqual({
+        p2pk: null,
+        invalidReason: "Token contains inconsistent P2PK proof locks.",
+      });
+    });
+
+    it("rejects malformed P2PK proofs with duplicate spending-condition tags", () => {
+      const proof = buildP2pkProof({
+        pubkeys: [BUYER_CASHU_PUBKEY, ARBITER_CASHU_PUBKEY],
+        nSigs: 2,
+      });
+      const [, secret] = JSON.parse(proof.secret);
+      secret.tags.push(["n_sigs", "1"]);
+      proof.secret = JSON.stringify(["P2PK", secret]);
+
+      expect(parseP2PK(proof)).toBeNull();
+    });
+
+    it("rejects malformed P2PK proofs whose n_sigs exceeds available locktime keys", () => {
+      const proof = buildP2pkProof({
+        pubkeys: [BUYER_CASHU_PUBKEY],
+        nSigs: 3,
+      });
+
+      expect(parseP2PK(proof)).toBeNull();
+    });
+
+    it("rejects duplicate keys in either NUT-11 signature pathway", () => {
+      expect(
+        parseP2PK(
+          buildP2pkProof({
+            pubkeys: [SELLER_CASHU_PUBKEY, ARBITER_CASHU_PUBKEY],
+            nSigs: 2,
+          })
+        )
+      ).toBeNull();
+      expect(
+        parseP2PK(
+          buildP2pkProof({
+            refundKeys: [BUYER_CASHU_PUBKEY, `02${BUYER_CASHU_PUBKEY}`],
+          })
+        )
+      ).toBeNull();
+    });
+
+    it("rejects an unknown NUT-11 signature flag", () => {
+      const proof = buildP2pkProof();
+      const [, secret] = JSON.parse(proof.secret);
+      secret.tags.push(["sigflag", "SIG_UNKNOWN"]);
+      proof.secret = JSON.stringify(["P2PK", secret]);
+
+      expect(parseP2PK(proof)).toBeNull();
+    });
+  });
+
+  describe("getArbiterPubkey", () => {
+    it("normalizes a configured arbiter pubkey", () => {
+      expect(getArbiterPubkey()).toBe(NORMALIZED_ARBITER_CASHU_PUBKEY);
+    });
+
+    it("returns null when the arbiter pubkey is not configured", () => {
+      delete process.env.NEXT_PUBLIC_ARBITER_PUBKEY;
+
+      expect(getArbiterPubkey()).toBeNull();
+    });
+  });
+
+  describe("seller escalation timing", () => {
+    const hour = 60 * 60 * 1000;
+    const requestSentAtMs = 1_000_000;
+
+    it("uses the normal 48 hour grace period when the refund locktime is far away", () => {
+      expect(
+        (p2pkCheckout as any).getSellerEscalationAtMs({
+          requestSentAtMs,
+          locktimeSeconds: Math.floor((requestSentAtMs + 7 * 24 * hour) / 1000),
+        })
+      ).toBe(requestSentAtMs + 48 * hour);
+    });
+
+    it("shortens the grace period to preserve a full day before refund unlock", () => {
+      expect(
+        (p2pkCheckout as any).getSellerEscalationAtMs({
+          requestSentAtMs,
+          locktimeSeconds: Math.floor((requestSentAtMs + 36 * hour) / 1000),
+        })
+      ).toBe(requestSentAtMs + 12 * hour);
+    });
+
+    it("allows immediate escalation when less than the safety window remains", () => {
+      expect(
+        (p2pkCheckout as any).getSellerEscalationAtMs({
+          requestSentAtMs,
+          locktimeSeconds: Math.floor((requestSentAtMs + 12 * hour) / 1000),
+        })
+      ).toBe(requestSentAtMs);
     });
   });
 });

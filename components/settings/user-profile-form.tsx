@@ -27,6 +27,8 @@ import {
 } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import { storage } from "@/utils/storage";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 
 interface UserProfileFormProps {
   isOnboarding?: boolean;
@@ -37,10 +39,11 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [isFetchingProfile, setIsFetchingProfile] = useState(false);
-  const [isNPubCopied, setIsNPubCopied] = useState(false);
-  const [isNSecCopied, setIsNSecCopied] = useState(false);
+  const { copied: isNPubCopied, copy: copyNPub } = useCopyToClipboard();
+  const { copied: isNSecCopied, copy: copyNSec } = useCopyToClipboard();
   const [isNSecVisible, setIsNSecVisible] = useState(false);
-  const [isNcryptsecCopied, setIsNcryptsecCopied] = useState(false);
+  const { copied: isNcryptsecCopied, copy: copyNcryptsec } =
+    useCopyToClipboard();
   const [isNcryptsecVisible, setIsNcryptsecVisible] = useState(false);
   const [userNcryptsec, setUserNcryptsec] = useState("");
   const [userNSec, setUserNSec] = useState("");
@@ -77,9 +80,10 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
     if (!userPubkey) return;
     setIsFetchingProfile(true);
 
-    const localFallback = parseLocalProfileFallback(
-      localStorage.getItem(getLocalUserProfileKey(userPubkey))
+    const rawLocalFallback = storage.getItem(
+      getLocalUserProfileKey(userPubkey)
     );
+    const localFallback = parseLocalProfileFallback(rawLocalFallback);
 
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(userPubkey)
@@ -100,17 +104,14 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       }
 
       try {
-        localStorage.setItem(
-          getLocalUserProfileKey(userPubkey),
-          JSON.stringify({
-            content: shouldUseLocalFallback
-              ? localFallback!.content
-              : profile.content,
-            updatedAt: shouldUseLocalFallback
-              ? localFallback!.updatedAt
-              : profileCreatedAt,
-          })
-        );
+        storage.setJson(getLocalUserProfileKey(userPubkey), {
+          content: shouldUseLocalFallback
+            ? localFallback!.content
+            : profile.content,
+          updatedAt: shouldUseLocalFallback
+            ? localFallback!.updatedAt
+            : profileCreatedAt,
+        });
       } catch (error) {
         console.error("Failed to persist profile fallback locally:", error);
       }
@@ -161,13 +162,10 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
       };
 
       try {
-        localStorage.setItem(
-          getLocalUserProfileKey(userPubkey),
-          JSON.stringify({
-            content: updatedData,
-            updatedAt: Math.floor(Date.now() / 1000),
-          })
-        );
+        storage.setJson(getLocalUserProfileKey(userPubkey), {
+          content: updatedData,
+          updatedAt: Math.floor(Date.now() / 1000),
+        });
       } catch (error) {
         console.error("Failed to save local profile fallback:", error);
       }
@@ -236,9 +234,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               variant="light"
               className="h-6 w-6 min-w-0 flex-shrink-0 p-0"
               onClick={() => {
-                navigator.clipboard.writeText(userNPub);
-                setIsNPubCopied(true);
-                setTimeout(() => setIsNPubCopied(false), 2000);
+                void copyNPub(userNPub);
               }}
             >
               {isNPubCopied ? "✅" : "📋"}
@@ -278,9 +274,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                 variant="light"
                 className="h-6 w-6 min-w-0 p-0"
                 onClick={() => {
-                  navigator.clipboard.writeText(userNSec);
-                  setIsNSecCopied(true);
-                  setTimeout(() => setIsNSecCopied(false), 2000);
+                  void copyNSec(userNSec);
                 }}
               >
                 {isNSecCopied ? "✅" : "📋"}
@@ -326,9 +320,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                 variant="light"
                 className="h-6 w-6 min-w-0 p-0"
                 onClick={() => {
-                  navigator.clipboard.writeText(userNcryptsec);
-                  setIsNcryptsecCopied(true);
-                  setTimeout(() => setIsNcryptsecCopied(false), 2000);
+                  void copyNcryptsec(userNcryptsec);
                 }}
               >
                 {isNcryptsecCopied ? "✅" : "📋"}

@@ -7,7 +7,11 @@ import {
 } from "@/utils/mcp/nostr-signing";
 import { ApiKeyRecord, getAgentSigner } from "@/utils/mcp/auth";
 import { EventTemplate, getEventHash } from "nostr-tools";
-import { cacheEvent, getDbPool } from "@/utils/db/db-service";
+import {
+  cacheEvent,
+  fetchProductByIdFromDb,
+  getDbPool,
+} from "@/utils/db/db-service";
 import { v4 as uuidv4 } from "uuid";
 import dns from "dns";
 import { promisify } from "util";
@@ -25,6 +29,12 @@ import {
 } from "@/utils/nostr/request-auth";
 import { getDefaultRelays, withBlastr } from "@/utils/nostr/relay-config";
 import { createGiftWrapEvent } from "@/utils/nostr/gift-wrap";
+import {
+  AgentWalletError,
+  getAgentWalletBalance,
+  payInvoiceFromAgentWallet,
+  receiveAgentCashuToken,
+} from "@/utils/mcp/agent-cashu-wallet";
 
 const resolveCname = promisify(dns.resolveCname);
 const resolve4 = promisify(dns.resolve4);
@@ -98,6 +108,21 @@ function errorResponse(message: string, details: string, startTime: number) {
     ],
     isError: true,
   };
+}
+
+function walletErrorResponse(
+  fallbackMessage: string,
+  error: unknown,
+  startTime: number
+) {
+  if (error instanceof AgentWalletError) {
+    return errorResponse(error.title, error.details, startTime);
+  }
+  return errorResponse(
+    fallbackMessage,
+    error instanceof Error ? error.message : "Unknown error",
+    startTime
+  );
 }
 
 async function getSigner(apiKey: ApiKeyRecord): Promise<McpNostrSigner | null> {
@@ -245,7 +270,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .string()
         .optional()
         .describe(
-          "URL slug for the storefront (e.g. 'fresh-farm' for milk.market/shop/fresh-farm). Must be lowercase alphanumeric with hyphens."
+          "URL slug for the storefront (e.g. 'fresh-farm' for shopstr.market/shop/fresh-farm). Must be lowercase alphanumeric with hyphens."
         ),
       storefrontFontHeading: z
         .string()
@@ -523,7 +548,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
   reg(
     "register_shop_slug",
-    "Register, update, or delete your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. milk.market/shop/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words (shop, admin, api, etc.) are not allowed. To delete, set action to 'delete'.",
+    "Register, update, or delete your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. shopstr.market/shop/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words (shop, admin, api, etc.) are not allowed. To delete, set action to 'delete'.",
     {
       slug: z
         .string()
@@ -873,7 +898,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const handlerDTag = uuidv4();
         const origin =
-          process.env.NEXT_PUBLIC_BASE_URL || "https://milk.market";
+          process.env.NEXT_PUBLIC_BASE_URL || "https://shopstr.market";
 
         const handlerEvent: EventTemplate = {
           kind: 31990,
@@ -1147,14 +1172,38 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
+        // Listings are addressable, so deletions carry `a` and `k` tags
+        // alongside the `e` tags.
+        const authorPubkey = signer.getPubKey();
+        const addresses = new Set<string>();
+        const kinds = new Set<string>();
+        for (const id of params.eventIds as string[]) {
+          const listing = await fetchProductByIdFromDb(id);
+          if (listing?.pubkey !== authorPubkey) continue;
+          const dTag = listing.tags.find((tag) => tag[0] === "d")?.[1];
+          if (dTag) addresses.add(`${listing.kind}:${listing.pubkey}:${dTag}`);
+          kinds.add(String(listing.kind));
+        }
+
         const eventTemplate: EventTemplate = {
           kind: 5,
           content: params.reason || "Deletion request",
-          tags: params.eventIds.map((id: string) => ["e", id]),
+          tags: [
+            ...params.eventIds.map((id: string) => ["e", id]),
+            ...[...addresses].map((address) => ["a", address]),
+            ...[...kinds].map((kind) => ["k", kind]),
+          ],
           created_at: Math.floor(Date.now() / 1000),
         };
 
-        const signedEvent = await signAndPublishEvent(signer, eventTemplate);
+        // The durable cache write drops the listing and tombstones it so it
+        // cannot be searched, ordered, or re-cached from relays.
+        const signedEvent = await signAndPublishEvent(
+          signer,
+          eventTemplate,
+          undefined,
+          { requireDurableCache: true }
+        );
 
         return successResponse(
           {
@@ -1736,7 +1785,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
   reg(
     "update_order_status",
-    "Update the status of an order and optionally notify the buyer via encrypted DM. Sellers can confirm, ship, or mark orders delivered. Buyers can cancel orders.",
+    "Update the status of an order and optionally notify the counterparty via encrypted DM. Sellers can confirm, ship, or mark orders delivered. Buyers can cancel orders.",
     {
       orderId: z.string().describe("The order ID to update"),
       status: z
@@ -1746,7 +1795,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .string()
         .optional()
         .describe(
-          "Buyer's pubkey (hex format) — required to send a notification DM"
+          "Buyer's pubkey (hex format) — optional confirmation when seller sends a notification DM"
         ),
       message: z
         .string()
@@ -1813,9 +1862,18 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         }
 
         let notificationSent = false;
-        const buyerPubkey = order.buyer_pubkey;
+        let notificationWarning: string | undefined;
 
-        if (params.buyerPubkey && params.message) {
+        const isBuyerCancellation = params.status === "cancelled";
+        const recipientPubkey = isBuyerCancellation
+          ? order.seller_pubkey
+          : order.buyer_pubkey;
+
+        const shouldSendNotification = Boolean(
+          isBuyerCancellation || (params.buyerPubkey && params.message)
+        );
+
+        if (shouldSendNotification) {
           try {
             const senderPubkey = signer.getPubKey();
             const defaultRelays = getDefaultRelays();
@@ -1831,21 +1889,62 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
               cancelled: "order-info",
             };
 
+            const wireStatusMap: Record<string, string> = {
+              confirmed: "confirmed",
+              shipped: "shipped",
+              delivered: "completed",
+              cancelled: "canceled",
+            };
+
+            let resolvedProductAddress = params.productAddress;
+            if (!resolvedProductAddress) {
+              try {
+                const { fetchProductByIdFromDb } =
+                  await import("@/utils/db/db-service");
+                const productEvent = await fetchProductByIdFromDb(
+                  order.product_id
+                );
+                if (productEvent) {
+                  const dTag =
+                    productEvent.tags?.find(
+                      (t: string[]) => t[0] === "d"
+                    )?.[1] || productEvent.id;
+                  resolvedProductAddress = `30402:${order.seller_pubkey}:${dTag}`;
+                }
+              } catch {}
+            }
+            if (!resolvedProductAddress) {
+              resolvedProductAddress = order.product_id.includes(":")
+                ? order.product_id
+                : `30402:${order.seller_pubkey}:${order.product_id}`;
+            }
+
             const innerTags: string[][] = [
-              ["p", order.buyer_pubkey, relayHint],
+              ["p", recipientPubkey, relayHint],
               ["subject", subjectMap[params.status] || "order-info"],
               ["order", params.orderId],
-              ["status", params.status],
+              ["status", wireStatusMap[params.status] || params.status],
               ["b", order.buyer_pubkey],
             ];
-            if (params.productAddress) {
-              innerTags.push(["item", params.productAddress, "1"]);
+            if (resolvedProductAddress) {
+              innerTags.push([
+                "item",
+                resolvedProductAddress,
+                String(order.quantity || 1),
+              ]);
             }
+
+            const messageText =
+              params.message && params.message.trim().length > 0
+                ? params.message.trim()
+                : isBuyerCancellation
+                  ? "Order has been cancelled by the buyer."
+                  : "";
 
             const innerEvent = {
               pubkey: senderPubkey,
               created_at: Math.floor(Date.now() / 1000),
-              content: params.message,
+              content: messageText,
               kind: 14,
               tags: innerTags,
             };
@@ -1856,7 +1955,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
             const wrapEvent = await createGiftWrapEvent(
               JSON.stringify(fullInnerEvent),
-              buyerPubkey
+              recipientPubkey
             );
 
             const relayManager = new McpRelayManager(withBlastr(defaultRelays));
@@ -1869,6 +1968,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             }
           } catch (dmError) {
             console.error("Failed to send status notification DM:", dmError);
+            notificationWarning = isBuyerCancellation
+              ? "Order was cancelled in the database, but the notification DM could not be delivered to the seller."
+              : "Order status was updated in the database, but the notification DM could not be delivered.";
           }
         }
 
@@ -1878,6 +1980,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             status: params.status,
             orderUpdated: true,
             notificationSent,
+            ...(notificationWarning ? { warning: notificationWarning } : {}),
           },
           startTime
         );
@@ -2437,49 +2540,12 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { fetchCachedEvents } = await import("@/utils/db/db-service");
-        const pubkey = signer.getPubKey();
-        const proofEvents = await fetchCachedEvents(7375);
-        const myProofEvents = proofEvents.filter(
-          (e: any) => e.pubkey === pubkey
-        );
-
-        let totalBalance = 0;
-        const mintBalances: Record<string, number> = {};
-
-        for (const event of myProofEvents) {
-          try {
-            const decryptedContent = signer.decrypt(pubkey, event.content);
-            const parsed = JSON.parse(decryptedContent);
-            const mintUrl = parsed.mint;
-            const proofs = parsed.proofs || [];
-            const amount = proofs.reduce(
-              (sum: number, p: any) => sum + (p.amount || 0),
-              0
-            );
-
-            if (!params.mintUrl || mintUrl === params.mintUrl) {
-              totalBalance += amount;
-              mintBalances[mintUrl] = (mintBalances[mintUrl] || 0) + amount;
-            }
-          } catch {
-            continue;
-          }
-        }
-
-        return successResponse(
-          {
-            totalBalance,
-            unit: "sats",
-            mintBalances,
-            proofEventCount: myProofEvents.length,
-          },
-          startTime
-        );
+        const balance = await getAgentWalletBalance(signer, params.mintUrl);
+        return successResponse({ ...balance, unit: "sats" }, startTime);
       } catch (error) {
-        return errorResponse(
+        return walletErrorResponse(
           "Failed to get Cashu balance",
-          error instanceof Error ? error.message : "Unknown error",
+          error,
           startTime
         );
       }
@@ -2488,7 +2554,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
   reg(
     "receive_cashu_tokens",
-    "Receive Cashu tokens and store them as a proof event (kind 7375). Publishes the encrypted proof event to your Nostr relays.",
+    "Receive a Cashu token. The token is swapped at its mint so the proofs are yours alone, then stored as an encrypted proof event (kind 7375). Spent, duplicate and forged tokens are rejected.",
     {
       token: z.string().describe("Serialized Cashu token string to receive"),
     },
@@ -2499,51 +2565,12 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { getDecodedToken } = await import("@cashu/cashu-ts");
-        const decoded = getDecodedToken(params.token, []);
-        const mintUrl = decoded.mint;
-        const proofs = decoded.proofs;
-        const totalAmount = proofs.reduce(
-          (sum: number, p: any) => sum + (p.amount || 0),
-          0
-        );
-
-        const pubkey = signer.getPubKey();
-
-        const proofData = JSON.stringify({
-          mint: mintUrl,
-          proofs,
-        });
-        const encryptedContent = signer.encrypt(pubkey, proofData);
-
-        const relays = withBlastr(getDefaultRelays());
-        const tags: string[][] = [["mint", mintUrl]];
-        for (const relay of relays) {
-          tags.push(["relay", relay]);
-        }
-
-        const eventTemplate: EventTemplate = {
-          kind: 7375,
-          created_at: Math.floor(Date.now() / 1000),
-          tags,
-          content: encryptedContent,
-        };
-
-        const signedEvent = await signAndPublishEvent(signer, eventTemplate);
-
-        return successResponse(
-          {
-            eventId: signedEvent.id,
-            amount: totalAmount,
-            mint: mintUrl,
-            proofCount: proofs.length,
-          },
-          startTime
-        );
+        const received = await receiveAgentCashuToken(signer, params.token);
+        return successResponse(received, startTime);
       } catch (error) {
-        return errorResponse(
+        return walletErrorResponse(
           "Failed to receive Cashu tokens",
-          error instanceof Error ? error.message : "Unknown error",
+          error,
           startTime
         );
       }
@@ -2609,7 +2636,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
   reg(
     "send_cashu_payment",
-    "Send a Cashu payment by melting tokens to pay a Lightning invoice. Uses proofs from your stored Cashu wallet.",
+    "Pay a Lightning invoice from your stored Cashu wallet. Only the proofs needed for the invoice are spent; the change stays in your wallet.",
     {
       invoice: z.string().describe("Lightning invoice (bolt11) to pay"),
       mintUrl: z
@@ -2626,101 +2653,16 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const { Mint: CashuMint, Wallet: CashuWallet } =
-          await import("@cashu/cashu-ts");
-        const mintUrl = params.mintUrl || "https://mint.minibits.cash/Bitcoin";
-        const mint = new CashuMint(mintUrl);
-        const wallet = new CashuWallet(mint);
-        await wallet.loadMint();
-
-        const { fetchCachedEvents } = await import("@/utils/db/db-service");
-        const pubkey = signer.getPubKey();
-        const proofEvents = await fetchCachedEvents(7375);
-        const myProofEvents = proofEvents.filter(
-          (e: any) => e.pubkey === pubkey
+        const payment = await payInvoiceFromAgentWallet(
+          signer,
+          params.invoice,
+          params.mintUrl
         );
-
-        const availableProofs: any[] = [];
-        for (const event of myProofEvents) {
-          try {
-            const decryptedContent = signer.decrypt(pubkey, event.content);
-            const parsed = JSON.parse(decryptedContent);
-            if (parsed.mint === mintUrl && parsed.proofs) {
-              availableProofs.push(...parsed.proofs);
-            }
-          } catch {
-            continue;
-          }
-        }
-
-        if (availableProofs.length === 0) {
-          return errorResponse(
-            "No available proofs",
-            `No Cashu proofs found for mint ${mintUrl}`,
-            startTime
-          );
-        }
-
-        const { withMintRetry } =
-          await import("@/utils/cashu/mint-retry-service");
-        const { safeMeltProofs } =
-          await import("@/utils/cashu/melt-retry-service");
-        const meltQuote = await withMintRetry(
-          () => wallet.createMeltQuoteBolt11(params.invoice),
-          { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
-        );
-        const totalNeeded =
-          meltQuote.amount.toNumber() +
-          (meltQuote.fee_reserve?.toNumber() || 0);
-        const totalAvailable = availableProofs.reduce(
-          (sum: number, p: any) => sum + (p.amount || 0),
-          0
-        );
-
-        if (totalAvailable < totalNeeded) {
-          return errorResponse(
-            "Insufficient balance",
-            `Need ${totalNeeded} sats but only have ${totalAvailable} sats`,
-            startTime
-          );
-        }
-
-        const meltOutcome = await safeMeltProofs(
-          wallet,
-          meltQuote,
-          availableProofs
-        );
-        if (meltOutcome.status !== "paid") {
-          return errorResponse(
-            meltOutcome.status === "pending"
-              ? "Mint payment pending"
-              : meltOutcome.status === "unknown"
-                ? "Cashu payment outcome unknown"
-                : "Cashu payment failed",
-            meltOutcome.errorMessage ??
-              `Mint reported melt status: ${meltOutcome.status}`,
-            startTime
-          );
-        }
-
-        return successResponse(
-          {
-            paid: true,
-            amount: meltQuote.amount,
-            fee: meltQuote.fee_reserve || 0,
-            mintUrl,
-            change: meltOutcome.changeProofs.reduce(
-              (sum: number, p: any) =>
-                sum + (p.amount?.toNumber?.() ?? p.amount ?? 0),
-              0
-            ),
-          },
-          startTime
-        );
+        return successResponse(payment, startTime);
       } catch (error) {
-        return errorResponse(
+        return walletErrorResponse(
           "Failed to send Cashu payment",
-          error instanceof Error ? error.message : "Unknown error",
+          error,
           startTime
         );
       }
@@ -2729,7 +2671,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
   reg(
     "manage_custom_domain",
-    "Verify and register a custom domain for your Milk Market storefront. Checks that the domain's CNAME or A record points to milk.market, then records the mapping in the database.",
+    "Verify and register a custom domain for your Shopstr storefront. Checks that the domain's CNAME or A record points to shopstr.market, then records the mapping in the database.",
     {
       domain: z
         .string()
@@ -2752,8 +2694,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       const signer = await getSigner(apiKey);
       if (!signer) return noSignerError();
 
-      const TARGET_CNAME = "milk.market";
-      const TARGET_IPS = ["75.2.60.5"];
+      const TARGET_CNAME = "shopstr.market";
+      const TARGET_CNAMES = ["shopstr.market", "shopstr.store"];
+      const TARGET_IPS = ["34.111.179.208"];
 
       try {
         const pubkey = signer.getPubKey();
@@ -2780,8 +2723,11 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           resolvedCname = cnames[0] || null;
           cnameOk =
             !!resolvedCname &&
-            (resolvedCname === TARGET_CNAME ||
-              resolvedCname.endsWith("." + TARGET_CNAME));
+            TARGET_CNAMES.some(
+              (target) =>
+                resolvedCname!.toLowerCase() === target ||
+                resolvedCname!.toLowerCase().endsWith("." + target)
+            );
         } catch {}
 
         if (!cnameOk) {

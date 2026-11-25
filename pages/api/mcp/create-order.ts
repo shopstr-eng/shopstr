@@ -1,8 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { randomBytes } from "crypto";
 import { Mint as CashuMint, Wallet as CashuWallet } from "@cashu/cashu-ts";
+import { getSatoshiValue } from "@getalby/lightning-tools";
 import { withMintRetry } from "@/utils/cashu/mint-retry-service";
 import { toCashuMintAmountSats } from "@/utils/cashu/payment-amount";
+import { sumProofAmounts } from "@/utils/cashu/proof-amount";
 import { authenticateRequest, initializeApiKeysTable } from "@/utils/mcp/auth";
 import {
   fetchAllProductsFromDb,
@@ -14,6 +16,7 @@ import {
   createMcpOrder,
   getMcpOrder,
   listMcpOrders,
+  listMcpOrdersAsSeller,
   formatOrderForResponse,
   CreateOrderInput,
 } from "@/mcp/tools/purchase-tools";
@@ -102,7 +105,7 @@ export default async function handler(
   };
 
   if (req.method === "POST") {
-    return handleCreateOrder(req, res, apiKey.id, apiKey.pubkey);
+    return await handleCreateOrder(req, res, apiKey.id, apiKey.pubkey);
   }
 
   if (req.method === "GET") {
@@ -227,11 +230,13 @@ async function handleCreateOrder(
         });
       }
       const weightPrice = product.weightPrices?.get(selectedWeight);
-      if (weightPrice !== undefined) {
+      // Match shared listing pricing: volume takes precedence when both
+      // dimensions are selected, while retaining the weight selection.
+      if (!selectedVolume && weightPrice !== undefined) {
         unitPrice = weightPrice;
       }
       selectedSpecs.weight = selectedWeight;
-      selectedSpecs.weightPrice = unitPrice;
+      selectedSpecs.weightPrice = weightPrice ?? unitPrice;
     }
 
     let effectiveQuantity = quantity;
@@ -260,6 +265,9 @@ async function handleCreateOrder(
         bundles: quantity,
       };
     } else {
+      if (unitPrice === undefined) {
+        return res.status(400).json({ error: "Listing price is missing" });
+      }
       subtotal = unitPrice * quantity;
     }
 
@@ -302,11 +310,11 @@ async function handleCreateOrder(
     const orderId = generateOrderId();
 
     const pricingBlock: Record<string, any> = {
-      unitPrice,
+      unitPrice: unitPrice ?? 0,
       quantity: effectiveQuantity,
       subtotal: selectedBulkUnits
         ? product.bulkPrices!.get(selectedBulkUnits)! * quantity
-        : unitPrice * quantity,
+        : (unitPrice ?? 0) * quantity,
       discountPercentage: discountPercentage || undefined,
       discountedSubtotal: discountPercentage ? subtotal : undefined,
       shippingCost,
@@ -319,7 +327,7 @@ async function handleCreateOrder(
     }
 
     if (paymentMethod === "cashu") {
-      return handleCashuPayment(
+      return await handleCashuPayment(
         res,
         orderId,
         apiKeyId,
@@ -335,7 +343,7 @@ async function handleCreateOrder(
       );
     }
 
-    return handleLightningPayment(
+    return await handleLightningPayment(
       res,
       orderId,
       apiKeyId,
@@ -352,9 +360,54 @@ async function handleCreateOrder(
     console.error("Failed to create MCP order:", error);
     return res.status(500).json({
       error: "Failed to create order",
-      details: error instanceof Error ? error.message : "Unknown error",
     });
   }
+}
+
+/**
+ * Thrown only when the external fiat→sats price lookup fails or stalls, so
+ * callers can answer 502 while local validation errors keep their existing
+ * handling.
+ */
+class PriceConversionError extends Error {}
+
+async function convertOrderTotalToSats(
+  total: number,
+  currency: string
+): Promise<number> {
+  const normalizedCurrency = currency.toLowerCase();
+  if (normalizedCurrency === "sats" || normalizedCurrency === "sat") {
+    return toCashuMintAmountSats(Math.round(total));
+  }
+
+  // The fiat conversion depends on an external price API; bound it so a
+  // stalled API cannot hang the order request.
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let sats: number;
+  try {
+    sats = await Promise.race([
+      getSatoshiValue({
+        amount: total,
+        currency,
+      }),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error("price conversion timed out")),
+          10_000
+        );
+      }),
+    ]);
+  } catch (error) {
+    throw new PriceConversionError(
+      `Could not convert ${currency} to sats: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
+
+  return toCashuMintAmountSats(Math.round(sats));
 }
 
 async function handleLightningPayment(
@@ -373,13 +426,14 @@ async function handleLightningPayment(
   const mint = getTrustedMintUrl();
 
   let amountInSats: number;
-  if (currency.toLowerCase() === "sats" || currency.toLowerCase() === "sat") {
-    amountInSats = Math.round(totalAmount);
-  } else {
-    amountInSats = Math.round(totalAmount);
+  try {
+    amountInSats = await convertOrderTotalToSats(totalAmount, currency);
+  } catch (error) {
+    if (error instanceof PriceConversionError) {
+      return res.status(502).json({ error: error.message });
+    }
+    throw error;
   }
-
-  amountInSats = toCashuMintAmountSats(amountInSats);
 
   try {
     const cashuMint = new CashuMint(mint);
@@ -474,16 +528,16 @@ async function handleCashuPayment(
       });
     }
 
-    const tokenAmount = decoded.proofs.reduce(
-      (sum: number, p: any) => sum + (p.amount || 0),
-      0
-    );
+    const tokenAmount = sumProofAmounts(decoded.proofs);
 
     let requiredAmount: number;
-    if (currency.toLowerCase() === "sats" || currency.toLowerCase() === "sat") {
-      requiredAmount = Math.round(totalAmount);
-    } else {
-      requiredAmount = Math.round(totalAmount);
+    try {
+      requiredAmount = await convertOrderTotalToSats(totalAmount, currency);
+    } catch (error) {
+      if (error instanceof PriceConversionError) {
+        return res.status(502).json({ error: error.message });
+      }
+      throw error;
     }
 
     if (tokenAmount < requiredAmount) {
@@ -576,7 +630,7 @@ async function updateOrderPaymentStatus(orderId: string, status: string) {
 async function handleGetOrder(
   res: NextApiResponse,
   orderId: string,
-  buyerPubkey: string
+  requesterPubkey: string
 ) {
   try {
     const order = await getMcpOrder(orderId);
@@ -584,7 +638,10 @@ async function handleGetOrder(
       return res.status(404).json({ error: "Order not found" });
     }
 
-    if (order.buyer_pubkey !== buyerPubkey) {
+    if (
+      order.buyer_pubkey !== requesterPubkey &&
+      order.seller_pubkey !== requesterPubkey
+    ) {
       return res
         .status(403)
         .json({ error: "Not authorized to view this order" });
@@ -603,12 +660,30 @@ async function handleGetOrder(
 async function handleListOrders(
   req: NextApiRequest,
   res: NextApiResponse,
-  buyerPubkey: string
+  requesterPubkey: string
 ) {
   try {
     const limit = Number(req.query.limit) || 50;
     const offset = Number(req.query.offset) || 0;
-    const orders = await listMcpOrders(buyerPubkey, limit, offset);
+    const rawRole = req.query.role;
+    if (rawRole !== undefined && typeof rawRole !== "string") {
+      return res.status(400).json({
+        error: "Invalid role parameter. Must be 'buyer' or 'seller'.",
+      });
+    }
+    const role = rawRole === undefined ? "buyer" : rawRole.trim().toLowerCase();
+
+    if (role !== "buyer" && role !== "seller") {
+      return res.status(400).json({
+        error: "Invalid role parameter. Must be 'buyer' or 'seller'.",
+      });
+    }
+
+    const orders =
+      role === "seller"
+        ? await listMcpOrdersAsSeller(requesterPubkey, limit, offset)
+        : await listMcpOrders(requesterPubkey, limit, offset);
+
     return res.status(200).json({
       success: true,
       orders: orders.map(formatOrderForResponse),

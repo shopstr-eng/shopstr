@@ -10,6 +10,7 @@ import {
   fetchProfilePubkeyByNameSlug,
 } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 type MarketplacePageProps = {
   ogMeta: OgMetaProps;
@@ -94,12 +95,10 @@ export default function SellerView({
   setSelectedSection,
 }: MarketplacePageProps) {
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem("sf_seller_pubkey");
-      sessionStorage.removeItem("sf_shop_slug");
-      localStorage.removeItem("sf_seller_pubkey");
-      localStorage.removeItem("sf_shop_slug");
-    }
+    storage.removeItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
+    storage.removeItem(STORAGE_KEYS.SF_SHOP_SLUG);
+    storage.removeSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
+    storage.removeSessionItem(STORAGE_KEYS.SF_SHOP_SLUG);
   }, []);
 
   return (

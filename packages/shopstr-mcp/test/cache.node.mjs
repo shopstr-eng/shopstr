@@ -53,3 +53,20 @@ test("prunes expired entries and supports disabled cache TTL", () => {
   assert.equal(disabledCache.get({ pubkey, kind: 0 }), undefined);
   assert.equal(disabledCache.size(), 0);
 });
+
+test("evicts oldest entry when maxEntries is exceeded", () => {
+  const cache = new MemoryCache(5_000, 2, () => 1_000);
+
+  cache.set({ pubkey: "a".repeat(64), kind: 0 }, { name: "First" });
+  cache.set({ pubkey: "b".repeat(64), kind: 0 }, { name: "Second" });
+  cache.set({ pubkey: "c".repeat(64), kind: 0 }, { name: "Third" });
+
+  assert.equal(cache.size(), 2);
+  assert.equal(cache.get({ pubkey: "a".repeat(64), kind: 0 }), undefined);
+  assert.deepEqual(cache.get({ pubkey: "b".repeat(64), kind: 0 })?.value, {
+    name: "Second",
+  });
+  assert.deepEqual(cache.get({ pubkey: "c".repeat(64), kind: 0 })?.value, {
+    name: "Third",
+  });
+});

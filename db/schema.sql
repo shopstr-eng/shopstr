@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS community_events (
 CREATE INDEX IF NOT EXISTS idx_community_events_pubkey ON community_events(pubkey);
 CREATE INDEX IF NOT EXISTS idx_community_events_kind ON community_events(kind);
 
--- Relay/config events (kind 10002 - relays, kind 10063 - blossom servers, kind 30405 - cart/saved, kind 30406 - buyer P2PK escrow records)
+-- Relay/config events (kind 10002 - relays, kind 10063 - blossom servers, kind 30407 - dispute records, kind 30405 - cart/saved, kind 30406 - buyer P2PK escrow records)
 CREATE TABLE IF NOT EXISTS config_events (
     id TEXT PRIMARY KEY,
     pubkey TEXT NOT NULL,
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS config_events (
     content TEXT NOT NULL,
     sig TEXT NOT NULL,
     cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT config_events_kind_check CHECK (kind IN (10002, 10063, 30405, 30406))
+    CONSTRAINT config_events_kind_check CHECK (kind IN (10002, 10063, 30407, 30405, 30406))
 );
 
 CREATE INDEX IF NOT EXISTS idx_config_events_pubkey ON config_events(pubkey);
@@ -124,6 +124,17 @@ CREATE TABLE IF NOT EXISTS discount_codes (
 
 CREATE INDEX IF NOT EXISTS idx_discount_codes_pubkey ON discount_codes(pubkey);
 CREATE INDEX IF NOT EXISTS idx_discount_codes_code ON discount_codes(code);
+
+-- NIP-09 tombstones so deleted listings are not re-cached from relays
+CREATE TABLE IF NOT EXISTS deleted_product_events (
+    pubkey TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target TEXT NOT NULL,
+    deleted_at BIGINT NOT NULL,
+    cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (pubkey, target_type, target),
+    CONSTRAINT deleted_product_events_type_check CHECK (target_type IN ('event', 'address'))
+);
 
 -- Failed relay publish tracking table
 CREATE TABLE IF NOT EXISTS failed_relay_publishes (
@@ -177,3 +188,68 @@ CREATE INDEX IF NOT EXISTS idx_mcp_orders_order_id ON mcp_orders(order_id);
 CREATE INDEX IF NOT EXISTS idx_mcp_orders_buyer_pubkey ON mcp_orders(buyer_pubkey);
 CREATE INDEX IF NOT EXISTS idx_mcp_orders_seller_pubkey ON mcp_orders(seller_pubkey);
 CREATE INDEX IF NOT EXISTS idx_mcp_orders_api_key_id ON mcp_orders(api_key_id);
+
+-- Browser P2PK escrow order commitments. The buyer authenticates the
+-- immutable commitment with NIP-98; only final-ruling fields may change.
+CREATE TABLE IF NOT EXISTS p2pk_escrow_orders (
+    -- H(escrow token), not the invoice order id: keyed by something only the
+    -- token holder can know, so an order id visible on an invoice cannot be
+    -- squatted with a counterfeit token. The invoice order id is kept in
+    -- invoice_order_id for the P2PK secret binding check and display.
+    order_id TEXT PRIMARY KEY,
+    invoice_order_id TEXT,
+    buyer_nostr_pubkey TEXT NOT NULL,
+    seller_nostr_pubkey TEXT NOT NULL,
+    seller_cashu_pubkey TEXT NOT NULL,
+    buyer_cashu_pubkey TEXT NOT NULL,
+    arbiter_cashu_pubkey TEXT NOT NULL,
+    amount_sats BIGINT NOT NULL CHECK (amount_sats > 0),
+    locktime BIGINT NOT NULL CHECK (locktime > 0),
+    token_hash TEXT NOT NULL,
+    ruling_for TEXT CHECK (ruling_for IN ('buyer', 'seller')),
+    resolved_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_p2pk_escrow_orders_buyer ON p2pk_escrow_orders(buyer_nostr_pubkey);
+CREATE INDEX IF NOT EXISTS idx_p2pk_escrow_orders_seller ON p2pk_escrow_orders(seller_nostr_pubkey);
+
+-- Buyer/seller of web checkout orders. The buyer registers the record with
+-- NIP-98 before the order id leaves their device; the first write wins and
+-- rows can never be updated or deleted, because a freed order id could be
+-- re-claimed by the seller, who learns it from the order DM.
+CREATE TABLE IF NOT EXISTS order_participants (
+    order_id TEXT PRIMARY KEY,
+    buyer_pubkey TEXT NOT NULL,
+    seller_pubkey TEXT NOT NULL,
+    -- 30402 listing address, or the note id of a zapsnag listing
+    product_address TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- When a feature first reached this database. Orders placed before
+-- order_participants existed fall back to the legacy message-tag lookup, but
+-- only for messages cached before this moment.
+CREATE TABLE IF NOT EXISTS schema_milestones (
+    name TEXT PRIMARY KEY,
+    reached_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO schema_milestones (name)
+VALUES ('order_participants')
+ON CONFLICT (name) DO NOTHING;
+
+CREATE INDEX IF NOT EXISTS idx_order_participants_buyer ON order_participants(buyer_pubkey);
+CREATE INDEX IF NOT EXISTS idx_order_participants_seller ON order_participants(seller_pubkey);
+
+CREATE OR REPLACE FUNCTION reject_order_participants_mutation()
+RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'order_participants rows are immutable';
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS order_participants_immutable ON order_participants;
+CREATE TRIGGER order_participants_immutable
+  BEFORE UPDATE OR DELETE ON order_participants
+  FOR EACH ROW EXECUTE FUNCTION reject_order_participants_mutation();

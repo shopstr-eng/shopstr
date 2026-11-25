@@ -1,5 +1,6 @@
 import {
   getParameterizedReplaceableCoordinate,
+  keepBestEventPerKey,
   mergeAndDeduplicateProducts,
   mergeAndDeduplicateProfiles,
   mergeAndDeduplicateReviews,
@@ -9,6 +10,7 @@ import {
   parseProfileEvent,
   parseReviewEvent,
 } from "../../parse-tags.js";
+import { verifyNip05Claim, type Nip05Verification } from "../../nip05.js";
 import { fetchFromRelays } from "../../relay-fetch.js";
 import type {
   NostrEvent,
@@ -18,11 +20,7 @@ import type {
   RelayFetchMeta,
   ReviewResponse,
 } from "../../types.js";
-import {
-  MCP_ERROR_CODES,
-  createErrorResponse,
-  type ToolTextResponse,
-} from "../../errors.js";
+import type { ToolTextResponse } from "../../errors.js";
 import {
   PRODUCT_KIND,
   PRODUCT_RESPONSE_BUDGET,
@@ -30,26 +28,37 @@ import {
   REVIEW_PRODUCT_FILTER_LIMIT,
   REVIEW_RESPONSE_BUDGET,
   SHOP_PROFILE_KIND,
+  CACHE_KINDS,
   allRelaysFailed,
-  buildToolMeta,
+  createNotFoundResponse,
   createRelayUnavailableResponse,
   emptyRelayMeta,
+  isDegradedLookup,
+  observeProductEventsForCategories,
 } from "./common.js";
 import type { CoreToolContext } from "./context.js";
 import {
+  confidenceField,
   createReviewFilter,
   eventReferencesSeller,
   hasProductAddress,
   hasTag,
+  reviewMatchConfidence,
 } from "./review-helpers.js";
 
 export type SellerProfilesResult = {
   userProfile: ProfileResponse | null;
   shopProfile: ProfileResponse | null;
+  nip05Verification: {
+    userProfile: Nip05Verification | null;
+    shopProfile: Nip05Verification | null;
+  };
   meta: RelayFetchMeta;
   cache: {
     userProfile: boolean;
     shopProfile: boolean;
+    userNip05Verification: boolean;
+    shopNip05Verification: boolean;
   };
 };
 
@@ -59,14 +68,21 @@ export type SellerProductsResult = {
   returnedProducts: ProductResponse[];
   truncated: boolean;
   meta: RelayFetchMeta;
+  cache: {
+    products: boolean;
+  };
 };
 
 export type SellerReviewsResult = {
+  events: NostrEvent[];
   reviews: ReviewResponse[];
   returnedReviews: ReviewResponse[];
   truncated: boolean;
   reviewLookupPartial: boolean;
   meta: RelayFetchMeta;
+  cache: {
+    reviews: boolean;
+  };
 };
 
 export function isPublicProduct(product: ProductResponse): boolean {
@@ -93,13 +109,22 @@ export async function fetchSellerProfiles(
   if (!shopProfile) missingKinds.push(SHOP_PROFILE_KIND);
 
   if (missingKinds.length === 0) {
+    const nip05Verification = await verifySellerProfilesNip05(
+      pubkey,
+      userProfile,
+      shopProfile,
+      context
+    );
+
     return {
       userProfile,
       shopProfile,
+      nip05Verification: nip05Verification.results,
       meta: emptyRelayMeta(),
       cache: {
         userProfile: true,
         shopProfile: true,
+        ...nip05Verification.cache,
       },
     };
   }
@@ -132,48 +157,132 @@ export async function fetchSellerProfiles(
     }
   }
 
+  const nip05Verification = await verifySellerProfilesNip05(
+    pubkey,
+    userProfile,
+    shopProfile,
+    context
+  );
+
   return {
     userProfile,
     shopProfile,
+    nip05Verification: nip05Verification.results,
     meta: relayResult.meta,
     cache: {
       userProfile: cachedUserProfile?.cached ?? false,
       shopProfile: cachedShopProfile?.cached ?? false,
+      ...nip05Verification.cache,
     },
   };
+}
+
+async function verifySellerProfilesNip05(
+  pubkey: string,
+  userProfile: ProfileResponse | null,
+  shopProfile: ProfileResponse | null,
+  context: CoreToolContext
+): Promise<{
+  results: SellerProfilesResult["nip05Verification"];
+  cache: Pick<
+    SellerProfilesResult["cache"],
+    "userNip05Verification" | "shopNip05Verification"
+  >;
+}> {
+  const [userResult, shopResult] = await Promise.all([
+    verifyProfileNip05(pubkey, userProfile, context),
+    verifyProfileNip05(pubkey, shopProfile, context),
+  ]);
+
+  return {
+    results: {
+      userProfile: userResult.verification,
+      shopProfile: shopResult.verification,
+    },
+    cache: {
+      userNip05Verification: userResult.cached,
+      shopNip05Verification: shopResult.cached,
+    },
+  };
+}
+
+async function verifyProfileNip05(
+  pubkey: string,
+  profile: ProfileResponse | null,
+  context: CoreToolContext
+): Promise<{ verification: Nip05Verification | null; cached: boolean }> {
+  const claimed = profile?.nip05?.trim();
+  if (!claimed) return { verification: null, cached: false };
+
+  const cacheKey = {
+    pubkey: `${pubkey}:${claimed.toLowerCase()}`,
+    kind: CACHE_KINDS.NIP05_VERIFICATION,
+  };
+  const cache = context.nip05Cache ?? context.cache;
+  const cached = cache.get<Nip05Verification>(cacheKey);
+  if (cached) {
+    return { verification: cached.value, cached: cached.cached };
+  }
+
+  const verifier = context.nip05Verifier ?? verifyNip05Claim;
+  const verification = await verifier(claimed, pubkey, {
+    timeoutMs: context.timeoutMs,
+  });
+  cache.set(cacheKey, verification);
+
+  return { verification, cached: false };
 }
 
 export async function fetchSellerProducts(
   pubkey: string,
   context: CoreToolContext
 ): Promise<SellerProductsResult> {
-  const relayResult = await fetchFromRelays(
-    context.nostr,
-    context.relays,
-    [
-      {
-        kinds: [PRODUCT_KIND],
-        authors: [pubkey],
-        limit: 500,
-      },
-    ],
-    { timeoutMs: context.timeoutMs }
-  );
+  const cached = context.cache.get<NostrEvent[]>({
+    pubkey,
+    kind: CACHE_KINDS.SELLER_PRODUCTS,
+  });
 
-  const events = mergeAndDeduplicateProducts(relayResult.events);
-  const publicProducts = events
+  let events = cached?.value;
+  let meta = emptyRelayMeta();
+
+  if (!events) {
+    const relayResult = await fetchFromRelays(
+      context.nostr,
+      context.relays,
+      [
+        {
+          kinds: [PRODUCT_KIND],
+          authors: [pubkey],
+          limit: 500,
+        },
+      ],
+      { timeoutMs: context.timeoutMs }
+    );
+    events = relayResult.events;
+    meta = relayResult.meta;
+    if (shouldCacheRelayResult(events, meta)) {
+      context.cache.set({ pubkey, kind: CACHE_KINDS.SELLER_PRODUCTS }, events);
+      observeProductEventsForCategories(events);
+    }
+  }
+
+  const productEvents = mergeAndDeduplicateProducts(events);
+  const publicProducts = productEvents
     .map((event) => ({ event, product: parseProductEvent(event) }))
     .filter(({ product }) => isPublicProduct(product));
   const products = publicProducts.map(({ product }) => product);
-  const productEvents = publicProducts.map(({ event }) => event);
+  const publicProductEvents = publicProducts.map(({ event }) => event);
   const returnedProducts = products.slice(0, PRODUCT_RESPONSE_BUDGET);
 
   return {
-    events: productEvents,
+    events: publicProductEvents,
     products,
     returnedProducts,
     truncated: returnedProducts.length < products.length,
-    meta: relayResult.meta,
+    meta,
+    cache: {
+      products: cached?.cached ?? false,
+    },
   };
 }
 
@@ -182,6 +291,13 @@ export async function fetchSellerReviews(
   productEvents: readonly NostrEvent[],
   context: CoreToolContext
 ): Promise<SellerReviewsResult> {
+  const cached = context.cache.get<{
+    events: NostrEvent[];
+    productAddresses: string[];
+  }>({
+    pubkey: sellerPubkey,
+    kind: CACHE_KINDS.SELLER_REVIEWS,
+  });
   const allProductAddresses = Array.from(
     new Set(
       productEvents
@@ -193,31 +309,85 @@ export async function fetchSellerReviews(
     0,
     REVIEW_PRODUCT_FILTER_LIMIT
   );
-  const relayFilters = buildSellerReviewFilters(productAddresses, sellerPubkey);
-  const relayResult = await fetchFromRelays(
-    context.nostr,
-    context.relays,
-    relayFilters,
-    { timeoutMs: context.timeoutMs }
-  );
+  // Product discovery can recover or change within the review cache TTL.
+  // Reuse reviews only if the cache covered the same address queries.
+  const cacheMatchesQuery =
+    cached &&
+    cached.value.productAddresses.length === productAddresses.length &&
+    productAddresses.every((address) =>
+      cached.value.productAddresses.includes(address)
+    );
+  const cacheHit = cacheMatchesQuery ? cached : undefined;
+  let events = cacheHit?.value.events;
+  let meta = emptyRelayMeta();
 
-  const reviews = mergeAndDeduplicateReviews(relayResult.events)
-    .filter((event) =>
+  if (!events) {
+    const relayFilters = buildSellerReviewFilters(
+      productAddresses,
+      sellerPubkey
+    );
+    const relayResult = await fetchFromRelays(
+      context.nostr,
+      context.relays,
+      relayFilters,
+      { timeoutMs: context.timeoutMs }
+    );
+    events = relayResult.events;
+    meta = relayResult.meta;
+    if (shouldCacheRelayResult(events, meta)) {
+      context.cache.set(
+        { pubkey: sellerPubkey, kind: CACHE_KINDS.SELLER_REVIEWS },
+        { events, productAddresses }
+      );
+    }
+  }
+
+  // The generic review identity is reviewer + the first target tag on the
+  // event, which the reviewer chooses. Within one seller's reputation that is
+  // not enough: a single key could vary an unrelated leading #e/#a tag and be
+  // counted once per event. Re-key on what the review means for this seller.
+  const reviewEvents = keepBestEventPerKey(
+    mergeAndDeduplicateReviews(events).filter((event) =>
       reviewMatchesSeller(event, sellerPubkey, allProductAddresses)
+    ),
+    (event) =>
+      getSellerScopedReviewIdentity(event, sellerPubkey, allProductAddresses)
+  );
+  const reviews = reviewEvents.map((event) =>
+    parseReviewEvent(
+      event,
+      confidenceField(reviewMatchConfidence(event, allProductAddresses))
     )
-    .map(parseReviewEvent);
+  );
   const returnedReviews = reviews.slice(0, REVIEW_RESPONSE_BUDGET);
 
   const reviewLookupPartial =
     allProductAddresses.length > REVIEW_PRODUCT_FILTER_LIMIT;
 
   return {
+    events: reviewEvents,
     reviews,
     returnedReviews,
     truncated: returnedReviews.length < reviews.length,
     reviewLookupPartial,
-    meta: relayResult.meta,
+    meta,
+    cache: {
+      reviews: cacheHit?.cached ?? false,
+    },
   };
+}
+
+/**
+ * Skip caching when every relay failed, or when the result is empty and some
+ * relay failed or timed out: the empty set may be a false negative, and a
+ * cached copy would make the retry we advertise return the same answer.
+ */
+function shouldCacheRelayResult(
+  events: readonly NostrEvent[],
+  meta: RelayFetchMeta
+): boolean {
+  if (allRelaysFailed(meta)) return false;
+  return events.length > 0 || !isDegradedLookup(meta);
 }
 
 export function buildPaymentInfo(products: readonly ProductResponse[]): {
@@ -310,6 +480,22 @@ function reviewMatchesSeller(
   return productAddresses.some((address) => hasProductAddress(event, address));
 }
 
+/**
+ * One review per reviewer per product of this seller, plus at most one
+ * seller-level review per reviewer.
+ */
+function getSellerScopedReviewIdentity(
+  event: NostrEvent,
+  sellerPubkey: string,
+  productAddresses: readonly string[]
+): string {
+  const productAddress = getSellerProductAddressReferences(
+    event,
+    sellerPubkey
+  ).find((address) => productAddresses.includes(address));
+  return `${event.pubkey}:${productAddress ?? "seller"}`;
+}
+
 function getSellerProductAddressReferences(
   event: NostrEvent,
   sellerPubkey: string
@@ -352,15 +538,9 @@ export function guardSellerNotFound(
     products.products.length === 0 &&
     (reviews?.reviews.length ?? 0) === 0
   ) {
-    return createErrorResponse(
-      "Seller not found.",
-      MCP_ERROR_CODES.NOT_FOUND,
-      false,
-      undefined,
-      buildToolMeta(relayMeta, {
-        hints: [discoveryHint],
-      })
-    );
+    return createNotFoundResponse("Seller not found.", relayMeta, "seller", [
+      discoveryHint,
+    ]);
   }
 
   return undefined;

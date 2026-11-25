@@ -18,9 +18,10 @@ describe("safeMeltProofs", () => {
   it("returns paid when meltProofsBolt11 succeeds first try", async () => {
     const change = [{ id: "k", amount: 1, secret: "s2", C: "c2" }];
     const wallet = {
-      meltProofsBolt11: jest
-        .fn()
-        .mockResolvedValue({ change, quote: baseQuote }),
+      meltProofsBolt11: jest.fn().mockResolvedValue({
+        change,
+        quote: { ...baseQuote, state: "PAID" },
+      }),
       checkMeltQuoteBolt11: jest.fn(),
     } as any;
 
@@ -41,6 +42,65 @@ describe("safeMeltProofs", () => {
 
     expect(outcome.status).toBe("paid");
     expect(outcome.changeProofs).toEqual(change);
+    expect(wallet.checkMeltQuoteBolt11).not.toHaveBeenCalled();
+  });
+
+  it("returns pending when a resolved melt response has the quote still PENDING", async () => {
+    const wallet = {
+      meltProofsBolt11: jest.fn().mockResolvedValue({
+        change: [],
+        quote: { ...baseQuote, state: "PENDING" },
+      }),
+      checkMeltQuoteBolt11: jest.fn(),
+    } as any;
+
+    const outcome = await safeMeltProofs(wallet, baseQuote, proofs, {
+      meltRetry: {
+        maxAttempts: 1,
+        perAttemptTimeoutMs: 100,
+        baseDelayMs: 1,
+        jitter: false,
+      },
+      checkRetry: {
+        maxAttempts: 1,
+        perAttemptTimeoutMs: 100,
+        baseDelayMs: 1,
+        jitter: false,
+      },
+    });
+
+    // An async melt answered but has not settled; callers must not treat
+    // the inputs as spent or retire their change-recovery data.
+    expect(outcome.status).toBe("pending");
+    expect(outcome.changeProofs).toEqual([]);
+    expect(wallet.checkMeltQuoteBolt11).not.toHaveBeenCalled();
+  });
+
+  it("returns unpaid when a resolved melt response has the quote UNPAID", async () => {
+    const wallet = {
+      meltProofsBolt11: jest.fn().mockResolvedValue({
+        change: [],
+        quote: { ...baseQuote, state: "UNPAID" },
+      }),
+      checkMeltQuoteBolt11: jest.fn(),
+    } as any;
+
+    const outcome = await safeMeltProofs(wallet, baseQuote, proofs, {
+      meltRetry: {
+        maxAttempts: 1,
+        perAttemptTimeoutMs: 100,
+        baseDelayMs: 1,
+        jitter: false,
+      },
+      checkRetry: {
+        maxAttempts: 1,
+        perAttemptTimeoutMs: 100,
+        baseDelayMs: 1,
+        jitter: false,
+      },
+    });
+
+    expect(outcome.status).toBe("unpaid");
     expect(wallet.checkMeltQuoteBolt11).not.toHaveBeenCalled();
   });
 

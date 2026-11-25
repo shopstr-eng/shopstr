@@ -57,8 +57,8 @@ import {
   isNpub,
 } from "@/utils/url-slugs";
 import { useDebounce } from "@/utils/hooks/useDebounce";
+import { useFollowToggle } from "@/components/hooks/use-follow-toggle";
 import {
-  getDirectFollowPubkeys,
   getProfileReportSignal,
   getReportModerationLabel,
   summarizeReportEvents,
@@ -136,13 +136,14 @@ function MarketplacePage({
 
   const { pubkey: userPubkey, isLoggedIn: loggedIn } =
     useContext(SignerContext);
+  const {
+    isFollowing: isFollowingFocusedPubkey,
+    isLoading: isFollowActionLoading,
+    toggle: handleFollowToggle,
+  } = useFollowToggle(focusedPubkey, { onRequireSignIn: onOpen });
   const directFollowPubkeys = useMemo(
-    () =>
-      getDirectFollowPubkeys(
-        followsContext.followList,
-        followsContext.firstDegreeFollowsLength
-      ),
-    [followsContext.followList, followsContext.firstDegreeFollowsLength]
+    () => followsContext.directFollowList,
+    [followsContext.directFollowList]
   );
   const reportSummaries = useMemo(
     () =>
@@ -383,6 +384,7 @@ function MarketplacePage({
                                   "inquiry",
                                   "copy_npub",
                                   "report_profile",
+                                  "follow",
                                 ]
                           }
                         />
@@ -510,6 +512,20 @@ function MarketplacePage({
               >
                 Message
               </Button>
+              {focusedPubkey !== userPubkey && (
+                <Button
+                  className="text-light-text dark:text-dark-text dark:hover:text-accent-dark-text bg-transparent text-lg hover:text-purple-700 sm:text-xl"
+                  onPress={handleFollowToggle}
+                  isLoading={isFollowActionLoading}
+                  isDisabled={isFollowActionLoading}
+                >
+                  {isFollowActionLoading
+                    ? "Please sign..."
+                    : isFollowingFocusedPubkey
+                      ? "Unfollow"
+                      : "+ Follow"}
+                </Button>
+              )}
               {rawEvent && (
                 <Dropdown>
                   <DropdownTrigger>
@@ -540,10 +556,13 @@ function MarketplacePage({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-2 pb-3 sm:flex-row">
-            <div ref={searchBarRef} className="w-full">
+          <div className="flex flex-col items-center justify-center gap-2 py-3 sm:flex-row sm:items-center">
+            <div
+              ref={searchBarRef}
+              className="my-auto flex w-full items-center justify-center self-center"
+            >
               <Input
-                className="text-light-text dark:text-dark-text mt-2"
+                className="text-light-text dark:text-dark-text"
                 isClearable
                 placeholder="Search by name, price, or seller"
                 value={selectedSearch}
@@ -563,11 +582,11 @@ function MarketplacePage({
                 onClear={() => setSelectedSearch("")}
               />
             </div>
-            <div className="flex w-full flex-row gap-2 pb-3">
+            <div className="my-auto flex w-full flex-row items-center justify-center gap-2 self-center">
               <Select
-                className="text-light-text dark:text-dark-text mt-2"
-                label="Categories"
-                placeholder="All"
+                aria-label="Categories"
+                className="text-light-text dark:text-dark-text"
+                placeholder="Categories"
                 selectedKeys={selectedCategories}
                 onChange={(event) => {
                   if (event.target.value === "") {
@@ -609,9 +628,8 @@ function MarketplacePage({
                 </SelectSection>
               </Select>
               <LocationDropdown
-                className="mt-2"
-                placeholder="All"
-                label="Location"
+                aria-label="Location"
+                placeholder="Location"
                 value={selectedLocation}
                 onChange={(event: any) => {
                   setSelectedLocation(event.target.value);

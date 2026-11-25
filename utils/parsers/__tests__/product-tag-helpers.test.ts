@@ -5,7 +5,7 @@ import {
 } from "../product-tag-helpers";
 
 describe("parseShippingTag", () => {
-  it("parses the modern 3-value shipping tag format", () => {
+  it("parses the modern 4-element shipping tag format", () => {
     expect(parseShippingTag(["shipping", "Added Cost", "10", "USD"])).toEqual({
       shippingType: "Added Cost",
       shippingCost: 10,

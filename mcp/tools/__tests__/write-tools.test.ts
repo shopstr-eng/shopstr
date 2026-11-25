@@ -15,10 +15,14 @@ import {
   updateMcpOrderStatus,
   updateMcpOrderAddress,
 } from "@/mcp/tools/purchase-tools";
-import { getDecodedToken, Mint, Wallet } from "@cashu/cashu-ts";
-import { withMintRetry } from "@/utils/cashu/mint-retry-service";
-import { safeMeltProofs } from "@/utils/cashu/melt-retry-service";
+import {
+  AgentWalletError,
+  getAgentWalletBalance,
+  payInvoiceFromAgentWallet,
+  receiveAgentCashuToken,
+} from "@/utils/mcp/agent-cashu-wallet";
 import { registerWriteTools } from "@/mcp/tools/write-tools";
+import { fetchProductByIdFromDb } from "@/utils/db/db-service";
 
 jest.mock("@/utils/mcp/auth", () => ({
   getAgentSigner: jest.fn(),
@@ -37,6 +41,7 @@ jest.mock("@/utils/mcp/nostr-signing", () => ({
 
 jest.mock("@/utils/db/db-service", () => ({
   cacheEvent: jest.fn(),
+  fetchProductByIdFromDb: jest.fn(),
   getDbPool: jest.fn(),
   fetchAllMessagesFromDb: jest.fn(),
   fetchCachedEvents: jest.fn(),
@@ -57,21 +62,23 @@ jest.mock("@/mcp/tools/purchase-tools", () => ({
   updateMcpOrderAddress: jest.fn(),
 }));
 
-jest.mock("@cashu/cashu-ts", () => ({
-  getDecodedToken: jest.fn(),
-  Mint: jest.fn().mockImplementation(() => ({})),
-  Wallet: jest.fn().mockImplementation(() => ({
-    loadMint: jest.fn(),
-    createMeltQuoteBolt11: jest.fn(),
-  })),
+jest.mock("@/utils/mcp/agent-cashu-wallet", () => ({
+  ...jest.requireActual("@/utils/mcp/agent-cashu-wallet"),
+  getAgentWalletBalance: jest.fn(),
+  receiveAgentCashuToken: jest.fn(),
+  payInvoiceFromAgentWallet: jest.fn(),
 }));
 
-jest.mock("@/utils/cashu/mint-retry-service", () => ({
-  withMintRetry: jest.fn((fn: () => Promise<unknown>) => fn()),
-}));
+// write-tools.ts does `const resolveCname = promisify(dns.resolveCname)` at
+// module load, so these must be Node-callback-style mocks
+// ((domain, callback) => ...), not promise-returning ones — promisify wraps
+// whatever it's given.
+const mockDnsResolveCname = jest.fn();
+const mockDnsResolve4 = jest.fn();
 
-jest.mock("@/utils/cashu/melt-retry-service", () => ({
-  safeMeltProofs: jest.fn(),
+jest.mock("dns", () => ({
+  resolveCname: (...args: unknown[]) => (mockDnsResolveCname as any)(...args),
+  resolve4: (...args: unknown[]) => (mockDnsResolve4 as any)(...args),
 }));
 
 type ToolResult = {
@@ -121,12 +128,18 @@ function makeApiKey(overrides: Partial<ApiKeyRecord> = {}): ApiKeyRecord {
 const fullAccessApiKey = makeApiKey();
 const readOnlyApiKey = makeApiKey({ permissions: "read" });
 
+const toolRegistry = new Map<
+  string,
+  { options: any; callback: ToolCallback }
+>();
+
 function registerToolsForTest(apiKey: ApiKeyRecord) {
   const callbacks = new Map<string, ToolCallback>();
   const server = {
     registerTool: jest.fn(
-      (name: string, _options: unknown, callback: ToolCallback) => {
+      (name: string, options: unknown, callback: ToolCallback) => {
         callbacks.set(name, callback);
+        toolRegistry.set(name, { options: options as any, callback });
       }
     ),
   };
@@ -168,22 +181,6 @@ function mockMcpOrder(overrides: Record<string, any> = {}) {
 
 function encryptForMock(plainText: string) {
   return `encrypted(${plainText})`;
-}
-
-function buildMockProofEvent(overrides: {
-  pubkey?: string;
-  mint?: string;
-  proofs?: Array<{ amount: number }>;
-}) {
-  const {
-    pubkey = TEST_PUBKEY,
-    mint = "https://mint.example",
-    proofs = [],
-  } = overrides;
-  return {
-    pubkey,
-    content: encryptForMock(JSON.stringify({ mint, proofs })),
-  };
 }
 
 function buildMockMessage(
@@ -275,7 +272,6 @@ beforeEach(() => {
     });
   jest.mocked(cacheEvent).mockResolvedValue(undefined);
   jest.mocked(fetchCachedEvents).mockResolvedValue([]);
-  jest.mocked(withMintRetry).mockImplementation((fn: any) => fn());
   global.fetch = jest.fn() as any;
 });
 
@@ -351,6 +347,15 @@ describe("registerWriteTools — (core listing & shop lifecycle)", () => {
       expect(JSON.parse(template.content)).toEqual(params);
     });
 
+    it("omits name from the event content when not provided", async () => {
+      const tool = getCallback();
+      await tool({ about: "Farm owner" });
+
+      const template = jest.mocked(signAndPublishEvent).mock
+        .calls[0]![1] as any;
+      expect(JSON.parse(template.content)).toEqual({ about: "Farm owner" });
+    });
+
     it("returns errorResponse when signAndPublishEvent throws", async () => {
       jest
         .mocked(signAndPublishEvent)
@@ -363,6 +368,15 @@ describe("registerWriteTools — (core listing & shop lifecycle)", () => {
       const payload = textPayload(result);
       expect(payload.error).toBe("Failed to set user profile");
       expect(payload.details).toBe("relay down");
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(signAndPublishEvent).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({ name: "Alice" });
+
+      expect(textPayload(result).details).toBe("Unknown error");
     });
   });
 
@@ -394,6 +408,16 @@ describe("registerWriteTools — (core listing & shop lifecycle)", () => {
         .calls[0]![1] as any;
       const content = JSON.parse(template.content);
       expect(content.ui).toEqual({ picture: "p.png", theme: "green" });
+    });
+
+    it("nests banner under content.ui when provided alone", async () => {
+      const tool = getCallback();
+      await tool({ banner: "b.png" });
+
+      const template = jest.mocked(signAndPublishEvent).mock
+        .calls[0]![1] as any;
+      const content = JSON.parse(template.content);
+      expect(content.ui).toEqual({ banner: "b.png" });
     });
 
     it("includes darkMode:false explicitly (not treated as unset like a falsy check would)", async () => {
@@ -434,6 +458,58 @@ describe("registerWriteTools — (core listing & shop lifecycle)", () => {
       expect(template.tags).toEqual([["d", TEST_PUBKEY]]);
     });
 
+    it("includes every provided top-level, ui, and storefront field", async () => {
+      const tool = getCallback();
+      await tool({
+        name: "Shop",
+        about: "Farm-fresh dairy",
+        merchants: ["merchant-1"],
+        paymentMethodDiscounts: { bitcoin: 5 },
+        freeShippingThreshold: 50,
+        freeShippingCurrency: "USD",
+        storefrontColorScheme: {
+          primary: "#4a7c59",
+          secondary: "#000",
+          accent: "#fff",
+          background: "#fff",
+          text: "#000",
+        },
+        storefrontLandingPageStyle: "hero",
+        storefrontFontHeading: "Playfair Display",
+        storefrontFontBody: "Inter",
+        storefrontSections: [{ id: "s1", type: "hero" }],
+        storefrontPages: [
+          { id: "p1", title: "About", slug: "about", sections: [] },
+        ],
+        storefrontFooter: { text: "Thanks for shopping" },
+        storefrontNavLinks: [{ label: "Shop", href: "/shop" }],
+        showWalletPage: true,
+      });
+
+      const template = jest.mocked(signAndPublishEvent).mock
+        .calls[0]![1] as any;
+      const content = JSON.parse(template.content);
+      expect(content).toMatchObject({
+        name: "Shop",
+        about: "Farm-fresh dairy",
+        merchants: ["merchant-1"],
+        paymentMethodDiscounts: { bitcoin: 5 },
+        freeShippingThreshold: 50,
+        freeShippingCurrency: "USD",
+      });
+      expect(content.storefront).toMatchObject({
+        colorScheme: { primary: "#4a7c59" },
+        landingPageStyle: "hero",
+        fontHeading: "Playfair Display",
+        fontBody: "Inter",
+        sections: [{ id: "s1", type: "hero" }],
+        pages: [{ id: "p1", title: "About", slug: "about", sections: [] }],
+        footer: { text: "Thanks for shopping" },
+        navLinks: [{ label: "Shop", href: "/shop" }],
+        showWalletPage: true,
+      });
+    });
+
     it("calls cacheEvent in addition to signAndPublishEvent's own caching", async () => {
       const tool = getCallback();
       await tool({ name: "Shop" });
@@ -451,6 +527,15 @@ describe("registerWriteTools — (core listing & shop lifecycle)", () => {
 
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to set shop profile");
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(signAndPublishEvent).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({ name: "Shop" });
+
+      expect(textPayload(result).details).toBe("Unknown error");
     });
   });
 
@@ -600,6 +685,16 @@ describe("registerWriteTools — (core listing & shop lifecycle)", () => {
       expect(payload.error).toBe("Failed to register shop slug");
       expect(payload.details).toBe("db offline");
     });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      const pool = mockPool();
+      pool.query.mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({ slug: "fresh-farm" });
+
+      expect(textPayload(result).details).toBe("Unknown error");
+    });
   });
 
   describe("create_product_listing", () => {
@@ -702,6 +797,35 @@ describe("registerWriteTools — (core listing & shop lifecycle)", () => {
         .mocked(signAndPublishEvent)
         .mock.calls.map((call) => (call[1] as any).kind);
       expect(kinds).toEqual([30402, 31989, 31990]);
+
+      const handlerCall = jest
+        .mocked(signAndPublishEvent)
+        .mock.calls.find((call) => (call[1] as any).kind === 31990);
+      expect(handlerCall).toBeDefined();
+      const webTags = (handlerCall![1] as any).tags.filter(
+        (t: string[]) => t[0] === "web"
+      );
+      expect(webTags[0][1]).toContain("https://shopstr.market");
+    });
+
+    it("uses process.env.NEXT_PUBLIC_BASE_URL for NIP-89 handler if defined, defaulting to https://shopstr.market", async () => {
+      const originalEnv = process.env.NEXT_PUBLIC_BASE_URL;
+      try {
+        process.env.NEXT_PUBLIC_BASE_URL = "https://custom.shopstr.market";
+        const tool = getCallback();
+        await tool(baseParams);
+
+        const handlerCall = jest
+          .mocked(signAndPublishEvent)
+          .mock.calls.find((call) => (call[1] as any).kind === 31990);
+        expect(handlerCall).toBeDefined();
+        const webTags = (handlerCall![1] as any).tags.filter(
+          (t: string[]) => t[0] === "web"
+        );
+        expect(webTags[0][1]).toContain("https://custom.shopstr.market");
+      } finally {
+        process.env.NEXT_PUBLIC_BASE_URL = originalEnv;
+      }
     });
 
     it("does not fail the tool call when the fire-and-forget rec/handler publishes reject", async () => {
@@ -736,6 +860,15 @@ describe("registerWriteTools — (core listing & shop lifecycle)", () => {
       expect(textPayload(result).error).toBe(
         "Failed to create product listing"
       );
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(signAndPublishEvent).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool(baseParams);
+
+      expect(textPayload(result).details).toBe("Unknown error");
     });
   });
 
@@ -813,6 +946,58 @@ describe("registerWriteTools — (core listing & shop lifecycle)", () => {
       );
     });
 
+    it("builds tags for every other provided optional field", async () => {
+      const tool = getCallback();
+      await tool({
+        dTag: "existing-tag",
+        title: "Raw Milk",
+        description: "Fresh from the farm",
+        location: "Vermont",
+        images: ["img1"],
+        quantity: "5",
+        condition: "new",
+        status: "active",
+        sizes: [{ size: "S", quantity: "2" }],
+        volumes: [{ volume: "1L", price: "5" }],
+        bulk: [{ units: "10", price: "40" }],
+        pickupLocations: [" 123 Farm Rd "],
+        expiration: "2030-01-01T00:00:00.000Z",
+        weights: [{ weight: "1lb", price: "12" }],
+        herdshareAgreement: "https://example.com/agreement",
+        requiredCustomerInfo: ["phone"],
+        subscriptionEnabled: true,
+        subscriptionDiscount: 10,
+        subscriptionFrequencies: ["weekly"],
+      });
+
+      const template = jest.mocked(signAndPublishEvent).mock
+        .calls[0]![1] as any;
+      expect(template.tags).toEqual(
+        expect.arrayContaining([
+          ["alt", "Product listing: Raw Milk"],
+          ["title", "Raw Milk"],
+          ["summary", "Fresh from the farm"],
+          ["location", "Vermont"],
+          ["image", "img1"],
+          ["quantity", "5"],
+          ["condition", "new"],
+          ["status", "active"],
+          ["size", "S", "2"],
+          ["volume", "1L", "5"],
+          ["bulk", "10", "40"],
+          ["pickup_location", "123 Farm Rd"],
+          ["valid_until", "1893456000"],
+          ["weight", "1lb", "12"],
+          ["herdshare_agreement", "https://example.com/agreement"],
+          ["required_customer_info", "phone"],
+          ["subscription_enabled", "true"],
+          ["subscription_discount", "10"],
+          ["subscription_frequency", "weekly"],
+        ])
+      );
+      expect(template.content).toBe("Fresh from the farm");
+    });
+
     it("returns errorResponse when signAndPublishEvent throws", async () => {
       jest
         .mocked(signAndPublishEvent)
@@ -825,6 +1010,15 @@ describe("registerWriteTools — (core listing & shop lifecycle)", () => {
       expect(textPayload(result).error).toBe(
         "Failed to update product listing"
       );
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(signAndPublishEvent).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({ dTag: "t" });
+
+      expect(textPayload(result).details).toBe("Unknown error");
     });
   });
 
@@ -848,6 +1042,46 @@ describe("registerWriteTools — (core listing & shop lifecycle)", () => {
       expect(textPayload(result).deletedEventIds).toEqual(["id1", "id2"]);
     });
 
+    it("adds a and k tags for the author's own listings and caches durably", async () => {
+      jest.mocked(fetchProductByIdFromDb).mockResolvedValueOnce({
+        id: "id1",
+        pubkey: TEST_PUBKEY,
+        kind: 30402,
+        created_at: 1,
+        content: "",
+        sig: "sig",
+        tags: [["d", "my-listing"]],
+      });
+      const tool = getCallback();
+      await tool({ eventIds: ["id1"] });
+
+      const call = jest.mocked(signAndPublishEvent).mock.calls[0]!;
+      expect((call[1] as any).tags).toEqual([
+        ["e", "id1"],
+        ["a", `30402:${TEST_PUBKEY}:my-listing`],
+        ["k", "30402"],
+      ]);
+      expect(call[3]).toEqual({ requireDurableCache: true });
+    });
+
+    it("does not add a or k tags for listings owned by someone else", async () => {
+      jest.mocked(fetchProductByIdFromDb).mockResolvedValueOnce({
+        id: "id1",
+        pubkey: "other",
+        kind: 30402,
+        created_at: 1,
+        content: "",
+        sig: "sig",
+        tags: [["d", "their-listing"]],
+      });
+      const tool = getCallback();
+      await tool({ eventIds: ["id1"] });
+
+      const template = jest.mocked(signAndPublishEvent).mock
+        .calls[0]![1] as any;
+      expect(template.tags).toEqual([["e", "id1"]]);
+    });
+
     it("uses the provided reason as content when given", async () => {
       const tool = getCallback();
       await tool({ eventIds: ["id1"], reason: "duplicate listing" });
@@ -867,6 +1101,15 @@ describe("registerWriteTools — (core listing & shop lifecycle)", () => {
 
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to delete listing");
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(signAndPublishEvent).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({ eventIds: ["id1"] });
+
+      expect(textPayload(result).details).toBe("Unknown error");
     });
   });
 
@@ -952,6 +1195,15 @@ describe("registerWriteTools — (core listing & shop lifecycle)", () => {
 
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to publish review");
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(signAndPublishEvent).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({ content: "great!", productId: "prod-1" });
+
+      expect(textPayload(result).details).toBe("Unknown error");
     });
   });
 });
@@ -1142,6 +1394,19 @@ describe("registerWriteTools — (community & messaging)", () => {
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to create community post");
     });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(signAndPublishEvent).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({
+        content: "Hello",
+        communityId,
+        communityPubkey: "community-owner-pubkey",
+      });
+
+      expect(textPayload(result).details).toBe("Unknown error");
+    });
   });
 
   describe("send_direct_message", () => {
@@ -1164,6 +1429,25 @@ describe("registerWriteTools — (community & messaging)", () => {
       );
       expect(innerEvent.tags.some((t: string[]) => t[0] === "order")).toBe(
         false
+      );
+    });
+
+    it("falls back to wss://relay.damus.io as the relay hint when getDefaultRelays returns none", async () => {
+      jest.mocked(getDefaultRelays).mockReturnValueOnce([]);
+      const tool = getCallback();
+      await tool({
+        recipientPubkey: "recipient-pubkey",
+        message: "Is this available?",
+        productAddress: "30402:seller:dtag",
+      });
+
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.tags).toEqual(
+        expect.arrayContaining([
+          ["a", "30402:seller:dtag", "wss://relay.damus.io"],
+        ])
       );
     });
 
@@ -1278,6 +1562,18 @@ describe("registerWriteTools — (community & messaging)", () => {
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to send direct message");
     });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(createGiftWrapEvent).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({
+        recipientPubkey: "recipient-pubkey",
+        message: "Hi",
+      });
+
+      expect(textPayload(result).details).toBe("Unknown error");
+    });
   });
 
   describe("update_order_address", () => {
@@ -1345,6 +1641,19 @@ describe("registerWriteTools — (community & messaging)", () => {
       expect(mockRelayManagerMethods.close).toHaveBeenCalledTimes(1);
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to update order address");
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(updateMcpOrderAddress).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({
+        orderId: "order-1",
+        sellerPubkey: "seller-pubkey",
+        newAddress: "456 New St",
+      });
+
+      expect(textPayload(result).details).toBe("Unknown error");
     });
   });
 
@@ -1430,6 +1739,68 @@ describe("registerWriteTools — (community & messaging)", () => {
       );
     });
 
+    it("includes the product title in the message when productTitle is provided", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: TEST_PUBKEY,
+        buyer_pubkey: "buyer-pubkey",
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "shipped" } as any);
+      const tool = getCallback();
+
+      await tool({ ...baseParams, productTitle: "Raw Milk" });
+
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.content).toContain('of "Raw Milk"');
+    });
+
+    it("falls back to wss://relay.damus.io as the relay hint when getDefaultRelays returns none", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: TEST_PUBKEY,
+        buyer_pubkey: "buyer-pubkey",
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "shipped" } as any);
+      jest.mocked(getDefaultRelays).mockReturnValueOnce([]);
+      const tool = getCallback();
+
+      await tool(baseParams);
+
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.tags).toEqual(
+        expect.arrayContaining([["p", "buyer-pubkey", "wss://relay.damus.io"]])
+      );
+    });
+
+    it("adds an item tag referencing productAddress when provided", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: TEST_PUBKEY,
+        buyer_pubkey: "buyer-pubkey",
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "shipped" } as any);
+      const tool = getCallback();
+
+      await tool({ ...baseParams, productAddress: "30402:seller:dtag" });
+
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.tags).toEqual(
+        expect.arrayContaining([["item", "30402:seller:dtag", "1"]])
+      );
+    });
+
     it("returns 'Unauthorized order update' when the final updateMcpOrderStatus resolves null despite passing the initial check", async () => {
       const order = mockMcpOrder({
         seller_pubkey: TEST_PUBKEY,
@@ -1462,6 +1833,15 @@ describe("registerWriteTools — (community & messaging)", () => {
       expect(mockRelayManagerMethods.close).toHaveBeenCalledTimes(1);
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to send shipping update");
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(getMcpOrder).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool(baseParams);
+
+      expect(textPayload(result).details).toBe("Unknown error");
     });
   });
 
@@ -1645,6 +2025,297 @@ describe("registerWriteTools — (community & messaging)", () => {
         expect(subjectTag[1]).toBe(expectedSubject);
       }
     );
+
+    it("sends notification DM to the seller when buyer cancels an order", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: "actual-seller",
+        buyer_pubkey: TEST_PUBKEY,
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "cancelled" } as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        orderId: "order-1",
+        status: "cancelled",
+        message: "I need to cancel this order",
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(textPayload(result).notificationSent).toBe(true);
+      expect(createGiftWrapEvent).toHaveBeenCalledWith(
+        expect.any(String),
+        "actual-seller"
+      );
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.tags).toContainEqual([
+        "p",
+        "actual-seller",
+        "wss://relay.damus.io",
+      ]);
+      expect(innerEvent.tags).toContainEqual(["status", "canceled"]);
+    });
+
+    it.each([
+      ["confirmed", "confirmed"],
+      ["shipped", "shipped"],
+      ["delivered", "completed"],
+      ["cancelled", "canceled"],
+    ])(
+      "maps MCP status '%s' to client wire status '%s' in the notification DM",
+      async (status, expectedWireStatus) => {
+        const order = mockMcpOrder({
+          seller_pubkey: status === "cancelled" ? "someone-else" : TEST_PUBKEY,
+          buyer_pubkey: status === "cancelled" ? TEST_PUBKEY : "actual-buyer",
+        });
+        jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+        jest
+          .mocked(updateMcpOrderStatus)
+          .mockResolvedValueOnce({ ...order, order_status: status } as any);
+        const tool = getCallback();
+
+        await tool({
+          orderId: "order-1",
+          status,
+          buyerPubkey: order.buyer_pubkey,
+          message: "Update",
+        });
+
+        const innerEvent = JSON.parse(
+          jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+        );
+        expect(innerEvent.tags).toContainEqual(["status", expectedWireStatus]);
+      }
+    );
+
+    it("sends notification DM with default text when buyer cancels without a message", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: "actual-seller",
+        buyer_pubkey: TEST_PUBKEY,
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "cancelled" } as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        orderId: "order-1",
+        status: "cancelled",
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(textPayload(result).notificationSent).toBe(true);
+      expect(createGiftWrapEvent).toHaveBeenCalledWith(
+        expect.any(String),
+        "actual-seller"
+      );
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.content).toBe("Order has been cancelled by the buyer.");
+    });
+
+    it("falls back to deriving product address from DB event when productAddress is omitted", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: "actual-seller",
+        buyer_pubkey: TEST_PUBKEY,
+        product_id: "prod-event-id",
+        quantity: 2,
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "cancelled" } as any);
+      jest.mocked(fetchProductByIdFromDb).mockResolvedValueOnce({
+        id: "prod-event-id",
+        pubkey: "actual-seller",
+        tags: [["d", "my-d-tag"]],
+      } as any);
+      const tool = getCallback();
+
+      await tool({
+        orderId: "order-1",
+        status: "cancelled",
+      });
+
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.tags).toContainEqual([
+        "item",
+        "30402:actual-seller:my-d-tag",
+        "2",
+      ]);
+    });
+
+    it("falls back to order.product_id formatted as address when DB lookup returns null", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: "actual-seller",
+        buyer_pubkey: TEST_PUBKEY,
+        product_id: "prod-raw-id",
+        quantity: 1,
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "cancelled" } as any);
+      jest.mocked(fetchProductByIdFromDb).mockResolvedValueOnce(null);
+      const tool = getCallback();
+
+      await tool({
+        orderId: "order-1",
+        status: "cancelled",
+      });
+
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.tags).toContainEqual([
+        "item",
+        "30402:actual-seller:prod-raw-id",
+        "1",
+      ]);
+    });
+
+    it("includes explicit warning in response when notification DM delivery fails", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: "actual-seller",
+        buyer_pubkey: TEST_PUBKEY,
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "cancelled" } as any);
+      jest
+        .mocked(createGiftWrapEvent)
+        .mockRejectedValueOnce(new Error("relay timeout"));
+      const tool = getCallback();
+
+      const result = await tool({
+        orderId: "order-1",
+        status: "cancelled",
+      });
+
+      expect(result.isError).toBeFalsy();
+      const payload = textPayload(result);
+      expect(payload.orderUpdated).toBe(true);
+      expect(payload.notificationSent).toBe(false);
+      expect(payload.warning).toContain(
+        "Order was cancelled in the database, but the notification DM could not be delivered to the seller."
+      );
+    });
+
+    it("sends notification DM to the buyer when seller confirms an order", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: TEST_PUBKEY,
+        buyer_pubkey: "actual-buyer",
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "confirmed" } as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        orderId: "order-1",
+        status: "confirmed",
+        buyerPubkey: "actual-buyer",
+        message: "Your order is confirmed!",
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(textPayload(result).notificationSent).toBe(true);
+      expect(createGiftWrapEvent).toHaveBeenCalledWith(
+        expect.any(String),
+        "actual-buyer"
+      );
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.tags).toContainEqual([
+        "p",
+        "actual-buyer",
+        "wss://relay.damus.io",
+      ]);
+    });
+
+    it("adds an item tag referencing productAddress in the notification DM when provided", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: TEST_PUBKEY,
+        buyer_pubkey: "actual-buyer",
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "confirmed" } as any);
+      const tool = getCallback();
+
+      await tool({
+        orderId: "order-1",
+        status: "confirmed",
+        buyerPubkey: "actual-buyer",
+        message: "Update",
+        productAddress: "30402:seller:dtag",
+      });
+
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.tags).toEqual(
+        expect.arrayContaining([["item", "30402:seller:dtag", "1"]])
+      );
+    });
+
+    it("falls back to wss://relay.damus.io as the relay hint when getDefaultRelays returns none", async () => {
+      const order = mockMcpOrder({
+        seller_pubkey: TEST_PUBKEY,
+        buyer_pubkey: "actual-buyer",
+      });
+      jest.mocked(getMcpOrder).mockResolvedValueOnce(order as any);
+      jest
+        .mocked(updateMcpOrderStatus)
+        .mockResolvedValueOnce({ ...order, order_status: "confirmed" } as any);
+      jest.mocked(getDefaultRelays).mockReturnValueOnce([]);
+      const tool = getCallback();
+
+      await tool({
+        orderId: "order-1",
+        status: "confirmed",
+        buyerPubkey: "actual-buyer",
+        message: "Update",
+      });
+
+      const innerEvent = JSON.parse(
+        jest.mocked(createGiftWrapEvent).mock.calls[0]![0] as string
+      );
+      expect(innerEvent.tags).toEqual(
+        expect.arrayContaining([["p", "actual-buyer", "wss://relay.damus.io"]])
+      );
+    });
+
+    it("returns errorResponse when getMcpOrder throws", async () => {
+      jest.mocked(getMcpOrder).mockRejectedValueOnce(new Error("db offline"));
+      const tool = getCallback();
+
+      const result = await tool({ orderId: "order-1", status: "confirmed" });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to update order status");
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(getMcpOrder).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({ orderId: "order-1", status: "confirmed" });
+
+      expect(textPayload(result).details).toBe("Unknown error");
+    });
   });
 
   describe("list_messages", () => {
@@ -1686,6 +2357,27 @@ describe("registerWriteTools — (community & messaging)", () => {
       expect(payload.messages.map((m: any) => m.eventId)).toEqual(["good-msg"]);
     });
 
+    it("skips a message when signer.decrypt itself throws (outer catch, distinct from a JSON.parse failure)", async () => {
+      jest.mocked(fetchAllMessagesFromDb).mockResolvedValueOnce([
+        {
+          id: "decrypt-fails",
+          pubkey: "x",
+          content: "anything",
+          is_read: false,
+        },
+        buildMockMessage({ id: "good-msg" }),
+      ] as any);
+      mockSigner.decrypt.mockImplementationOnce(() => {
+        throw new Error("nip44 decrypt failed");
+      });
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      const payload = textPayload(result);
+      expect(payload.messages.map((m: any) => m.eventId)).toEqual(["good-msg"]);
+    });
+
     it("skips a message when the seal layer fails to decode as JSON", async () => {
       const badSeal = {
         id: "bad-seal",
@@ -1707,6 +2399,98 @@ describe("registerWriteTools — (community & messaging)", () => {
 
       const payload = textPayload(result);
       expect(payload.messages.map((m: any) => m.eventId)).toEqual(["good-msg"]);
+    });
+
+    it("skips a message whose seal decodes to valid JSON but is missing its content field", async () => {
+      const sealWithoutContent = { pubkey: "sender" };
+      const msg = {
+        id: "seal-no-content",
+        pubkey: "wrap-pubkey",
+        content: encryptForMock(JSON.stringify(sealWithoutContent)),
+        is_read: false,
+      };
+      jest
+        .mocked(fetchAllMessagesFromDb)
+        .mockResolvedValueOnce([
+          msg,
+          buildMockMessage({ id: "good-msg" }),
+        ] as any);
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      const payload = textPayload(result);
+      expect(payload.messages.map((m: any) => m.eventId)).toEqual(["good-msg"]);
+    });
+
+    it("skips a message whose inner content decodes to a JSON null", async () => {
+      const seal = {
+        pubkey: "sender",
+        content: encryptForMock("null"),
+      };
+      const msg = {
+        id: "inner-null",
+        pubkey: "wrap-pubkey",
+        content: encryptForMock(JSON.stringify(seal)),
+        is_read: false,
+      };
+      jest
+        .mocked(fetchAllMessagesFromDb)
+        .mockResolvedValueOnce([
+          msg,
+          buildMockMessage({ id: "good-msg" }),
+        ] as any);
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      const payload = textPayload(result);
+      expect(payload.messages.map((m: any) => m.eventId)).toEqual(["good-msg"]);
+    });
+
+    it("defaults to an empty tag set and subject 'general' when the inner message has no tags array", async () => {
+      const inner = {
+        pubkey: "sender",
+        created_at: 1000,
+        content: "Hi, no tags here",
+      };
+      const seal = {
+        pubkey: "sender",
+        content: encryptForMock(JSON.stringify(inner)),
+      };
+      const msg = {
+        id: "no-tags",
+        pubkey: "wrap-pubkey",
+        content: encryptForMock(JSON.stringify(seal)),
+        is_read: false,
+      };
+      jest.mocked(fetchAllMessagesFromDb).mockResolvedValueOnce([msg] as any);
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      const payload = textPayload(result);
+      expect(payload.messages[0]).toMatchObject({
+        eventId: "no-tags",
+        subject: "general",
+      });
+    });
+
+    it("ignores malformed tags shorter than 2 elements without skipping the rest of the message", async () => {
+      jest.mocked(fetchAllMessagesFromDb).mockResolvedValueOnce([
+        buildMockMessage({
+          id: "short-tag",
+          tags: [["lonely"], ["subject", "order-info"]],
+        }),
+      ] as any);
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(textPayload(result).messages[0]).toMatchObject({
+        eventId: "short-tag",
+        subject: "order-info",
+      });
     });
 
     it("filters by subject and by senderPubkey", async () => {
@@ -1792,6 +2576,27 @@ describe("registerWriteTools — (community & messaging)", () => {
         address: null,
       });
     });
+
+    it("returns errorResponse when fetchAllMessagesFromDb throws", async () => {
+      jest
+        .mocked(fetchAllMessagesFromDb)
+        .mockRejectedValueOnce(new Error("db offline"));
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to list messages");
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(fetchAllMessagesFromDb).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(textPayload(result).details).toBe("Unknown error");
+    });
   });
 
   describe("mark_messages_read", () => {
@@ -1855,6 +2660,31 @@ describe("registerWriteTools — (community & messaging)", () => {
       const result = await tool({ messageIds: ["msg-1"] });
 
       expect(client.release).toHaveBeenCalledTimes(1);
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to mark messages as read");
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      const { client } = mockPool();
+      client.query.mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({ messageIds: ["msg-1"] });
+
+      expect(textPayload(result).details).toBe("Unknown error");
+    });
+
+    it("does not attempt to release a client when pool.connect itself rejects", async () => {
+      const client = { query: jest.fn(), release: jest.fn() };
+      const pool = {
+        connect: jest.fn().mockRejectedValue(new Error("pool exhausted")),
+      };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      const tool = getCallback();
+
+      const result = await tool({ messageIds: ["msg-1"] });
+
+      expect(client.release).not.toHaveBeenCalled();
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to mark messages as read");
     });
@@ -1942,6 +2772,17 @@ describe("registerWriteTools — (relay & media configuration)", () => {
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to set relay list");
     });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(signAndPublishEvent).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({
+        relays: [{ url: "wss://read.example", type: "read" }],
+      });
+
+      expect(textPayload(result).details).toBe("Unknown error");
+    });
   });
 
   describe("set_blossom_servers", () => {
@@ -1980,6 +2821,15 @@ describe("registerWriteTools — (relay & media configuration)", () => {
 
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to set blossom servers");
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(signAndPublishEvent).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({ servers: ["https://cdn1.example"] });
+
+      expect(textPayload(result).details).toBe("Unknown error");
     });
   });
 
@@ -2123,6 +2973,21 @@ describe("registerWriteTools — (relay & media configuration)", () => {
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to upload media");
     });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest
+        .mocked(global.fetch as jest.Mock)
+        .mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({
+        fileBase64: Buffer.from("abc").toString("base64"),
+        fileName: "file.png",
+        mimeType: "image/png",
+      });
+
+      expect(textPayload(result).details).toBe("Unknown error");
+    });
   });
 });
 
@@ -2262,6 +3127,26 @@ describe("registerWriteTools — (discount codes)", () => {
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to create discount code");
     });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest
+        .mocked(global.fetch as jest.Mock)
+        .mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({ code: "SUMMER20", discountPercentage: 20 });
+
+      expect(textPayload(result).details).toBe("Unknown error");
+    });
+
+    it("falls back to 'Unknown error' when the API's error response omits an error message", async () => {
+      mockFetchJson({}, { ok: false, status: 500 });
+      const tool = getCallback();
+
+      const result = await tool({ code: "SUMMER20", discountPercentage: 20 });
+
+      expect(textPayload(result).details).toBe("Unknown error");
+    });
   });
 
   describe("delete_discount_code", () => {
@@ -2322,6 +3207,26 @@ describe("registerWriteTools — (discount codes)", () => {
 
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to delete discount code");
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest
+        .mocked(global.fetch as jest.Mock)
+        .mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({ code: "SUMMER20" });
+
+      expect(textPayload(result).details).toBe("Unknown error");
+    });
+
+    it("falls back to 'Unknown error' when the API's error response omits an error message", async () => {
+      mockFetchJson({}, { ok: false, status: 500 });
+      const tool = getCallback();
+
+      const result = await tool({ code: "SUMMER20" });
+
+      expect(textPayload(result).details).toBe("Unknown error");
     });
   });
 
@@ -2393,6 +3298,17 @@ describe("registerWriteTools — (discount codes)", () => {
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to list discount codes");
     });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest
+        .mocked(global.fetch as jest.Mock)
+        .mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(textPayload(result).details).toBe("Unknown error");
+    });
   });
 });
 
@@ -2409,19 +3325,6 @@ describe("registerWriteTools — (Cashu payments)", () => {
       .mocked(getDefaultRelays)
       .mockReturnValue(["wss://relay.damus.io", "wss://nos.lol"]);
   });
-
-  function mockCashuWallet(meltQuote: {
-    amount: number;
-    fee_reserve?: number;
-  }) {
-    const wallet = {
-      loadMint: jest.fn().mockResolvedValue(undefined),
-      createMeltQuoteBolt11: jest.fn().mockResolvedValue(meltQuote),
-    };
-    jest.mocked(Mint).mockImplementationOnce(() => ({}) as any);
-    jest.mocked(Wallet).mockImplementationOnce(() => wallet as any);
-    return wallet;
-  }
 
   describe.each(PHASE_5_TOOLS)("%s — shared guards", (toolName) => {
     it("returns a permission error when apiKey.permissions is not full_access", async () => {
@@ -2455,83 +3358,60 @@ describe("registerWriteTools — (Cashu payments)", () => {
       );
     }
 
-    it("filters proof events to only ones authored by the signer's own pubkey", async () => {
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          pubkey: TEST_PUBKEY,
-          proofs: [{ amount: 5 }],
-        }),
-        buildMockProofEvent({
-          pubkey: "other-pubkey",
-          proofs: [{ amount: 999 }],
-        }),
-      ] as any);
-      const tool = getCallback();
-
-      const result = await tool({});
-
-      expect(fetchCachedEvents).toHaveBeenCalledWith(7375);
-      const payload = textPayload(result);
-      expect(payload.totalBalance).toBe(5);
-      expect(payload.proofEventCount).toBe(1);
-    });
-
-    it("skips a proof event when decrypt/JSON.parse fails, without failing the whole call", async () => {
-      jest
-        .mocked(fetchCachedEvents)
-        .mockResolvedValueOnce([
-          { pubkey: TEST_PUBKEY, content: "not encrypted json" },
-          buildMockProofEvent({ proofs: [{ amount: 7 }] }),
-        ] as any);
-      const tool = getCallback();
-
-      const result = await tool({});
-
-      expect(textPayload(result).totalBalance).toBe(7);
-    });
-
-    it("aggregates across mints by default, and filters to one mint when mintUrl is provided", async () => {
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint-a.example",
-          proofs: [{ amount: 3 }],
-        }),
-        buildMockProofEvent({
-          mint: "https://mint-b.example",
-          proofs: [{ amount: 4 }],
-        }),
-      ] as any);
-      const tool = getCallback();
-
-      const all = await tool({});
-      expect(textPayload(all)).toMatchObject({
+    it("reads the signer's wallet and reports sats", async () => {
+      jest.mocked(getAgentWalletBalance).mockResolvedValueOnce({
         totalBalance: 7,
-        mintBalances: {
-          "https://mint-a.example": 3,
-          "https://mint-b.example": 4,
-        },
+        mintBalances: { "https://mint.example": 7 },
+        proofEventCount: 2,
       });
+      const tool = getCallback();
 
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint-a.example",
-          proofs: [{ amount: 3 }],
-        }),
-        buildMockProofEvent({
-          mint: "https://mint-b.example",
-          proofs: [{ amount: 4 }],
-        }),
-      ] as any);
-      const filtered = await tool({ mintUrl: "https://mint-a.example" });
-      expect(textPayload(filtered)).toMatchObject({
-        totalBalance: 3,
-        mintBalances: { "https://mint-a.example": 3 },
+      const result = await tool({});
+
+      expect(getAgentWalletBalance).toHaveBeenCalledWith(mockSigner, undefined);
+      expect(textPayload(result)).toMatchObject({
+        success: true,
+        totalBalance: 7,
+        unit: "sats",
+        mintBalances: { "https://mint.example": 7 },
+        proofEventCount: 2,
       });
     });
 
-    it("returns errorResponse when fetchCachedEvents throws", async () => {
+    it("passes the mint filter through", async () => {
+      jest.mocked(getAgentWalletBalance).mockResolvedValueOnce({
+        totalBalance: 0,
+        mintBalances: {},
+        proofEventCount: 0,
+      });
+      const tool = getCallback();
+
+      await tool({ mintUrl: "https://mint.example" });
+
+      expect(getAgentWalletBalance).toHaveBeenCalledWith(
+        mockSigner,
+        "https://mint.example"
+      );
+    });
+
+    it("returns the wallet error's title and details", async () => {
       jest
-        .mocked(fetchCachedEvents)
+        .mocked(getAgentWalletBalance)
+        .mockRejectedValueOnce(new AgentWalletError("Wallet title", "why"));
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result)).toMatchObject({
+        error: "Wallet title",
+        details: "why",
+      });
+    });
+
+    it("returns errorResponse for unexpected failures", async () => {
+      jest
+        .mocked(getAgentWalletBalance)
         .mockRejectedValueOnce(new Error("db offline"));
       const tool = getCallback();
 
@@ -2539,6 +3419,16 @@ describe("registerWriteTools — (Cashu payments)", () => {
 
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to get Cashu balance");
+      expect(textPayload(result).details).toBe("db offline");
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(getAgentWalletBalance).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({});
+
+      expect(textPayload(result).details).toBe("Unknown error");
     });
   });
 
@@ -2550,45 +3440,71 @@ describe("registerWriteTools — (Cashu payments)", () => {
       );
     }
 
-    it("decodes the token, sums proof amounts, and publishes an encrypted kind:7375 event tagged with mint + relay hints", async () => {
-      const proofs = [{ amount: 7 }, { amount: 8 }];
-      jest.mocked(getDecodedToken).mockReturnValueOnce({
+    it("hands the token to the wallet and returns what was stored", async () => {
+      jest.mocked(receiveAgentCashuToken).mockResolvedValueOnce({
+        eventId: "evt-1",
+        persisted: true,
+        amount: 15,
         mint: "https://mint.example",
-        proofs,
-      } as any);
+        proofCount: 2,
+      });
       const tool = getCallback();
 
       const result = await tool({ token: "cashu-token" });
 
-      expect(mockSigner.encrypt).toHaveBeenCalledWith(
-        TEST_PUBKEY,
-        JSON.stringify({ mint: "https://mint.example", proofs })
+      expect(receiveAgentCashuToken).toHaveBeenCalledWith(
+        mockSigner,
+        "cashu-token"
       );
-      const template = jest.mocked(signAndPublishEvent).mock
-        .calls[0]![1] as any;
-      expect(template.kind).toBe(7375);
-      expect(template.tags).toEqual([
-        ["mint", "https://mint.example"],
-        ["relay", "wss://relay.damus.io"],
-        ["relay", "wss://nos.lol"],
-      ]);
       expect(textPayload(result)).toMatchObject({
+        success: true,
+        eventId: "evt-1",
         amount: 15,
         mint: "https://mint.example",
         proofCount: 2,
       });
     });
 
-    it("returns errorResponse when getDecodedToken throws on a malformed token", async () => {
-      jest.mocked(getDecodedToken).mockImplementationOnce(() => {
-        throw new Error("invalid token encoding");
-      });
+    it("returns the wallet error's title and details, e.g. a spent token", async () => {
+      jest
+        .mocked(receiveAgentCashuToken)
+        .mockRejectedValueOnce(
+          new AgentWalletError(
+            "Failed to receive Cashu tokens",
+            "Token already spent."
+          )
+        );
       const tool = getCallback();
 
-      const result = await tool({ token: "garbage" });
+      const result = await tool({ token: "cashu-token" });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result)).toMatchObject({
+        error: "Failed to receive Cashu tokens",
+        details: "Token already spent.",
+      });
+    });
+
+    it("returns errorResponse for unexpected failures", async () => {
+      jest
+        .mocked(receiveAgentCashuToken)
+        .mockRejectedValueOnce(new Error("database offline"));
+      const tool = getCallback();
+
+      const result = await tool({ token: "cashu-token" });
 
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to receive Cashu tokens");
+      expect(textPayload(result).details).toBe("database offline");
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(receiveAgentCashuToken).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({ token: "cashu-token" });
+
+      expect(textPayload(result).details).toBe("Unknown error");
     });
   });
 
@@ -2631,6 +3547,15 @@ describe("registerWriteTools — (Cashu payments)", () => {
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to set Cashu mints");
     });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest.mocked(signAndPublishEvent).mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({ mints: ["https://mint.example"] });
+
+      expect(textPayload(result).details).toBe("Unknown error");
+    });
   });
 
   describe("send_cashu_payment", () => {
@@ -2641,14 +3566,16 @@ describe("registerWriteTools — (Cashu payments)", () => {
       );
     }
 
-    it("returns 'No available proofs' when no cached proof event matches the target mint", async () => {
-      mockCashuWallet({ amount: 10, fee_reserve: 1 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://other-mint.example",
-          proofs: [{ amount: 100 }],
-        }),
-      ] as any);
+    it("pays the invoice from the signer's wallet and reports the outcome", async () => {
+      jest.mocked(payInvoiceFromAgentWallet).mockResolvedValueOnce({
+        paid: true,
+        amount: 1000,
+        fee: 10,
+        mintUrl: "https://mint.example",
+        change: 9,
+        eventId: "evt-2",
+        persisted: true,
+      });
       const tool = getCallback();
 
       const result = await tool({
@@ -2656,199 +3583,424 @@ describe("registerWriteTools — (Cashu payments)", () => {
         mintUrl: "https://mint.example",
       });
 
-      expect(result.isError).toBe(true);
-      const payload = textPayload(result);
-      expect(payload.error).toBe("No available proofs");
-      expect(safeMeltProofs).not.toHaveBeenCalled();
-    });
-
-    it("returns 'Insufficient balance' with needed vs. available amounts, without melting", async () => {
-      mockCashuWallet({ amount: 100, fee_reserve: 5 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint.example",
-          proofs: [{ amount: 10 }],
-        }),
-      ] as any);
-      const tool = getCallback();
-
-      const result = await tool({
-        invoice: "lnbc1invoice",
-        mintUrl: "https://mint.example",
-      });
-
-      expect(result.isError).toBe(true);
-      const payload = textPayload(result);
-      expect(payload.error).toBe("Insufficient balance");
-      expect(payload.details).toBe("Need 105 sats but only have 10 sats");
-      expect(safeMeltProofs).not.toHaveBeenCalled();
-    });
-
-    it("skips a malformed proof event while aggregating available proofs", async () => {
-      mockCashuWallet({ amount: 5, fee_reserve: 0 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        { pubkey: TEST_PUBKEY, content: "not encrypted json" },
-        buildMockProofEvent({
-          mint: "https://mint.example",
-          proofs: [{ amount: 5 }],
-        }),
-      ] as any);
-      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
-        status: "paid",
-        changeProofs: [],
-      } as any);
-      const tool = getCallback();
-
-      const result = await tool({
-        invoice: "lnbc1invoice",
-        mintUrl: "https://mint.example",
-      });
-
-      expect(safeMeltProofs).toHaveBeenCalledWith(
-        expect.any(Object),
-        expect.any(Object),
-        [{ amount: 5 }]
+      expect(payInvoiceFromAgentWallet).toHaveBeenCalledWith(
+        mockSigner,
+        "lnbc1invoice",
+        "https://mint.example"
       );
-      expect(textPayload(result).paid).toBe(true);
+      expect(textPayload(result)).toMatchObject({
+        success: true,
+        paid: true,
+        amount: 1000,
+        fee: 10,
+        change: 9,
+        mintUrl: "https://mint.example",
+      });
+    });
+
+    it("leaves the mint to the wallet's default when none is given", async () => {
+      jest.mocked(payInvoiceFromAgentWallet).mockResolvedValueOnce({
+        paid: true,
+        amount: 1,
+        fee: 0,
+        mintUrl: "https://mint.minibits.cash/Bitcoin",
+        change: 0,
+        eventId: null,
+        persisted: true,
+      });
+      const tool = getCallback();
+
+      await tool({ invoice: "lnbc1invoice" });
+
+      expect(payInvoiceFromAgentWallet).toHaveBeenCalledWith(
+        mockSigner,
+        "lnbc1invoice",
+        undefined
+      );
     });
 
     it.each([
-      ["pending", "Mint payment pending"],
-      ["unknown", "Cashu payment outcome unknown"],
-      ["failed", "Cashu payment failed"],
-    ])(
-      "maps a '%s' melt outcome to the error '%s'",
-      async (status, expectedError) => {
-        mockCashuWallet({ amount: 5, fee_reserve: 0 });
-        jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-          buildMockProofEvent({
-            mint: "https://mint.example",
-            proofs: [{ amount: 5 }],
-          }),
-        ] as any);
-        jest.mocked(safeMeltProofs).mockResolvedValueOnce({
-          status,
-          changeProofs: [],
-        } as any);
-        const tool = getCallback();
-
-        const result = await tool({
-          invoice: "lnbc1invoice",
-          mintUrl: "https://mint.example",
-        });
-
-        expect(result.isError).toBe(true);
-        expect(textPayload(result).error).toBe(expectedError);
-      }
-    );
-
-    it("surfaces meltOutcome.errorMessage as details when the mint provides one", async () => {
-      mockCashuWallet({ amount: 5, fee_reserve: 0 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint.example",
-          proofs: [{ amount: 5 }],
-        }),
-      ] as any);
-      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
-        status: "failed",
-        changeProofs: [],
-        errorMessage: "mint rejected the melt request",
-      } as any);
-      const tool = getCallback();
-
-      const result = await tool({
-        invoice: "lnbc1invoice",
-        mintUrl: "https://mint.example",
-      });
-
-      expect(textPayload(result).details).toBe(
-        "mint rejected the melt request"
-      );
-    });
-
-    it("sums changeProofs, handling both plain-number and .toNumber()-style amounts", async () => {
-      mockCashuWallet({ amount: 5, fee_reserve: 0 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint.example",
-          proofs: [{ amount: 5 }],
-        }),
-      ] as any);
-      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
-        status: "paid",
-        changeProofs: [{ amount: 4 }, { amount: { toNumber: () => 6 } }],
-      } as any);
-      const tool = getCallback();
-
-      const result = await tool({
-        invoice: "lnbc1invoice",
-        mintUrl: "https://mint.example",
-      });
-
-      expect(textPayload(result).change).toBe(10);
-    });
-
-    it("defaults mintUrl to https://mint.minibits.cash/Bitcoin when not provided", async () => {
-      mockCashuWallet({ amount: 5, fee_reserve: 0 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint.minibits.cash/Bitcoin",
-          proofs: [{ amount: 5 }],
-        }),
-      ] as any);
-      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
-        status: "paid",
-        changeProofs: [],
-      } as any);
+      ["Insufficient balance", "Need 105 sats but only have 10 sats"],
+      ["No available proofs", "No Cashu proofs found for mint https://m"],
+      ["Mint payment pending", "Melt quote is PENDING"],
+      ["Cashu payment outcome unknown", "state check failed"],
+      ["Cashu payment failed", "mint rejected the melt request"],
+      ["Failed to send Cashu payment", "Mint host is not allowed"],
+    ])("returns the wallet error '%s' as is", async (title, details) => {
+      jest
+        .mocked(payInvoiceFromAgentWallet)
+        .mockRejectedValueOnce(new AgentWalletError(title, details));
       const tool = getCallback();
 
       const result = await tool({ invoice: "lnbc1invoice" });
 
-      expect(Mint).toHaveBeenCalledWith("https://mint.minibits.cash/Bitcoin");
-      expect(textPayload(result).mintUrl).toBe(
-        "https://mint.minibits.cash/Bitcoin"
-      );
+      expect(result.isError).toBe(true);
+      expect(textPayload(result)).toMatchObject({ error: title, details });
     });
 
-    it("calls withMintRetry with the documented retry configuration", async () => {
-      mockCashuWallet({ amount: 5, fee_reserve: 0 });
-      jest.mocked(fetchCachedEvents).mockResolvedValueOnce([
-        buildMockProofEvent({
-          mint: "https://mint.example",
-          proofs: [{ amount: 5 }],
-        }),
-      ] as any);
-      jest.mocked(safeMeltProofs).mockResolvedValueOnce({
-        status: "paid",
-        changeProofs: [],
-      } as any);
+    it("returns errorResponse for unexpected failures", async () => {
+      jest
+        .mocked(payInvoiceFromAgentWallet)
+        .mockRejectedValueOnce(new Error("mint unreachable"));
       const tool = getCallback();
 
-      await tool({ invoice: "lnbc1invoice", mintUrl: "https://mint.example" });
-
-      expect(withMintRetry).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.objectContaining({
-          maxAttempts: 4,
-          perAttemptTimeoutMs: 15000,
-          totalTimeoutMs: 60000,
-        })
-      );
-    });
-
-    it("returns errorResponse when wallet.loadMint throws", async () => {
-      const wallet = mockCashuWallet({ amount: 5, fee_reserve: 0 });
-      wallet.loadMint.mockRejectedValueOnce(new Error("mint unreachable"));
-      const tool = getCallback();
-
-      const result = await tool({
-        invoice: "lnbc1invoice",
-        mintUrl: "https://mint.example",
-      });
+      const result = await tool({ invoice: "lnbc1invoice" });
 
       expect(result.isError).toBe(true);
       expect(textPayload(result).error).toBe("Failed to send Cashu payment");
+      expect(textPayload(result).details).toBe("mint unreachable");
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      jest
+        .mocked(payInvoiceFromAgentWallet)
+        .mockRejectedValueOnce("raw failure");
+      const tool = getCallback();
+
+      const result = await tool({ invoice: "lnbc1invoice" });
+
+      expect(textPayload(result).details).toBe("Unknown error");
+    });
+  });
+});
+
+describe("registerWriteTools — (custom domain)", () => {
+  beforeEach(() => {
+    mockDnsResolveCname.mockImplementation((_domain: string, cb: any) =>
+      cb(new Error("NXDOMAIN"))
+    );
+    mockDnsResolve4.mockImplementation((_domain: string, cb: any) =>
+      cb(new Error("NXDOMAIN"))
+    );
+  });
+
+  describe.each(["manage_custom_domain"])("%s — shared guards", (toolName) => {
+    it("returns a permission error when apiKey.permissions is not full_access", async () => {
+      const callbacks = registerToolsForTest(readOnlyApiKey);
+      const tool = getTool(callbacks, toolName);
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toMatch(/Insufficient permissions/i);
+      expect(getAgentSigner).not.toHaveBeenCalled();
+    });
+
+    it("returns a no-signer error when getAgentSigner resolves null", async () => {
+      jest.mocked(getAgentSigner).mockResolvedValueOnce(null);
+      const callbacks = registerToolsForTest(fullAccessApiKey);
+      const tool = getTool(callbacks, toolName);
+
+      const result = await tool({});
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toMatch(/No signing key configured/i);
+    });
+  });
+
+  describe("manage_custom_domain", () => {
+    function getCallback() {
+      return getTool(
+        registerToolsForTest(fullAccessApiKey),
+        "manage_custom_domain"
+      );
+    }
+
+    it("action='remove' deletes from custom_domains scoped to pubkey+domain, without any DNS lookup", async () => {
+      const pool = { query: jest.fn().mockResolvedValue({ rowCount: 1 }) };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "remove",
+        domain: "shop.example.com",
+      });
+
+      expect(pool.query).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "DELETE FROM custom_domains WHERE pubkey = $1 AND domain = $2"
+        ),
+        [TEST_PUBKEY, "shop.example.com"]
+      );
+      expect(mockDnsResolveCname).not.toHaveBeenCalled();
+      expect(mockDnsResolve4).not.toHaveBeenCalled();
+      expect(textPayload(result)).toMatchObject({
+        domain: "shop.example.com",
+        removed: true,
+      });
+    });
+
+    it.each([
+      "shopstr.market",
+      "edge.shopstr.market",
+      "shopstr.store",
+      "edge.shopstr.store",
+      "SHOPSTR.MARKET",
+    ])(
+      "treats a resolved CNAME of '%s' as a valid match and skips the A-record lookup",
+      async (cname) => {
+        mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
+          cb(null, [cname])
+        );
+        const tool = getCallback();
+
+        const result = await tool({
+          action: "verify",
+          domain: "shop.example.com",
+        });
+
+        const payload = textPayload(result);
+        expect(payload.cnameOk).toBe(true);
+        expect(payload.dnsOk).toBe(true);
+        expect(mockDnsResolve4).not.toHaveBeenCalled();
+      }
+    );
+
+    it("treats a successful CNAME lookup with an empty result as no CNAME, falling back to A records", async () => {
+      mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, [])
+      );
+      mockDnsResolve4.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["34.111.179.208"])
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "verify",
+        domain: "shop.example.com",
+      });
+
+      const payload = textPayload(result);
+      expect(payload.cnameOk).toBe(false);
+      expect(payload.resolvedCname).toBeNull();
+      expect(payload.aOk).toBe(true);
+    });
+
+    it("falls back to the A-record lookup when the CNAME lookup fails", async () => {
+      mockDnsResolve4.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["34.111.179.208"])
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "verify",
+        domain: "shop.example.com",
+      });
+
+      const payload = textPayload(result);
+      expect(payload.cnameOk).toBe(false);
+      expect(payload.aOk).toBe(true);
+      expect(payload.dnsOk).toBe(true);
+      expect(mockDnsResolve4).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back to the A-record lookup when the CNAME resolves but doesn't match shopstr.market", async () => {
+      mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["notshopstrmarket.example.com"])
+      );
+      mockDnsResolve4.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["34.111.179.208"])
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "verify",
+        domain: "shop.example.com",
+      });
+
+      const payload = textPayload(result);
+      expect(payload.cnameOk).toBe(false);
+      expect(payload.aOk).toBe(true);
+      expect(mockDnsResolve4).toHaveBeenCalledTimes(1);
+    });
+
+    it("dnsOk is false and returns setup instructions when neither CNAME nor A record match", async () => {
+      mockDnsResolve4.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["1.2.3.4"])
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "verify",
+        domain: "shop.example.com",
+      });
+
+      const payload = textPayload(result);
+      expect(payload.dnsOk).toBe(false);
+      expect(payload.aOk).toBe(false);
+      expect(payload.instructions).toBe(
+        "Please add a CNAME record pointing shop.example.com to shopstr.market, or an A record pointing to 34.111.179.208."
+      );
+      expect(payload.instructions).not.toContain("milk.market");
+      expect(payload.instructions).not.toContain("75.2.60.5");
+    });
+
+    it("action='verify' never writes to the database, regardless of DNS pass/fail", async () => {
+      const pool = { query: jest.fn() };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      const tool = getCallback();
+
+      await tool({ action: "verify", domain: "shop.example.com" });
+
+      expect(pool.query).not.toHaveBeenCalled();
+    });
+
+    it("action='register' rejects with 'DNS verification failed' when DNS does not point to shopstr.market, without querying the db", async () => {
+      const pool = { query: jest.fn() };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "register",
+        domain: "shop.example.com",
+        shopSlug: "fresh-farm",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("DNS verification failed");
+      expect(textPayload(result).details).toBe(
+        "Domain shop.example.com does not point to shopstr.market. Please configure your DNS first."
+      );
+      expect(textPayload(result).details).not.toContain("milk.market");
+      expect(pool.query).not.toHaveBeenCalled();
+    });
+
+    it("action='register' rejects with 'Missing shopSlug' when shopSlug is omitted, even if DNS passed", async () => {
+      const pool = { query: jest.fn() };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["shopstr.market"])
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "register",
+        domain: "shop.example.com",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Missing shopSlug");
+      expect(pool.query).not.toHaveBeenCalled();
+    });
+
+    it("action='register' returns 'Domain already registered' when the upsert affects zero rows", async () => {
+      const pool = { query: jest.fn().mockResolvedValue({ rowCount: 0 }) };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["shopstr.market"])
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "register",
+        domain: "shop.example.com",
+        shopSlug: "fresh-farm",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Domain already registered");
+    });
+
+    it("action='register' upserts via ON CONFLICT and returns registered=true on success", async () => {
+      const pool = { query: jest.fn().mockResolvedValue({ rowCount: 1 }) };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["shopstr.market"])
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "register",
+        domain: "shop.example.com",
+        shopSlug: "fresh-farm",
+      });
+
+      expect(pool.query).toHaveBeenCalledWith(
+        expect.stringContaining("INSERT INTO custom_domains"),
+        [TEST_PUBKEY, "shop.example.com", "fresh-farm"]
+      );
+      expect(textPayload(result)).toMatchObject({
+        domain: "shop.example.com",
+        shopSlug: "fresh-farm",
+        registered: true,
+        dnsOk: true,
+      });
+    });
+
+    it("returns 'Invalid action' for an unrecognized action value (defensive fallback)", async () => {
+      mockDnsResolveCname.mockImplementationOnce((_domain: string, cb: any) =>
+        cb(null, ["shopstr.market"])
+      );
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "bogus",
+        domain: "shop.example.com",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Invalid action");
+    });
+
+    it("returns errorResponse when the db query throws", async () => {
+      const pool = {
+        query: jest.fn().mockRejectedValue(new Error("db offline")),
+      };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "remove",
+        domain: "shop.example.com",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(textPayload(result).error).toBe("Failed to manage custom domain");
+    });
+
+    it("falls back to 'Unknown error' when a non-Error value is thrown", async () => {
+      const pool = { query: jest.fn().mockRejectedValue("raw failure") };
+      jest.mocked(getDbPool).mockReturnValue(pool as any);
+      const tool = getCallback();
+
+      const result = await tool({
+        action: "remove",
+        domain: "shop.example.com",
+      });
+
+      expect(textPayload(result).details).toBe("Unknown error");
+    });
+  });
+
+  describe("domain & storefront tool descriptions", () => {
+    beforeEach(() => {
+      registerToolsForTest(fullAccessApiKey);
+    });
+
+    it("registers manage_custom_domain with shopstr.market description and no milk.market references", () => {
+      const toolDef = toolRegistry.get("manage_custom_domain");
+      expect(toolDef).toBeDefined();
+      expect(toolDef!.options.description).toContain("Shopstr storefront");
+      expect(toolDef!.options.description).toContain("shopstr.market");
+      expect(toolDef!.options.description).not.toContain("milk.market");
+      expect(toolDef!.options.description).not.toContain("Milk Market");
+    });
+
+    it("registers register_shop_slug referencing shopstr.market in tool description", () => {
+      const toolDef = toolRegistry.get("register_shop_slug");
+      expect(toolDef).toBeDefined();
+      expect(toolDef!.options.description).toContain(
+        "shopstr.market/shop/your-slug"
+      );
+      expect(toolDef!.options.description).not.toContain("milk.market");
+    });
+
+    it("registers set_shop_profile referencing shopstr.market in shopSlug description", () => {
+      const toolDef = toolRegistry.get("set_shop_profile");
+      expect(toolDef).toBeDefined();
+      const shopSlugDesc = toolDef!.options.inputSchema.shopSlug?.description;
+      expect(shopSlugDesc).toContain("shopstr.market/shop/fresh-farm");
+      expect(shopSlugDesc).not.toContain("milk.market");
     });
   });
 });

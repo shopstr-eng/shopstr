@@ -1,7 +1,5 @@
-import { getLocalStorageJson } from "@/utils/safe-json";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { SavedAddress } from "@/utils/types/types";
-
-const SAVED_ADDRESSES_KEY = "savedAddresses";
 
 const ensureSingleDefault = (
   addresses: SavedAddress[],
@@ -22,15 +20,16 @@ const ensureSingleDefault = (
 };
 
 export const getSavedAddresses = (): SavedAddress[] => {
-  if (typeof window === "undefined") return [];
-  return getLocalStorageJson<SavedAddress[]>(SAVED_ADDRESSES_KEY, [], {
+  return storage.getJson<SavedAddress[]>(STORAGE_KEYS.SAVED_ADDRESSES, [], {
     removeOnError: true,
+    removeOnValidationError: true,
     validate: (value): value is SavedAddress[] => Array.isArray(value),
   });
 };
 
 const persist = (addresses: SavedAddress[]): void => {
-  localStorage.setItem(SAVED_ADDRESSES_KEY, JSON.stringify(addresses));
+  storage.setJson(STORAGE_KEYS.SAVED_ADDRESSES, addresses);
+  if (typeof window === "undefined") return;
   window.dispatchEvent(new Event("storage"));
 };
 

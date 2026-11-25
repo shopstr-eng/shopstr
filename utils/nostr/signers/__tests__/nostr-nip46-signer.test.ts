@@ -8,6 +8,7 @@ import {
   finalizeEvent,
   generateSecretKey,
 } from "nostr-tools";
+import { decryptNIP46SignerCredentials } from "@/utils/nostr/nip46-encryption";
 
 jest.mock("nostr-tools", () => ({
   ...jest.requireActual("nostr-tools"),
@@ -26,6 +27,11 @@ jest.mock("@/utils/timeout");
 const newPromiseWithTimeoutMock = newPromiseWithTimeout as jest.Mock;
 jest.mock("uuid");
 const uuidv4Mock = uuidv4 as jest.Mock;
+jest.mock("@/utils/nostr/nip46-encryption", () => ({
+  decryptNIP46SignerCredentials: jest.fn(),
+}));
+const decryptNIP46SignerCredentialsMock =
+  decryptNIP46SignerCredentials as jest.Mock;
 
 describe("NostrNIP46Signer", () => {
   const mockChallengeHandler = jest.fn();
@@ -114,6 +120,87 @@ describe("NostrNIP46Signer", () => {
         mockChallengeHandler
       );
       expect(result).toBeUndefined();
+    });
+
+    it("restores an encrypted signer after a passphrase challenge", async () => {
+      decryptNIP46SignerCredentialsMock.mockResolvedValue({
+        type: "nip46",
+        bunker: validBunkerUrl,
+        appPrivKey: "01".repeat(32),
+      });
+      mockChallengeHandler.mockResolvedValue({
+        res: "secret-passphrase",
+        remind: false,
+      });
+
+      const signer = NostrNIP46Signer.fromJSON(
+        { type: "nip46", encryptedSigner: "encrypted-envelope" },
+        mockChallengeHandler
+      );
+      expect(signer).toBeInstanceOf(NostrNIP46Signer);
+      if (!signer) return;
+
+      const pubkeyPromise = signer.getPubKey();
+      await new Promise(process.nextTick);
+      onEventCallback({
+        content: JSON.stringify({
+          id: "shp" + "mock-instance-id" + 0,
+          result: "restored-pubkey",
+        }),
+      });
+
+      await expect(pubkeyPromise).resolves.toBe("restored-pubkey");
+      expect(mockChallengeHandler).toHaveBeenCalledWith(
+        "passphrase",
+        "Enter passphrase",
+        expect.any(Function),
+        expect.any(AbortSignal),
+        undefined
+      );
+      expect(decryptNIP46SignerCredentialsMock).toHaveBeenCalledWith(
+        "encrypted-envelope",
+        "secret-passphrase"
+      );
+    });
+
+    it("shares one unlock challenge across concurrent signer operations", async () => {
+      decryptNIP46SignerCredentialsMock.mockResolvedValue({
+        type: "nip46",
+        bunker: validBunkerUrl,
+        appPrivKey: "01".repeat(32),
+      });
+      mockChallengeHandler.mockResolvedValue({
+        res: "secret-passphrase",
+        remind: false,
+      });
+
+      const signer = NostrNIP46Signer.fromJSON(
+        { type: "nip46", encryptedSigner: "encrypted-envelope" },
+        mockChallengeHandler
+      )!;
+      const firstPubkey = signer.getPubKey();
+      const secondPubkey = signer.getPubKey();
+      await new Promise(process.nextTick);
+
+      onEventCallback({
+        content: JSON.stringify({
+          id: "shp" + "mock-instance-id" + 0,
+          result: "restored-pubkey",
+        }),
+      });
+      onEventCallback({
+        content: JSON.stringify({
+          id: "shp" + "mock-instance-id" + 1,
+          result: "restored-pubkey",
+        }),
+      });
+
+      await expect(Promise.all([firstPubkey, secondPubkey])).resolves.toEqual([
+        "restored-pubkey",
+        "restored-pubkey",
+      ]);
+      expect(mockChallengeHandler).toHaveBeenCalledTimes(1);
+      expect(decryptNIP46SignerCredentialsMock).toHaveBeenCalledTimes(1);
     });
   });
 

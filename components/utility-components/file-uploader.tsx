@@ -2,7 +2,7 @@ import { useContext, useRef, useState } from "react";
 import { Button, Input, Progress } from "@heroui/react";
 import {
   blossomUploadImages,
-  getLocalStorageData,
+  getStoredBlossomServers,
 } from "@/utils/nostr/nostr-helper-functions";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { AnimatePresence, motion } from "framer-motion";
@@ -73,7 +73,7 @@ export const FileUploaderButton = ({
   const hiddenFileInput = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const { signer, isLoggedIn } = useContext(SignerContext);
-  const { blossomServers } = getLocalStorageData() || {};
+  const blossomServers = getStoredBlossomServers();
 
   const getPreviewUrl = (file: File): string => URL.createObjectURL(file);
 
@@ -237,6 +237,13 @@ export const FileUploaderButton = ({
         return [];
       }
 
+      // Check before any decoding/compression work: without a signer the upload
+      // cannot be authorized, and the old code silently skipped the upload and
+      // then blamed the media server for the missing URL.
+      if (!isLoggedIn) {
+        throw new Error("You must be signed in to upload images.");
+      }
+
       if (
         imageFiles.some(
           (imgFile) =>
@@ -278,7 +285,7 @@ export const FileUploaderButton = ({
       );
 
       let responses: any[] = [];
-      if (isLoggedIn) {
+      {
         // Upload with bounded concurrency and track progress by completed count.
         let uploadedCount = 0;
         responses = await withConcurrency(

@@ -111,6 +111,7 @@ Model Context Protocol server enabling AI agents to participate in the marketpla
 
 - **Lightning**: Cashu mint quote (bolt11) via `@cashu/cashu-ts`. Default mint: `https://mint.minibits.cash/Bitcoin`. Agent pays then calls `verify_payment`
 - **Cashu**: Agent provides serialized token; server verifies and redeems
+- **Agent wallet** (`full_access`): `utils/mcp/agent-cashu-wallet.ts` backs `get_cashu_balance`, `receive_cashu_tokens` and `send_cashu_payment`. Received tokens are swapped at the mint before they count as balance. A payment swaps out just the proofs the invoice needs, saves every resulting proof as a kind 7375 event before it melts, then replaces that event with the kept and change proofs. Proofs the mint reports as spent are pruned on the next payment. Mint URLs go through `utils/cashu/mint-url-safety.ts`, the same policy as `/api/cashu/validate-mint`
 
 ### Permissions & Auth
 

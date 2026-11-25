@@ -1,16 +1,14 @@
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import ShopstrSlider from "../shopstr-slider";
-import { FollowsContext } from "@/utils/context/context";
-import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
+import {
+  FollowsContext,
+  type FollowsContextInterface,
+} from "@/utils/context/context";
 
 const mockUseTheme = { theme: "light" };
 jest.mock("next-themes", () => ({
   useTheme: () => mockUseTheme,
-}));
-
-jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
-  getLocalStorageData: jest.fn(() => ({ wot: 5 })),
 }));
 
 jest.mock("@/utils/STATIC-VARIABLES", () => ({
@@ -37,8 +35,14 @@ jest.mock("@heroui/react", () => ({
 }));
 
 const mockLocalStorageSetItem = jest.fn();
+const mockLocalStorageGetItem = jest.fn(() => "5");
 Object.defineProperty(window, "localStorage", {
-  value: { setItem: mockLocalStorageSetItem },
+  value: {
+    getItem: mockLocalStorageGetItem,
+    setItem: mockLocalStorageSetItem,
+    removeItem: jest.fn(),
+    clear: jest.fn(),
+  },
   writable: true,
 });
 
@@ -51,10 +55,13 @@ const renderWithContext = (contextValue: any) => {
 };
 
 describe("ShopstrSlider", () => {
-  const defaultFollowsContext = {
+  const defaultFollowsContext: FollowsContextInterface = {
+    directFollowList: [],
     followList: [],
     firstDegreeFollowsLength: 0,
     isLoading: false,
+    addFollow: async () => ({ ok: false, reason: "unknown" }),
+    removeFollow: async () => ({ ok: false, reason: "unknown" }),
   };
 
   beforeEach(() => {
@@ -64,7 +71,7 @@ describe("ShopstrSlider", () => {
 
   it("initializes with a value from localStorage and does not show the refresh button", () => {
     renderWithContext(defaultFollowsContext);
-    expect(getLocalStorageData).toHaveBeenCalled();
+    expect(mockLocalStorageGetItem).toHaveBeenCalledWith("wot");
     expect(screen.getByTestId("slider")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Refresh to Apply" })
@@ -92,6 +99,7 @@ describe("ShopstrSlider", () => {
 
   it("uses firstDegreeFollowsLength for maxValue when available", () => {
     const contextValue = {
+      ...defaultFollowsContext,
       followList: [],
       isLoading: false,
       firstDegreeFollowsLength: 150,
@@ -105,6 +113,7 @@ describe("ShopstrSlider", () => {
 
   it("uses the wot value for maxValue when context data is not available", () => {
     const contextValue = {
+      ...defaultFollowsContext,
       followList: [],
       firstDegreeFollowsLength: 0,
       isLoading: true,

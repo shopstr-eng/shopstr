@@ -31,6 +31,11 @@ export type FetchOptions = {
   timeoutMs?: number;
 };
 
+export type NostrFetchResult = {
+  events: NostrEvent[];
+  complete: boolean;
+};
+
 const DEFAULT_KEEP_ALIVE_MS = 5 * 60 * 1000;
 const DEFAULT_GC_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_CONNECTION_TIMEOUT_MS = 4_000;
@@ -173,7 +178,9 @@ export class NostrManager {
     for (const relay of relays) {
       relay.activeSubs.push(sub);
     }
-    await this.keepAlive(relays);
+    this.keepAlive(relays).catch((error) => {
+      this.logRelayWarning("Relay keep-alive failed", "batch", error);
+    });
     return sub;
   }
 
@@ -183,13 +190,28 @@ export class NostrManager {
     relayUrls?: string[],
     options: FetchOptions = {}
   ): Promise<NostrEvent[]> {
+    const result = await this.fetchWithStatus(
+      filters,
+      params,
+      relayUrls,
+      options
+    );
+    return result.events;
+  }
+
+  public async fetchWithStatus(
+    filters: NostrFilter[],
+    params: SubscribeManyParams = {},
+    relayUrls?: string[],
+    options: FetchOptions = {}
+  ): Promise<NostrFetchResult> {
     const timeoutMs = options.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
     const fetchedEvents: NostrEvent[] = [];
     let sub: NostrSub | undefined;
     let settled = false;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-    return await new Promise<NostrEvent[]>((resolve, reject) => {
+    return await new Promise<NostrFetchResult>((resolve, reject) => {
       const cleanup = async (): Promise<void> => {
         if (timeoutId) clearTimeout(timeoutId);
         if (sub) await sub.close();
@@ -201,7 +223,7 @@ export class NostrManager {
       };
 
       timeoutId = setTimeout(() => {
-        settle(() => resolve(fetchedEvents));
+        settle(() => resolve({ events: fetchedEvents, complete: false }));
       }, timeoutMs);
 
       const originalOnevent = params.onevent;
@@ -226,7 +248,7 @@ export class NostrManager {
               );
               return;
             }
-            settle(() => resolve(fetchedEvents));
+            settle(() => resolve({ events: fetchedEvents, complete: true }));
           });
         },
         onclose: (reasons) => {

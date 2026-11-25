@@ -1,14 +1,18 @@
-import { getLocalStorageJson } from "./safe-json";
+import { storage, STORAGE_KEYS } from "./storage";
 
 type StorefrontCartItem = {
   pubkey?: string;
 };
 
 export const getStorefrontCartQuantity = (sellerPubkey = "") => {
-  const cartItems = getLocalStorageJson<StorefrontCartItem[]>("cart", [], {
-    removeOnError: true,
-    validate: Array.isArray,
-  });
+  const cartItems = storage.getJson<StorefrontCartItem[]>(
+    STORAGE_KEYS.CART,
+    [],
+    {
+      removeOnError: true,
+      validate: Array.isArray,
+    }
+  );
 
   if (!sellerPubkey) {
     return cartItems.length;

@@ -160,6 +160,10 @@ describe("SignInModal", () => {
         /paste your bunker token/i
       );
       await user.type(input, "bunker://valid-token");
+      await user.type(
+        screen.getByPlaceholderText(/protect your bunker connection/i),
+        "secret-passphrase"
+      );
 
       await user.click(screen.getByTestId("bunker-submit-btn"));
       await waitFor(() => {
@@ -173,6 +177,7 @@ describe("SignInModal", () => {
           relays: mockRelays.relayList,
           readRelays: mockRelays.readRelayList,
           writeRelays: mockRelays.writeRelayList,
+          signerPassphrase: "secret-passphrase",
         });
         expect(push).toHaveBeenCalledWith("/marketplace");
       });
@@ -190,6 +195,10 @@ describe("SignInModal", () => {
         /paste your bunker token/i
       );
       await user.type(input, "bunker://valid-token");
+      await user.type(
+        screen.getByPlaceholderText(/protect your bunker connection/i),
+        "secret-passphrase"
+      );
       await user.click(screen.getByTestId("bunker-submit-btn"));
 
       expect(

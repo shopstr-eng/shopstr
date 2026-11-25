@@ -5,6 +5,7 @@ import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
 import { getListingSlug } from "@/utils/url-slugs";
+import { useCopyToClipboard } from "@/utils/hooks/useCopyToClipboard";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { DisplayCheckoutCost } from "./display-monetary-info";
 import ProductInvoiceCard from "../product-invoice-card";
@@ -44,8 +45,8 @@ import WeightSelector from "./weight-selector";
 import BulkSelector from "./bulk-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 import useReportEventFlow from "./use-report-event-flow";
-import { getLocalStorageJson } from "@/utils/safe-json";
 import { CartDiscountsMap, isCartDiscountsMap } from "@/utils/cart-discounts";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
@@ -115,12 +116,13 @@ export default function CheckoutCard({
   const [successText, setSuccessText] = useState(
     "Listing URL copied to clipboard!"
   );
+  const { copy } = useCopyToClipboard();
 
   const [cart, setCart] = useState<ProductData[]>([]);
   const [selectedVolume, setSelectedVolume] = useState<string>("");
   const [selectedWeight, setSelectedWeight] = useState<string>("");
   const [selectedBulkOption, setSelectedBulkOption] = useState<string>("1");
-  const [currentPrice, setCurrentPrice] = useState(productData.price);
+  const [currentPrice, setCurrentPrice] = useState(productData.price ?? 0);
   const [discountCode, setDiscountCode] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState<number>(0);
   const [discountError, setDiscountError] = useState("");
@@ -162,7 +164,7 @@ export default function CheckoutCard({
         setCurrentPrice(weightPrice);
       }
     } else {
-      setCurrentPrice(productData.price);
+      setCurrentPrice(productData.price ?? 0);
     }
   }, [
     selectedVolume,
@@ -233,14 +235,9 @@ export default function CheckoutCard({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const cartList = getLocalStorageJson<ProductData[]>("cart", [], {
-        removeOnError: true,
-        validate: Array.isArray,
-      });
-      if (cartList && cartList.length > 0) {
-        setCart(cartList);
-      }
+    const cartList = storage.getJson<ProductData[]>(STORAGE_KEYS.CART, []);
+    if (cartList && cartList.length > 0) {
+      setCart(cartList);
     }
   }, []);
 
@@ -390,7 +387,7 @@ export default function CheckoutCard({
 
       updatedCart = [...cart, productToAdd];
       setCart(updatedCart);
-      localStorage.setItem("cart", JSON.stringify(updatedCart));
+      storage.setJson(STORAGE_KEYS.CART, updatedCart);
 
       const sellerShop = shopMapContext.shopData.get(productData.pubkey);
       if (
@@ -403,19 +400,18 @@ export default function CheckoutCard({
 
       // Store discount code if applied
       if (appliedDiscount > 0 && discountCode) {
-        const discounts = getLocalStorageJson<CartDiscountsMap>(
-          "cartDiscounts",
+        const discounts = storage.getJson<CartDiscountsMap>(
+          STORAGE_KEYS.CART_DISCOUNTS,
           {},
           {
             removeOnError: true,
-            removeOnValidationError: true,
             validate: isCartDiscountsMap,
           }
         );
         discounts[productData.pubkey] = {
           code: discountCode,
         };
-        localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
+        storage.setJson(STORAGE_KEYS.CART_DISCOUNTS, discounts);
       }
     } else {
       onOpen();
@@ -437,11 +433,11 @@ export default function CheckoutCard({
     if (navigator.share) {
       await navigator.share(shareData);
     } else {
-      navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${listingPath}`
-      );
-      setSuccessText("Listing URL copied to clipboard!");
-      setShowSuccessModal(true);
+      const didCopy = await copy(shareData.url);
+      if (didCopy) {
+        setSuccessText("Listing URL copied to clipboard!");
+        setShowSuccessModal(true);
+      }
     }
   };
 
@@ -637,7 +633,13 @@ export default function CheckoutCard({
                         dropDownKeys={
                           productData.pubkey === userPubkey
                             ? ["shop_profile"]
-                            : ["shop", "inquiry", "copy_npub", "report_profile"]
+                            : [
+                                "shop",
+                                "inquiry",
+                                "copy_npub",
+                                "report_profile",
+                                "follow",
+                              ]
                         }
                       />
                       {merchantQuality !== "" && (
@@ -786,7 +788,7 @@ export default function CheckoutCard({
                   {hasBulkPrices && (
                     <BulkSelector
                       bulkPrices={productData.bulkPrices!}
-                      basePrice={productData.price}
+                      basePrice={productData.price ?? 0}
                       currency={productData.currency}
                       selectedBulkOption={selectedBulkOption}
                       onBulkChange={setSelectedBulkOption}
@@ -980,6 +982,7 @@ export default function CheckoutCard({
                                         "inquiry",
                                         "copy_npub",
                                         "report_profile",
+                                        "follow",
                                       ]
                                 }
                               />

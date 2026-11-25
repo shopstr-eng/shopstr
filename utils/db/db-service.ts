@@ -1,13 +1,31 @@
+import type { ProfileCacheScope } from "@/utils/nostr/profile-cache";
 import { Pool, PoolClient } from "pg";
 import { NostrEvent } from "../types/types";
+import { selectPreferredReplaceableEvent } from "../nostr/replaceable-events";
 import { findListingBySlug } from "../url-slugs";
+import {
+  PRODUCT_KIND,
+  buildProductAddress,
+  extractProductDeletionTargets,
+  getProductDTag,
+  isProductTombstoned,
+  type ProductTombstone,
+} from "./product-deletions";
 
 let pool: Pool | null = null;
 let tablesInitialized = false;
 let initializingTables = false;
+let initializeTablesPromise: Promise<void> | null = null;
 
 // Queue for serializing cache operations
 let cacheQueue: Promise<void> = Promise.resolve();
+
+function shouldAutoInitializeTables(): boolean {
+  return (
+    process.env.NODE_ENV !== "test" ||
+    process.env.SHOPSTR_DB_AUTO_INIT_IN_TESTS === "1"
+  );
+}
 
 export async function ensureFailedRelayPublishesTable(
   client: PoolClient
@@ -197,15 +215,40 @@ export function getDbPool(): Pool {
     });
 
     // Auto-create tables on first connection (only once)
-    if (!tablesInitialized && !initializingTables) {
-      initializingTables = true;
-      initializeTables().catch((error) => {
+    if (
+      shouldAutoInitializeTables() &&
+      !tablesInitialized &&
+      !initializingTables
+    ) {
+      ensureTablesInitialized().catch((error) => {
         console.error("Failed to initialize database tables:", error);
-        initializingTables = false;
       });
     }
   }
   return pool;
+}
+
+async function ensureTablesInitialized(): Promise<void> {
+  if (tablesInitialized) return;
+
+  if (!initializeTablesPromise) {
+    initializingTables = true;
+    initializeTablesPromise = initializeTables().finally(() => {
+      initializingTables = false;
+      if (!tablesInitialized) {
+        initializeTablesPromise = null;
+      }
+    });
+  }
+
+  await initializeTablesPromise;
+}
+
+async function getInitializedDbPool(): Promise<Pool> {
+  if (shouldAutoInitializeTables()) {
+    await ensureTablesInitialized();
+  }
+  return getDbPool();
 }
 
 // Auto-create all tables if they don't exist
@@ -234,6 +277,33 @@ async function initializeTables(): Promise<void> {
 
       CREATE INDEX IF NOT EXISTS idx_product_events_pubkey ON product_events(pubkey);
       CREATE INDEX IF NOT EXISTS idx_product_events_created_at ON product_events(created_at DESC);
+
+      -- NIP-09 tombstones so deleted listings are not re-cached from relays
+      CREATE TABLE IF NOT EXISTS deleted_product_events (
+          pubkey TEXT NOT NULL,
+          target_type TEXT NOT NULL,
+          target TEXT NOT NULL,
+          deleted_at BIGINT NOT NULL,
+          cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (pubkey, target_type, target),
+          CONSTRAINT deleted_product_events_type_check CHECK (target_type IN ('event', 'address'))
+      );
+
+      -- Contact list events (kind 3 - NIP-02 follows)
+      CREATE TABLE IF NOT EXISTS contact_list_events (
+          id TEXT PRIMARY KEY,
+          pubkey TEXT NOT NULL,
+          created_at BIGINT NOT NULL,
+          kind INTEGER NOT NULL,
+          tags JSONB NOT NULL,
+          content TEXT NOT NULL,
+          sig TEXT NOT NULL,
+          cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT contact_list_events_kind_check CHECK (kind = 3)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_contact_list_events_pubkey ON contact_list_events(pubkey);
+      CREATE INDEX IF NOT EXISTS idx_contact_list_events_created_at ON contact_list_events(created_at DESC);
 
       -- Reviews table (kind 31555)
       CREATE TABLE IF NOT EXISTS review_events (
@@ -335,7 +405,7 @@ async function initializeTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_community_events_pubkey ON community_events(pubkey);
       CREATE INDEX IF NOT EXISTS idx_community_events_kind ON community_events(kind);
 
-      -- Relay/config events (kind 10002 - relays, kind 10063 - blossom servers, kind 30405 - cart/saved, kind 30406 - buyer P2PK escrow records)
+      -- Relay/config events (kind 10002 - relays, kind 10063 - blossom servers, kind 30407 - dispute records, kind 30405 - cart/saved, kind 30406 - buyer P2PK escrow records)
       CREATE TABLE IF NOT EXISTS config_events (
           id TEXT PRIMARY KEY,
           pubkey TEXT NOT NULL,
@@ -345,7 +415,7 @@ async function initializeTables(): Promise<void> {
           content TEXT NOT NULL,
           sig TEXT NOT NULL,
           cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT config_events_kind_check CHECK (kind IN (10002, 10063, 30405, 30406))
+          CONSTRAINT config_events_kind_check CHECK (kind IN (10002, 10063, 30407, 30405, 30406))
       );
 
       CREATE INDEX IF NOT EXISTS idx_config_events_pubkey ON config_events(pubkey);
@@ -405,6 +475,70 @@ async function initializeTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_seller_pubkey ON mcp_orders(seller_pubkey);
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_api_key_id ON mcp_orders(api_key_id);
 
+      -- Browser P2PK escrow order commitments. The buyer authenticates the
+      -- initial immutable record with NIP-98; only the ruling columns mutate.
+      CREATE TABLE IF NOT EXISTS p2pk_escrow_orders (
+          order_id TEXT PRIMARY KEY,
+          invoice_order_id TEXT,
+          buyer_nostr_pubkey TEXT NOT NULL,
+          seller_nostr_pubkey TEXT NOT NULL,
+          seller_cashu_pubkey TEXT NOT NULL,
+          buyer_cashu_pubkey TEXT NOT NULL,
+          arbiter_cashu_pubkey TEXT NOT NULL,
+          amount_sats BIGINT NOT NULL CHECK (amount_sats > 0),
+          locktime BIGINT NOT NULL CHECK (locktime > 0),
+          token_hash TEXT NOT NULL,
+          ruling_for TEXT CHECK (ruling_for IN ('buyer', 'seller')),
+          resolved_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_p2pk_escrow_orders_buyer ON p2pk_escrow_orders(buyer_nostr_pubkey);
+      CREATE INDEX IF NOT EXISTS idx_p2pk_escrow_orders_seller ON p2pk_escrow_orders(seller_nostr_pubkey);
+
+      -- Migration for tables created before invoice_order_id existed.
+      ALTER TABLE p2pk_escrow_orders ADD COLUMN IF NOT EXISTS invoice_order_id TEXT;
+
+      -- Buyer/seller of web checkout orders. The buyer registers the record
+      -- with NIP-98 before the order id leaves their device; the first write
+      -- wins and rows can never be updated or deleted, because a freed order
+      -- id could be re-claimed by the seller, who learns it from the order DM.
+      CREATE TABLE IF NOT EXISTS order_participants (
+          order_id TEXT PRIMARY KEY,
+          buyer_pubkey TEXT NOT NULL,
+          seller_pubkey TEXT NOT NULL,
+          -- 30402 listing address, or the note id of a zapsnag listing
+          product_address TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- When a feature first reached this database. Orders placed before
+      -- order_participants existed fall back to the legacy message-tag
+      -- lookup, but only for messages cached before this moment.
+      CREATE TABLE IF NOT EXISTS schema_milestones (
+          name TEXT PRIMARY KEY,
+          reached_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      INSERT INTO schema_milestones (name)
+      VALUES ('order_participants')
+      ON CONFLICT (name) DO NOTHING;
+
+      CREATE INDEX IF NOT EXISTS idx_order_participants_buyer ON order_participants(buyer_pubkey);
+      CREATE INDEX IF NOT EXISTS idx_order_participants_seller ON order_participants(seller_pubkey);
+
+      CREATE OR REPLACE FUNCTION reject_order_participants_mutation()
+      RETURNS trigger AS $$
+      BEGIN
+        RAISE EXCEPTION 'order_participants rows are immutable';
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS order_participants_immutable ON order_participants;
+      CREATE TRIGGER order_participants_immutable
+        BEFORE UPDATE OR DELETE ON order_participants
+        FOR EACH ROW EXECUTE FUNCTION reject_order_participants_mutation();
+
       -- Shop slugs table (storefront URL slugs)
       CREATE TABLE IF NOT EXISTS shop_slugs (
           pubkey TEXT PRIMARY KEY,
@@ -439,7 +573,7 @@ async function initializeTables(): Promise<void> {
           ALTER TABLE config_events DROP CONSTRAINT config_events_kind_check;
         END IF;
         ALTER TABLE config_events
-          ADD CONSTRAINT config_events_kind_check CHECK (kind IN (10002, 10063, 30405, 30406));
+          ADD CONSTRAINT config_events_kind_check CHECK (kind IN (10002, 10063, 30407, 30405, 30406));
 
         IF NOT EXISTS (
           SELECT 1 FROM information_schema.columns 
@@ -469,10 +603,8 @@ async function initializeTables(): Promise<void> {
     await ensureFailedRelayPublishesTable(client);
 
     tablesInitialized = true;
-    initializingTables = false;
   } catch (error) {
     console.error("Failed to initialize tables:", error);
-    initializingTables = false;
     throw error;
   } finally {
     if (client) {
@@ -483,6 +615,9 @@ async function initializeTables(): Promise<void> {
 
 // Map event kinds to table names
 export function getTableForKind(kind: number): string | null {
+  // Contact list
+  if (kind === 3) return "contact_list_events";
+
   // Products
   if (kind === 30402) return "product_events";
 
@@ -505,16 +640,17 @@ export function getTableForKind(kind: number): string | null {
   if ([34550, 1111, 4550].includes(kind)) return "community_events";
 
   // Config
-  if ([10002, 10063, 30405, 30406].includes(kind)) return "config_events";
+  if ([10002, 10063, 30407, 30405, 30406].includes(kind))
+    return "config_events";
 
   return null;
 }
 
 // Helper function to check if event kind should only keep latest per pubkey
 export function shouldKeepOnlyLatest(kind: number): boolean {
-  // Wallet config (17375), wallet state (37375), relay list (10002), blossom servers (10063)
+  // Contact list (3), wallet config (17375), wallet state (37375), relay list (10002), blossom servers (10063)
   // User profile (0), shop profile (30019), community definition (34550)
-  return [17375, 37375, 10002, 10063, 0, 30019, 34550].includes(kind);
+  return [3, 17375, 37375, 10002, 10063, 0, 30019, 34550].includes(kind);
 }
 
 // Helper function to check if event is a review (needs special handling per product)
@@ -526,108 +662,368 @@ export function buildReviewDTagFilter(dTag: string): string {
   return JSON.stringify([["d", dTag]]);
 }
 
-// Cache a single event to the database
-export async function cacheEvent(event: NostrEvent): Promise<void> {
-  const table = getTableForKind(event.kind);
-  if (!table) {
-    console.warn(`No table mapping for event kind ${event.kind}`);
-    return;
+function mapCachedEventRow(row: any): NostrEvent {
+  return {
+    id: row.id,
+    pubkey: row.pubkey,
+    created_at: Number(row.created_at),
+    kind: Number(row.kind),
+    tags: row.tags,
+    content: row.content,
+    sig: row.sig,
+  };
+}
+
+function buildEventUpsertQuery(table: string, event: NostrEvent) {
+  return {
+    text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (id) DO UPDATE SET
+             pubkey = EXCLUDED.pubkey,
+             created_at = EXCLUDED.created_at,
+             tags = EXCLUDED.tags,
+             content = EXCLUDED.content,
+             sig = EXCLUDED.sig,
+             cached_at = CURRENT_TIMESTAMP`,
+    values: [
+      event.id,
+      event.pubkey,
+      event.created_at,
+      event.kind,
+      JSON.stringify(event.tags),
+      event.content,
+      event.sig,
+    ] as any[],
+  };
+}
+
+// Kinds where each "d" tag is its own slot (NIP-01 addressable events), so a
+// pubkey can hold many of them at once. Every other keep-latest kind has a
+// single slot per pubkey.
+const D_TAG_SCOPED_KINDS: ReadonlySet<number> = new Set([34550, 31555]);
+
+type ReplaceableScope = { dTag?: string };
+
+// Describes the slot an event replaces, or null when the kind just accumulates
+// (a plain upsert by id). Per NIP-01 a missing d tag means d = "", so those
+// events share one slot per pubkey instead of piling up as separate rows.
+function getReplaceableScope(event: NostrEvent): ReplaceableScope | null {
+  if (D_TAG_SCOPED_KINDS.has(event.kind)) {
+    return { dTag: event.tags.find((tag) => tag[0] === "d")?.[1] ?? "" };
+  }
+  return shouldKeepOnlyLatest(event.kind) ? {} : null;
+}
+
+// Rows in the d = "" slot: no d tag at all, or a d tag whose value is empty.
+// `tags @> [["d",""]]` alone would miss the first case.
+const EMPTY_D_TAG_SLOT_SQL = `COALESCE((
+  SELECT e.elem->>1
+  FROM jsonb_array_elements(tags) WITH ORDINALITY AS e(elem, ord)
+  WHERE e.elem->>0 = 'd'
+  ORDER BY e.ord
+  LIMIT 1
+), '') = ''`;
+
+function getReplaceableSlotKey(
+  event: NostrEvent,
+  scope: ReplaceableScope
+): string {
+  return `${event.pubkey}:${event.kind}:${scope.dTag ?? ""}`;
+}
+
+// Stores `event` only if it is the newest of its slot, using the NIP-01 rule
+// (highest created_at, lowest id on a tie). Older rows are dropped; an older
+// incoming event is ignored. Returns whether the event was stored. Must run
+// inside a transaction: the advisory lock serializes writers of the same slot,
+// which row locks cannot do when the slot is still empty.
+async function cacheNewestReplaceableEvent(
+  client: PoolClient,
+  table: string,
+  event: NostrEvent,
+  scope: ReplaceableScope
+): Promise<boolean> {
+  const dTagFilter = scope.dTag ? buildReviewDTagFilter(scope.dTag) : undefined;
+  const emptyDTagSlot = scope.dTag === "" ? ` AND ${EMPTY_D_TAG_SLOT_SQL}` : "";
+
+  await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+    `${table}:${getReplaceableSlotKey(event, scope)}`,
+  ]);
+
+  const deleteValues: (string | number)[] = [event.pubkey, event.kind];
+  if (dTagFilter) deleteValues.push(dTagFilter);
+  const idParam = `$${deleteValues.length + 1}`;
+  const createdAtParam = `$${deleteValues.length + 2}::bigint`;
+  deleteValues.push(event.id, event.created_at);
+  await client.query({
+    text: `DELETE FROM ${table}
+           WHERE pubkey = $1 AND kind = $2${dTagFilter ? " AND tags @> $3::jsonb" : ""}${emptyDTagSlot}
+             AND id != ${idParam}
+             AND (created_at < ${createdAtParam}
+                  OR (created_at = ${createdAtParam} AND id > ${idParam}))`,
+    values: deleteValues,
+  });
+
+  const insertValues: (string | number)[] = [
+    event.id,
+    event.pubkey,
+    event.created_at,
+    event.kind,
+    JSON.stringify(event.tags),
+    event.content,
+    event.sig,
+  ];
+  if (dTagFilter) insertValues.push(dTagFilter);
+  const result = await client.query({
+    text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
+           SELECT $1::text, $2::text, $3::bigint, $4::integer, $5::jsonb, $6::text, $7::text
+           WHERE NOT EXISTS (
+             SELECT 1 FROM ${table}
+             WHERE pubkey = $2 AND kind = $4${dTagFilter ? " AND tags @> $8::jsonb" : ""}${emptyDTagSlot}
+               AND id != $1
+               AND (created_at > $3 OR (created_at = $3 AND id < $1))
+           )
+           ON CONFLICT (id) DO UPDATE SET
+             pubkey = EXCLUDED.pubkey,
+             created_at = EXCLUDED.created_at,
+             tags = EXCLUDED.tags,
+             content = EXCLUDED.content,
+             sig = EXCLUDED.sig,
+             cached_at = CURRENT_TIMESTAMP
+           RETURNING id`,
+    values: insertValues,
+  });
+  return (result.rowCount ?? 0) > 0;
+}
+
+async function recordProductTombstone(
+  client: PoolClient,
+  pubkey: string,
+  targetType: ProductTombstone["targetType"],
+  target: string,
+  deletedAt: number
+): Promise<void> {
+  await client.query(
+    `INSERT INTO deleted_product_events (pubkey, target_type, target, deleted_at)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (pubkey, target_type, target) DO UPDATE SET
+       deleted_at = GREATEST(deleted_product_events.deleted_at, EXCLUDED.deleted_at)`,
+    [pubkey, targetType, target, deletedAt] as any[]
+  );
+}
+
+// Remove every cached version of a listing address up to `deletedUpTo`.
+async function deleteProductVersionsUpTo(
+  client: PoolClient,
+  pubkey: string,
+  dTag: string,
+  deletedUpTo: number
+): Promise<void> {
+  await client.query(
+    `DELETE FROM product_events pe
+     WHERE pe.pubkey = $1
+       AND pe.kind = ${PRODUCT_KIND}
+       AND pe.created_at <= $3
+       AND EXISTS (
+         SELECT 1 FROM jsonb_array_elements(pe.tags) elem
+         WHERE elem->>0 = 'd' AND elem->>1 = $2
+       )`,
+    [pubkey, dTag, deletedUpTo] as any[]
+  );
+}
+
+// Applies a NIP-09 deletion from the listing's author: drops cached versions
+// and leaves tombstones so relays cannot re-introduce them. Must run inside a
+// transaction. Only listings already cached for the deletion's pubkey are
+// touched or tombstoned, so deletions for unknown or foreign listings add no
+// rows and cannot be used to grow the tombstone table.
+async function applyProductDeletion(
+  client: PoolClient,
+  event: NostrEvent
+): Promise<void> {
+  const { eventIds, dTags } = extractProductDeletionTargets(event);
+  if (eventIds.length === 0 && dTags.length === 0) return;
+
+  const deletionTime = Number(event.created_at);
+  const deletedUpToByDTag = new Map<string, number>();
+
+  if (dTags.length > 0) {
+    const known = await client.query<{ d_tag: string }>(
+      `SELECT DISTINCT elem->>1 AS d_tag
+       FROM product_events pe, jsonb_array_elements(pe.tags) elem
+       WHERE pe.pubkey = $1
+         AND pe.kind = ${PRODUCT_KIND}
+         AND elem->>0 = 'd'
+         AND elem->>1 = ANY($2)`,
+      [event.pubkey, dTags] as any[]
+    );
+    for (const row of known.rows) {
+      deletedUpToByDTag.set(row.d_tag, deletionTime);
+    }
   }
 
-  const dbPool = getDbPool();
+  if (eventIds.length > 0) {
+    const cached = await client.query<{
+      id: string;
+      created_at: string | number;
+      tags: string[][];
+    }>(
+      `SELECT id, created_at, tags FROM product_events
+       WHERE pubkey = $1 AND id = ANY($2)`,
+      [event.pubkey, eventIds] as any[]
+    );
+
+    // Deleting a version also retires older versions of the same listing,
+    // matching deleteCachedEventsByIds.
+    for (const row of cached.rows) {
+      await recordProductTombstone(
+        client,
+        event.pubkey,
+        "event",
+        row.id,
+        deletionTime
+      );
+      const dTag = getProductDTag({ tags: row.tags } as NostrEvent);
+      if (!dTag) continue;
+      deletedUpToByDTag.set(
+        dTag,
+        Math.max(deletedUpToByDTag.get(dTag) ?? 0, Number(row.created_at))
+      );
+    }
+
+    await client.query(
+      `DELETE FROM product_events WHERE pubkey = $1 AND id = ANY($2)`,
+      [event.pubkey, eventIds] as any[]
+    );
+  }
+
+  for (const [dTag, deletedUpTo] of deletedUpToByDTag) {
+    await recordProductTombstone(
+      client,
+      event.pubkey,
+      "address",
+      buildProductAddress(event.pubkey, dTag),
+      deletedUpTo
+    );
+    await deleteProductVersionsUpTo(client, event.pubkey, dTag, deletedUpTo);
+  }
+}
+
+async function fetchProductTombstones(
+  client: PoolClient,
+  events: NostrEvent[]
+): Promise<ProductTombstone[]> {
+  const products = events.filter((event) => event.kind === PRODUCT_KIND);
+  if (products.length === 0) return [];
+
+  const pubkeys = new Set<string>();
+  const ids = new Set<string>();
+  const addresses = new Set<string>();
+  for (const product of products) {
+    pubkeys.add(product.pubkey);
+    ids.add(product.id);
+    const dTag = getProductDTag(product);
+    if (dTag) addresses.add(buildProductAddress(product.pubkey, dTag));
+  }
+
+  const result = await client.query<{
+    pubkey: string;
+    target_type: ProductTombstone["targetType"];
+    target: string;
+    deleted_at: string | number;
+  }>(
+    `SELECT pubkey, target_type, target, deleted_at
+     FROM deleted_product_events
+     WHERE pubkey = ANY($1)
+       AND ((target_type = 'event' AND target = ANY($2))
+         OR (target_type = 'address' AND target = ANY($3)))`,
+    [[...pubkeys], [...ids], [...addresses]] as any[]
+  );
+
+  return result.rows.map((row) => ({
+    pubkey: row.pubkey,
+    targetType: row.target_type,
+    target: row.target,
+    deletedAt: Number(row.deleted_at),
+  }));
+}
+
+async function cacheDeletionEvent(
+  event: NostrEvent,
+  throwOnError: boolean
+): Promise<void> {
+  // Gift wraps, wallet events, and deletions of other kinds are not handled
+  // here, so skip the DB round trip entirely.
+  const { eventIds, dTags } = extractProductDeletionTargets(event);
+  if (eventIds.length === 0 && dTags.length === 0) return;
+
+  const dbPool = throwOnError ? await getInitializedDbPool() : getDbPool();
   let client;
 
   try {
     client = await dbPool.connect();
-    // For events that should only keep the latest version per pubkey
-    if (shouldKeepOnlyLatest(event.kind)) {
-      await client.query("BEGIN");
-
-      // Delete older events from the same pubkey with the same kind
-      const deleteQuery = {
-        text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2`,
-        values: [event.pubkey, event.kind] as any[],
-      };
-      await client.query(deleteQuery);
-
-      // Insert the new event
-      const insertQuery = {
-        text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        values: [
-          event.id,
-          event.pubkey,
-          event.created_at,
-          event.kind,
-          JSON.stringify(event.tags),
-          event.content,
-          event.sig,
-        ] as any[],
-      };
-      await client.query(insertQuery);
-
-      await client.query("COMMIT");
-    } else if (isReviewEvent(event.kind)) {
-      // For reviews, keep only the latest per pubkey per product
-      await client.query("BEGIN");
-
-      // Extract the product identifier from the 'd' tag (format: "30402:merchant_pubkey:product_d_tag")
-      const dTag = event.tags.find((tag) => tag[0] === "d")?.[1];
-
-      if (dTag) {
-        // Delete older reviews from the same pubkey for the same product
-        const deleteQuery = {
-          text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags @> $3::jsonb`,
-          values: [
-            event.pubkey,
-            event.kind,
-            buildReviewDTagFilter(dTag),
-          ] as any[],
-        };
-        await client.query(deleteQuery);
+    await client.query("BEGIN");
+    await applyProductDeletion(client, event);
+    await client.query("COMMIT");
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Failed to rollback transaction:", rollbackError);
       }
-
-      // Insert the new review
-      const insertQuery = {
-        text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        values: [
-          event.id,
-          event.pubkey,
-          event.created_at,
-          event.kind,
-          JSON.stringify(event.tags),
-          event.content,
-          event.sig,
-        ] as any[],
-      };
-      await client.query(insertQuery);
-
-      await client.query("COMMIT");
-    } else {
-      // For other events, use the normal upsert behavior
-      const query = {
-        text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
-               ON CONFLICT (id) DO UPDATE SET
-                 pubkey = EXCLUDED.pubkey,
-                 created_at = EXCLUDED.created_at,
-                 tags = EXCLUDED.tags,
-                 content = EXCLUDED.content,
-                 sig = EXCLUDED.sig,
-                 cached_at = CURRENT_TIMESTAMP`,
-        values: [
-          event.id,
-          event.pubkey,
-          event.created_at,
-          event.kind,
-          JSON.stringify(event.tags),
-          event.content,
-          event.sig,
-        ] as any[],
-      };
-      await client.query(query);
     }
+    console.error("Failed to apply deletion event %s:", event.id, error);
+    if (throwOnError) throw error;
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
+async function cacheEventInternal(
+  event: NostrEvent,
+  throwOnError: boolean
+): Promise<boolean> {
+  if (event.kind === 5) {
+    await cacheDeletionEvent(event, throwOnError);
+    return true;
+  }
+
+  const table = getTableForKind(event.kind);
+  if (!table) {
+    console.warn(`No table mapping for event kind ${event.kind}`);
+    return false;
+  }
+
+  const dbPool =
+    event.kind === 30407 || throwOnError
+      ? await getInitializedDbPool()
+      : getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    if (event.kind === PRODUCT_KIND) {
+      const tombstones = await fetchProductTombstones(client, [event]);
+      if (isProductTombstoned(event, tombstones)) return false;
+    }
+
+    const scope = getReplaceableScope(event);
+    if (scope) {
+      await client.query("BEGIN");
+      const stored = await cacheNewestReplaceableEvent(
+        client,
+        table,
+        event,
+        scope
+      );
+      await client.query("COMMIT");
+      return stored;
+    }
+
+    await client.query(buildEventUpsertQuery(table, event));
+    return true;
   } catch (error) {
     if (client) {
       try {
@@ -637,11 +1033,25 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
       }
     }
     console.error("Failed to cache event %s:", event.id, error);
+    if (throwOnError) throw error;
+    return false;
   } finally {
     if (client) {
       client.release();
     }
   }
+}
+
+// Best-effort cache used by ordinary relay ingestion paths.
+export async function cacheEvent(event: NostrEvent): Promise<void> {
+  await cacheEventInternal(event, false);
+}
+
+// Fail-closed cache used before security-sensitive delivery side effects.
+// Resolves to false when the event was valid but not stored: a newer event
+// already holds its replaceable slot, or the listing was deleted (NIP-09).
+export async function cacheEventStrict(event: NostrEvent): Promise<boolean> {
+  return cacheEventInternal(event, true);
 }
 
 // Cache multiple events in a batch with retry logic for deadlocks
@@ -696,144 +1106,65 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
     }
   }
 
-  const dbPool = getDbPool();
+  const dbPool = events.some((event) => event.kind === 30407)
+    ? await getInitializedDbPool()
+    : getDbPool();
   let client;
 
   try {
     client = await dbPool.connect();
     await client.query("BEGIN");
 
+    const productEvents = eventsByTable.get("product_events");
+    if (productEvents) {
+      const tombstones = await fetchProductTombstones(client, productEvents);
+      eventsByTable.set(
+        "product_events",
+        productEvents.filter((event) => !isProductTombstoned(event, tombstones))
+      );
+    }
+
     for (const [table, tableEvents] of eventsByTable.entries()) {
-      // Group events by type
-      const latestOnlyEvents = tableEvents.filter((e) =>
-        shouldKeepOnlyLatest(e.kind)
-      );
-      const reviewEvents = tableEvents.filter((e) => isReviewEvent(e.kind));
-      const regularEvents = tableEvents.filter(
-        (e) => !shouldKeepOnlyLatest(e.kind) && !isReviewEvent(e.kind)
-      );
+      // Keep one candidate per slot; the database copy is compared below.
+      const newestBySlot = new Map<
+        string,
+        { event: NostrEvent; scope: ReplaceableScope }
+      >();
+      const regularEvents: NostrEvent[] = [];
+      for (const event of tableEvents) {
+        const scope = getReplaceableScope(event);
+        if (!scope) {
+          regularEvents.push(event);
+          continue;
+        }
 
-      // Handle latest-only events (per pubkey) - batch by pubkey+kind to reduce queries
-      const latestByPubkeyKind = new Map<string, NostrEvent>();
-      for (const event of latestOnlyEvents) {
-        const key = `${event.pubkey}:${event.kind}`;
-        const existing = latestByPubkeyKind.get(key);
-        if (!existing || event.created_at > existing.created_at) {
-          latestByPubkeyKind.set(key, event);
+        const slot = getReplaceableSlotKey(event, scope);
+        const current = newestBySlot.get(slot);
+        if (
+          !current ||
+          selectPreferredReplaceableEvent(event, current.event) === event
+        ) {
+          newestBySlot.set(slot, { event, scope });
         }
       }
 
-      for (const event of latestByPubkeyKind.values()) {
-        // First, lock and delete old rows
-        await client.query(
-          `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND id != $3`,
-          [event.pubkey, event.kind, event.id] as any[]
-        );
-
-        // Then insert/update with ON CONFLICT
-        const upsertQuery = {
-          text: `
-            INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (id) DO UPDATE SET
-              pubkey = EXCLUDED.pubkey,
-              created_at = EXCLUDED.created_at,
-              tags = EXCLUDED.tags,
-              content = EXCLUDED.content,
-              sig = EXCLUDED.sig,
-              cached_at = CURRENT_TIMESTAMP
-          `,
-          values: [
-            event.id,
-            event.pubkey,
-            event.created_at,
-            event.kind,
-            JSON.stringify(event.tags),
-            event.content,
-            event.sig,
-          ] as any[],
-        };
-        await client.query(upsertQuery);
+      // Fixed order so concurrent batches take their slot locks in the same
+      // order and cannot deadlock each other.
+      for (const slot of Array.from(newestBySlot.keys()).sort()) {
+        const { event, scope } = newestBySlot.get(slot)!;
+        await cacheNewestReplaceableEvent(client, table, event, scope);
       }
 
-      // Handle review events (latest per pubkey per product) - batch by pubkey+dtag
-      const latestReviewByPubkeyDtag = new Map<string, NostrEvent>();
-      for (const event of reviewEvents) {
-        const dTag = event.tags.find((tag) => tag[0] === "d")?.[1];
-        if (dTag) {
-          const key = `${event.pubkey}:${dTag}`;
-          const existing = latestReviewByPubkeyDtag.get(key);
-          if (!existing || event.created_at > existing.created_at) {
-            latestReviewByPubkeyDtag.set(key, event);
-          }
-        }
-      }
-
-      for (const event of latestReviewByPubkeyDtag.values()) {
-        const dTag = event.tags.find((tag) => tag[0] === "d")?.[1];
-
-        if (dTag) {
-          // First, lock and delete old rows
-          await client.query(
-            `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags @> $3::jsonb AND id != $4`,
-            [
-              event.pubkey,
-              event.kind,
-              buildReviewDTagFilter(dTag),
-              event.id,
-            ] as any[]
-          );
-
-          // Then insert/update with ON CONFLICT
-          const upsertQuery = {
-            text: `
-              INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-              VALUES ($1, $2, $3, $4, $5, $6, $7)
-              ON CONFLICT (id) DO UPDATE SET
-                pubkey = EXCLUDED.pubkey,
-                created_at = EXCLUDED.created_at,
-                tags = EXCLUDED.tags,
-                content = EXCLUDED.content,
-                sig = EXCLUDED.sig,
-                cached_at = CURRENT_TIMESTAMP
-            `,
-            values: [
-              event.id,
-              event.pubkey,
-              event.created_at,
-              event.kind,
-              JSON.stringify(event.tags),
-              event.content,
-              event.sig,
-            ] as any[],
-          };
-          await client.query(upsertQuery);
-        }
-      }
-
-      // Handle regular events with upsert
       for (const event of regularEvents) {
-        const query = {
-          text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                 ON CONFLICT (id) DO UPDATE SET
-                   pubkey = EXCLUDED.pubkey,
-                   created_at = EXCLUDED.created_at,
-                   tags = EXCLUDED.tags,
-                   content = EXCLUDED.content,
-                   sig = EXCLUDED.sig,
-                   cached_at = CURRENT_TIMESTAMP`,
-          values: [
-            event.id,
-            event.pubkey,
-            event.created_at,
-            event.kind,
-            JSON.stringify(event.tags),
-            event.content,
-            event.sig,
-          ] as any[],
-        };
-        await client.query(query);
+        await client.query(buildEventUpsertQuery(table, event));
+      }
+    }
+
+    // Deletions run after inserts so a deletion batched with the listing it
+    // targets still finds it cached.
+    for (const event of events) {
+      if (event.kind === 5) {
+        await applyProductDeletion(client, event);
       }
     }
 
@@ -869,7 +1200,7 @@ export async function fetchCachedEvents(
   const table = getTableForKind(kind);
   if (!table) return [];
 
-  const dbPool = getDbPool();
+  const dbPool = kind === 30407 ? await getInitializedDbPool() : getDbPool();
   let client;
 
   try {
@@ -893,7 +1224,7 @@ export async function fetchCachedEvents(
       params.push(filters.until);
     }
 
-    query += " ORDER BY created_at DESC";
+    query += " ORDER BY created_at DESC, id ASC";
 
     if (filters?.limit) {
       query += ` LIMIT $${paramIndex++}`;
@@ -907,15 +1238,7 @@ export async function fetchCachedEvents(
 
     const result = await client.query(query, params);
 
-    return result.rows.map((row) => ({
-      id: row.id,
-      pubkey: row.pubkey,
-      created_at: row.created_at,
-      kind: row.kind,
-      tags: row.tags,
-      content: row.content,
-      sig: row.sig,
-    }));
+    return result.rows.map(mapCachedEventRow);
   } catch (error) {
     console.error("Failed to fetch cached events:", error);
     return [];
@@ -960,6 +1283,7 @@ export async function deleteCachedEventsByIds(
 
   // All tables that can store events
   const otherTables = [
+    "contact_list_events",
     "review_events",
     "report_events",
     "message_events",
@@ -972,6 +1296,39 @@ export async function deleteCachedEventsByIds(
   try {
     client = await dbPool.connect();
     await client.query("BEGIN");
+
+    // Tombstone the listings first so relays that still hold them cannot
+    // re-cache them after this delete.
+    const doomedProducts = await client.query<{
+      id: string;
+      pubkey: string;
+      created_at: string | number;
+      tags: string[][];
+    }>(
+      `SELECT id, pubkey, created_at, tags FROM product_events
+       WHERE id = ANY($1)`,
+      [eventIds]
+    );
+    for (const row of doomedProducts.rows ?? []) {
+      const createdAt = Number(row.created_at);
+      await recordProductTombstone(
+        client,
+        row.pubkey,
+        "event",
+        row.id,
+        createdAt
+      );
+      const dTag = getProductDTag({ tags: row.tags } as NostrEvent);
+      if (dTag) {
+        await recordProductTombstone(
+          client,
+          row.pubkey,
+          "address",
+          buildProductAddress(row.pubkey, dTag),
+          createdAt
+        );
+      }
+    }
 
     // For product_events: delete by ID, and also remove any versions that are
     // strictly OLDER than the deleted event (same pubkey + d-tag, smaller
@@ -1046,6 +1403,7 @@ export async function cachedEventsBelongToPubkey(
 
   const eventTables = [
     "product_events",
+    "contact_list_events",
     "review_events",
     "message_events",
     "profile_events",
@@ -1332,52 +1690,432 @@ export async function getUnreadMessageCount(pubkey: string): Promise<number> {
   }
 }
 
-export async function getOrderParticipants(orderId: string): Promise<{
-  buyerPubkey: string | null;
-  sellerPubkey: string | null;
-}> {
-  const dbPool = getDbPool();
-  let client;
+export type P2pkEscrowOrderRecord = {
+  // H(escrow token). Keyed by the token rather than the invoice order id so
+  // registrations cannot be squatted by someone who merely saw the order id.
+  orderId: string;
+  // The order id from the invoice, bound inside the P2PK secret. Null only
+  // for rows registered before this column existed.
+  invoiceOrderId: string | null;
+  buyerNostrPubkey: string;
+  sellerNostrPubkey: string;
+  sellerCashuPubkey: string;
+  buyerCashuPubkey: string;
+  arbiterCashuPubkey: string;
+  amountSats: number;
+  locktime: number;
+  tokenHash: string;
+  rulingFor: "buyer" | "seller" | null;
+};
+
+type P2pkEscrowOrderRegistration = Omit<
+  P2pkEscrowOrderRecord,
+  "rulingFor" | "invoiceOrderId"
+> & { invoiceOrderId: string };
+
+type P2pkEscrowOrderRow = {
+  order_id: string;
+  invoice_order_id: string | null;
+  buyer_nostr_pubkey: string;
+  seller_nostr_pubkey: string;
+  seller_cashu_pubkey: string;
+  buyer_cashu_pubkey: string;
+  arbiter_cashu_pubkey: string;
+  amount_sats: string | number;
+  locktime: string | number;
+  token_hash: string;
+  ruling_for: "buyer" | "seller" | null;
+};
+
+function mapP2pkEscrowOrderRow(row: P2pkEscrowOrderRow): P2pkEscrowOrderRecord {
+  return {
+    orderId: row.order_id,
+    invoiceOrderId: row.invoice_order_id ?? null,
+    buyerNostrPubkey: row.buyer_nostr_pubkey,
+    sellerNostrPubkey: row.seller_nostr_pubkey,
+    sellerCashuPubkey: row.seller_cashu_pubkey,
+    buyerCashuPubkey: row.buyer_cashu_pubkey,
+    arbiterCashuPubkey: row.arbiter_cashu_pubkey,
+    amountSats: Number(row.amount_sats),
+    locktime: Number(row.locktime),
+    tokenHash: row.token_hash,
+    rulingFor: row.ruling_for,
+  };
+}
+
+function registrationsEqual(
+  left: P2pkEscrowOrderRecord,
+  right: P2pkEscrowOrderRegistration
+): boolean {
+  return (
+    left.orderId === right.orderId &&
+    left.invoiceOrderId === right.invoiceOrderId &&
+    left.buyerNostrPubkey === right.buyerNostrPubkey &&
+    left.sellerNostrPubkey === right.sellerNostrPubkey &&
+    left.sellerCashuPubkey === right.sellerCashuPubkey &&
+    left.buyerCashuPubkey === right.buyerCashuPubkey &&
+    left.arbiterCashuPubkey === right.arbiterCashuPubkey &&
+    left.amountSats === right.amountSats &&
+    left.locktime === right.locktime &&
+    left.tokenHash === right.tokenHash
+  );
+}
+
+export async function registerP2pkEscrowOrder(
+  registration: P2pkEscrowOrderRegistration
+): Promise<"created" | "existing" | "conflict"> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
 
   try {
-    client = await dbPool.connect();
-    const result = await client.query<{ tags: string[][] }>(
-      `SELECT tags
-       FROM message_events
-       WHERE order_id = $1
-       ORDER BY created_at DESC`,
-      [orderId] as any[]
+    const inserted = await client.query(
+      `INSERT INTO p2pk_escrow_orders (
+         order_id,
+         invoice_order_id,
+         buyer_nostr_pubkey,
+         seller_nostr_pubkey,
+         seller_cashu_pubkey,
+         buyer_cashu_pubkey,
+         arbiter_cashu_pubkey,
+         amount_sats,
+         locktime,
+         token_hash
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (order_id) DO NOTHING
+       RETURNING order_id`,
+      [
+        registration.orderId,
+        registration.invoiceOrderId,
+        registration.buyerNostrPubkey,
+        registration.sellerNostrPubkey,
+        registration.sellerCashuPubkey,
+        registration.buyerCashuPubkey,
+        registration.arbiterCashuPubkey,
+        registration.amountSats,
+        registration.locktime,
+        registration.tokenHash,
+      ]
     );
+    if ((inserted.rowCount ?? 0) > 0) return "created";
 
-    let buyerPubkey: string | null = null;
-    let sellerPubkey: string | null = null;
+    const existing = await client.query<P2pkEscrowOrderRow>(
+      `SELECT order_id,
+              invoice_order_id,
+              buyer_nostr_pubkey,
+              seller_nostr_pubkey,
+              seller_cashu_pubkey,
+              buyer_cashu_pubkey,
+              arbiter_cashu_pubkey,
+              amount_sats,
+              locktime,
+              token_hash,
+              ruling_for
+       FROM p2pk_escrow_orders
+       WHERE order_id = $1`,
+      [registration.orderId]
+    );
+    const row = existing.rows[0];
+    if (!row) return "conflict";
+    return registrationsEqual(mapP2pkEscrowOrderRow(row), registration)
+      ? "existing"
+      : "conflict";
+  } finally {
+    client.release();
+  }
+}
 
-    for (const row of result.rows) {
-      const tags = Array.isArray(row.tags) ? (row.tags as string[][]) : [];
+export async function getP2pkEscrowOrder(
+  orderId: string
+): Promise<P2pkEscrowOrderRecord | null> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
 
-      if (!buyerPubkey) {
-        const buyerTag = tags.find((tag) => tag[0] === "b");
-        if (buyerTag?.[1]) {
-          buyerPubkey = buyerTag[1];
-        }
-      }
+  try {
+    const result = await client.query<P2pkEscrowOrderRow>(
+      `SELECT order_id,
+              invoice_order_id,
+              buyer_nostr_pubkey,
+              seller_nostr_pubkey,
+              seller_cashu_pubkey,
+              buyer_cashu_pubkey,
+              arbiter_cashu_pubkey,
+              amount_sats,
+              locktime,
+              token_hash,
+              ruling_for
+       FROM p2pk_escrow_orders
+       WHERE order_id = $1
+       LIMIT 1`,
+      [orderId]
+    );
+    return result.rows[0] ? mapP2pkEscrowOrderRow(result.rows[0]) : null;
+  } finally {
+    client.release();
+  }
+}
 
-      if (!sellerPubkey) {
-        const itemTag = tags.find((tag) => tag[0] === "item");
-        const productAddress =
-          tags.find((tag) => tag[0] === "a")?.[1] || itemTag?.[1];
-        const addressParts = productAddress?.split(":");
-        if (addressParts && addressParts.length >= 2 && addressParts[1]) {
-          sellerPubkey = addressParts[1];
-        }
-      }
+export async function recordP2pkEscrowRuling(
+  orderId: string,
+  rulingFor: "buyer" | "seller"
+): Promise<"recorded" | "already-recorded" | "conflict" | "not-found"> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
 
-      if (buyerPubkey && sellerPubkey) {
-        break;
+  try {
+    await client.query("BEGIN");
+    const result = await client.query<{
+      ruling_for: "buyer" | "seller" | null;
+    }>(
+      `SELECT ruling_for
+       FROM p2pk_escrow_orders
+       WHERE order_id = $1
+       FOR UPDATE`,
+      [orderId]
+    );
+    const existingRuling = result.rows[0]?.ruling_for;
+    if (result.rows.length === 0) {
+      await client.query("COMMIT");
+      return "not-found";
+    }
+    if (existingRuling === rulingFor) {
+      await client.query("COMMIT");
+      return "already-recorded";
+    }
+    if (existingRuling) {
+      await client.query("COMMIT");
+      return "conflict";
+    }
+
+    await client.query(
+      `UPDATE p2pk_escrow_orders
+       SET ruling_for = $2, resolved_at = CURRENT_TIMESTAMP
+       WHERE order_id = $1`,
+      [orderId, rulingFor]
+    );
+    await client.query("COMMIT");
+    return "recorded";
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // Preserve the original database error.
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export type OrderParticipantsRegistration = {
+  orderId: string;
+  buyerPubkey: string;
+  sellerPubkey: string;
+  productAddress: string;
+};
+
+type OrderParticipantsRow = {
+  buyer_pubkey: string;
+  seller_pubkey: string;
+  product_address: string;
+};
+
+// First write wins. Repeating the same registration is a no-op so clients
+// can retry; any different claim for an existing order id is a conflict and
+// never overwrites the stored participants.
+export async function registerOrderParticipants(
+  registration: OrderParticipantsRegistration
+): Promise<"created" | "existing" | "conflict"> {
+  const dbPool = await getInitializedDbPool();
+  const client = await dbPool.connect();
+
+  try {
+    const inserted = await client.query(
+      `INSERT INTO order_participants (
+         order_id,
+         buyer_pubkey,
+         seller_pubkey,
+         product_address
+       )
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (order_id) DO NOTHING
+       RETURNING order_id`,
+      [
+        registration.orderId,
+        registration.buyerPubkey,
+        registration.sellerPubkey,
+        registration.productAddress,
+      ]
+    );
+    if ((inserted.rowCount ?? 0) > 0) return "created";
+
+    const existing = await client.query<OrderParticipantsRow>(
+      `SELECT buyer_pubkey, seller_pubkey, product_address
+       FROM order_participants
+       WHERE order_id = $1`,
+      [registration.orderId]
+    );
+    const row = existing.rows[0];
+    if (!row) return "conflict";
+    return row.buyer_pubkey === registration.buyerPubkey &&
+      row.seller_pubkey === registration.sellerPubkey &&
+      row.product_address === registration.productAddress
+      ? "existing"
+      : "conflict";
+  } finally {
+    client.release();
+  }
+}
+
+export type OrderParticipantsSource =
+  "order_participants" | "mcp_orders" | "legacy_message_tags";
+
+export type OrderParticipants = {
+  buyerPubkey: string;
+  sellerPubkey: string;
+  source: OrderParticipantsSource;
+};
+
+// Pre-order_participants behaviour, kept only for orders placed before that
+// table existed. Message tags are written by whoever sends the message, so
+// this is not trustworthy; the cached_at cutoff (server clock) stops it from
+// resolving any order whose messages arrived after the table was introduced.
+async function getLegacyOrderParticipants(
+  client: PoolClient,
+  orderIds: string[]
+): Promise<Map<string, OrderParticipants>> {
+  const result = await client.query<{ order_id: string; tags: string[][] }>(
+    `SELECT order_id, tags
+     FROM message_events
+     WHERE order_id = ANY($1)
+       AND cached_at < (
+         SELECT reached_at
+         FROM schema_milestones
+         WHERE name = 'order_participants'
+       )
+     ORDER BY created_at DESC`,
+    [orderIds]
+  );
+
+  const found = new Map<
+    string,
+    { buyerPubkey: string | null; sellerPubkey: string | null }
+  >();
+
+  for (const row of result.rows) {
+    const current = found.get(row.order_id) ?? {
+      buyerPubkey: null,
+      sellerPubkey: null,
+    };
+    const tags = Array.isArray(row.tags) ? row.tags : [];
+
+    if (!current.buyerPubkey) {
+      const buyerTag = tags.find((tag) => tag[0] === "b");
+      if (buyerTag?.[1]) {
+        current.buyerPubkey = buyerTag[1];
       }
     }
 
-    return { buyerPubkey, sellerPubkey };
+    if (!current.sellerPubkey) {
+      const itemTag = tags.find((tag) => tag[0] === "item");
+      const productAddress =
+        tags.find((tag) => tag[0] === "a")?.[1] || itemTag?.[1];
+      const addressParts = productAddress?.split(":");
+      if (addressParts && addressParts.length >= 2 && addressParts[1]) {
+        current.sellerPubkey = addressParts[1];
+      }
+    }
+
+    found.set(row.order_id, current);
+  }
+
+  const participants = new Map<string, OrderParticipants>();
+  for (const [orderId, { buyerPubkey, sellerPubkey }] of found) {
+    if (buyerPubkey && sellerPubkey) {
+      participants.set(orderId, {
+        buyerPubkey,
+        sellerPubkey,
+        source: "legacy_message_tags",
+      });
+    }
+  }
+  return participants;
+}
+
+// Resolves buyer/seller from records written by authenticated server code.
+// p2pk_escrow_orders is not a source, because its invoice_order_id is neither
+// unique nor bound to the real buyer. With includeLegacy, orders that have no
+// record at all fall back to the legacy lookup above; orders whose records
+// disagree stay unresolved either way. Unresolved orders are absent from the
+// returned map.
+export async function getOrderParticipantsForOrders(
+  orderIds: string[],
+  options: { includeLegacy: boolean }
+): Promise<Map<string, OrderParticipants>> {
+  const participants = new Map<string, OrderParticipants>();
+  if (orderIds.length === 0) return participants;
+
+  let client;
+
+  try {
+    const dbPool = await getInitializedDbPool();
+    client = await dbPool.connect();
+    const result = await client.query<{
+      order_id: string;
+      source: OrderParticipantsSource;
+      buyer_pubkey: string;
+      seller_pubkey: string;
+    }>(
+      `SELECT order_id, 'order_participants' AS source, buyer_pubkey, seller_pubkey
+       FROM order_participants
+       WHERE order_id = ANY($1)
+       UNION ALL
+       SELECT order_id, 'mcp_orders' AS source, buyer_pubkey, seller_pubkey
+       FROM mcp_orders
+       WHERE order_id = ANY($1)
+       ORDER BY order_id, source DESC`,
+      [orderIds]
+    );
+
+    const conflicted = new Set<string>();
+    for (const row of result.rows) {
+      if (conflicted.has(row.order_id)) continue;
+
+      const existing = participants.get(row.order_id);
+      if (!existing) {
+        participants.set(row.order_id, {
+          buyerPubkey: row.buyer_pubkey,
+          sellerPubkey: row.seller_pubkey,
+          source: row.source,
+        });
+        continue;
+      }
+
+      if (
+        existing.buyerPubkey !== row.buyer_pubkey ||
+        existing.sellerPubkey !== row.seller_pubkey
+      ) {
+        console.warn(
+          `Order ${row.order_id} has conflicting participant records; leaving it unresolved.`
+        );
+        participants.delete(row.order_id);
+        conflicted.add(row.order_id);
+      }
+    }
+
+    if (options.includeLegacy) {
+      const unrecorded = orderIds.filter(
+        (orderId) => !participants.has(orderId) && !conflicted.has(orderId)
+      );
+      if (unrecorded.length > 0) {
+        const legacy = await getLegacyOrderParticipants(client, unrecorded);
+        for (const [orderId, legacyParticipants] of legacy) {
+          participants.set(orderId, legacyParticipants);
+        }
+      }
+    }
+
+    return participants;
   } catch (error) {
     console.error("Failed to get order participants:", error);
     throw error;
@@ -1386,6 +2124,15 @@ export async function getOrderParticipants(orderId: string): Promise<{
       client.release();
     }
   }
+}
+
+export async function getOrderParticipants(
+  orderId: string
+): Promise<OrderParticipants | null> {
+  const participants = await getOrderParticipantsForOrders([orderId], {
+    includeLegacy: true,
+  });
+  return participants.get(orderId) ?? null;
 }
 
 // Update order status in database
@@ -1480,18 +2227,22 @@ export async function getOrderStatuses(
   }
 }
 
-// Fetch all profiles from database (both user and shop profiles)
-export async function fetchAllProfilesFromDb(): Promise<NostrEvent[]> {
+export async function fetchAllProfilesFromDb(
+  scope?: ProfileCacheScope
+): Promise<NostrEvent[]> {
   const dbPool = getDbPool();
   let client;
 
   try {
     client = await dbPool.connect();
-    const query = `SELECT id, pubkey, created_at, kind, tags, content, sig 
-                   FROM profile_events 
+    const query = `SELECT id, pubkey, created_at, kind, tags, content, sig
+                   FROM profile_events
+                   ${scope ? "WHERE kind = $1 AND pubkey = ANY($2::text[])" : ""}
                    ORDER BY created_at DESC`;
 
-    const result = await client.query(query);
+    const result = scope
+      ? await client.query(query, [scope.kind, scope.pubkeys])
+      : await client.query(query);
 
     return result.rows.map((row) => ({
       id: row.id,

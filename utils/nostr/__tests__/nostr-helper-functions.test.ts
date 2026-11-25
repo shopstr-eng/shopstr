@@ -1,5 +1,6 @@
 jest.mock("@/utils/db/db-client", () => ({
   cacheEventToDatabase: jest.fn().mockResolvedValue(undefined),
+  cacheEventToDatabaseStrict: jest.fn().mockResolvedValue(undefined),
   deleteEventsFromDatabase: jest.fn().mockResolvedValue(undefined),
   trackFailedRelayPublish: jest.fn().mockResolvedValue(undefined),
 }));
@@ -48,14 +49,18 @@ import {
   createNostrProfileEvent,
   createNostrRelayEvent,
   createNostrShopEvent,
+  clearNWCConnection,
   deleteEvent,
   finalizeAndSendNostrEvent,
+  followUser,
   getDefaultBlossomServer,
   getDefaultMint,
   getDefaultRelays,
+  getLatestLocalContactListEvent,
   getLocalStorageData,
   getLocalUserProfileKey,
   isProfileContentPopulated,
+  lockNWCConnection,
   LogOut,
   parseLocalProfileFallback,
   PostListing,
@@ -68,8 +73,10 @@ import {
   publishReportEvent,
   publishReviewEvent,
   REPORT_TYPES,
-  saveNWCString,
+  saveEncryptedNWCString,
+  saveNWCInfo,
   setLocalStorageDataOnSignIn,
+  unlockNWCString,
   verifyNip05Identifier,
   withBlastr,
 } from "../nostr-helper-functions";
@@ -86,14 +93,17 @@ import {
   retractApproval,
 } from "../community";
 import { finalizeEvent, nip44 } from "nostr-tools";
+import { webcrypto } from "node:crypto";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import {
   Community,
   CommunityRelays,
   ProductFormValues,
 } from "@/utils/types/types";
+
 import {
   cacheEventToDatabase,
+  cacheEventToDatabaseStrict,
   deleteEventsFromDatabase,
   trackFailedRelayPublish,
 } from "@/utils/db/db-client";
@@ -101,7 +111,25 @@ import {
   buildDeleteCachedEventsProof,
   buildSignedHttpRequestProofTemplate,
 } from "@/utils/nostr/request-auth";
+import type { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
+import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { newPromiseWithTimeout } from "@/utils/timeout";
+
+const originalCrypto = globalThis.crypto;
+
+beforeAll(() => {
+  Object.defineProperty(globalThis, "crypto", {
+    configurable: true,
+    value: webcrypto,
+  });
+});
+
+afterAll(() => {
+  Object.defineProperty(globalThis, "crypto", {
+    configurable: true,
+    value: originalCrypto,
+  });
+});
 
 describe("constructGiftWrappedEvent", () => {
   const senderPubkey =
@@ -452,49 +480,12 @@ describe("setLocalStorageDataOnSignIn", () => {
     expect(localStorage.getItem("encryptedPrivateKey")).toBeNull();
   });
 
-  it("writes all four bunker keys when clientPubkey, clientPrivkey, bunkerRemotePubkey, and bunkerRelays are all provided", () => {
-    setLocalStorageDataOnSignIn({
-      clientPubkey: "pub-abc",
-      clientPrivkey: "priv-abc",
-      bunkerRemotePubkey: "remote-pubkey",
-      bunkerRelays: ["wss://relay.example"],
-    });
-
-    expect(localStorage.getItem("clientPubkey")).toBe("pub-abc");
-    expect(localStorage.getItem("clientPrivkey")).toBe("priv-abc");
-    expect(localStorage.getItem("bunkerRemotePubkey")).toBe("remote-pubkey");
-    expect(localStorage.getItem("bunkerRelays")).toBe(
-      JSON.stringify(["wss://relay.example"])
-    );
-  });
-
-  it("does not write bunker keys when any of the four required fields is missing", () => {
-    setLocalStorageDataOnSignIn({
-      clientPubkey: "pub-abc",
-      clientPrivkey: "priv-abc",
-      bunkerRemotePubkey: "remote-pubkey",
-    });
-
-    expect(localStorage.getItem("clientPubkey")).toBeNull();
-    expect(localStorage.getItem("clientPrivkey")).toBeNull();
-  });
-
-  it("writes bunkerSecret alongside the other bunker keys when provided", () => {
-    setLocalStorageDataOnSignIn({
-      clientPubkey: "pub-abc",
-      clientPrivkey: "priv-abc",
-      bunkerRemotePubkey: "remote-pubkey",
-      bunkerRelays: ["wss://relay.example"],
-      bunkerSecret: "my-secret",
-    });
-
-    expect(localStorage.getItem("bunkerSecret")).toBe("my-secret");
-  });
-
   it("writes signer JSON when a signer is provided", () => {
-    const signer = { type: "nip07" } as any;
+    const signer = { toJSON: () => ({ type: "nip07" }) } as any;
     setLocalStorageDataOnSignIn({ signer });
-    expect(localStorage.getItem("signer")).toBe(JSON.stringify(signer));
+    expect(localStorage.getItem("signer")).toBe(
+      JSON.stringify({ type: "nip07" })
+    );
   });
 
   it("writes migrationComplete=true when migrationComplete is truthy", () => {
@@ -1006,7 +997,7 @@ describe("verifyNip05Identifier", () => {
 
 describe("getLocalStorageData", () => {
   beforeEach(() => {
-    localStorage.clear();
+    LogOut();
   });
 
   it("returns getDefaultRelays() when localStorage.relays is absent", () => {
@@ -1092,18 +1083,24 @@ describe("getLocalStorageData", () => {
   it("returns null for nwcString and nwcInfo when the keys are absent", () => {
     const data = getLocalStorageData();
     expect(data.nwcString).toBeNull();
+    expect(data.legacyNWCString).toBeNull();
     expect(data.nwcInfo).toBeNull();
+    expect(data.hasStoredNWCConnection).toBe(false);
+    expect(data.hasLegacyNWCConnection).toBe(false);
   });
 
-  it("returns the stored nwcString when present", () => {
+  it("flags a legacy plaintext nwcString without treating it as unlocked", () => {
     localStorage.setItem(
       "nwcString",
       "nostr+walletconnect://pubkey?relay=wss://relay.example"
     );
     const data = getLocalStorageData();
-    expect(data.nwcString).toBe(
+    expect(data.nwcString).toBeNull();
+    expect(data.legacyNWCString).toBe(
       "nostr+walletconnect://pubkey?relay=wss://relay.example"
     );
+    expect(data.hasStoredNWCConnection).toBe(false);
+    expect(data.hasLegacyNWCConnection).toBe(true);
   });
 
   it("returns the parsed savedAddresses array", () => {
@@ -1130,21 +1127,6 @@ describe("getLocalStorageData", () => {
     expect(getLocalStorageData().signer).toEqual({ type: "nip07" });
   });
 
-  it("accepts { type: 'nip46', bunker: '...' } as a valid stored signer", () => {
-    const storedSigner = {
-      type: "nip46",
-      bunker: "bunker://pubkey?relay=wss://relay.example",
-    };
-    localStorage.setItem("signer", JSON.stringify(storedSigner));
-    expect(getLocalStorageData().signer).toEqual(storedSigner);
-  });
-
-  it("rejects { type: 'nip46' } missing bunker and falls through to migration", () => {
-    localStorage.setItem("signer", JSON.stringify({ type: "nip46" }));
-    localStorage.setItem("signInMethod", "extension");
-    expect(getLocalStorageData().signer).toEqual({ type: "nip07" });
-  });
-
   it("accepts { type: 'nsec', encryptedPrivKey: '...' } as a valid stored signer", () => {
     const storedSigner = { type: "nsec", encryptedPrivKey: "enc-key-abc" };
     localStorage.setItem("signer", JSON.stringify(storedSigner));
@@ -1168,24 +1150,6 @@ describe("getLocalStorageData", () => {
   it("reconstructs { type: 'nip07' } from signInMethod=extension when no stored signer", () => {
     localStorage.setItem("signInMethod", "extension");
     expect(getLocalStorageData().signer).toEqual({ type: "nip07" });
-  });
-
-  it("reconstructs { type: 'nip46', bunker, appPrivKey } from signInMethod=bunker keys", () => {
-    localStorage.setItem("signInMethod", "bunker");
-    localStorage.setItem("bunkerRemotePubkey", "remote-pubkey");
-    localStorage.setItem("bunkerSecret", "my-secret");
-    localStorage.setItem(
-      "bunkerRelays",
-      JSON.stringify(["wss://relay.example"])
-    );
-    localStorage.setItem("clientPrivkey", "privkey-abc");
-
-    expect(getLocalStorageData().signer).toEqual({
-      type: "nip46",
-      bunker:
-        "bunker://remote-pubkey?secret=my-secret&relay=wss://relay.example",
-      appPrivKey: "privkey-abc",
-    });
   });
 
   it("reconstructs { type: 'nsec', encryptedPrivKey } from signInMethod=nsec when encryptedPrivateKey is a string", () => {
@@ -1356,34 +1320,84 @@ describe("constructMessageGiftWrap", () => {
   });
 });
 
-describe("saveNWCString", () => {
+describe("encrypted NWC storage", () => {
   beforeEach(() => {
     localStorage.clear();
     jest.restoreAllMocks();
+    clearNWCConnection();
   });
 
-  it("writes nwcString to localStorage when given a non-empty string", () => {
-    saveNWCString("nostr+walletconnect://pubkey?relay=wss://relay.example");
-    expect(localStorage.getItem("nwcString")).toBe(
+  it("stores the NWC connection encrypted at rest", async () => {
+    await saveEncryptedNWCString(
+      "nostr+walletconnect://pubkey?relay=wss://relay.example",
+      "secret-passphrase"
+    );
+
+    expect(localStorage.getItem("nwcString")).toBeNull();
+    expect(localStorage.getItem("encryptedNWCString")).not.toBeNull();
+    expect(localStorage.getItem("encryptedNWCString")).not.toContain(
+      "relay.example"
+    );
+    expect(getLocalStorageData().nwcString).toBe(
       "nostr+walletconnect://pubkey?relay=wss://relay.example"
     );
   });
 
-  it("removes both nwcString and nwcInfo from localStorage when given an empty string", () => {
+  it("unlocks an encrypted NWC connection using the passphrase", async () => {
+    await saveEncryptedNWCString(
+      "nostr+walletconnect://pubkey?relay=wss://relay.example",
+      "secret-passphrase"
+    );
+    clearNWCConnection();
+
+    await expect(unlockNWCString("secret-passphrase")).rejects.toThrow(
+      "NWC connection not found."
+    );
+
+    await saveEncryptedNWCString(
+      "nostr+walletconnect://pubkey?relay=wss://relay.example",
+      "secret-passphrase"
+    );
+    localStorage.removeItem("nwcString");
+    const encrypted = localStorage.getItem("encryptedNWCString");
+    clearNWCConnection();
+    localStorage.setItem("encryptedNWCString", encrypted || "");
+    lockNWCConnection();
+
+    expect(getLocalStorageData().nwcString).toBeNull();
+    await expect(unlockNWCString("secret-passphrase")).resolves.toBe(
+      "nostr+walletconnect://pubkey?relay=wss://relay.example"
+    );
+  });
+
+  it("removes NWC connection state when cleared", () => {
     localStorage.setItem("nwcString", "some-value");
     localStorage.setItem("nwcInfo", "some-info");
+    localStorage.setItem("encryptedNWCString", "ciphertext");
 
-    saveNWCString("");
+    clearNWCConnection();
 
     expect(localStorage.getItem("nwcString")).toBeNull();
     expect(localStorage.getItem("nwcInfo")).toBeNull();
+    expect(localStorage.getItem("encryptedNWCString")).toBeNull();
   });
 
-  it("dispatches a storage event on window", () => {
+  it("dispatches a storage event on window", async () => {
     const dispatchSpy = jest.spyOn(window, "dispatchEvent");
-    saveNWCString("nostr+walletconnect://pubkey");
+    await saveEncryptedNWCString(
+      "nostr+walletconnect://pubkey",
+      "secret-passphrase"
+    );
     expect(dispatchSpy).toHaveBeenCalledWith(
       expect.objectContaining({ type: "storage" })
+    );
+  });
+
+  it("persists non-sensitive wallet info separately", () => {
+    saveNWCInfo({ alias: "Alby", methods: ["pay_invoice"] });
+
+    expect(localStorage.getItem("nwcInfo")).toBe(
+      JSON.stringify({ alias: "Alby", methods: ["pay_invoice"] })
     );
   });
 });
@@ -1413,6 +1427,7 @@ describe("LogOut", () => {
       "bunkerRelays",
       "bunkerSecret",
       "signer",
+      "encryptedNWCString",
       "nwcString",
       "nwcInfo",
       "savedAddresses",
@@ -1497,6 +1512,24 @@ describe("sendGiftWrappedMessageEvent", () => {
     expect(callOrder.indexOf("cache")).toBeLessThan(
       callOrder.indexOf("publish")
     );
+  });
+
+  it("does not publish a gift wrap when its required cache write fails", async () => {
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+    (cacheEventToDatabaseStrict as jest.Mock).mockRejectedValueOnce(
+      new Error("database unavailable")
+    );
+
+    await expect(
+      sendGiftWrappedMessageEvent(
+        nostr as any,
+        giftWrappedEvent as any,
+        undefined,
+        { requireDurableCache: true }
+      )
+    ).rejects.toThrow("database unavailable");
+
+    expect(nostr.publish).not.toHaveBeenCalled();
   });
 
   it("calls nostr.publish inside the timeout wrapper", async () => {
@@ -2341,6 +2374,23 @@ describe("finalizeAndSendNostrEvent", () => {
     expect(result).toEqual(signedEvent);
     expect(cacheEventToDatabase).toHaveBeenCalledWith(signedEvent);
     expect(newPromiseWithTimeout).toHaveBeenCalled();
+  });
+
+  it("requires a strict cache write before publishing when requested", async () => {
+    const signedEvent = makeSignedEvent();
+    const signer = { sign: jest.fn().mockResolvedValue(signedEvent) };
+    const nostr = { publish: jest.fn().mockResolvedValue(undefined) };
+
+    await finalizeAndSendNostrEvent(
+      signer as any,
+      nostr as any,
+      eventTemplate,
+      { requireDurableCache: true }
+    );
+
+    expect(cacheEventToDatabaseStrict).toHaveBeenCalledWith(signedEvent);
+    expect(cacheEventToDatabase).not.toHaveBeenCalled();
+    expect(nostr.publish).toHaveBeenCalled();
   });
 
   it("re-throws when signer.sign rejects", async () => {
@@ -3640,6 +3690,13 @@ describe("blossomUploadImages", () => {
   beforeEach(() => {
     global.fetch = jest.fn();
     (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(
+      async (fn: Parameters<typeof newPromiseWithTimeout>[0]) => {
+        return new Promise((resolve, reject) =>
+          fn(resolve, reject, new AbortController().signal)
+        );
+      }
+    );
   });
 
   afterEach(() => {
@@ -3734,6 +3791,45 @@ describe("blossomUploadImages", () => {
         ["m", "image/png"],
       ])
     );
+  });
+
+  it("uses a future expiration and unpadded Base64url authorization", async () => {
+    const signer = makeSigner();
+    signer.sign.mockImplementation(async (event: NostrEventTemplate) => ({
+      ...event,
+      id: "signed-upload-event",
+      pubkey: "user-pubkey",
+      // The extra byte makes standard Base64 emit padding, so this test cannot
+      // accidentally accept the non-URL-safe encoder.
+      sig: "sigx",
+    }));
+    (global.fetch as jest.Mock).mockResolvedValue(makeSuccessResponse());
+
+    await blossomUploadImages(
+      makeImageFile(),
+      signer as unknown as NostrSigner,
+      ["https://blossom.example"]
+    );
+
+    const authorization = (global.fetch as jest.Mock).mock.calls[0][1].headers
+      .authorization as string;
+    expect(authorization).toMatch(/^Nostr /);
+
+    const encoded = authorization.slice("Nostr ".length);
+    expect(encoded).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(encoded).not.toMatch(/[+/=]/);
+
+    const standardBase64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = standardBase64.padEnd(
+      Math.ceil(standardBase64.length / 4) * 4,
+      "="
+    );
+    const event = JSON.parse(atob(padded));
+    const expiration = event.tags.find(
+      (tag: string[]) => tag[0] === "expiration"
+    );
+
+    expect(Number(expiration?.[1])).toBeGreaterThan(event.created_at);
   });
 
   it("normalises NIP-94 format: reads url, sha256/ox, size, m from nip94_event.tags when top-level fields are absent", async () => {
@@ -3862,6 +3958,7 @@ describe("blossomUploadImages", () => {
     const mirrorCall = (global.fetch as jest.Mock).mock.calls[1];
     expect(mirrorCall[0].toString()).toBe("https://mirror.example/mirror");
     expect(mirrorCall[1].method).toBe("PUT");
+    expect(mirrorCall[1].headers["content-type"]).toBe("application/json");
   });
 
   it("caches the authorization event after a successful upload", async () => {
@@ -3875,5 +3972,239 @@ describe("blossomUploadImages", () => {
     expect(cacheEventToDatabase).toHaveBeenCalledWith(
       expect.objectContaining({ id: "signed-upload-event" })
     );
+  });
+
+  it("falls over to the next server when the first upload fails", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockImplementation(async (url: any) => {
+      if (String(url).includes("dead.example")) {
+        return { ok: false, status: 502, text: async () => "bad gateway" };
+      }
+      return makeSuccessResponse({ url: "https://live.example/abc" });
+    });
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://dead.example",
+      "https://live.example",
+    ]);
+
+    expect(result).toContainEqual(["url", "https://live.example/abc"]);
+
+    const attempted = (global.fetch as jest.Mock).mock.calls.map(([u]) =>
+      String(u)
+    );
+    expect(attempted).toContain("https://dead.example/upload");
+    expect(attempted).toContain("https://live.example/upload");
+  });
+
+  it("falls over after a Blossom upload request times out", async () => {
+    const signer = makeSigner();
+    (newPromiseWithTimeout as jest.Mock).mockRejectedValueOnce(
+      new Error("Timeout")
+    );
+    (global.fetch as jest.Mock).mockImplementation(async (url: URL) => {
+      const requestUrl = String(url);
+      if (requestUrl.endsWith("/mirror")) {
+        return { ok: true };
+      }
+      return makeSuccessResponse({
+        url: requestUrl.includes("live.example")
+          ? "https://live.example/abc"
+          : "https://hanging.example/abc",
+      });
+    });
+
+    await expect(
+      blossomUploadImages(makeImageFile(), signer as unknown as NostrSigner, [
+        "https://hanging.example",
+        "https://live.example",
+      ])
+    ).resolves.toContainEqual(["url", "https://live.example/abc"]);
+
+    expect(newPromiseWithTimeout).toHaveBeenNthCalledWith(
+      1,
+      expect.any(Function),
+      { timeout: 30_000 }
+    );
+  });
+
+  it("falls over after a 401 response without reading missing descriptor fields", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockImplementation(async (url: URL) => {
+      const requestUrl = String(url);
+      if (requestUrl === "https://expired.example/upload") {
+        return {
+          ok: false,
+          status: 401,
+          text: async () => '{"error":"expired authorization"}',
+        };
+      }
+      if (requestUrl.endsWith("/mirror")) {
+        return { ok: true };
+      }
+      return makeSuccessResponse({ url: "https://live.example/abc" });
+    });
+
+    await expect(
+      blossomUploadImages(makeImageFile(), signer as unknown as NostrSigner, [
+        "https://expired.example",
+        "https://live.example",
+      ])
+    ).resolves.toContainEqual(["url", "https://live.example/abc"]);
+
+    const uploadAttempts = (global.fetch as jest.Mock).mock.calls
+      .map(([url]) => String(url))
+      .filter((url) => url.endsWith("/upload"));
+    expect(uploadAttempts).toEqual([
+      "https://expired.example/upload",
+      "https://live.example/upload",
+    ]);
+  });
+
+  it("reports every server that failed when none accept the upload", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: async () => "server error",
+    });
+
+    await expect(
+      blossomUploadImages(makeImageFile(), signer as any, [
+        "https://one.example",
+        "https://two.example",
+      ])
+    ).rejects.toThrow(/one\.example[\s\S]*two\.example/);
+  });
+
+  it("keeps a successful upload when mirroring to another server fails", async () => {
+    const consoleWarnSpy = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => {});
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockImplementation(async (url: any) => {
+      if (String(url).includes("/mirror")) {
+        return { ok: false, status: 500, text: async () => "mirror down" };
+      }
+      return makeSuccessResponse({ url: "https://primary.example/abc" });
+    });
+
+    const result = await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://primary.example",
+      "https://mirror.example",
+    ]);
+
+    expect(result).toContainEqual(["url", "https://primary.example/abc"]);
+    expect(consoleWarnSpy).toHaveBeenCalled();
+    consoleWarnSpy.mockRestore();
+  });
+
+  it("does not mirror back to the server that accepted the upload", async () => {
+    const signer = makeSigner();
+    (global.fetch as jest.Mock).mockImplementation(async (url: any) => {
+      if (String(url).includes("dead.example")) {
+        return { ok: false, status: 502, text: async () => "bad gateway" };
+      }
+      return makeSuccessResponse({ url: "https://live.example/abc" });
+    });
+
+    await blossomUploadImages(makeImageFile(), signer as any, [
+      "https://dead.example",
+      "https://live.example",
+    ]);
+
+    const mirrored = (global.fetch as jest.Mock).mock.calls
+      .map(([u]) => String(u))
+      .filter((u) => u.includes("/mirror"));
+
+    expect(mirrored).not.toContain("https://live.example/mirror");
+  });
+});
+
+describe("followUser", () => {
+  const userPubkey =
+    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+  const targetPubkey =
+    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem(
+      "relays",
+      JSON.stringify(["wss://alive.example", "wss://dead.example"])
+    );
+    localStorage.setItem("readRelays", JSON.stringify([]));
+    localStorage.setItem("writeRelays", JSON.stringify([]));
+    (cacheEventToDatabase as jest.Mock).mockResolvedValue(undefined);
+    (newPromiseWithTimeout as jest.Mock).mockImplementation(async (fn: any) => {
+      return new Promise((resolve, reject) =>
+        fn(resolve, reject, new AbortController().signal)
+      );
+    });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ contactList: null }),
+    }) as typeof global.fetch;
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const createSigner = (pubkey = userPubkey) => ({
+    getPubKey: jest.fn().mockResolvedValue(pubkey),
+    sign: jest.fn().mockImplementation(async (template: any) => ({
+      ...template,
+      id: "signed-contact-list",
+      pubkey: userPubkey,
+      sig: "sig",
+    })),
+  });
+
+  it("creates a first contact list when every relay and the DB confirm it is empty", async () => {
+    const signer = createSigner();
+    const nostr = {
+      fetch: jest.fn().mockResolvedValue([]),
+      publish: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const result = await followUser(nostr as any, signer as any, targetPubkey);
+
+    expect(result).toMatchObject({
+      ok: true,
+      event: {
+        id: "signed-contact-list",
+        kind: 3,
+        tags: [["p", targetPubkey]],
+      },
+      alreadyApplied: false,
+    });
+    expect(getLatestLocalContactListEvent(userPubkey)).toMatchObject({
+      id: "signed-contact-list",
+      tags: [["p", targetPubkey]],
+    });
+  });
+
+  it("refuses to create a first contact list while any relay is unreachable", async () => {
+    // Separate user so the module-level local contact list cache from the
+    // previous test cannot satisfy the lookup.
+    const signer = createSigner("d".repeat(64));
+    const nostr = {
+      fetch: jest.fn((_filters: unknown, _opts: unknown, relays: string[]) =>
+        relays[0] === "wss://dead.example"
+          ? Promise.reject(new Error("relay down"))
+          : Promise.resolve([])
+      ),
+      publish: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const result = await followUser(nostr as any, signer as any, targetPubkey);
+
+    expect(result).toEqual({
+      ok: false,
+      reason: "unverified-contact-list",
+    });
+    expect(signer.sign).not.toHaveBeenCalled();
+    expect(nostr.publish).not.toHaveBeenCalled();
   });
 });

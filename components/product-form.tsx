@@ -33,12 +33,12 @@ import {
   SHIPPING_OPTIONS,
 } from "@/utils/STATIC-VARIABLES";
 import {
+  getStoredRelays,
   PostListing,
-  getLocalStorageData,
   finalizeAndSendNostrEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
-import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
+import ConfirmActionModal from "./utility-components/modals/confirm-action-modal";
 import { ProductContext, ProfileMapContext } from "../utils/context/context";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import {
@@ -140,7 +140,7 @@ export default function ProductForm({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const { relays } = getLocalStorageData();
+      const relays = getStoredRelays();
       setPubkey(signerPubKey as string);
       setRelayHint(relays[0] as string);
     }
@@ -496,7 +496,7 @@ export default function ProductForm({
                       <div className="absolute top-4 right-4 z-20">
                         {" "}
                         {/* Increased spacing */}
-                        <ConfirmActionDropdown
+                        <ConfirmActionModal
                           helpText="Are you sure you want to delete this image?"
                           buttonLabel="Delete Image"
                           onConfirm={deleteImage(index)}
@@ -513,7 +513,7 @@ export default function ProductForm({
                           >
                             <TrashIcon style={{ padding: 4 }} />
                           </Button>
-                        </ConfirmActionDropdown>
+                        </ConfirmActionModal>
                       </div>
                       <Image
                         alt="Product Image"
@@ -1721,7 +1721,7 @@ export default function ProductForm({
           </ModalBody>
 
           <ModalFooter>
-            <ConfirmActionDropdown
+            <ConfirmActionModal
               helpText={
                 "Are you sure you want to clear this form? You will lose all current progress."
               }
@@ -1731,7 +1731,7 @@ export default function ProductForm({
               <Button color="danger" variant="light">
                 Clear
               </Button>
-            </ConfirmActionDropdown>
+            </ConfirmActionModal>
 
             <Button
               className={SHOPSTRBUTTONCLASSNAMES}

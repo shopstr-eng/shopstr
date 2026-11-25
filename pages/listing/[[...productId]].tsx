@@ -43,6 +43,8 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 import SignInModal from "@/components/sign-in/SignInModal";
 import useReportEventFlow from "@/components/utility-components/use-report-event-flow";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import { useFollowToggle } from "@/components/hooks/use-follow-toggle";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 type ListingPageProps = {
   ogMeta: OgMetaProps;
@@ -250,14 +252,17 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
     if (!sellerPubkey) return undefined;
     return profileMap.get(sellerPubkey)?.content.p2pk;
   }, [profileMap, sellerPubkey]);
+  const {
+    isFollowing: isFollowingSeller,
+    isLoading: isFollowActionLoading,
+    toggle: handleFollowToggle,
+  } = useFollowToggle(sellerPubkey, { onRequireSignIn: onOpen });
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const pk =
-        sessionStorage.getItem("sf_seller_pubkey") ||
-        localStorage.getItem("sf_seller_pubkey");
-      if (pk) setSfSellerPubkey(pk);
-    }
+    const pk =
+      storage.getSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY) ||
+      storage.getItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
+    if (pk) setSfSellerPubkey(pk);
   }, []);
 
   useEffect(() => {
@@ -318,10 +323,10 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
       if (matchingEvent) {
         if (sfSellerPubkey && matchingEvent.pubkey !== sfSellerPubkey) {
           setSfSellerPubkey("");
-          sessionStorage.removeItem("sf_seller_pubkey");
-          sessionStorage.removeItem("sf_shop_slug");
-          localStorage.removeItem("sf_seller_pubkey");
-          localStorage.removeItem("sf_shop_slug");
+          storage.removeSessionItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
+          storage.removeSessionItem(STORAGE_KEYS.SF_SHOP_SLUG);
+          storage.removeItem(STORAGE_KEYS.SF_SELLER_PUBKEY);
+          storage.removeItem(STORAGE_KEYS.SF_SHOP_SLUG);
         }
         const resolvedListing = resolveListingStateFromEvent(matchingEvent);
         if (resolvedListing) {
@@ -456,6 +461,22 @@ const Listing = ({ initialProductEvent }: ListingPageProps) => {
                   <p className="mb-6 whitespace-pre-wrap text-gray-600 dark:text-gray-300">
                     {productData.summary}
                   </p>
+                  {sellerPubkey && sellerPubkey !== userPubkey && (
+                    <Button
+                      color="secondary"
+                      variant="flat"
+                      className="mb-4"
+                      onPress={handleFollowToggle}
+                      isLoading={isFollowActionLoading}
+                      isDisabled={isFollowActionLoading}
+                    >
+                      {isFollowActionLoading
+                        ? "Please sign..."
+                        : isFollowingSeller
+                          ? "Unfollow"
+                          : "+ Follow"}
+                    </Button>
+                  )}
                   <ZapsnagButton product={productData} />
                 </div>
               </div>

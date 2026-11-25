@@ -129,7 +129,16 @@ export async function verifyNip98Request(
       }
     }
 
-    return { ok: true, pubkey: parsed.pubkey };
+    // Normalize to lowercase hex so downstream comparisons and case-sensitive
+    // DB lookups behave consistently regardless of signer casing.
+    if (
+      typeof parsed.pubkey !== "string" ||
+      !/^[0-9a-fA-F]{64}$/.test(parsed.pubkey)
+    ) {
+      return { ok: false, error: "Malformed NIP-98 authorization" };
+    }
+
+    return { ok: true, pubkey: parsed.pubkey.toLowerCase() };
   } catch {
     return { ok: false, error: "Malformed NIP-98 authorization" };
   }

@@ -209,6 +209,17 @@ export interface ShopProfile {
   event?: NostrEvent;
 }
 
+export interface Nip58ProfileBadge {
+  definitionAddress: string;
+  awardEventId: string;
+  issuerPubkey: string;
+  badgeDefinitionDTag: string;
+  name: string;
+  description?: string;
+  image?: string;
+  thumbnail?: string;
+}
+
 export interface ProfileData {
   pubkey: string;
   content: {
@@ -230,6 +241,7 @@ export interface ProfileData {
     };
   };
   created_at: number;
+  badges?: Nip58ProfileBadge[];
 }
 
 export interface Transaction {
@@ -289,11 +301,14 @@ export interface SavedAddress {
 
 export interface ParsedP2PK {
   pubkey: string;
+  pubkeys?: string[];
+  nSigs?: number;
   locktime: number;
   refundKeys: string[];
   expired: boolean;
   rawTags: any[];
   proofCount?: number;
+  shopstrOrderId?: string;
 }
 
 export type WalletConfig = string[][];

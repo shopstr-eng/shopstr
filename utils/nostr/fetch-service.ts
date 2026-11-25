@@ -13,10 +13,20 @@ import {
 import { ChatsMap } from "@/utils/context/context";
 import {
   getLocalStorageData,
+  getLatestLocalContactListEvent,
   deleteEvent,
   verifyNip05Identifier,
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import {
+  fetchCachedProfileEvents,
+  type ProfileCacheRead,
+} from "@/utils/nostr/profile-cache";
+import { isHexPubkey } from "@/utils/nostr/pubkey";
+import {
+  pickPreferredReplaceableEvent,
+  selectPreferredReplaceableEvent,
+} from "@/utils/nostr/replaceable-events";
 import {
   ProductData,
   parseTags,
@@ -27,8 +37,17 @@ import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions"
 import { hashToCurve } from "@cashu/cashu-ts";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
-import { cacheEventsToDatabase } from "@/utils/db/db-client";
+import {
+  cacheEventsToDatabase,
+  cacheEventToDatabase,
+} from "@/utils/db/db-client";
 import { mapWithConcurrency } from "@/utils/concurrency";
+import {
+  buildProductAddress,
+  extractProductDeletionTargets,
+  isProductTombstoned,
+  type ProductTombstone,
+} from "@/utils/db/product-deletions";
 import {
   applyWalletConfigContent,
   generateCashuWalletKeypair,
@@ -45,27 +64,56 @@ import {
   buildSignedHttpRequestProofTemplate,
   SIGNED_EVENT_HEADER,
 } from "@/utils/nostr/request-auth";
+import {
+  fetchNip58ProfileBadges,
+  Nip58ProfileBadgesResult,
+} from "@/utils/nostr/badges";
+import type { Nip58ProfileBadge } from "@/utils/types/types";
 
 interface NipProfile {
   pubkey: string;
   created_at: number;
   content: { nip05?: string; [key: string]: any };
   nip05Verified: boolean;
+  badges?: Nip58ProfileBadge[];
 }
 
 type SearchFilter = Filter & { search: string };
 
 const PRODUCT_SEARCH_LIMIT = 100;
 export const NIP50_SEARCH_TIMEOUT_MS = 10_000;
+const NIP11_RELAY_INFO_TIMEOUT_MS = 3_000;
+const NIP11_RELAY_INFO_CACHE_TTL_MS = 5 * 60_000;
 const COMMUNITY_POST_BATCH_CONCURRENCY = 4;
+export const NIP58_BADGE_HYDRATION_RETRY_MS = 5_000;
+
+export interface Nip58BadgeHydrationOutcome {
+  retryAt: number | null;
+}
+
+interface Nip58BadgeHydrationState {
+  relayKey: string;
+  inFlight?: Promise<Map<string, Nip58ProfileBadgesResult>>;
+}
+
+let nip58BadgeHydrationStates = new WeakMap<
+  object,
+  Map<string, Nip58BadgeHydrationState>
+>();
+let nip58BadgeHydrationEpoch = 0;
 export const DEFAULT_NIP50_SEARCH_RELAYS = [
-  "wss://relay.nostr.band",
-  "wss://nostr.wine",
-  "wss://relay.noswhere.com",
-  "wss://search.nos.today",
-  "wss://antiprimal.net",
   "wss://relay.ditto.pub",
+  "wss://relay.plebeian.market",
+  "wss://relay.gulugulu.moe",
 ];
+
+interface Nip50RelaySupportCacheEntry {
+  expiresAt: number;
+  supportPromise: Promise<boolean>;
+}
+
+const nip50RelaySupportCache = new Map<string, Nip50RelaySupportCacheEntry>();
+let relayInfoFetchImpl: typeof globalThis.fetch | undefined;
 
 function normalizeRelayUrl(relay: string): string {
   const trimmedRelay = relay.trim();
@@ -90,22 +138,244 @@ function getUniqueRelayUrls(relays: string[]): string[] {
   return Array.from(relayMap.values());
 }
 
-function getNip50SearchRelays(relays: string[]): string[] {
-  const selectedSearchRelays = getUniqueRelayUrls(relays);
-  const selectedSearchRelaySet = new Set(
-    selectedSearchRelays.map((relay) => relay.toLowerCase())
-  );
-  const backupSearchRelays = DEFAULT_NIP50_SEARCH_RELAYS.filter(
-    (relay) => !selectedSearchRelaySet.has(relay.toLowerCase())
-  );
+function getNip58RelayKey(relays: string[]): string {
+  return getUniqueRelayUrls(relays)
+    .map((relay) => relay.toLowerCase())
+    .sort()
+    .join(",");
+}
 
-  // All user-selected relays are queried first, then any curated NIP-50 relays
-  // not already in the user's list are appended as fallbacks. Note: this means
-  // search terms are sent to every user-configured relay, not just those that
-  // advertise NIP-50 support. Non-NIP-50 relays may return unfiltered results,
-  // but fetchNip50ProductSearch post-filters via eventMatchesProductSearch so
-  // only matching events reach the UI — the only cost is extra bandwidth.
-  return [...selectedSearchRelays, ...backupSearchRelays];
+function getNip58ManagerStates(
+  nostr: object
+): Map<string, Nip58BadgeHydrationState> {
+  const existingStates = nip58BadgeHydrationStates.get(nostr);
+  if (existingStates) return existingStates;
+
+  const states = new Map<string, Nip58BadgeHydrationState>();
+  nip58BadgeHydrationStates.set(nostr, states);
+  return states;
+}
+
+function earlierRetryAt(
+  current: number | null,
+  candidate: number | null
+): number | null {
+  if (candidate === null) return current;
+  return current === null ? candidate : Math.min(current, candidate);
+}
+
+export function clearNip58ProfileBadgeHydrationCache(): void {
+  nip58BadgeHydrationStates = new WeakMap();
+  nip58BadgeHydrationEpoch += 1;
+}
+
+export async function hydrateNip58ProfileBadges(
+  nostr: NostrManager,
+  relays: string[],
+  pubkeys: string[],
+  editProfileContext: (
+    profileMap: Map<string, NipProfile | null>,
+    isLoading: boolean
+  ) => void,
+  existingProfileMap: Map<string, any> = new Map()
+): Promise<Nip58BadgeHydrationOutcome> {
+  const uniquePubkeys = Array.from(new Set(pubkeys.filter(isHexPubkey)));
+  if (!uniquePubkeys.length) return { retryAt: null };
+
+  const relayKey = getNip58RelayKey(relays);
+  const hydrationEpoch = nip58BadgeHydrationEpoch;
+  const managerStates = getNip58ManagerStates(nostr);
+  const pendingHydrations = new Set<
+    Promise<Map<string, Nip58ProfileBadgesResult>>
+  >();
+  const statesToHydrate = new Map<string, Nip58BadgeHydrationState>();
+  let retryAt: number | null = null;
+  const isCurrentState = (pubkey: string, state: Nip58BadgeHydrationState) =>
+    hydrationEpoch === nip58BadgeHydrationEpoch &&
+    managerStates.get(pubkey) === state;
+
+  for (const pubkey of uniquePubkeys) {
+    const existingState = managerStates.get(pubkey);
+    if (existingState?.relayKey === relayKey && existingState.inFlight) {
+      pendingHydrations.add(existingState.inFlight);
+      continue;
+    }
+
+    const state: Nip58BadgeHydrationState = { relayKey };
+    managerStates.set(pubkey, state);
+    statesToHydrate.set(pubkey, state);
+  }
+
+  if (statesToHydrate.size) {
+    let hydrationPromise: Promise<Map<string, Nip58ProfileBadgesResult>>;
+    hydrationPromise = (async () => {
+      const badgeResults = await fetchNip58ProfileBadges(
+        nostr,
+        relays,
+        Array.from(statesToHydrate.keys())
+      );
+      const currentResults = new Map<string, Nip58ProfileBadgesResult>();
+
+      for (const [pubkey, state] of statesToHydrate) {
+        if (!isCurrentState(pubkey, state)) continue;
+        const badgeResult = badgeResults.get(pubkey);
+        if (badgeResult) currentResults.set(pubkey, badgeResult);
+      }
+      return currentResults;
+    })().finally(() => {
+      for (const [pubkey, state] of statesToHydrate) {
+        if (!isCurrentState(pubkey, state)) continue;
+        if (state.inFlight !== hydrationPromise) continue;
+        managerStates.delete(pubkey);
+      }
+    });
+
+    for (const state of statesToHydrate.values()) {
+      state.inFlight = hydrationPromise;
+    }
+    pendingHydrations.add(hydrationPromise);
+  }
+
+  const badgeResultMaps = await Promise.all(pendingHydrations);
+  const badgeResults = new Map<string, Nip58ProfileBadgesResult>();
+  for (const resultMap of badgeResultMaps) {
+    for (const [pubkey, result] of resultMap) {
+      if (uniquePubkeys.includes(pubkey)) badgeResults.set(pubkey, result);
+    }
+  }
+
+  const profileUpdates = new Map<string, NipProfile | null>();
+  for (const pubkey of uniquePubkeys) {
+    const badgeResult = badgeResults.get(pubkey);
+    if (!badgeResult?.complete) {
+      if (badgeResult?.retryable !== false) {
+        retryAt = earlierRetryAt(
+          retryAt,
+          Date.now() + NIP58_BADGE_HYDRATION_RETRY_MS
+        );
+      }
+      continue;
+    }
+
+    const existingProfile = existingProfileMap.get(pubkey);
+    const profile: NipProfile = existingProfile || {
+      pubkey,
+      created_at: 0,
+      content: {},
+      nip05Verified: false,
+    };
+    profileUpdates.set(pubkey, {
+      ...profile,
+      badges: badgeResult.badges,
+    });
+  }
+
+  if (profileUpdates.size) {
+    editProfileContext(profileUpdates, false);
+  }
+  return { retryAt };
+}
+
+function buildRelayInformationUrl(relay: string): string | null {
+  try {
+    const url = new URL(relay);
+
+    if (url.protocol === "wss:") {
+      url.protocol = "https:";
+    } else if (url.protocol === "ws:") {
+      url.protocol = "http:";
+    } else if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return null;
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function relayInfoAdvertisesNip50(relayInfo: unknown): boolean {
+  if (!relayInfo || typeof relayInfo !== "object") return false;
+
+  const supportedNips = (relayInfo as { supported_nips?: unknown })
+    .supported_nips;
+
+  return (
+    Array.isArray(supportedNips) &&
+    supportedNips.some((nip) => nip === 50 || nip === "50")
+  );
+}
+
+async function fetchRelayAdvertisesNip50(relay: string): Promise<boolean> {
+  const fetchImpl = globalThis.fetch;
+  if (typeof fetchImpl !== "function") return false;
+
+  if (relayInfoFetchImpl !== fetchImpl) {
+    nip50RelaySupportCache.clear();
+    relayInfoFetchImpl = fetchImpl;
+  }
+
+  const relayCacheKey = relay.toLowerCase();
+  const cachedSupport = nip50RelaySupportCache.get(relayCacheKey);
+  if (cachedSupport && cachedSupport.expiresAt > Date.now()) {
+    return cachedSupport.supportPromise;
+  }
+  if (cachedSupport) nip50RelaySupportCache.delete(relayCacheKey);
+
+  const relayInformationUrl = buildRelayInformationUrl(relay);
+  if (!relayInformationUrl) return false;
+
+  const cacheEntry: Nip50RelaySupportCacheEntry = {
+    expiresAt: Date.now() + NIP11_RELAY_INFO_CACHE_TTL_MS,
+    supportPromise: Promise.resolve(false),
+  };
+
+  cacheEntry.supportPromise = (async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      NIP11_RELAY_INFO_TIMEOUT_MS
+    );
+
+    try {
+      const response = await fetchImpl(relayInformationUrl, {
+        headers: { Accept: "application/nostr+json" },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) throw new Error("Relay information request failed");
+
+      return relayInfoAdvertisesNip50(await response.json());
+    } catch {
+      if (nip50RelaySupportCache.get(relayCacheKey) === cacheEntry) {
+        nip50RelaySupportCache.delete(relayCacheKey);
+      }
+      return false;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  })();
+
+  nip50RelaySupportCache.set(relayCacheKey, cacheEntry);
+  return cacheEntry.supportPromise;
+}
+
+async function getSelectedNip50SearchRelays(
+  relays: string[]
+): Promise<string[]> {
+  const knownSearchRelaySet = new Set(
+    DEFAULT_NIP50_SEARCH_RELAYS.map((relay) => relay.toLowerCase())
+  );
+  const selectedSearchRelays = (
+    await Promise.all(
+      getUniqueRelayUrls(relays).map(async (relay) => {
+        if (knownSearchRelaySet.has(relay.toLowerCase())) return relay;
+        return (await fetchRelayAdvertisesNip50(relay)) ? relay : null;
+      })
+    )
+  ).filter((relay): relay is string => !!relay);
+
+  return selectedSearchRelays;
 }
 
 export function getProductEventKey(event: NostrEvent): string {
@@ -193,8 +463,6 @@ export async function fetchNip50ProductSearch(
     return { productEvents: [] };
   }
 
-  const searchRelays = getNip50SearchRelays(relays);
-
   const fetchSearchEvents = async (targetRelays: string[]) => {
     if (targetRelays.length === 0) return Promise.resolve([]);
 
@@ -215,14 +483,42 @@ export async function fetchNip50ProductSearch(
     return relayResults.flat();
   };
 
+  const curatedSearchEventsByRelay = new Map(
+    DEFAULT_NIP50_SEARCH_RELAYS.map((relay) => [
+      relay.toLowerCase(),
+      fetchSearchEvents([relay]),
+    ])
+  );
+  const selectedSearchRelays = await getSelectedNip50SearchRelays(relays);
+  const selectedSearchRelaySet = new Set(
+    selectedSearchRelays.map((relay) => relay.toLowerCase())
+  );
+  const selectedSearchEventsPromise = Promise.all(
+    selectedSearchRelays.map(
+      (relay) =>
+        curatedSearchEventsByRelay.get(relay.toLowerCase()) ??
+        fetchSearchEvents([relay])
+    )
+  ).then((relayResults) => relayResults.flat());
+  const fallbackSearchEventsPromise = Promise.all(
+    DEFAULT_NIP50_SEARCH_RELAYS.filter(
+      (relay) => !selectedSearchRelaySet.has(relay.toLowerCase())
+    ).map((relay) => curatedSearchEventsByRelay.get(relay.toLowerCase())!)
+  ).then((relayResults) => relayResults.flat());
+
   const filterSearchProductEvents = (events: NostrEvent[]) =>
     events.filter(
       (event) => event.id && event.sig && event.pubkey && event.kind === 30402
     );
 
-  let searchProductEvents = filterSearchProductEvents(
-    await fetchSearchEvents(searchRelays)
-  );
+  const [selectedSearchEvents, fallbackSearchEvents] = await Promise.all([
+    selectedSearchEventsPromise,
+    fallbackSearchEventsPromise,
+  ]);
+  let searchProductEvents = filterSearchProductEvents([
+    ...selectedSearchEvents,
+    ...fallbackSearchEvents,
+  ]);
   let relevantSearchProductEvents = searchProductEvents.filter((event) =>
     eventMatchesProductSearch(event, searchQuery)
   );
@@ -347,13 +643,53 @@ export const fetchAllPosts = async (
         "#t": ["shopstr-zapsnag", "zapsnag"],
       };
 
-      const fetchedEvents = await nostr.fetch(
-        [filter, zapsnagFilter],
+      const deletionFilter: Filter = {
+        kinds: [5],
+        "#k": ["30402"],
+      };
+
+      const allFetchedEvents = await nostr.fetch(
+        [filter, zapsnagFilter, deletionFilter],
         {},
         relays
       );
+      const fetchedDeletions = allFetchedEvents.filter(
+        (event): event is NostrEvent => event?.kind === 5
+      );
+      const tombstones: ProductTombstone[] = fetchedDeletions.flatMap(
+        (deletion) => {
+          const { eventIds, dTags } = extractProductDeletionTargets(deletion);
+          return [
+            ...eventIds.map((target) => ({
+              pubkey: deletion.pubkey,
+              targetType: "event" as const,
+              target,
+              deletedAt: deletion.created_at,
+            })),
+            ...dTags.map((dTag) => ({
+              pubkey: deletion.pubkey,
+              targetType: "address" as const,
+              target: buildProductAddress(deletion.pubkey, dTag),
+              deletedAt: deletion.created_at,
+            })),
+          ];
+        }
+      );
+      // Listings the author deleted must not come back from relays that
+      // still hold them.
+      const fetchedEvents = allFetchedEvents.filter(
+        (event) =>
+          event?.kind !== 5 &&
+          !(event?.kind === 30402 && isProductTombstoned(event, tombstones))
+      );
       if (!fetchedEvents.length) {
         console.error("No products found with filter: ", filter);
+      }
+
+      if (fetchedDeletions.length > 0) {
+        cacheEventsToDatabase(fetchedDeletions).catch((error) =>
+          console.error("Failed to cache deletions to database:", error)
+        );
       }
 
       // Cache valid product events to database
@@ -609,7 +945,8 @@ export const fetchShopProfile = async (
   editShopContext: (
     shopEvents: Map<string, ShopProfile>,
     isLoading: boolean
-  ) => void
+  ) => void,
+  profileCacheRead?: ProfileCacheRead
 ): Promise<{
   shopProfileMap: Map<string, ShopProfile>;
 }> => {
@@ -629,45 +966,45 @@ export const fetchShopProfile = async (
 
       // First load from database
       try {
-        const response = await fetch("/api/db/fetch-profiles");
-        if (response.ok) {
-          const profilesFromDb = await response.json();
-          const shopProfilesFromDb = profilesFromDb.filter(
-            (e: NostrEvent) =>
-              e.kind === 30019 && pubkeyShopProfileToFetch.includes(e.pubkey)
+        const requested = new Set(pubkeyShopProfileToFetch);
+        const profilesFromDb = await fetchCachedProfileEvents(
+          30019,
+          profileCacheRead
+        );
+        const shopProfilesFromDb = profilesFromDb.filter(
+          (event) => event.kind === 30019 && requested.has(event.pubkey)
+        );
+
+        if (shopProfilesFromDb.length > 0) {
+          shopProfilesFromDb.sort(
+            (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
           );
-
-          if (shopProfilesFromDb.length > 0) {
-            shopProfilesFromDb.sort(
-              (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
-            );
-            const latestEventsMap: Map<string, NostrEvent> = new Map();
-            shopProfilesFromDb.forEach((event: NostrEvent) => {
-              if (!latestEventsMap.has(event.pubkey)) {
-                latestEventsMap.set(event.pubkey, event);
-              }
-            });
-
-            latestEventsMap.forEach((event, pubkey) => {
-              try {
-                const shopProfileSetting = {
-                  pubkey: event.pubkey,
-                  content: JSON.parse(event.content),
-                  created_at: event.created_at,
-                  event: event,
-                };
-                shopProfile.set(pubkey, shopProfileSetting);
-              } catch (error) {
-                console.error(
-                  `Failed to parse shop profile from DB for pubkey: ${pubkey}`,
-                  error
-                );
-              }
-            });
-
-            if (shopProfile.size > 0) {
-              editShopContext(shopProfile, false);
+          const latestEventsMap: Map<string, NostrEvent> = new Map();
+          shopProfilesFromDb.forEach((event: NostrEvent) => {
+            if (!latestEventsMap.has(event.pubkey)) {
+              latestEventsMap.set(event.pubkey, event);
             }
+          });
+
+          latestEventsMap.forEach((event, pubkey) => {
+            try {
+              const shopProfileSetting = {
+                pubkey: event.pubkey,
+                content: JSON.parse(event.content),
+                created_at: event.created_at,
+                event: event,
+              };
+              shopProfile.set(pubkey, shopProfileSetting);
+            } catch (error) {
+              console.error(
+                `Failed to parse shop profile from DB for pubkey: ${pubkey}`,
+                error
+              );
+            }
+          });
+
+          if (shopProfile.size > 0) {
+            editShopContext(shopProfile, false);
           }
         }
       } catch (error) {
@@ -770,16 +1107,21 @@ export const fetchProfile = async (
     profileMap: Map<string, NipProfile | null>,
     isLoading: boolean
   ) => void,
-  existingProfileMap: Map<string, any> = new Map()
+  existingProfileMap: Map<string, any> = new Map(),
+  profileCacheRead?: ProfileCacheRead
 ): Promise<{
   profileMap: Map<string, NipProfile | null>;
+  badgeHydration: Promise<Nip58BadgeHydrationOutcome>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
       if (!pubkeyProfilesToFetch.length) {
         const preservedProfileMap = new Map(existingProfileMap);
         editProfileContext(preservedProfileMap, false);
-        resolve({ profileMap: preservedProfileMap });
+        resolve({
+          profileMap: preservedProfileMap,
+          badgeHydration: Promise.resolve({ retryAt: null }),
+        });
         return;
       }
 
@@ -792,51 +1134,53 @@ export const fetchProfile = async (
           !existingProfile ||
           (profile.created_at ?? 0) >= (existingProfile.created_at ?? 0)
         ) {
-          mergedProfileMap.set(profile.pubkey, profile);
+          const nextProfile =
+            profile.badges === undefined && existingProfile?.badges
+              ? { ...profile, badges: existingProfile.badges }
+              : profile;
+          mergedProfileMap.set(profile.pubkey, nextProfile);
         }
       };
 
       const dbProfileMap = new Map<string, NipProfile>();
       try {
-        const response = await fetch("/api/db/fetch-profiles");
-        if (response.ok) {
-          const profilesFromDb = await response.json();
-          const latestDbEvents = new Map<string, NostrEvent>();
+        const requested = new Set(pubkeyProfilesToFetch);
+        const profilesFromDb = await fetchCachedProfileEvents(
+          0,
+          profileCacheRead
+        );
+        const latestDbEvents = new Map<string, NostrEvent>();
 
-          for (const event of profilesFromDb) {
-            if (
-              event.kind === 0 &&
-              pubkeyProfilesToFetch.includes(event.pubkey)
-            ) {
-              const existing = latestDbEvents.get(event.pubkey);
-              if (!existing || event.created_at > existing.created_at) {
-                latestDbEvents.set(event.pubkey, event);
-              }
+        for (const event of profilesFromDb) {
+          if (event.kind === 0 && requested.has(event.pubkey)) {
+            const existing = latestDbEvents.get(event.pubkey);
+            if (!existing || event.created_at > existing.created_at) {
+              latestDbEvents.set(event.pubkey, event);
             }
           }
+        }
 
-          for (const [pubkey, event] of latestDbEvents.entries()) {
-            const content = parseJsonSafely<Record<string, any>>(event.content);
-            if (!content) {
-              console.warn(`Skipping invalid profile JSON from DB: ${pubkey}`);
-              continue;
-            }
-
-            const profile: NipProfile = {
-              pubkey: event.pubkey,
-              created_at: event.created_at,
-              content,
-              nip05Verified: false,
-            };
-            dbProfileMap.set(pubkey, profile);
-            updateProfileIfNewer(profile);
+        for (const [pubkey, event] of latestDbEvents.entries()) {
+          const content = parseJsonSafely<Record<string, any>>(event.content);
+          if (!content) {
+            console.warn(`Skipping invalid profile JSON from DB: ${pubkey}`);
+            continue;
           }
 
-          if (dbProfileMap.size > 0) {
-            editProfileContext(new Map(mergedProfileMap), false);
-            await verifyProfilesNip05(dbProfileMap);
-            editProfileContext(new Map(mergedProfileMap), false);
-          }
+          const profile: NipProfile = {
+            pubkey: event.pubkey,
+            created_at: event.created_at,
+            content,
+            nip05Verified: false,
+          };
+          dbProfileMap.set(pubkey, profile);
+          updateProfileIfNewer(profile);
+        }
+
+        if (dbProfileMap.size > 0) {
+          editProfileContext(new Map(mergedProfileMap), false);
+          await verifyProfilesNip05(dbProfileMap);
+          editProfileContext(new Map(mergedProfileMap), false);
         }
       } catch (error) {
         console.error("Failed to fetch profiles from database: ", error);
@@ -898,8 +1242,19 @@ export const fetchProfile = async (
       }
 
       editProfileContext(new Map(mergedProfileMap), false);
-
-      resolve({ profileMap: mergedProfileMap });
+      const badgeHydration = hydrateNip58ProfileBadges(
+        nostr,
+        relays,
+        pubkeyProfilesToFetch,
+        editProfileContext,
+        mergedProfileMap
+      ).catch((error) => {
+        console.error("Failed to fetch NIP-58 profile badges:", error);
+        return {
+          retryAt: Date.now() + NIP58_BADGE_HYDRATION_RETRY_MS,
+        };
+      });
+      resolve({ profileMap: mergedProfileMap, badgeHydration });
     } catch (error) {
       reject(error);
     }
@@ -1040,17 +1395,13 @@ export const fetchGiftWrappedChatsAndMessages = async (
           ) {
             continue;
           }
-          const recipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
-          if (typeof recipientPubkey !== "string") {
-            console.error(
-              `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap",
-                ${tagsMap},
-                ${event}`
+          const recipientPubkey = tagsMap.get("p"); // pubkey you sent the message to
+          if (!recipientPubkey) {
+            console.warn(
+              "Skipping gift-wrapped chat message without recipient p tag",
+              { wrappedEventId: event.id }
             );
-            alert(
-              `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap`
-            );
-            return;
+            continue;
           }
           const cachedMessage = chatMessagesFromCache.get(event.id);
           let chatMessage: NostrMessageEvent;
@@ -1303,97 +1654,193 @@ export const fetchAllFollows = async (
   nostr: NostrManager,
   relays: string[],
   editFollowsContext: (
+    directFollowList: string[],
     followList: string[],
     firstDegreeFollowsLength: number,
     isLoading: boolean
   ) => void,
   userPubkey?: string
 ): Promise<{
+  directFollowList: string[];
   followList: string[];
+  firstDegreeFollowsLength: number;
 }> => {
   const wot = getLocalStorageData().wot;
 
   if (!userPubkey) {
-    editFollowsContext([], 0, false);
+    editFollowsContext([], [], 0, false);
     return {
+      directFollowList: [],
       followList: [],
+      firstDegreeFollowsLength: 0,
     };
   }
 
-  const fetchFollows = async (userPubkey: string) => {
-    let secondDegreeFollowsArrayFromRelay: string[] = [];
-    let firstDegreeFollowsLength = 0;
-    const followsSet: Set<string> = new Set();
+  const localContactListEvent = getLatestLocalContactListEvent(userPubkey);
 
-    // fetch first-degree follows
-    const fetchedEvents = await nostr.fetch(
-      [
-        {
-          kinds: [3],
-          authors: [userPubkey],
-        },
-      ],
-      {},
-      relays
+  const extractValidFollowTags = (
+    tags: string[][],
+    excluded = new Set<string>()
+  ) =>
+    tags
+      .filter((tag) => tag[0] === "p")
+      .map((tag) => tag[1])
+      .filter(
+        (pubkey) => isHexPubkey(pubkey!) && !excluded.has(pubkey!)
+      ) as string[];
+
+  const getLatestEventByAuthor = (events: NostrEvent[]) => {
+    const latestByAuthor = new Map<string, NostrEvent>();
+    for (const event of events) {
+      const existing = latestByAuthor.get(event.pubkey);
+      latestByAuthor.set(
+        event.pubkey,
+        existing ? selectPreferredReplaceableEvent(event, existing) : event
+      );
+    }
+    return latestByAuthor;
+  };
+
+  let dbContactListEvent: NostrEvent | null = null;
+  if (localContactListEvent?.id) {
+    const localDirectFollows = Array.from(
+      new Set(extractValidFollowTags(localContactListEvent.tags))
     );
+    editFollowsContext(
+      localDirectFollows,
+      localDirectFollows,
+      localDirectFollows.length,
+      true
+    );
+  }
 
-    const latestContactListEvent = fetchedEvents.reduce<NostrEvent | null>(
-      (latestEvent, event) => {
-        if (!latestEvent || event.created_at > latestEvent.created_at) {
-          return event;
+  try {
+    // Bound the DB cache lookup so a hung API route can't stall the whole
+    // follows pipeline before the relay fetch even starts.
+    const response = await fetch(
+      `/api/db/fetch-contacts?pubkey=${encodeURIComponent(userPubkey)}`,
+      typeof AbortSignal !== "undefined" &&
+        typeof AbortSignal.timeout === "function"
+        ? { signal: AbortSignal.timeout(2500) }
+        : undefined
+    );
+    if (response.ok) {
+      const data = await response.json();
+      if (data?.contactList) {
+        dbContactListEvent = data.contactList as NostrEvent;
+        const dbDirectFollows = Array.from(
+          new Set(extractValidFollowTags(dbContactListEvent.tags))
+        );
+        if (!localContactListEvent?.id && dbDirectFollows.length > 0) {
+          editFollowsContext(
+            dbDirectFollows,
+            dbDirectFollows,
+            dbDirectFollows.length,
+            true
+          );
         }
-        return latestEvent;
-      },
-      null
-    );
+      }
+    }
+  } catch (error) {
+    console.error("Failed to fetch contact list from database:", error);
+  }
 
-    if (!latestContactListEvent) {
-      return {
-        followsArrayFromRelay: [],
-        firstDegreeFollowsLength: 0,
-      };
+  const fetchFollows = async (authorPubkey: string) => {
+    // fetch first-degree follows
+    let fetchedFirstDegreeEvents: NostrEvent[] = [];
+    try {
+      fetchedFirstDegreeEvents = (await nostr.fetch(
+        [{ kinds: [3], authors: [authorPubkey] }],
+        {},
+        relays
+      )) as NostrEvent[];
+    } catch (error) {
+      console.error(
+        "Relay fetch for first-degree follows failed, falling back to DB:",
+        error
+      );
     }
 
-    const authors: string[] = [];
-    const directFollowsArrayFromRelay = latestContactListEvent.tags
-      .map((tag) => tag[1])
-      .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
-    directFollowsArrayFromRelay.forEach((pubkey) => followsSet.add(pubkey!));
-    firstDegreeFollowsLength = directFollowsArrayFromRelay.length;
-    authors.push(...(directFollowsArrayFromRelay as string[]));
+    const allFirstDegreeEvents = [...fetchedFirstDegreeEvents];
+    if (
+      dbContactListEvent &&
+      authorPubkey === userPubkey &&
+      dbContactListEvent.id
+    ) {
+      allFirstDegreeEvents.push(dbContactListEvent);
+    }
+    if (
+      localContactListEvent &&
+      authorPubkey === userPubkey &&
+      localContactListEvent.id
+    ) {
+      allFirstDegreeEvents.push(localContactListEvent);
+    }
 
-    if (!authors.length) {
+    const latestFirstDegreeEvent =
+      pickPreferredReplaceableEvent(allFirstDegreeEvents);
+
+    if (
+      latestFirstDegreeEvent &&
+      (!dbContactListEvent ||
+        latestFirstDegreeEvent.id !== dbContactListEvent.id)
+    ) {
+      cacheEventToDatabase(latestFirstDegreeEvent).catch((error) =>
+        console.error("Failed to cache initial contact list:", error)
+      );
+    }
+
+    const directFollowList = latestFirstDegreeEvent
+      ? Array.from(new Set(extractValidFollowTags(latestFirstDegreeEvent.tags)))
+      : [];
+
+    const firstDegreeFollowsLength = directFollowList.length;
+
+    if (directFollowList.length > 0) {
+      editFollowsContext(
+        directFollowList,
+        directFollowList,
+        firstDegreeFollowsLength,
+        true
+      );
+    }
+
+    if (!directFollowList.length) {
       return {
+        directFollowList,
         followsArrayFromRelay: [],
         firstDegreeFollowsLength,
       };
     }
 
-    // Fetch second-degree follows
-    const fetchedSecondDegreeEvents = await nostr.fetch(
-      [
-        {
-          kinds: [3],
-          authors,
-        },
-      ],
-      {},
-      relays
-    );
+    const followsSet: Set<string> = new Set(directFollowList);
+    let secondDegreeFollowsArrayFromRelay: string[] = [];
 
-    const latestSecondDegreeEvents = new Map<string, NostrEvent>();
-    for (const followEvent of fetchedSecondDegreeEvents) {
-      const latestEvent = latestSecondDegreeEvents.get(followEvent.pubkey);
-      if (!latestEvent || followEvent.created_at > latestEvent.created_at) {
-        latestSecondDegreeEvents.set(followEvent.pubkey, followEvent);
-      }
+    // Fetch second-degree follows
+    let fetchedSecondDegreeEvents: NostrEvent[] = [];
+    try {
+      fetchedSecondDegreeEvents = (await nostr.fetch(
+        [
+          {
+            kinds: [3],
+            authors: directFollowList,
+          },
+        ],
+        {},
+        relays
+      )) as NostrEvent[];
+    } catch (error) {
+      console.error("Relay fetch for second-degree follows failed:", error);
     }
 
-    for (const followEvent of latestSecondDegreeEvents.values()) {
-      const validFollowTags = followEvent.tags
-        .map((tag) => tag[1])
-        .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
-      secondDegreeFollowsArrayFromRelay.push(...(validFollowTags as string[]));
+    for (const followEvent of getLatestEventByAuthor(
+      fetchedSecondDegreeEvents
+    ).values()) {
+      const validFollowTags = extractValidFollowTags(
+        followEvent.tags,
+        followsSet
+      );
+      secondDegreeFollowsArrayFromRelay.push(...validFollowTags);
     }
 
     const pubkeyCount: Map<string, number> = new Map();
@@ -1406,23 +1853,27 @@ export const fetchAllFollows = async (
       );
     // Concatenate arrays ensuring uniqueness
     const followsArrayFromRelay = Array.from(
-      new Set(
-        (directFollowsArrayFromRelay as string[]).concat(
-          secondDegreeFollowsArrayFromRelay
-        )
-      )
+      new Set(directFollowList.concat(secondDegreeFollowsArrayFromRelay))
     );
     return {
+      directFollowList,
       followsArrayFromRelay,
       firstDegreeFollowsLength,
     };
   };
 
-  const { followsArrayFromRelay, firstDegreeFollowsLength } =
+  const { directFollowList, followsArrayFromRelay, firstDegreeFollowsLength } =
     await fetchFollows(userPubkey);
-  editFollowsContext(followsArrayFromRelay, firstDegreeFollowsLength, false);
+  editFollowsContext(
+    directFollowList,
+    followsArrayFromRelay,
+    firstDegreeFollowsLength,
+    false
+  );
   return {
+    directFollowList,
     followList: followsArrayFromRelay,
+    firstDegreeFollowsLength,
   };
 };
 
