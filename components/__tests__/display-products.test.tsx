@@ -951,6 +951,38 @@ describe("DisplayProducts deletion", () => {
     );
   });
 
+  it("deletes a relay search result that is not in the product context by event id only", async () => {
+    const relayProduct = {
+      id: "relay-listing",
+      pubkey: "viewer-pubkey",
+      created_at: 10,
+      kind: 30402,
+      tags: [
+        ["d", "coffee"],
+        ["title", "Coffee Beans"],
+        ["price", "12", "USD"],
+        ["image", "https://example.com/coffee.png"],
+      ],
+      content: "Fresh coffee",
+      sig: "relay-sig",
+    } as NostrEvent;
+    const nostr = { fetch: jest.fn().mockResolvedValue([relayProduct]) };
+    renderDisplayProducts({ nostr, productEvents: [] });
+
+    fireEvent.click(await screen.findByTestId("product-relay-listing"));
+    fireEvent.click(screen.getByText("Delete listing"));
+
+    await waitFor(() =>
+      expect(deleteEvent).toHaveBeenCalledWith(
+        nostr,
+        undefined,
+        ["relay-listing"],
+        undefined,
+        []
+      )
+    );
+  });
+
   it("deletes a listing by event id and address", async () => {
     const nostr = await deleteOwnProduct({
       id: "listing",
