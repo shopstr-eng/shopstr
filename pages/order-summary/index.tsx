@@ -128,6 +128,7 @@ export default function OrderSummary() {
   const formatPaymentMethod = (method: string) => {
     const methods: Record<string, string> = {
       lightning: "Lightning Network",
+      hodl: "Lightning Escrow",
       cashu: "Cashu eCash",
       ecash: "Cashu eCash",
       nwc: "Nostr Wallet Connect",
@@ -175,11 +176,14 @@ export default function OrderSummary() {
                   <CheckCircleIcon className="h-10 w-10 text-green-600 dark:text-green-400" />
                 </div>
                 <h1 className="text-light-text dark:text-dark-text text-2xl font-bold sm:text-3xl">
-                  Order Confirmed!
+                  {orderData.paymentMethod === "hodl"
+                    ? "Payment Held in Escrow"
+                    : "Order Confirmed!"}
                 </h1>
                 <p className="mt-2 text-center text-gray-600 dark:text-gray-400">
-                  The seller has been notified and will receive your order
-                  details.
+                  {orderData.paymentMethod === "hodl"
+                    ? "Your order is saved. Check Orders for the hold deadline, confirm receipt after delivery, or raise a dispute before the hold expires."
+                    : "The seller has been notified and will receive your order details."}
                 </p>
                 {orderData.orderId && (
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">

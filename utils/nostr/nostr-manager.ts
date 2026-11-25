@@ -201,6 +201,10 @@ export class NostrManager {
     relayUrls?: string[],
     timeout?: number
   ): Promise<NostrFetchResult> {
+    const urls = [
+      ...new Set(relayUrls ?? this.relays.map((relay) => relay.url)),
+    ];
+    if (urls.length === 0) return { events: [], complete: false };
     return await newPromiseWithTimeout(
       async (resolve, _reject, abortSignal) => {
         if (!params) {
@@ -260,11 +264,49 @@ export class NostrManager {
           }
           return onEose!();
         };
-
-        sub = await this.subscribe(filters, params, relayUrls);
-        if (abortSignal.aborted) {
-          await closeSubIfNeeded();
-        }
+        abortSignal.addEventListener("abort", () => finish(false));
+        await Promise.all(
+          urls.map(async (url) => {
+            const sub = await this.subscribe(
+              filters,
+              {
+                ...params,
+                // nostr-tools synthesizes EOSE when this timer fires. Keep it
+                // beyond our aggregate deadline, which reports an incomplete read.
+                maxWait: (timeout ?? 60_000) + 1_000,
+                onevent: (event) => {
+                  if (resolved || seen.has(event.id)) return;
+                  seen.add(event.id);
+                  fetchedEvents.push(event);
+                  params?.onevent?.(event);
+                },
+                oneose: () => {
+                  // subscribeMap also synthesizes EOSE immediately BEFORE onclose
+                  // on failure. One subscription per relay plus this microtask lets
+                  // us observe that failure instead of certifying a complete read.
+                  queueMicrotask(() => {
+                    if (resolved) return;
+                    ended.add(url);
+                    if (ended.size === urls.length) {
+                      finish(!failed);
+                      if (!failed) params?.oneose?.();
+                    }
+                  });
+                },
+                onclose: (reasons) => {
+                  if (resolved || ended.has(url)) return;
+                  failed = true;
+                  ended.add(url);
+                  params?.onclose?.(reasons);
+                  if (ended.size === urls.length) finish(false);
+                },
+              },
+              [url]
+            );
+            if (resolved) await sub.close();
+            else subscriptions.push(sub);
+          })
+        );
       },
       { timeout }
     );
