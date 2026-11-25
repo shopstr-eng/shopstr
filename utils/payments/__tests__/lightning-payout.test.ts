@@ -337,4 +337,240 @@ describe("executeSellerLightningPayout", () => {
       changeAmount: 0,
     });
   });
+
+  describe("error handling and ecash fallback resilience", () => {
+    it.each(["", "   "])(
+      "falls back to ecash when lnurl is blank ('%s')",
+      async (emptyLnurl) => {
+        const wallet = makeWallet(jest.fn());
+        const sellerProofs = [makeProof(1000)];
+
+        const result = await executeSellerLightningPayout(
+          wallet,
+          emptyLnurl,
+          1000,
+          sellerProofs
+        );
+
+        expect(result).toEqual({
+          status: "fallback",
+          reason: "no-quote",
+          fallbackProofs: sellerProofs,
+          fallbackAmount: 1000,
+          errorMessage: "No valid Lightning address provided",
+        });
+        expect(mockFetch).not.toHaveBeenCalled();
+        expect(mockRequestInvoice).not.toHaveBeenCalled();
+      }
+    );
+
+    it.each([
+      [2, -1],
+      [3, 0],
+    ])(
+      "falls back to ecash when sellerAmount (%i) results in non-positive payout (%i sats)",
+      async (sellerAmount, calculatedAmount) => {
+        const wallet = makeWallet(jest.fn());
+        const sellerProofs = [makeProof(sellerAmount)];
+
+        const result = await executeSellerLightningPayout(
+          wallet,
+          "seller@getalby.com",
+          sellerAmount,
+          sellerProofs
+        );
+
+        expect(result).toEqual({
+          status: "fallback",
+          reason: "no-quote",
+          fallbackProofs: sellerProofs,
+          fallbackAmount: sellerAmount,
+          errorMessage: `Seller payout amount after fee deduction is too low for Lightning payout (${calculatedAmount} sats)`,
+        });
+        expect(mockFetch).not.toHaveBeenCalled();
+        expect(mockRequestInvoice).not.toHaveBeenCalled();
+      }
+    );
+
+    it("falls back to ecash when LightningAddress fetch fails (e.g. 400 Bad Request or network error)", async () => {
+      mockFetch.mockRejectedValueOnce(
+        new Error("Failed to fetch lnurl info: 400 Bad Request")
+      );
+      const wallet = makeWallet(jest.fn());
+      const sellerProofs = [makeProof(1000)];
+
+      const result = await executeSellerLightningPayout(
+        wallet,
+        "seller@invalid.com",
+        1000,
+        sellerProofs
+      );
+
+      expect(result).toEqual({
+        status: "fallback",
+        reason: "no-quote",
+        fallbackProofs: sellerProofs,
+        fallbackAmount: 1000,
+        errorMessage: "Failed to fetch lnurl info: 400 Bad Request",
+      });
+      expect(mockRequestInvoice).not.toHaveBeenCalled();
+    });
+
+    it("falls back to ecash when requestInvoice throws (e.g. amount below minimum)", async () => {
+      mockRequestInvoice.mockRejectedValueOnce(
+        new Error("Amount is below minimum limit of 1000 sats")
+      );
+      const wallet = makeWallet(jest.fn());
+      const sellerProofs = [makeProof(500)];
+
+      const result = await executeSellerLightningPayout(
+        wallet,
+        "seller@getalby.com",
+        500,
+        sellerProofs
+      );
+
+      expect(result).toEqual({
+        status: "fallback",
+        reason: "no-quote",
+        fallbackProofs: sellerProofs,
+        fallbackAmount: 500,
+        errorMessage: "Amount is below minimum limit of 1000 sats",
+      });
+    });
+
+    it("falls back to ecash when requestInvoice returns an empty paymentRequest", async () => {
+      mockRequestInvoice.mockResolvedValueOnce({ paymentRequest: "" });
+      const wallet = makeWallet(jest.fn());
+      const sellerProofs = [makeProof(1000)];
+
+      const result = await executeSellerLightningPayout(
+        wallet,
+        "seller@getalby.com",
+        1000,
+        sellerProofs
+      );
+
+      expect(result).toEqual({
+        status: "fallback",
+        reason: "no-quote",
+        fallbackProofs: sellerProofs,
+        fallbackAmount: 1000,
+        errorMessage: "Lightning address returned an empty invoice",
+      });
+    });
+
+    it("falls back to ecash when wallet.loadMint throws", async () => {
+      const wallet = makeWallet(jest.fn());
+      wallet.loadMint.mockRejectedValueOnce(new Error("Mint offline"));
+      const sellerProofs = [makeProof(1000)];
+
+      const result = await executeSellerLightningPayout(
+        wallet,
+        "seller@getalby.com",
+        1000,
+        sellerProofs
+      );
+
+      expect(result).toEqual({
+        status: "fallback",
+        reason: "no-quote",
+        fallbackProofs: sellerProofs,
+        fallbackAmount: 1000,
+        errorMessage: "Mint offline",
+      });
+      expect(mockRequestInvoice).not.toHaveBeenCalled();
+    });
+
+    it("falls back to ecash when createMeltQuoteBolt11 throws (e.g. no route found)", async () => {
+      const createMeltQuoteBolt11 = jest
+        .fn()
+        .mockRejectedValueOnce(
+          new Error("No route found to lightning destination")
+        );
+      const wallet = makeWallet(createMeltQuoteBolt11);
+      const sellerProofs = [makeProof(1000)];
+
+      const result = await executeSellerLightningPayout(
+        wallet,
+        "seller@getalby.com",
+        1000,
+        sellerProofs
+      );
+
+      expect(result).toEqual({
+        status: "fallback",
+        reason: "no-quote",
+        fallbackProofs: sellerProofs,
+        fallbackAmount: 1000,
+        errorMessage: "No route found to lightning destination",
+      });
+    });
+
+    it("falls back to ecash when meltQuote has non-positive or invalid total", async () => {
+      const createMeltQuoteBolt11 = jest.fn().mockResolvedValue({
+        amount: { toNumber: () => 0 },
+        fee_reserve: { toNumber: () => 0 },
+        quote: "quote-id",
+      });
+      const wallet = makeWallet(createMeltQuoteBolt11);
+      const sellerProofs = [makeProof(1000)];
+
+      const result = await executeSellerLightningPayout(
+        wallet,
+        "seller@getalby.com",
+        1000,
+        sellerProofs
+      );
+
+      expect(result).toEqual({
+        status: "fallback",
+        reason: "no-quote",
+        fallbackProofs: sellerProofs,
+        fallbackAmount: 1000,
+        errorMessage: "Invalid melt quote total amount",
+      });
+      expect(safeSwap).not.toHaveBeenCalled();
+    });
+
+    it("handles meltQuote and meltOutcome with primitive numbers (non-Amount objects)", async () => {
+      const meltQuote = {
+        amount: 978,
+        fee_reserve: 5,
+        quote: "quote-id",
+      } as any;
+      const createMeltQuoteBolt11 = jest.fn().mockResolvedValue(meltQuote);
+      const wallet = makeWallet(createMeltQuoteBolt11);
+      const keepProof = makeProof(17);
+      const meltChangeProof = makeProof(3);
+      jest.mocked(safeSwap).mockResolvedValue({
+        status: "swapped",
+        keep: [keepProof],
+        send: [makeProof(983)],
+      });
+      jest.mocked(safeMeltProofs).mockResolvedValue({
+        status: "paid",
+        meltQuote: {
+          amount: 978,
+          fee_reserve: 0,
+          quote: "quote-id",
+        } as any,
+        changeProofs: [meltChangeProof],
+      });
+
+      const result = await executeSellerLightningPayout(
+        wallet,
+        "seller@getalby.com",
+        1000,
+        [makeProof(1000)]
+      );
+
+      expect(result).toEqual({
+        status: "completed",
+        meltAmount: 978,
+        changeProofs: [keepProof, meltChangeProof],
+        changeAmount: 20,
+      });
+    });
+  });
 });
