@@ -40,6 +40,7 @@ import {
 import { hashToCurve } from "@cashu/cashu-ts";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+import { unwrapGiftWrap } from "@/utils/nostr/unwrap-gift-wrap";
 import {
   cacheEventsToDatabase,
   cacheEventToDatabase,
@@ -1354,35 +1355,17 @@ export const fetchGiftWrappedChatsAndMessages = async (
         );
 
         for (const event of fetchedEvents) {
-          let messageEvent;
+          // Anyone can send a gift wrap to this pubkey. Skip anything that
+          // does not unwrap cleanly instead of failing the whole inbox.
+          const rumor = await unwrapGiftWrap(event, signer!);
+          if (!rumor) continue;
+          // Rumors are unsigned; sig is blanked below.
+          const messageEvent = rumor as NostrEvent;
 
-          const sealEventString = await signer!.decrypt(
-            event.pubkey,
-            event.content
-          );
-          if (sealEventString) {
-            const sealEvent = JSON.parse(sealEventString);
-            if (sealEvent?.kind === 13) {
-              const messageEventString = await signer!.decrypt(
-                sealEvent.pubkey,
-                sealEvent.content
-              );
-              if (messageEventString) {
-                const messageEventCheck = JSON.parse(messageEventString);
-                if (messageEventCheck?.pubkey === sealEvent.pubkey) {
-                  messageEvent = messageEventCheck;
-                }
-              } else {
-                continue;
-              }
-            }
-          } else {
-            continue;
-          }
           const senderPubkey = messageEvent.pubkey;
 
           const tagsMap: Map<string, string> = new Map(
-            messageEvent.tags.map(([k, v]: [string, string]) => [k, v])
+            messageEvent.tags.map(([k, v]) => [k, v] as [string, string])
           );
           const subject = tagsMap.has("subject")
             ? tagsMap.get("subject")
