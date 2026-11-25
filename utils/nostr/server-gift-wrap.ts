@@ -38,7 +38,12 @@ function randomPastTimestamp(): number {
 export async function sendServerGiftWrappedDm(params: {
   senderPrivkeyHexOrNsec: string;
   recipientPubkey: string;
-  payload: unknown;
+  payload?: unknown;
+  // Plain-text body and extra rumor tags, for messages the web app parses by
+  // subject and tags (such as order payments). Without `content` the payload
+  // is sent as JSON.
+  content?: string;
+  tags?: string[][];
   relayManager?: McpRelayManager;
   waitForRelayPublish?: boolean;
 }): Promise<void> {
@@ -46,6 +51,8 @@ export async function sendServerGiftWrappedDm(params: {
     senderPrivkeyHexOrNsec,
     recipientPubkey,
     payload,
+    content,
+    tags = [],
     relayManager,
     waitForRelayPublish = true,
   } = params;
@@ -58,8 +65,8 @@ export async function sendServerGiftWrappedDm(params: {
     pubkey: senderPubkey,
     created_at: randomPastTimestamp(),
     kind: 14,
-    tags: [["p", recipientPubkey]],
-    content: JSON.stringify(payload),
+    tags: [["p", recipientPubkey], ...tags],
+    content: content ?? JSON.stringify(payload),
   };
   const rumor = {
     ...rumorBare,
