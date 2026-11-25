@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { finalizeEvent } from "nostr-tools";
 
+import { finalizeEvent, generateSecretKey } from "nostr-tools";
+
 import { NostrManager } from "../dist/nostr-manager.js";
 
 const privateKey = new Uint8Array(32).fill(1);
@@ -60,6 +62,33 @@ test("relay reconnect refreshes the underlying relay handle", async () => {
   await manager.close();
 });
 
+test("relay connection attempts use a 4000ms default timeout", async () => {
+  const manager = new NostrManager([], { gcInterval: 60_000 });
+  const calls = [];
+
+  manager.pool = {
+    async ensureRelay(url, params) {
+      calls.push({ url, params });
+      return {
+        close() {},
+      };
+    },
+  };
+
+  try {
+    manager.addRelay("wss://relay.example.com");
+
+    assert.deepEqual(calls, [
+      {
+        url: "wss://relay.example.com",
+        params: { connectionTimeout: 4000 },
+      },
+    ]);
+  } finally {
+    await manager.close();
+  }
+});
+
 test("addRelay handles rejected ensureRelay promises", async () => {
   const manager = new NostrManager([], { gcInterval: 60_000 });
   const unhandledReasons = [];
@@ -84,6 +113,60 @@ test("addRelay handles rejected ensureRelay promises", async () => {
     await assert.doesNotReject(manager.relays[0].disconnect());
   } finally {
     process.removeListener("unhandledRejection", onUnhandledRejection);
+    await manager.close();
+  }
+});
+
+test("fetch resolves collected events when the aggregate timeout fires", async () => {
+  const manager = new NostrManager([], {
+    gcInterval: 60_000,
+    readable: true,
+  });
+  const product = finalizeEvent(
+    {
+      kind: 30402,
+      tags: [],
+      content: "",
+      created_at: 1,
+    },
+    generateSecretKey()
+  );
+  let subscribeParams;
+  let closeCount = 0;
+
+  manager.pool = {
+    async ensureRelay() {
+      return {
+        close() {},
+      };
+    },
+    subscribeMap(_requests, params) {
+      subscribeParams = params;
+      return {
+        close() {
+          closeCount += 1;
+        },
+      };
+    },
+  };
+
+  try {
+    manager.addRelay("wss://relay.example.com");
+    const fetchPromise = manager.fetch(
+      [{ kinds: [30402] }],
+      {},
+      ["wss://relay.example.com"],
+      { timeoutMs: 50 }
+    );
+
+    await new Promise((resolve) => setImmediate(resolve));
+    subscribeParams.onevent(product);
+
+    const events = await fetchPromise;
+
+    assert.deepEqual(events, [product]);
+    assert.equal(closeCount, 1);
+  } finally {
     await manager.close();
   }
 });
