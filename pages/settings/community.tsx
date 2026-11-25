@@ -68,7 +68,7 @@ const CommunityManagementPage = () => {
     }
   };
 
-  const handleDelete = async (communityId: string) => {
+  const handleDelete = async (community: Community) => {
     if (!signer || !nostr) return;
 
     const isConfirmed = window.confirm(
@@ -77,12 +77,17 @@ const CommunityManagementPage = () => {
 
     if (isConfirmed) {
       try {
-        await deleteEvent(nostr, signer, [communityId]);
+        // Communities are addressable events, so the deletion request names
+        // both the event id and its address (NIP-09) so that relays holding
+        // older versions drop them too.
+        await deleteEvent(nostr, signer, [community.id], community.kind, [
+          `${community.kind}:${community.pubkey}:${community.d}`,
+        ]);
         alert(
           "Community deletion request sent. It may take a few moments to disappear from relays."
         );
         // Optimistically remove from the local list
-        setMyCommunities((prev) => prev.filter((c) => c.id !== communityId));
+        setMyCommunities((prev) => prev.filter((c) => c.id !== community.id));
       } catch (error) {
         console.error("Failed to delete community", error);
         alert("Failed to delete community.");
@@ -156,7 +161,7 @@ const CommunityManagementPage = () => {
                             size="sm"
                             color="danger"
                             variant="flat"
-                            onClick={() => handleDelete(community.id)}
+                            onClick={() => handleDelete(community)}
                           >
                             Delete
                           </Button>
