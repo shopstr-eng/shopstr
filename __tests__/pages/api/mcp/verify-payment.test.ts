@@ -9,16 +9,16 @@ const recordRequestMock = jest.fn();
 
 const getMcpOrderMock = jest.fn();
 const updateMcpOrderPaymentMock = jest.fn();
+const getMcpLightningPaymentMock = jest.fn();
+const claimMcpLightningMintMock = jest.fn();
+const releaseMcpLightningClaimMock = jest.fn();
+const setMcpLightningTokenMock = jest.fn();
+const mintPaidQuoteMock = jest.fn();
+const sendOrderPaymentDmMock = jest.fn();
 
 const walletLoadMintMock = jest.fn();
 const walletCheckMintQuoteBolt11Mock = jest.fn();
 const withMintRetryMock = jest.fn();
-const getTrustedMintUrlMock = jest.fn();
-
-const pendingLightningPaymentsMap = new Map<
-  string,
-  { quote: string; mintUrl: string; amount: number; orderId: string }
->();
 
 jest.mock("@/utils/mcp/auth", () => ({
   authenticateRequest: (...args: unknown[]) => authenticateRequestMock(...args),
@@ -38,14 +38,19 @@ jest.mock("@/mcp/tools/purchase-tools", () => ({
   getMcpOrder: (...args: unknown[]) => getMcpOrderMock(...args),
   updateMcpOrderPayment: (...args: unknown[]) =>
     updateMcpOrderPaymentMock(...args),
+  getMcpLightningPayment: (...args: unknown[]) =>
+    getMcpLightningPaymentMock(...args),
+  claimMcpLightningMint: (...args: unknown[]) =>
+    claimMcpLightningMintMock(...args),
+  releaseMcpLightningClaim: (...args: unknown[]) =>
+    releaseMcpLightningClaimMock(...args),
+  setMcpLightningToken: (...args: unknown[]) =>
+    setMcpLightningTokenMock(...args),
 }));
 
-jest.mock("@/pages/api/mcp/create-order", () => ({
-  pendingLightningPayments: pendingLightningPaymentsMap,
-}));
-
-jest.mock("@/utils/cashu/trusted-mints", () => ({
-  getTrustedMintUrl: (...args: unknown[]) => getTrustedMintUrlMock(...args),
+jest.mock("@/utils/mcp/order-payment", () => ({
+  mintPaidQuote: (...args: unknown[]) => mintPaidQuoteMock(...args),
+  sendOrderPaymentDm: (...args: unknown[]) => sendOrderPaymentDmMock(...args),
 }));
 
 jest.mock("@/utils/cashu/mint-retry-service", () => ({
@@ -77,6 +82,20 @@ const BUYER_PUBKEY = "b".repeat(64);
 const SELLER_PUBKEY = "c".repeat(64);
 const OTHER_PUBKEY = "d".repeat(64);
 const DEFAULT_MINT = "https://mint.example.com";
+
+function makePayment(overrides: Record<string, unknown> = {}) {
+  return {
+    order_id: "order-123",
+    quote_id: "quote_abc",
+    mint_url: DEFAULT_MINT,
+    amount_sats: 1000,
+    product_address: `30402:${SELLER_PUBKEY}:listing-1`,
+    selected_specs: { size: "L" },
+    seller_token: null,
+    claim_age_seconds: null,
+    ...overrides,
+  };
+}
 
 function makeApiKey(overrides: Partial<ApiKeyRecord> = {}): ApiKeyRecord {
   return {
@@ -177,8 +196,6 @@ describe("POST /api/mcp/verify-payment", () => {
     jest.resetModules();
     jest.clearAllMocks();
 
-    pendingLightningPaymentsMap.clear();
-
     applyRateLimitMock.mockReturnValue(true);
     recordRequestMock.mockImplementation(() => undefined);
     initializeApiKeysTableMock.mockResolvedValue(undefined);
@@ -194,7 +211,12 @@ describe("POST /api/mcp/verify-payment", () => {
       amount: 1000,
     });
     withMintRetryMock.mockImplementation((fn: () => Promise<unknown>) => fn());
-    getTrustedMintUrlMock.mockReturnValue(DEFAULT_MINT);
+    getMcpLightningPaymentMock.mockResolvedValue(makePayment());
+    claimMcpLightningMintMock.mockResolvedValue(true);
+    releaseMcpLightningClaimMock.mockResolvedValue(undefined);
+    setMcpLightningTokenMock.mockResolvedValue(undefined);
+    mintPaidQuoteMock.mockResolvedValue("cashuBminted");
+    sendOrderPaymentDmMock.mockResolvedValue(undefined);
 
     const mod = await import("@/pages/api/mcp/verify-payment");
     handler = mod.default;
@@ -303,13 +325,6 @@ describe("POST /api/mcp/verify-payment", () => {
       authenticateRequestMock.mockResolvedValueOnce(
         makeApiKey({ pubkey: BUYER_PUBKEY })
       );
-      pendingLightningPaymentsMap.set("order-123", {
-        quote: "quote_abc",
-        mintUrl: DEFAULT_MINT,
-        amount: 1000,
-        orderId: "order-123",
-      });
-
       const req = createMockRequest();
       const res = createMockResponse();
 
@@ -328,13 +343,6 @@ describe("POST /api/mcp/verify-payment", () => {
       authenticateRequestMock.mockResolvedValueOnce(
         makeApiKey({ pubkey: SELLER_PUBKEY })
       );
-      pendingLightningPaymentsMap.set("order-123", {
-        quote: "quote_abc",
-        mintUrl: DEFAULT_MINT,
-        amount: 1000,
-        orderId: "order-123",
-      });
-
       const req = createMockRequest();
       const res = createMockResponse();
 
@@ -372,249 +380,207 @@ describe("POST /api/mcp/verify-payment", () => {
     });
   });
 
-  describe("In-memory pending payment flow", () => {
-    it("verifies and transitions pending payment to paid when mint returns PAID", async () => {
-      pendingLightningPaymentsMap.set("order-123", {
-        quote: "quote_memory_1",
-        mintUrl: "https://custom-mint.org",
-        amount: 2500,
-        orderId: "order-123",
-      });
-      walletCheckMintQuoteBolt11Mock.mockResolvedValueOnce({
-        quote: "quote_memory_1",
-        state: "PAID",
-      });
-
+  describe("Lightning settlement", () => {
+    async function verify() {
       const req = createMockRequest();
       const res = createMockResponse();
-
       await handler(req, res as unknown as NextApiResponse);
+      return res;
+    }
 
-      expect(res.statusCode).toBe(200);
-      expect(res.jsonBody).toEqual({
-        success: true,
-        status: "paid",
-        message:
-          "Lightning payment confirmed! Your order is now being processed.",
-        orderId: "order-123",
-        payment: {
-          method: "lightning",
-          amount: 2500,
-          currency: "sats",
-          quoteId: "quote_memory_1",
-        },
-      });
+    const quoteState = (state: string) =>
+      walletCheckMintQuoteBolt11Mock.mockResolvedValue({ state });
 
-      expect(updateMcpOrderPaymentMock).toHaveBeenCalledWith(
-        "order-123",
-        "ln_quote_memory_1",
-        "paid"
-      );
-      expect(pendingLightningPaymentsMap.has("order-123")).toBe(false);
+    it("looks the payment up in the database, not in memory", async () => {
+      await verify();
+
+      expect(getMcpLightningPaymentMock).toHaveBeenCalledWith("order-123");
     });
 
-    it("verifies and transitions pending payment to paid when mint returns ISSUED", async () => {
-      pendingLightningPaymentsMap.set("order-123", {
-        quote: "quote_memory_2",
-        mintUrl: DEFAULT_MINT,
-        amount: 500,
-        orderId: "order-123",
-      });
-      walletCheckMintQuoteBolt11Mock.mockResolvedValueOnce({
-        quote: "quote_memory_2",
-        state: "ISSUED",
-      });
+    it("returns 400 when the order has no Lightning payment", async () => {
+      getMcpLightningPaymentMock.mockResolvedValue(null);
 
-      const req = createMockRequest();
-      const res = createMockResponse();
+      const res = await verify();
 
-      await handler(req, res as unknown as NextApiResponse);
-
-      expect(res.statusCode).toBe(200);
-      expect((res.jsonBody as { status?: string }).status).toBe("paid");
-      expect(updateMcpOrderPaymentMock).toHaveBeenCalledWith(
-        "order-123",
-        "ln_quote_memory_2",
-        "paid"
-      );
-      expect(pendingLightningPaymentsMap.has("order-123")).toBe(false);
+      expect(res.statusCode).toBe(400);
+      expect(mintPaidQuoteMock).not.toHaveBeenCalled();
     });
 
-    it("returns unpaid status when mint reports quote is UNPAID without deleting pending map", async () => {
-      pendingLightningPaymentsMap.set("order-123", {
-        quote: "quote_memory_3",
-        mintUrl: DEFAULT_MINT,
-        amount: 1500,
-        orderId: "order-123",
-      });
-      walletCheckMintQuoteBolt11Mock.mockResolvedValueOnce({
-        quote: "quote_memory_3",
-        state: "UNPAID",
-      });
+    it("reports unpaid while the invoice is open, and mints nothing", async () => {
+      quoteState("UNPAID");
 
-      const req = createMockRequest();
-      const res = createMockResponse();
-
-      await handler(req, res as unknown as NextApiResponse);
+      const res = await verify();
 
       expect(res.statusCode).toBe(200);
-      expect(res.jsonBody).toEqual({
-        success: true,
+      expect(res.jsonBody).toMatchObject({
         status: "unpaid",
-        message: "Payment has not been received yet. Please pay the invoice.",
-        orderId: "order-123",
-        payment: {
-          method: "lightning",
-          amount: 1500,
-          currency: "sats",
-          quoteId: "quote_memory_3",
-          mintUrl: DEFAULT_MINT,
-        },
+        payment: { mintUrl: DEFAULT_MINT, quoteId: "quote_abc" },
       });
+      expect(claimMcpLightningMintMock).not.toHaveBeenCalled();
+      expect(mintPaidQuoteMock).not.toHaveBeenCalled();
+    });
 
+    it("mints the paid invoice, saves the token, pays the seller, then marks the order paid", async () => {
+      const res = await verify();
+
+      expect(mintPaidQuoteMock).toHaveBeenCalledWith(
+        DEFAULT_MINT,
+        "quote_abc",
+        1000
+      );
+      expect(setMcpLightningTokenMock).toHaveBeenNthCalledWith(
+        1,
+        "order-123",
+        "cashuBminted"
+      );
+      expect(sendOrderPaymentDmMock).toHaveBeenCalledWith({
+        orderId: "order-123",
+        buyerPubkey: BUYER_PUBKEY,
+        sellerPubkey: SELLER_PUBKEY,
+        productAddress: `30402:${SELLER_PUBKEY}:listing-1`,
+        productTitle: "Test Product",
+        quantity: 1,
+        amount: 1000,
+        token: "cashuBminted",
+        selectedSpecs: { size: "L" },
+        shippingAddress: null,
+        encryptedNsec: null,
+      });
+      expect(updateMcpOrderPaymentMock).toHaveBeenCalledWith(
+        "order-123",
+        "ln_quote_abc",
+        "paid"
+      );
+      expect(setMcpLightningTokenMock).toHaveBeenLastCalledWith(
+        "order-123",
+        null
+      );
+      expect(setMcpLightningTokenMock.mock.invocationCallOrder[0]).toBeLessThan(
+        sendOrderPaymentDmMock.mock.invocationCallOrder[0]!
+      );
+      expect(sendOrderPaymentDmMock.mock.invocationCallOrder[0]).toBeLessThan(
+        updateMcpOrderPaymentMock.mock.invocationCallOrder[0]!
+      );
+      expect(res.statusCode).toBe(200);
+      expect(res.jsonBody).toMatchObject({ success: true, status: "paid" });
+    });
+
+    it("does not mint twice when another request holds the claim", async () => {
+      claimMcpLightningMintMock.mockResolvedValue(false);
+
+      const res = await verify();
+
+      expect(res.jsonBody).toMatchObject({ status: "processing" });
+      expect(mintPaidQuoteMock).not.toHaveBeenCalled();
+      expect(sendOrderPaymentDmMock).not.toHaveBeenCalled();
+    });
+
+    it("lets the next request retry when the mint did nothing", async () => {
+      mintPaidQuoteMock.mockRejectedValue(new Error("mint down"));
+
+      const res = await verify();
+
+      expect(res.statusCode).toBe(500);
+      expect(releaseMcpLightningClaimMock).toHaveBeenCalledWith("order-123");
+      expect(sendOrderPaymentDmMock).not.toHaveBeenCalled();
+    });
+
+    it("keeps the claim when the mint may have gone through", async () => {
+      mintPaidQuoteMock.mockRejectedValue(new Error("response lost"));
+      walletCheckMintQuoteBolt11Mock
+        .mockResolvedValueOnce({ state: "PAID" })
+        .mockResolvedValueOnce({ state: "ISSUED" });
+
+      const res = await verify();
+
+      expect(res.statusCode).toBe(500);
+      expect(releaseMcpLightningClaimMock).not.toHaveBeenCalled();
+    });
+
+    it("still delivers the token when saving it fails", async () => {
+      setMcpLightningTokenMock.mockRejectedValueOnce(new Error("db down"));
+
+      const res = await verify();
+
+      expect(sendOrderPaymentDmMock).toHaveBeenCalledWith(
+        expect.objectContaining({ token: "cashuBminted" })
+      );
+      expect(res.jsonBody).toMatchObject({ status: "paid" });
+    });
+
+    it("keeps the order unpaid and the token saved when the seller cannot be reached", async () => {
+      sendOrderPaymentDmMock.mockRejectedValue(new Error("cache down"));
+
+      const res = await verify();
+
+      expect(res.statusCode).toBe(502);
       expect(updateMcpOrderPaymentMock).not.toHaveBeenCalled();
-      expect(pendingLightningPaymentsMap.has("order-123")).toBe(true);
-    });
-  });
-
-  describe("Cold-start and persistence fallback (order.payment_ref)", () => {
-    it("falls back to order.payment_ref (ln_<quote>) and getTrustedMintUrl when pending map is empty", async () => {
-      // Map is empty (simulating server restart, cold start, or different instance)
-      expect(pendingLightningPaymentsMap.size).toBe(0);
-
-      getMcpOrderMock.mockResolvedValueOnce(
-        makeOrder({
-          payment_ref: "ln_quote_persisted_999",
-          amount_total: 4200,
-        })
-      );
-      walletCheckMintQuoteBolt11Mock.mockResolvedValueOnce({
-        quote: "quote_persisted_999",
-        state: "PAID",
-        amount: 4200,
-      });
-
-      // Seller checks the payment on cold start
-      authenticateRequestMock.mockResolvedValueOnce(
-        makeApiKey({ pubkey: SELLER_PUBKEY })
-      );
-
-      const req = createMockRequest();
-      const res = createMockResponse();
-
-      await handler(req, res as unknown as NextApiResponse);
-
-      expect(res.statusCode).toBe(200);
-      expect(res.jsonBody).toEqual({
-        success: true,
-        status: "paid",
-        message:
-          "Lightning payment confirmed! Your order is now being processed.",
-        orderId: "order-123",
-        payment: {
-          method: "lightning",
-          amount: 4200,
-          currency: "sats",
-          quoteId: "quote_persisted_999",
-        },
-      });
-
-      expect(getTrustedMintUrlMock).toHaveBeenCalled();
-      expect(updateMcpOrderPaymentMock).toHaveBeenCalledWith(
+      expect(setMcpLightningTokenMock).not.toHaveBeenCalledWith(
         "order-123",
-        "ln_quote_persisted_999",
-        "paid"
+        null
       );
     });
 
-    it("ignores untrusted mintUrl passed in req.body on cold start fallback and uses getTrustedMintUrl", async () => {
-      getMcpOrderMock.mockResolvedValueOnce(
-        makeOrder({
-          payment_ref: "ln_quote_body_mint",
-          amount_total: 800,
-        })
+    it("retries only the delivery when a saved token is waiting", async () => {
+      getMcpLightningPaymentMock.mockResolvedValue(
+        makePayment({ seller_token: "cashuBsaved", claim_age_seconds: 30 })
       );
-      walletCheckMintQuoteBolt11Mock.mockResolvedValueOnce({
-        quote: "quote_body_mint",
-        state: "PAID",
-        amount: 800,
-      });
 
-      const req = createMockRequest({
-        body: {
-          orderId: "order-123",
-          mintUrl: "https://evil-untrusted-mint.test",
-        },
-      });
-      const res = createMockResponse();
+      const res = await verify();
 
-      await handler(req, res as unknown as NextApiResponse);
-
-      expect(res.statusCode).toBe(200);
-      expect((res.jsonBody as { status?: string }).status).toBe("paid");
-      expect(cashuMintConstructorMock).toHaveBeenCalledWith(DEFAULT_MINT);
-      expect(cashuMintConstructorMock).not.toHaveBeenCalledWith(
-        "https://evil-untrusted-mint.test"
+      expect(walletCheckMintQuoteBolt11Mock).not.toHaveBeenCalled();
+      expect(mintPaidQuoteMock).not.toHaveBeenCalled();
+      expect(sendOrderPaymentDmMock).toHaveBeenCalledWith(
+        expect.objectContaining({ token: "cashuBsaved" })
       );
-      expect(updateMcpOrderPaymentMock).toHaveBeenCalledWith(
-        "order-123",
-        "ln_quote_body_mint",
-        "paid"
-      );
+      expect(res.jsonBody).toMatchObject({ status: "paid" });
     });
 
-    it("returns 400 when order.payment_ref does not start with ln_ (e.g. cashu_ or failed_)", async () => {
-      getMcpOrderMock.mockResolvedValueOnce(
-        makeOrder({
-          payment_ref: "cashu_token_receipt_123",
-        })
-      );
+    describe("invoice already minted", () => {
+      beforeEach(() => quoteState("ISSUED"));
 
-      const req = createMockRequest();
-      const res = createMockResponse();
+      it("fails the order when someone else minted it", async () => {
+        const res = await verify();
 
-      await handler(req, res as unknown as NextApiResponse);
-
-      expect(res.statusCode).toBe(400);
-      expect(res.jsonBody).toEqual({
-        error:
-          "No pending Lightning payment found for this order. It may have expired.",
-        orderId: "order-123",
+        expect(res.statusCode).toBe(409);
+        expect(updateMcpOrderPaymentMock).toHaveBeenCalledWith(
+          "order-123",
+          "failed_order-123",
+          "failed"
+        );
+        expect(sendOrderPaymentDmMock).not.toHaveBeenCalled();
       });
-      expect(withMintRetryMock).not.toHaveBeenCalled();
-    });
 
-    it("returns 400 if pending payment is missing from map and order has no payment_ref quote", async () => {
-      getMcpOrderMock.mockResolvedValueOnce(
-        makeOrder({
-          payment_ref: null,
-        })
-      );
+      it("reports processing while our own mint is recent", async () => {
+        getMcpLightningPaymentMock.mockResolvedValue(
+          makePayment({ claim_age_seconds: 5 })
+        );
 
-      const req = createMockRequest();
-      const res = createMockResponse();
+        const res = await verify();
 
-      await handler(req, res as unknown as NextApiResponse);
-
-      expect(res.statusCode).toBe(400);
-      expect(res.jsonBody).toEqual({
-        error:
-          "No pending Lightning payment found for this order. It may have expired.",
-        orderId: "order-123",
+        expect(res.jsonBody).toMatchObject({ status: "processing" });
+        expect(updateMcpOrderPaymentMock).not.toHaveBeenCalled();
       });
-      expect(withMintRetryMock).not.toHaveBeenCalled();
+
+      it("fails the order when our own mint never finished", async () => {
+        getMcpLightningPaymentMock.mockResolvedValue(
+          makePayment({ claim_age_seconds: 600 })
+        );
+
+        const res = await verify();
+
+        expect(res.statusCode).toBe(500);
+        expect(updateMcpOrderPaymentMock).toHaveBeenCalledWith(
+          "order-123",
+          "failed_order-123",
+          "failed"
+        );
+      });
     });
   });
 
   describe("Error handling and mint retry", () => {
     it("wraps checkMintQuoteBolt11 in withMintRetry with { maxAttempts: 2, perAttemptTimeoutMs: 5000 }", async () => {
-      pendingLightningPaymentsMap.set("order-123", {
-        quote: "quote_abc",
-        mintUrl: DEFAULT_MINT,
-        amount: 1000,
-        orderId: "order-123",
-      });
-
       const req = createMockRequest();
       const res = createMockResponse();
 
@@ -627,12 +593,6 @@ describe("POST /api/mcp/verify-payment", () => {
     });
 
     it("returns 500 if checking mint quote throws an error", async () => {
-      pendingLightningPaymentsMap.set("order-123", {
-        quote: "quote_abc",
-        mintUrl: DEFAULT_MINT,
-        amount: 1000,
-        orderId: "order-123",
-      });
       withMintRetryMock.mockRejectedValueOnce(
         new Error("Connection refused to mint")
       );
