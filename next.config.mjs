@@ -39,6 +39,9 @@ const nextConfig = {
   // the deployment image lean).
   outputFileTracingRoot: path.join(__dirname, "."),
   reactStrictMode: true,
+  experimental: {
+    agentUpgrade: "security",
+  },
   allowedDevOrigins: process.env.REPLIT_DEV_DOMAIN
     ? [process.env.REPLIT_DEV_DOMAIN]
     : [],
