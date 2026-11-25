@@ -415,3 +415,59 @@ test("defaults displayName to empty string when missing", () => {
 
   assert.equal(profile.displayName, "");
 });
+
+test("caps reviewer-controlled review content, rating keys and d tag", () => {
+  const ratingTags = [];
+  for (let i = 0; i < 300; i++) ratingTags.push(["rating", "1", `key-${i}`]);
+  const review = parseReviewEvent(
+    event({
+      kind: 31555,
+      content: "A".repeat(60_000),
+      tags: [
+        ["d", "d".repeat(5_000)],
+        ...ratingTags,
+        ["rating", "1", "k".repeat(500)],
+        ["rating", "0", "thumb"],
+      ],
+    })
+  );
+
+  assert.equal(review.content.length, 1_000);
+  assert.equal(review.content.endsWith("..."), true);
+  assert.equal(review.contentTruncated, true);
+  assert.equal(review.d.length, 300);
+  assert.equal(Object.keys(review.ratings).length, 10);
+  // thumb weighs half of the score, so it survives even when it is listed last.
+  assert.equal(review.ratings.thumb, 0);
+  assert.equal(
+    Object.keys(review.ratings).every((key) => key.length <= 32),
+    true
+  );
+});
+
+test("leaves ordinary reviews untouched", () => {
+  const review = parseReviewEvent(
+    event({
+      kind: 31555,
+      content: "Great product, fast shipping.",
+      tags: [
+        ["d", "review:product"],
+        ["rating", "1", "thumb"],
+        ["rating", "0.8", "quality"],
+      ],
+    })
+  );
+
+  assert.equal(review.content, "Great product, fast shipping.");
+  assert.equal(review.contentTruncated, undefined);
+  assert.deepEqual(review.ratings, { thumb: 1, quality: 0.8 });
+});
+
+test("does not split a surrogate pair when truncating review content", () => {
+  const review = parseReviewEvent(
+    event({ kind: 31555, content: `${"a".repeat(996)}😀😀😀`, tags: [] })
+  );
+
+  assert.equal(review.contentTruncated, true);
+  assert.equal(review.content, `${"a".repeat(996)}...`);
+});

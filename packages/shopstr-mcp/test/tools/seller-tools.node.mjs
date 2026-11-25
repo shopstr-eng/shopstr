@@ -1556,3 +1556,142 @@ test("seller lookups still cache empty results when every relay answered", async
 
   assert.equal(countProductCalls(), afterFirst);
 });
+
+function reputationFetch(reviews) {
+  return (filters) => {
+    if (
+      filters.some((filter) =>
+        filter.kinds?.some((kind) => kind === 0 || kind === 30019)
+      )
+    ) {
+      return [profileEvent(), shopEvent()];
+    }
+    if (filters.some((filter) => filter.kinds?.includes(30402))) {
+      return [productEvent()];
+    }
+    if (filters.some((filter) => filter.kinds?.includes(31555))) {
+      return reviews;
+    }
+    return [];
+  };
+}
+
+const idFor = (index, fill) => (index + 1).toString(16).padStart(64, fill);
+
+test("get_seller_reputation counts one seller-level review per reviewer key", async () => {
+  // One key, six events. Each carries a different throwaway #e tag, so the
+  // generic reviewer+target identity sees six distinct targets.
+  const stuffed = Array.from({ length: 6 }, (_, index) =>
+    reviewEvent({
+      id: idFor(index, "0"),
+      created_at: 300 + index,
+      tags: [
+        ["d", `seller-review-${index}`],
+        ["e", idFor(index, "f")],
+        ["p", sellerPubkey],
+        ["rating", "1", "thumb"],
+      ],
+    })
+  );
+
+  const response = await handleGetSellerReputation(
+    { sellerPubkey },
+    context(reputationFetch(stuffed), new MemoryCache(0))
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.reviewCount, 1);
+  assert.equal(body.recentReviews[0].id, idFor(5, "0"));
+  assert.equal(body.reputation.positiveReviewCount, 1);
+  assert.equal(body.reputation.trustLevel, "low");
+});
+
+test("get_seller_reputation counts one review per reviewer key per product", async () => {
+  // Same product every time, but an unrelated leading #a tag changes the
+  // generic identity on each event.
+  const stuffed = Array.from({ length: 6 }, (_, index) =>
+    reviewEvent({
+      id: idFor(index, "0"),
+      created_at: 300 + index,
+      tags: [
+        ["a", `30402:${hex("e")}:decoy-${index}`],
+        ["d", `a:${productAddress}`],
+        ["rating", "1", "thumb"],
+      ],
+    })
+  );
+
+  const response = await handleGetSellerReputation(
+    { sellerPubkey },
+    context(reputationFetch(stuffed), new MemoryCache(0))
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.reviewCount, 1);
+  assert.equal(body.reputation.trustLevel, "low");
+});
+
+test("get_seller_reputation still counts distinct reviewers and distinct products", async () => {
+  const secondProductAddress = `30402:${sellerPubkey}:tea`;
+  const reviews = [
+    // Five different reviewers on the same product.
+    ...Array.from({ length: 5 }, (_, index) =>
+      reviewEvent({
+        id: idFor(index, "0"),
+        pubkey: idFor(index, "a"),
+        created_at: 300 + index,
+        tags: [
+          ["d", `a:${productAddress}`],
+          ["a", productAddress],
+          ["rating", "1", "thumb"],
+        ],
+      })
+    ),
+    // One of them also reviews a second product and the seller itself.
+    reviewEvent({
+      id: hex("5"),
+      pubkey: idFor(0, "a"),
+      created_at: 400,
+      tags: [
+        ["d", `a:${secondProductAddress}`],
+        ["a", secondProductAddress],
+        ["rating", "1", "thumb"],
+      ],
+    }),
+    reviewEvent({
+      id: hex("6"),
+      pubkey: idFor(0, "a"),
+      created_at: 401,
+      tags: [
+        ["d", "seller-review"],
+        ["p", sellerPubkey],
+        ["rating", "1", "thumb"],
+      ],
+    }),
+  ];
+  const fetchImpl = (filters) => {
+    if (filters.some((filter) => filter.kinds?.includes(30402))) {
+      return [
+        productEvent(),
+        productEvent({
+          id: hex("9"),
+          tags: [
+            ["d", "tea"],
+            ["title", "Tea"],
+            ["price", "5", "USD"],
+          ],
+        }),
+      ];
+    }
+    return reputationFetch(reviews)(filters);
+  };
+
+  const response = await handleGetSellerReputation(
+    { sellerPubkey },
+    context(fetchImpl, new MemoryCache(0))
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(body.reviewCount, 7);
+  assert.equal(body.reputation.trustLevel, "high");
+});

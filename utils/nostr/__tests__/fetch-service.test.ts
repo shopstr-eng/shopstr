@@ -2074,6 +2074,7 @@ describe("fetchProfile", () => {
   });
 
   it("keeps the latest kind 0 profile from the DB and ignores shop profile rows", async () => {
+    const chatPubkey = "f".repeat(64);
     const verifyNip05Identifier = jest.fn().mockResolvedValue(false);
     const cacheEventsToDatabase = jest.fn();
 
@@ -2126,6 +2127,10 @@ describe("fetchProfile", () => {
           }),
           sig: "sig-older-user-profile",
         }),
+        makeProfileEvent({
+          pubkey: chatPubkey,
+          content: '{"name":"Chat contact"}',
+        }),
       ])
     ) as typeof global.fetch;
 
@@ -2137,10 +2142,13 @@ describe("fetchProfile", () => {
     const { profileMap } = await fetchProfile(
       nostr,
       ["wss://relay.example"],
-      [pubkey],
+      [pubkey, chatPubkey],
       editProfileContext
     );
 
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith("/api/db/fetch-profiles");
+    expect(profileMap.get(chatPubkey)?.content.name).toBe("Chat contact");
     expect(profileMap.get(pubkey)).toMatchObject({
       pubkey,
       created_at: 300,
@@ -2152,6 +2160,46 @@ describe("fetchProfile", () => {
     expect(profileMap.get(pubkey)?.content.about).toBeUndefined();
     expect(editProfileContext).toHaveBeenLastCalledWith(profileMap, false);
     expect(cacheEventsToDatabase).not.toHaveBeenCalled();
+  });
+
+  it("requests only explicitly scoped public authors in bounded batches", async () => {
+    const { fetchProfile } = await import("../fetch-service");
+    const requested = Array.from({ length: 101 }, (_, index) =>
+      (index + 1).toString(16).padStart(64, "0")
+    );
+    const lastPubkey = requested[100]!;
+    const cachedProfile = makeProfileEvent({
+      pubkey: lastPubkey,
+      content: '{"name":"Cached profile"}',
+    });
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce(makeDbPayload([cachedProfile]));
+    global.fetch = fetchMock;
+    const nostr = new NostrManager();
+    jest.spyOn(nostr, "fetch").mockResolvedValue([]);
+
+    const { profileMap } = await fetchProfile(
+      nostr,
+      [],
+      [...requested, "f".repeat(64)],
+      jest.fn(),
+      new Map(),
+      { mode: "public-listing-authors", pubkeys: [...requested, lastPubkey] }
+    ).finally(() => nostr.close());
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/db/fetch-profiles?kind=0&pubkeys=" +
+        encodeURIComponent(requested.slice(0, 100).join(","))
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/db/fetch-profiles?kind=0&pubkeys=" + lastPubkey
+    );
+    expect(profileMap.get(lastPubkey)?.content.name).toBe("Cached profile");
   });
 
   it("returns the preserved existing map without network access when pubkeyProfilesToFetch is empty", async () => {
@@ -4731,6 +4779,104 @@ describe("fetchGiftWrappedChatsAndMessages", () => {
     const [chatMap] = editChatContext.mock.calls[0];
     expect(chatMap.has(senderPubkey)).toBe(true);
     expect(chatMap.get(senderPubkey)[0].content).toBe("Hello!");
+  });
+
+  it("keeps loading the inbox when another gift wrap is malformed or forged", async () => {
+    const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
+    jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
+
+    const { fetchGiftWrappedChatsAndMessages } =
+      await import("../fetch-service");
+
+    const userPubkey = "user-pubkey";
+    const sellerPubkey = "seller-pubkey";
+    const rumor = (pubkey: string) =>
+      JSON.stringify({
+        kind: 14,
+        pubkey,
+        content: "Your order shipped",
+        created_at: 1000,
+        tags: [
+          ["p", userPubkey],
+          ["subject", "shipping-info"],
+        ],
+      });
+    const plainTexts: Record<string, string> = {
+      "legit-seal": JSON.stringify({
+        kind: 13,
+        pubkey: sellerPubkey,
+        content: "legit-rumor",
+      }),
+      "legit-rumor": rumor(sellerPubkey),
+      "forged-seal": JSON.stringify({
+        kind: 13,
+        pubkey: "attacker-pubkey",
+        content: "forged-rumor",
+      }),
+      "forged-rumor": rumor(sellerPubkey),
+      "wrong-kind-seal": JSON.stringify({
+        kind: 1,
+        pubkey: "attacker-pubkey",
+        content: "legit-rumor",
+      }),
+      "not-json-seal": "{oops",
+    };
+    const wrapEvent = (id: string, content: string) => ({
+      id,
+      kind: 1059,
+      pubkey: "eph",
+      content,
+      created_at: 1000,
+      sig: "sig",
+      tags: [["p", userPubkey]],
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [],
+    }) as typeof global.fetch;
+
+    const nostr = {
+      fetch: jest
+        .fn()
+        .mockResolvedValue([
+          wrapEvent("garbage", "not-nip44"),
+          wrapEvent("forged", "forged-seal"),
+          wrapEvent("wrong-kind", "wrong-kind-seal"),
+          wrapEvent("not-json", "not-json-seal"),
+          wrapEvent("legit", "legit-seal"),
+        ]),
+    };
+    const signer = {
+      sign: jest.fn().mockResolvedValue({
+        kind: 27235,
+        id: "proof",
+        sig: "s",
+        pubkey: userPubkey,
+        content: "",
+        tags: [],
+        created_at: 0,
+      }),
+      decrypt: jest.fn(async (_pubkey: string, cipherText: string) => {
+        const plainText = plainTexts[cipherText];
+        if (plainText === undefined) throw new Error("invalid payload length");
+        return plainText;
+      }),
+    };
+    const editChatContext = jest.fn();
+
+    const result = await fetchGiftWrappedChatsAndMessages(
+      nostr as any,
+      signer as any,
+      ["wss://relay.example"],
+      editChatContext,
+      userPubkey
+    );
+
+    expect(result.profileSetFromChats).toEqual(new Set([sellerPubkey]));
+    const [chatMap] = editChatContext.mock.calls[0];
+    expect(chatMap.get(sellerPubkey)).toHaveLength(1);
+    expect(chatMap.get(sellerPubkey)[0].wrappedEventId).toBe("legit");
   });
 
   it("filters out events whose subject is not in the allowed set", async () => {
@@ -8021,13 +8167,14 @@ describe("fetchShopProfile", () => {
     expect(editShopContext).toHaveBeenCalledWith(new Map(), false);
   });
 
-  it("hydrates shop profiles from DB before querying relays", async () => {
+  it("hydrates shop profiles from the unfiltered DB request before querying relays", async () => {
     const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
     jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
 
     const { fetchShopProfile } = await import("../fetch-service");
 
-    const pubkey = "seller-shop-db";
+    const pubkey = "a".repeat(64);
+    const chatPubkey = "b".repeat(64);
     const shopEvent = makeShopEvent({
       id: "shop-event-db",
       pubkey,
@@ -8036,9 +8183,15 @@ describe("fetchShopProfile", () => {
       sig: "sig-shop-db",
     });
 
-    global.fetch = jest
-      .fn()
-      .mockResolvedValue(makeDbPayload([shopEvent])) as typeof global.fetch;
+    global.fetch = jest.fn().mockResolvedValue(
+      makeDbPayload([
+        shopEvent,
+        makeShopEvent({
+          pubkey: chatPubkey,
+          content: '{"name":"Chat contact shop"}',
+        }),
+      ])
+    ) as typeof global.fetch;
 
     const nostr = { fetch: jest.fn().mockResolvedValue([]) } as any;
     const editShopContext = jest.fn();
@@ -8046,17 +8199,40 @@ describe("fetchShopProfile", () => {
     const { shopProfileMap } = await fetchShopProfile(
       nostr,
       ["wss://relay.example"],
-      [pubkey],
+      [pubkey, chatPubkey],
       editShopContext
     );
 
+    expect(global.fetch).toHaveBeenCalledTimes(1);
     expect(global.fetch).toHaveBeenCalledWith("/api/db/fetch-profiles");
+    expect(shopProfileMap.get(chatPubkey)?.content.name).toBe(
+      "Chat contact shop"
+    );
     expect(shopProfileMap.get(pubkey)).toMatchObject({
       pubkey,
       created_at: 100,
       content: { name: "DB Shop" },
     });
     expect(cacheEventsToDatabase).not.toHaveBeenCalled();
+  });
+
+  it("limits the scoped shop cache request to public listing authors", async () => {
+    const { fetchShopProfile } = await import("../fetch-service");
+    const sellerPubkey = "a".repeat(64);
+    const chatPubkey = "b".repeat(64);
+    global.fetch = jest.fn().mockResolvedValue(makeDbPayload([]));
+    const nostr = new NostrManager();
+    jest.spyOn(nostr, "fetch").mockResolvedValue([]);
+
+    await fetchShopProfile(nostr, [], [sellerPubkey, chatPubkey], jest.fn(), {
+      mode: "public-listing-authors",
+      pubkeys: [sellerPubkey],
+    }).finally(() => nostr.close());
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/db/fetch-profiles?kind=30019&pubkeys=" + sellerPubkey
+    );
   });
 
   it("relay results overwrite DB results for the same pubkey", async () => {
@@ -9162,7 +9338,7 @@ describe("fetchReviews", () => {
       created_at: 100,
       tags: [
         ["d", productAddress],
-        ["rating", "1", "overall"],
+        ["rating", "0", "overall"],
       ],
     });
     // Relay has newer review with higher rating
@@ -9172,7 +9348,7 @@ describe("fetchReviews", () => {
       created_at: 200,
       tags: [
         ["d", productAddress],
-        ["rating", "5", "overall"],
+        ["rating", "1", "overall"],
       ],
     });
 
@@ -9191,8 +9367,8 @@ describe("fetchReviews", () => {
       editReviewsContext
     );
 
-    // Score must reflect the newer review (rating 5 → 2.5), not the older (rating 1 → 0.5)
-    expect(result.merchantScoresMap.get("seller-a")).toEqual([2.5]);
+    // Score must reflect the newer review (1), not the older one (0)
+    expect(result.merchantScoresMap.get("seller-a")).toEqual([1]);
   });
 
   it("aggregates merchant scores using calculateWeightedScore of the review tags", async () => {
@@ -9205,7 +9381,8 @@ describe("fetchReviews", () => {
       id: "score-review",
       tags: [
         ["d", productAddress],
-        ["rating", "4", "overall"],
+        ["rating", "1", "thumb"],
+        ["rating", "0", "quality"],
       ],
     });
 
@@ -9224,7 +9401,144 @@ describe("fetchReviews", () => {
       editReviewsContext
     );
 
-    expect(result.merchantScoresMap.get("seller-a")).toEqual([2]);
+    expect(result.merchantScoresMap.get("seller-a")).toEqual([0.5]);
+  });
+
+  describe("review integrity", () => {
+    async function run(dbEvents: unknown[], relayEvents: unknown[]) {
+      jest.doMock("@/utils/db/db-client", () => ({
+        cacheEventsToDatabase: jest.fn().mockResolvedValue(undefined),
+      }));
+      const { fetchReviews } = await import("../fetch-service");
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => dbEvents,
+      }) as typeof global.fetch;
+      const nostr = { fetch: jest.fn().mockResolvedValue(relayEvents) };
+      return fetchReviews(
+        nostr as any,
+        ["wss://relay.example"],
+        [product as any],
+        jest.fn()
+      );
+    }
+
+    const positive = (pubkey: string) =>
+      makeReviewEvent({
+        id: `r-${pubkey}`,
+        pubkey,
+        tags: [
+          ["d", productAddress],
+          ["rating", "1", "thumb"],
+        ],
+      });
+
+    it("keeps scores between 0 and 1 when a review has forged ratings", async () => {
+      const honest = ["a", "b", "c", "d", "e"].map(positive);
+      const huge = makeReviewEvent({
+        id: "huge",
+        pubkey: "attacker-1",
+        tags: [
+          ["d", productAddress],
+          ["rating", "-1e9", "thumb"],
+        ],
+      });
+      const text = makeReviewEvent({
+        id: "text",
+        pubkey: "attacker-2",
+        tags: [
+          ["d", productAddress],
+          ["rating", "great", "thumb"],
+        ],
+      });
+
+      const result = await run([], [...honest, huge, text]);
+      const scores = result.merchantScoresMap.get("seller-a")!;
+
+      expect(scores).toHaveLength(6);
+      expect(scores.every((s) => s >= 0 && s <= 1)).toBe(true);
+    });
+
+    it("skips reviews that have no valid rating", async () => {
+      const noRating = makeReviewEvent({
+        id: "none",
+        tags: [["d", productAddress]],
+      });
+      const result = await run([], [noRating]);
+      expect(result.merchantScoresMap.size).toBe(0);
+      expect(result.productReviewsMap.size).toBe(0);
+    });
+
+    it("ignores a seller's review of their own product", async () => {
+      const result = await run([], [positive("seller-a")]);
+      expect(result.merchantScoresMap.size).toBe(0);
+    });
+
+    it("ignores relay reviews for products that were not requested", async () => {
+      const other = makeReviewEvent({
+        id: "other",
+        tags: [
+          ["d", "a:30402:other-seller:other-listing"],
+          ["rating", "1", "thumb"],
+        ],
+      });
+      const result = await run([], [other]);
+      expect(result.merchantScoresMap.size).toBe(0);
+    });
+
+    it("shows the text and ratings of the newest review", async () => {
+      const older = makeReviewEvent({
+        id: "old",
+        created_at: 100,
+        content: "old text",
+        tags: [
+          ["d", productAddress],
+          ["rating", "1", "thumb"],
+        ],
+      });
+      const newer = makeReviewEvent({
+        id: "new",
+        created_at: 300,
+        content: "new text",
+        tags: [
+          ["d", productAddress],
+          ["rating", "0", "thumb"],
+        ],
+      });
+
+      const result = await run([older], [newer]);
+      const shown = result.productReviewsMap
+        .get("seller-a")!
+        .get("listing-1")!
+        .get("reviewer-1")!;
+
+      expect(shown).toEqual([
+        ["comment", "new text"],
+        ["rating", "0", "thumb"],
+      ]);
+      expect(result.merchantScoresMap.get("seller-a")).toEqual([0]);
+    });
+
+    it("does not let an older relay copy replace a newer cached review", async () => {
+      const newer = makeReviewEvent({
+        id: "new",
+        created_at: 300,
+        content: "new text",
+      });
+      const older = makeReviewEvent({
+        id: "old",
+        created_at: 100,
+        content: "old text",
+      });
+
+      const result = await run([newer], [older]);
+      const shown = result.productReviewsMap
+        .get("seller-a")!
+        .get("listing-1")!
+        .get("reviewer-1")!;
+
+      expect(shown[0]).toEqual(["comment", "new text"]);
+    });
   });
 
   it("strips internal created_at entries from review payloads before resolving", async () => {
@@ -9365,7 +9679,7 @@ describe("fetchReviews", () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it("updates existing review's created_at via map() when a newer relay review supersedes it (lines 1175-1178)", async () => {
+  it("uses the newer relay review when two relay reviews come from the same reviewer", async () => {
     const cacheEventsToDatabase = jest.fn().mockResolvedValue(undefined);
     jest.doMock("@/utils/db/db-client", () => ({ cacheEventsToDatabase }));
 
@@ -9377,7 +9691,7 @@ describe("fetchReviews", () => {
       created_at: 200,
       tags: [
         ["d", productAddress],
-        ["rating", "3", "overall"],
+        ["rating", "0", "overall"],
       ],
       sig: "sig-first-relay",
     });
@@ -9387,7 +9701,7 @@ describe("fetchReviews", () => {
       created_at: 300,
       tags: [
         ["d", productAddress],
-        ["rating", "5", "overall"],
+        ["rating", "1", "overall"],
       ],
       sig: "sig-second-relay",
     });
@@ -9409,7 +9723,7 @@ describe("fetchReviews", () => {
       editReviewsContext
     );
 
-    expect(result.merchantScoresMap.get("seller-a")).toEqual([2.5]);
+    expect(result.merchantScoresMap.get("seller-a")).toEqual([1]);
   });
 
   it("logs cache rejection for valid relay reviews and still resolves (line 1276)", async () => {

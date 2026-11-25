@@ -151,6 +151,17 @@ describe("NostrNSecSigner", () => {
     expect(nostrTools.getPublicKey).toHaveBeenCalled();
   });
 
+  it("shares one pending unlock across simultaneous signing and decryption", async () => {
+    const signer = new NostrNSecSigner({ encryptedPrivKey: encrypted }, mockCH);
+    const event = { kind: 27235, content: "", tags: [], created_at: 1 };
+    await Promise.all([
+      signer.sign(event),
+      signer.sign(event),
+      signer.decrypt("peer", "cipher"),
+    ]);
+    expect(mockCH).toHaveBeenCalledTimes(1);
+  });
+
   it("sign()", async () => {
     const s = new NostrNSecSigner({ encryptedPrivKey: encrypted }, mockCH);
     const ev = await s.sign({

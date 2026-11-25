@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 const stagedResult = spawnSync(
   "git",
@@ -38,19 +38,25 @@ const prettierFiles = byExtension([
 ]);
 const jestFiles = byExtension([".js", ".jsx", ".ts", ".tsx"]);
 const filesToRestage = Array.from(new Set([...eslintFiles, ...prettierFiles]));
-const localBin = (command) =>
-  join(
-    "node_modules",
-    ".bin",
-    process.platform === "win32" ? `${command}.cmd` : command
-  );
+// Run a package's JS bin entry with the current Node binary instead of the
+// node_modules/.bin shim. On Windows the shim is a .cmd file, which Node
+// refuses to spawn without `shell: true` (EINVAL since CVE-2024-27980), and
+// a shell would make staged filenames subject to command interpretation.
+const localBin = (packageName) => {
+  const packageJsonPath = join("node_modules", packageName, "package.json");
+  const { bin } = JSON.parse(readFileSync(packageJsonPath, "utf8"));
+  const entry = typeof bin === "string" ? bin : bin[packageName];
+  return [process.execPath, join(dirname(packageJsonPath), entry)];
+};
 
-const run = (command, args) => {
+const run = ([command, ...prefixArgs], args) => {
   if (args.length === 0) {
     return;
   }
 
-  const result = spawnSync(command, args, { stdio: "inherit" });
+  const result = spawnSync(command, [...prefixArgs, ...args], {
+    stdio: "inherit",
+  });
   if (result.error) {
     console.error(`Unable to run ${command}: ${result.error.message}`);
     process.exit(1);
@@ -80,5 +86,5 @@ if (jestFiles.length > 0) {
 }
 
 if (filesToRestage.length > 0) {
-  run("git", ["add", "--", ...filesToRestage]);
+  run(["git"], ["add", "--", ...filesToRestage]);
 }

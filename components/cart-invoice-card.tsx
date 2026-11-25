@@ -1,3 +1,7 @@
+import HodlCartCheckout, {
+  type HodlCartItem,
+} from "@/components/hodl/hodl-cart-checkout";
+import { isHodlEscrowFeatureEnabled } from "@/utils/lightning/hodl-order-client";
 import {
   useCallback,
   useContext,
@@ -294,6 +298,7 @@ export default function CartInvoiceCard({
 
   const { isOpen, onOpen, onClose } = useDisclosure();
 
+  const [hodlItems, setHodlItems] = useState<HodlCartItem[] | null>(null);
   const [formType, setFormType] = useState<
     "shipping" | "contact" | "combined" | null
   >(null);
@@ -893,7 +898,7 @@ export default function CartInvoiceCard({
 
   const onFormSubmit = async (
     data: { [x: string]: string },
-    paymentType?: "lightning" | "cashu" | "nwc"
+    paymentType?: "lightning" | "cashu" | "nwc" | "hodl"
   ) => {
     try {
       // totalCost is already in sats with discounts applied
@@ -989,7 +994,38 @@ export default function CartInvoiceCard({
         pickupLocation: pickupSummary || undefined,
       };
 
-      if (paymentType === "cashu") {
+      if (paymentType === "hodl") {
+        setHodlItems(
+          products.map((product) => ({
+            title: product.title,
+            params: {
+              productId: product.id,
+              quantity: quantities[product.id] ?? 1,
+              formType:
+                product.shippingType === "Free" ||
+                product.shippingType === "Added Cost" ||
+                (product.shippingType === "Free/Pickup" &&
+                  (formType === "shipping" ||
+                    shippingPickupPreference === "shipping"))
+                  ? "shipping"
+                  : "contact",
+              selectedSize: product.selectedSize,
+              selectedVolume: product.selectedVolume,
+              selectedWeight: product.selectedWeight,
+              selectedBulkOption: product.selectedBulkOption,
+              discountCode: discountCodes[product.pubkey],
+              fulfillment: {
+                address: addressTag,
+                pickupLocation: selectedPickupLocations[product.id],
+                contact: [data["Contact Type"], data.Contact, data.Instructions]
+                  .filter(Boolean)
+                  .join("\n"),
+                additionalInfo: data.Required,
+              },
+            },
+          }))
+        );
+      } else if (paymentType === "cashu") {
         await handleCashuPayment(price, paymentData);
       } else if (paymentType === "nwc") {
         await handleNWCPayment(price, paymentData);
@@ -2632,6 +2668,17 @@ export default function CartInvoiceCard({
                           ? basePrice * (1 - discount / 100)
                           : basePrice;
 
+                      // Determine if shipping should be shown for this product
+                      const shouldShowShipping =
+                        !sellerFreeShippingStatus[product.pubkey]?.qualifies &&
+                        formType !== null &&
+                        getCartShippingPredicate({
+                          formType,
+                          hasMixedShippingWithPickup,
+                          shippingPickupPreference:
+                            shippingPickupPreference ?? undefined,
+                        })(shippingTypes[product.id]);
+
                       return (
                         <div
                           key={product.id}
@@ -2683,15 +2730,14 @@ export default function CartInvoiceCard({
                               </div>
                             </>
                           )}
-                          {getCartUnitShippingCost(product) > 0 &&
-                            ((formType === "combined" &&
-                              shippingPickupPreference === "shipping") ||
-                              formType === "shipping") && (
+                          {shouldShowShipping &&
+                            getCartUnitShippingCost(product) > 0 && (
                               <div className="flex justify-between text-sm">
                                 <span className="ml-2">Shipping cost:</span>
                                 <span>
                                   {formatWithCommas(
-                                    getCartUnitShippingCost(product),
+                                    getCartUnitShippingCost(product) *
+                                      (quantities[product.id] || 1),
                                     product.currency
                                   )}
                                 </span>
@@ -2867,14 +2913,15 @@ export default function CartInvoiceCard({
                         : basePrice;
 
                     // Determine if shipping should be shown for this product
-                    const productShippingType = shippingTypes[product.id];
                     const shouldShowShipping =
-                      formType === "shipping" ||
-                      (formType === "combined" &&
-                        (productShippingType === "Added Cost" ||
-                          productShippingType === "Free" ||
-                          (productShippingType === "Free/Pickup" &&
-                            shippingPickupPreference === "shipping")));
+                      !sellerFreeShippingStatus[product.pubkey]?.qualifies &&
+                      formType !== null &&
+                      getCartShippingPredicate({
+                        formType,
+                        hasMixedShippingWithPickup,
+                        shippingPickupPreference:
+                          shippingPickupPreference ?? undefined,
+                      })(shippingTypes[product.id]);
 
                     return (
                       <div
@@ -2941,10 +2988,7 @@ export default function CartInvoiceCard({
                           </>
                         )}
                         {shouldShowShipping &&
-                          getCartUnitShippingCost(product) > 0 &&
-                          ((formType === "combined" &&
-                            shippingPickupPreference === "shipping") ||
-                            formType === "shipping") && (
+                          getCartUnitShippingCost(product) > 0 && (
                             <div className="flex justify-between text-sm">
                               <span className="ml-2">Shipping cost:</span>
                               <span>
@@ -3173,7 +3217,27 @@ export default function CartInvoiceCard({
                 </h2>
               )}
 
+              {hodlItems && (
+                <HodlCartCheckout
+                  key={userPubkey}
+                  items={hodlItems}
+                  onFunded={(id) => {
+                    const saved = storage.getJson<ProductData[]>(
+                      STORAGE_KEYS.CART,
+                      []
+                    );
+                    storage.setJson(
+                      STORAGE_KEYS.CART,
+                      saved.filter((p) => p.id !== id)
+                    );
+                  }}
+                  onClose={() => {
+                    window.location.assign("/cart");
+                  }}
+                />
+              )}
               <form
+                hidden={hodlItems !== null}
                 onSubmit={handleFormSubmit((data) => onFormSubmit(data))}
                 className="space-y-6"
               >
@@ -3208,6 +3272,24 @@ export default function CartInvoiceCard({
                   >
                     Pay with Lightning: {formattedTotalCost}
                   </Button>
+
+                  {isHodlEscrowFeatureEnabled() && (
+                    <Button
+                      className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                      isDisabled={!isFormValid}
+                      onPress={() => {
+                        if (!isLoggedIn) {
+                          onOpen();
+                          return;
+                        }
+                        handleFormSubmit((data) =>
+                          onFormSubmit(data, "hodl")
+                        )();
+                      }}
+                    >
+                      Review Lightning Escrow
+                    </Button>
+                  )}
 
                   {hasTokensAvailable && (
                     <Button

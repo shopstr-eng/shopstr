@@ -39,28 +39,30 @@ export type NostrFetchResult = {
 };
 export type NostrManagerParams = {
   connectionTimeout?: number;
-  keepAliveTime: number;
-  gcInterval: number;
+  keepAliveTime?: number;
+  gcInterval?: number;
   readable?: boolean;
   writable?: boolean;
 };
 
 const DEFAULT_CONNECTION_TIMEOUT_MS = 4000;
+const DEFAULT_KEEP_ALIVE_MS = 1000 * 60 * 5;
+const DEFAULT_GC_INTERVAL_MS = 1000 * 60 * 5;
 
 export class NostrManager {
   private readonly pool: SimplePool;
-  private readonly params: NostrManagerParams;
+  private readonly params: Required<NostrManagerParams>;
   private readonly relays: Array<NostrRelay> = [];
-  private gcTimeout: any;
+  private gcTimeout?: ReturnType<typeof setTimeout>;
 
-  constructor(relays: Array<string> = [], params?: NostrManagerParams) {
+  constructor(relays: Array<string> = [], params: NostrManagerParams = {}) {
     const {
-      keepAliveTime = 1000 * 60 * 5,
-      gcInterval = 1000 * 60 * 5,
+      keepAliveTime = DEFAULT_KEEP_ALIVE_MS,
+      gcInterval = DEFAULT_GC_INTERVAL_MS,
       connectionTimeout = DEFAULT_CONNECTION_TIMEOUT_MS,
       readable = true,
       writable = true,
-    } = params || {};
+    } = params;
 
     this.pool = new SimplePool();
     this.params = {
@@ -145,18 +147,15 @@ export class NostrManager {
     }
     if (relayUrls) {
       for (const relayUrl of relayUrls) {
-        this.addRelay(relayUrl);
+        this.addRelay(relayUrl, {
+          connectionTimeout: this.params.connectionTimeout,
+        });
       }
     }
 
     const relays = relayUrls
       ? this.relays.filter((r) => relayUrls.includes(r.url))
       : this.relays;
-    // Fire-and-forget: subscribeMap() below already connects to each relay
-    // independently and in parallel (with its own bounded connection
-    // timeout), so awaiting keepAlive() here would only make every relay
-    // wait for the slowest/dead relay before any REQ goes out.
-    this.keepAlive(relays).catch(console.error);
     const requests = relays.flatMap((r) =>
       filters.map((f) => ({ url: r.url, filter: f }))
     );
@@ -174,6 +173,10 @@ export class NostrManager {
     for (const relay of relays) {
       relay.activeSubs.push(sub);
     }
+    // Fire-and-forget: subscribeMap() above already connects to each relay
+    // independently and in parallel, so reconnecting sleeping relays must not
+    // delay issuing REQs to healthy relays.
+    this.keepAlive(relays).catch(console.error);
     return sub;
   }
 
@@ -198,63 +201,80 @@ export class NostrManager {
     relayUrls?: string[],
     timeout?: number
   ): Promise<NostrFetchResult> {
+    const urls = [
+      ...new Set(relayUrls ?? this.relays.map((relay) => relay.url)),
+    ];
+    if (urls.length === 0) return { events: [], complete: false };
     return await newPromiseWithTimeout(
       async (resolve, _reject, abortSignal) => {
-        if (!params) {
-          params = {};
-        }
+        const onEvent = params?.onevent ?? (() => {});
+        const onEose = params?.oneose ?? (() => {});
+        const onClose = params?.onclose;
+        const fetchedEvents: NostrEvent[] = [];
+        const seen = new Set<string>();
+        const ended = new Set<string>();
+        const subscriptions: NostrSub[] = [];
+        let resolved = false;
+        let failed = false;
 
-        if (!params.onevent) {
-          params.onevent = () => {};
-        }
-
-        if (!params.oneose) {
-          params.oneose = () => {};
-        }
-
-        const onEvent = params.onevent;
-        const onEose = params.oneose;
-        const fetchedEvents: Array<NostrEvent> = [];
-        let sub: NostrSub | undefined;
-        let didCloseSub = false;
-        let didResolve = false;
-
-        const closeSubIfNeeded = async () => {
-          if (!sub || didCloseSub) return;
-          didCloseSub = true;
-          await sub.close();
+        const closeSubscriptions = () => {
+          Promise.all(subscriptions.map((subscription) => subscription.close()))
+            .then(() => undefined)
+            .catch(console.error);
         };
 
-        abortSignal.addEventListener("abort", () => {
-          closeSubIfNeeded().catch(console.error);
-          // If the aggregate timeout fires, return whatever events were
-          // already collected from the relays that did respond instead of
-          // discarding them. The abort listener runs synchronously before
-          // the timeout's reject(), so resolving here wins.
-          if (!didResolve) {
-            didResolve = true;
-            resolve({ events: fetchedEvents, complete: false });
-          }
-        });
-
-        params.onevent = (event: NostrEvent) => {
-          fetchedEvents.push(event);
-          return onEvent!(event);
+        const finish = (complete: boolean) => {
+          if (resolved) return;
+          resolved = true;
+          resolve({ events: fetchedEvents, complete });
+          closeSubscriptions();
         };
 
-        params.oneose = () => {
-          closeSubIfNeeded().catch(console.error);
-          if (!didResolve) {
-            didResolve = true;
-            resolve({ events: fetchedEvents, complete: true });
-          }
-          return onEose!();
-        };
+        // On timeout, preserve events already received from healthy relays.
+        abortSignal.addEventListener("abort", () => finish(false));
 
-        sub = await this.subscribe(filters, params, relayUrls);
-        if (abortSignal.aborted) {
-          await closeSubIfNeeded();
-        }
+        await Promise.all(
+          urls.map(async (url) => {
+            const sub = await this.subscribe(
+              filters,
+              {
+                ...params,
+                // nostr-tools synthesizes EOSE when this timer fires. Keep it
+                // beyond our aggregate deadline, which reports an incomplete read.
+                maxWait: (timeout ?? 60_000) + 1_000,
+                onevent: (event) => {
+                  if (resolved || seen.has(event.id)) return;
+                  seen.add(event.id);
+                  fetchedEvents.push(event);
+                  onEvent(event);
+                },
+                oneose: () => {
+                  // subscribeMap also synthesizes EOSE immediately BEFORE onclose
+                  // on failure. One subscription per relay plus this microtask lets
+                  // us observe that failure instead of certifying a complete read.
+                  queueMicrotask(() => {
+                    if (resolved) return;
+                    ended.add(url);
+                    if (ended.size === urls.length) {
+                      finish(!failed);
+                      if (!failed) onEose();
+                    }
+                  });
+                },
+                onclose: (reasons) => {
+                  if (resolved || ended.has(url)) return;
+                  failed = true;
+                  ended.add(url);
+                  onClose?.(reasons);
+                  if (ended.size === urls.length) finish(false);
+                },
+              },
+              [url]
+            );
+            if (resolved) await sub.close();
+            else subscriptions.push(sub);
+          })
+        );
       },
       { timeout }
     );
@@ -320,19 +340,25 @@ export class NostrManager {
     }
   ): void {
     if (this.relays.find((r) => r.url === relayUrl)) return;
-    const connectionTimeout =
-      params?.connectionTimeout ??
-      this.params.connectionTimeout ??
-      DEFAULT_CONNECTION_TIMEOUT_MS;
+    const relayParams = {
+      connectionTimeout:
+        params?.connectionTimeout ??
+        this.params.connectionTimeout ??
+        DEFAULT_CONNECTION_TIMEOUT_MS,
+    };
+
+    const watchRelayPromise = (
+      relayPromise: ReturnType<SimplePool["ensureRelay"]>
+    ) => {
+      relayPromise.catch(() => undefined);
+      return relayPromise;
+    };
+    watchRelayPromise(this.pool.ensureRelay(relayUrl, relayParams));
+
     const relay: NostrRelay = {
       url: relayUrl,
       connect: async () => {
-        // Ask the pool fresh on every call instead of caching the first
-        // ensureRelay() promise: a rejected promise stays rejected forever,
-        // which previously made a relay unrecoverable after one failed
-        // connection attempt. The pool/AbstractRelay already dedupes
-        // in-flight connection attempts internally.
-        await this.pool.ensureRelay(relayUrl, { connectionTimeout });
+        await this.pool.ensureRelay(relayUrl, relayParams);
       },
       disconnect: async () => {
         this.pool.close([relayUrl]);
