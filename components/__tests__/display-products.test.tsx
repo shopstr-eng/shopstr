@@ -1,6 +1,13 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { useState, type Dispatch, type SetStateAction } from "react";
 import DisplayProducts from "../display-products";
+import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import {
   FollowsContext,
   ProductContext,
@@ -36,10 +43,12 @@ jest.mock(
       productData,
       href,
       reportSignal,
+      onProductClick,
     }: {
       productData: { id: string; title: string };
       href?: string | null;
       reportSignal?: { level: string };
+      onProductClick?: (product: { id: string; title: string }) => void;
     }) {
       return href ? (
         <a
@@ -53,6 +62,7 @@ jest.mock(
         <div
           data-testid={`product-${productData.id}`}
           data-report-level={reportSignal?.level}
+          onClick={() => onProductClick?.(productData)}
         >
           {productData.title}
         </div>
@@ -60,7 +70,23 @@ jest.mock(
     }
 );
 
-jest.mock("../display-product-modal", () => () => null);
+jest.mock(
+  "../display-product-modal",
+  () =>
+    function MockDisplayProductModal({
+      productData,
+      handleDelete,
+    }: {
+      productData: { id: string };
+      handleDelete: (productId: string) => void;
+    }) {
+      return (
+        <button onClick={() => handleDelete(productData.id)}>
+          Delete listing
+        </button>
+      );
+    }
+);
 jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   deleteEvent: jest.fn(),
   REPORT_TYPES: [
@@ -879,5 +905,74 @@ describe("DisplayProducts search filtering", () => {
       ).not.toBeInTheDocument();
       expect(screen.getByTestId("product-local-product")).toBeInTheDocument();
     });
+  });
+});
+
+describe("DisplayProducts deletion", () => {
+  const deleteOwnProduct = async (productEvent: NostrEvent) => {
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
+    renderDisplayProducts({
+      nostr,
+      productEvents: [productEvent],
+      selectedSearch: "",
+    });
+
+    fireEvent.click(await screen.findByTestId(`product-${productEvent.id}`));
+    fireEvent.click(screen.getByText("Delete listing"));
+
+    await waitFor(() => expect(deleteEvent).toHaveBeenCalledTimes(1));
+    return nostr;
+  };
+
+  beforeEach(() => {
+    jest.mocked(deleteEvent).mockClear();
+  });
+
+  it("deletes a kind-1 zapsnag note with a d tag by event id only", async () => {
+    const nostr = await deleteOwnProduct({
+      id: "zapsnag-note",
+      pubkey: "viewer-pubkey",
+      created_at: 10,
+      kind: 1,
+      tags: [
+        ["t", "shopstr-zapsnag"],
+        ["d", "coffee"],
+      ],
+      content: "Coffee beans price: 100 sats #zapsnag",
+      sig: "zapsnag-sig",
+    } as NostrEvent);
+
+    expect(deleteEvent).toHaveBeenCalledWith(
+      nostr,
+      undefined,
+      ["zapsnag-note"],
+      1,
+      []
+    );
+  });
+
+  it("deletes a listing by event id and address", async () => {
+    const nostr = await deleteOwnProduct({
+      id: "listing",
+      pubkey: "viewer-pubkey",
+      created_at: 10,
+      kind: 30402,
+      tags: [
+        ["d", "coffee"],
+        ["title", "Coffee Beans"],
+        ["price", "12", "USD"],
+        ["image", "https://example.com/coffee.png"],
+      ],
+      content: "Fresh coffee",
+      sig: "listing-sig",
+    } as NostrEvent);
+
+    expect(deleteEvent).toHaveBeenCalledWith(
+      nostr,
+      undefined,
+      ["listing"],
+      30402,
+      ["30402:viewer-pubkey:coffee"]
+    );
   });
 });
