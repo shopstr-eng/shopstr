@@ -53,6 +53,7 @@ import {
   getUniqueProofs,
 } from "@/utils/nostr/fetch-service";
 import { fetchAllPostsAbortable } from "@/utils/nostr/fetch-all-posts-abortable";
+import type { ProfileCacheRead } from "@/utils/nostr/profile-cache";
 import {
   NostrEvent,
   Community,
@@ -961,6 +962,12 @@ function Shopstr({ props }: { props: AppProps }) {
         }
 
         const pubkeysToFetchProfilesFor = Array.from(pubkeySet);
+        const profileCacheRead: ProfileCacheRead = isLoggedIn
+          ? { mode: "unfiltered" }
+          : {
+              mode: "public-listing-authors",
+              pubkeys: Array.from(profileSetFromProducts),
+            };
 
         await initialUserProfileFetch;
 
@@ -974,7 +981,8 @@ function Shopstr({ props }: { props: AppProps }) {
                 allRelays,
                 pubkeysToFetchProfilesFor,
                 guardedEditProfileContext,
-                profileContext.profileData
+                profileContext.profileData,
+                profileCacheRead
               ),
             () =>
               guardedEditProfileContext(
@@ -989,7 +997,8 @@ function Shopstr({ props }: { props: AppProps }) {
                 nostr!,
                 allRelays,
                 pubkeysToFetchProfilesFor,
-                guardedEditShopContext
+                guardedEditShopContext,
+                profileCacheRead
               ),
             () => guardedEditShopContext(new Map(), false)
           ),

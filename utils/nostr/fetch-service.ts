@@ -18,6 +18,10 @@ import {
   verifyNip05Identifier,
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
+import {
+  fetchCachedProfileEvents,
+  type ProfileCacheRead,
+} from "@/utils/nostr/profile-cache";
 import { isHexPubkey } from "@/utils/nostr/pubkey";
 import {
   pickPreferredReplaceableEvent,
@@ -941,7 +945,8 @@ export const fetchShopProfile = async (
   editShopContext: (
     shopEvents: Map<string, ShopProfile>,
     isLoading: boolean
-  ) => void
+  ) => void,
+  profileCacheRead?: ProfileCacheRead
 ): Promise<{
   shopProfileMap: Map<string, ShopProfile>;
 }> => {
@@ -961,45 +966,45 @@ export const fetchShopProfile = async (
 
       // First load from database
       try {
-        const response = await fetch("/api/db/fetch-profiles");
-        if (response.ok) {
-          const profilesFromDb = await response.json();
-          const shopProfilesFromDb = profilesFromDb.filter(
-            (e: NostrEvent) =>
-              e.kind === 30019 && pubkeyShopProfileToFetch.includes(e.pubkey)
+        const requested = new Set(pubkeyShopProfileToFetch);
+        const profilesFromDb = await fetchCachedProfileEvents(
+          30019,
+          profileCacheRead
+        );
+        const shopProfilesFromDb = profilesFromDb.filter(
+          (event) => event.kind === 30019 && requested.has(event.pubkey)
+        );
+
+        if (shopProfilesFromDb.length > 0) {
+          shopProfilesFromDb.sort(
+            (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
           );
-
-          if (shopProfilesFromDb.length > 0) {
-            shopProfilesFromDb.sort(
-              (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
-            );
-            const latestEventsMap: Map<string, NostrEvent> = new Map();
-            shopProfilesFromDb.forEach((event: NostrEvent) => {
-              if (!latestEventsMap.has(event.pubkey)) {
-                latestEventsMap.set(event.pubkey, event);
-              }
-            });
-
-            latestEventsMap.forEach((event, pubkey) => {
-              try {
-                const shopProfileSetting = {
-                  pubkey: event.pubkey,
-                  content: JSON.parse(event.content),
-                  created_at: event.created_at,
-                  event: event,
-                };
-                shopProfile.set(pubkey, shopProfileSetting);
-              } catch (error) {
-                console.error(
-                  `Failed to parse shop profile from DB for pubkey: ${pubkey}`,
-                  error
-                );
-              }
-            });
-
-            if (shopProfile.size > 0) {
-              editShopContext(shopProfile, false);
+          const latestEventsMap: Map<string, NostrEvent> = new Map();
+          shopProfilesFromDb.forEach((event: NostrEvent) => {
+            if (!latestEventsMap.has(event.pubkey)) {
+              latestEventsMap.set(event.pubkey, event);
             }
+          });
+
+          latestEventsMap.forEach((event, pubkey) => {
+            try {
+              const shopProfileSetting = {
+                pubkey: event.pubkey,
+                content: JSON.parse(event.content),
+                created_at: event.created_at,
+                event: event,
+              };
+              shopProfile.set(pubkey, shopProfileSetting);
+            } catch (error) {
+              console.error(
+                `Failed to parse shop profile from DB for pubkey: ${pubkey}`,
+                error
+              );
+            }
+          });
+
+          if (shopProfile.size > 0) {
+            editShopContext(shopProfile, false);
           }
         }
       } catch (error) {
@@ -1102,7 +1107,8 @@ export const fetchProfile = async (
     profileMap: Map<string, NipProfile | null>,
     isLoading: boolean
   ) => void,
-  existingProfileMap: Map<string, any> = new Map()
+  existingProfileMap: Map<string, any> = new Map(),
+  profileCacheRead?: ProfileCacheRead
 ): Promise<{
   profileMap: Map<string, NipProfile | null>;
   badgeHydration: Promise<Nip58BadgeHydrationOutcome>;
@@ -1138,45 +1144,43 @@ export const fetchProfile = async (
 
       const dbProfileMap = new Map<string, NipProfile>();
       try {
-        const response = await fetch("/api/db/fetch-profiles");
-        if (response.ok) {
-          const profilesFromDb = await response.json();
-          const latestDbEvents = new Map<string, NostrEvent>();
+        const requested = new Set(pubkeyProfilesToFetch);
+        const profilesFromDb = await fetchCachedProfileEvents(
+          0,
+          profileCacheRead
+        );
+        const latestDbEvents = new Map<string, NostrEvent>();
 
-          for (const event of profilesFromDb) {
-            if (
-              event.kind === 0 &&
-              pubkeyProfilesToFetch.includes(event.pubkey)
-            ) {
-              const existing = latestDbEvents.get(event.pubkey);
-              if (!existing || event.created_at > existing.created_at) {
-                latestDbEvents.set(event.pubkey, event);
-              }
+        for (const event of profilesFromDb) {
+          if (event.kind === 0 && requested.has(event.pubkey)) {
+            const existing = latestDbEvents.get(event.pubkey);
+            if (!existing || event.created_at > existing.created_at) {
+              latestDbEvents.set(event.pubkey, event);
             }
           }
+        }
 
-          for (const [pubkey, event] of latestDbEvents.entries()) {
-            const content = parseJsonSafely<Record<string, any>>(event.content);
-            if (!content) {
-              console.warn(`Skipping invalid profile JSON from DB: ${pubkey}`);
-              continue;
-            }
-
-            const profile: NipProfile = {
-              pubkey: event.pubkey,
-              created_at: event.created_at,
-              content,
-              nip05Verified: false,
-            };
-            dbProfileMap.set(pubkey, profile);
-            updateProfileIfNewer(profile);
+        for (const [pubkey, event] of latestDbEvents.entries()) {
+          const content = parseJsonSafely<Record<string, any>>(event.content);
+          if (!content) {
+            console.warn(`Skipping invalid profile JSON from DB: ${pubkey}`);
+            continue;
           }
 
-          if (dbProfileMap.size > 0) {
-            editProfileContext(new Map(mergedProfileMap), false);
-            await verifyProfilesNip05(dbProfileMap);
-            editProfileContext(new Map(mergedProfileMap), false);
-          }
+          const profile: NipProfile = {
+            pubkey: event.pubkey,
+            created_at: event.created_at,
+            content,
+            nip05Verified: false,
+          };
+          dbProfileMap.set(pubkey, profile);
+          updateProfileIfNewer(profile);
+        }
+
+        if (dbProfileMap.size > 0) {
+          editProfileContext(new Map(mergedProfileMap), false);
+          await verifyProfilesNip05(dbProfileMap);
+          editProfileContext(new Map(mergedProfileMap), false);
         }
       } catch (error) {
         console.error("Failed to fetch profiles from database: ", error);
