@@ -95,6 +95,32 @@ describe("ImageCarousel", () => {
     expect(image.className).not.toContain("h-full");
   });
 
+  describe("image loading", () => {
+    it("lazy loads every image by default", () => {
+      render(<ImageCarousel images={["1.jpg", "2.jpg", "3.jpg"]} />);
+      const images = screen.getAllByTestId("next-image");
+      images.forEach((image) => {
+        expect(image).toHaveAttribute("loading", "lazy");
+        expect(image).toHaveAttribute("decoding", "async");
+        expect(image).not.toHaveAttribute("fetchpriority");
+      });
+    });
+
+    it("skips the HeroUI preloader so lazy images can load", () => {
+      render(<ImageCarousel images={["1.jpg"]} />);
+      expect(screen.getByTestId("next-image")).toHaveAttribute("as", "img");
+    });
+
+    it("loads only the first image eagerly when priority is set", () => {
+      render(<ImageCarousel images={["1.jpg", "2.jpg"]} priority />);
+      const [first, second] = screen.getAllByTestId("next-image");
+      expect(first).toHaveAttribute("loading", "eager");
+      expect(first).toHaveAttribute("fetchpriority", "high");
+      expect(second).toHaveAttribute("loading", "lazy");
+      expect(second).not.toHaveAttribute("fetchpriority");
+    });
+  });
+
   it("passes showThumbs prop to the Carousel", () => {
     render(<ImageCarousel images={["image1.jpg"]} showThumbs={true} />);
     const props = JSON.parse(

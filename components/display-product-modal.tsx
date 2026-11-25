@@ -158,6 +158,7 @@ export default function DisplayProductModal({
                 productTitle={productData.title}
                 showThumbs={productData.images.length > 1}
                 classname="max-h-[80vh]"
+                priority
               />
             ) : null}
             <Divider />

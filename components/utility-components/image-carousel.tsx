@@ -12,6 +12,7 @@ interface ImageCarouselProps {
   classname?: string;
   showThumbs?: boolean;
   fixedHeight?: boolean;
+  priority?: boolean;
 }
 
 export default function ImageCarousel({
@@ -20,6 +21,7 @@ export default function ImageCarousel({
   classname = "",
   showThumbs = false,
   fixedHeight = true,
+  priority = false,
 }: ImageCarouselProps) {
   const router = useRouter();
 
@@ -54,6 +56,11 @@ export default function ImageCarousel({
               : `Product image ${index + 1}`
           }
           radius="none"
+          // `as` skips HeroUI's preloader so native lazy loading can work
+          as="img"
+          loading={priority && index === 0 ? "eager" : "lazy"}
+          fetchPriority={priority && index === 0 ? "high" : undefined}
+          decoding="async"
           style={{
             width: "100%",
             height: "100%",
