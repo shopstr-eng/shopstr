@@ -12,10 +12,22 @@ export type RateLimitOptions = {
   windowMs: number;
 };
 
-const buckets = new Map<
-  string,
-  Map<string, { count: number; resetAt: number }>
->();
+type RateLimitEntry = { count: number; resetAt: number };
+
+type RateLimitBucket = {
+  entries: Map<string, RateLimitEntry>;
+  lastSweepAt: number;
+};
+
+const buckets = new Map<string, RateLimitBucket>();
+
+// Keys are client IPs (and pubkeys after authentication), so without a bound
+// the maps would grow with every distinct caller for the life of the process.
+// Expired entries are swept at most once per SWEEP_INTERVAL_MS per bucket when
+// a new key arrives; MAX_KEYS_PER_BUCKET is a backstop for a flood of distinct
+// keys inside a single window.
+const SWEEP_INTERVAL_MS = 60 * 1000;
+export const MAX_KEYS_PER_BUCKET = 5_000;
 
 function normalizeIp(ip: string | undefined): string | undefined {
   const trimmed = ip?.trim();
@@ -73,15 +85,35 @@ function getForwardedForIp(
   return undefined;
 }
 
-function getBucket(
-  name: string
-): Map<string, { count: number; resetAt: number }> {
+function getBucket(name: string, now: number): RateLimitBucket {
   let bucket = buckets.get(name);
   if (!bucket) {
-    bucket = new Map();
+    bucket = { entries: new Map(), lastSweepAt: now };
     buckets.set(name, bucket);
   }
   return bucket;
+}
+
+function sweepExpiredEntries(bucket: RateLimitBucket, now: number): void {
+  for (const [key, entry] of bucket.entries) {
+    if (now > entry.resetAt) bucket.entries.delete(key);
+  }
+  bucket.lastSweepAt = now;
+}
+
+// Called before a new key is inserted. The full scan for expired entries runs
+// at most once per SWEEP_INTERVAL_MS. If the bucket is still at its cap, the
+// oldest entries (Map iteration order is insertion order) are dropped one at a
+// time, so a flood of distinct keys costs O(1) per request, not a rescan.
+function makeRoomForNewKey(bucket: RateLimitBucket, now: number): void {
+  if (now - bucket.lastSweepAt >= SWEEP_INTERVAL_MS) {
+    sweepExpiredEntries(bucket, now);
+  }
+  while (bucket.entries.size >= MAX_KEYS_PER_BUCKET) {
+    const oldestKey = bucket.entries.keys().next().value;
+    if (oldestKey === undefined) break;
+    bucket.entries.delete(oldestKey);
+  }
 }
 
 export function checkRateLimit(
@@ -90,12 +122,18 @@ export function checkRateLimit(
   options: RateLimitOptions
 ): RateLimitResult {
   const now = Date.now();
-  const bucket = getBucket(bucketName);
-  const entry = bucket.get(key);
+  const bucket = getBucket(bucketName, now);
+  const entry = bucket.entries.get(key);
 
   if (!entry || now > entry.resetAt) {
     const resetAt = now + options.windowMs;
-    bucket.set(key, { count: 1, resetAt });
+    if (entry) {
+      // Re-insert so insertion order keeps tracking recency.
+      bucket.entries.delete(key);
+    } else {
+      makeRoomForNewKey(bucket, now);
+    }
+    bucket.entries.set(key, { count: 1, resetAt });
     return {
       ok: true,
       limit: options.limit,
@@ -167,4 +205,9 @@ export function applyRateLimit(
 // Exported for tests only.
 export function __resetRateLimitBuckets(): void {
   buckets.clear();
+}
+
+// Exported for tests only.
+export function __getRateLimitBucketSize(bucketName: string): number {
+  return buckets.get(bucketName)?.entries.size ?? 0;
 }
