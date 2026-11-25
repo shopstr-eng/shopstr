@@ -392,3 +392,94 @@ test("get_product_details returns retryable NOT_FOUND when a relay fails both th
     )
   );
 });
+
+test("get_product_details does not serve a hidden listing by product address", async () => {
+  const hidden = productEvent({
+    tags: [
+      ["d", "product"],
+      ["title", "Unreleased Shirt"],
+      ["price", "10", "USD"],
+      ["visibility", "hidden"],
+    ],
+    content: "Internal notes that are not public yet.",
+  });
+  const ctx = context(() => [hidden]);
+
+  const response = await handleGetProductDetails(
+    { productAddress: `30402:${hex("b")}:product` },
+    ctx
+  );
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, true);
+  assert.equal(body.errorCode, "NOT_FOUND");
+  assert.equal(body.retryable, false);
+  assert.equal(response.content[0].text.includes("Unreleased Shirt"), false);
+  assert.equal(response.content[0].text.includes("Internal notes"), false);
+});
+
+test("get_product_details does not serve a hidden listing by event id", async () => {
+  const productId = hex("1");
+  const hidden = productEvent({
+    id: productId,
+    tags: [
+      ["d", "product"],
+      ["title", "Unreleased Shirt"],
+      ["price", "10", "USD"],
+      ["visibility", "HIDDEN"],
+    ],
+  });
+  const ctx = context(() => [hidden]);
+
+  const response = await handleGetProductDetails({ productId }, ctx);
+  const body = JSON.parse(response.content[0].text);
+
+  assert.equal(response.isError, true);
+  assert.equal(body.errorCode, "NOT_FOUND");
+  assert.equal(response.content[0].text.includes("Unreleased Shirt"), false);
+});
+
+test("get_product_details does not fall back to an older public revision once a listing is hidden", async () => {
+  const publicRevision = productEvent({ id: hex("1"), created_at: 100 });
+  const hiddenRevision = productEvent({
+    id: hex("2"),
+    created_at: 200,
+    tags: [
+      ["d", "product"],
+      ["title", "Linen Shirt"],
+      ["price", "10", "USD"],
+      ["visibility", "hidden"],
+    ],
+  });
+  // One relay still holds the stale public revision, another has the update.
+  const ctx = context(() => [publicRevision, hiddenRevision]);
+
+  const response = await handleGetProductDetails(
+    { productAddress: `30402:${hex("b")}:product` },
+    ctx
+  );
+
+  assert.equal(response.isError, true);
+  assert.equal(JSON.parse(response.content[0].text).errorCode, "NOT_FOUND");
+});
+
+test("get_product_details still serves on-sale and pre-order listings", async () => {
+  for (const visibility of ["on-sale", "pre-order"]) {
+    const event = productEvent({
+      tags: [
+        ["d", "product"],
+        ["title", "Linen Shirt"],
+        ["price", "10", "USD"],
+        ["visibility", visibility],
+      ],
+    });
+    const response = await handleGetProductDetails(
+      { productAddress: `30402:${hex("b")}:product` },
+      context(() => [event])
+    );
+    const body = JSON.parse(response.content[0].text);
+
+    assert.notEqual(response.isError, true);
+    assert.equal(body.product.visibility, visibility);
+  }
+});

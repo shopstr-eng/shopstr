@@ -20,6 +20,7 @@ import {
   getDataFreshness,
 } from "./utils/common.js";
 import type { CoreToolContext } from "./utils/context.js";
+import { isPublicProduct } from "./utils/seller.js";
 
 export const getProductDetailsInputSchema = {
   productId: z
@@ -189,6 +190,20 @@ export async function handleGetProductDetails(
   }
 
   const product = parseProductEvent(event);
+  // The newest revision decides visibility: a hidden listing must not be
+  // served by direct lookup, and must not fall back to an older public
+  // revision either. Report it exactly like a listing that does not exist.
+  if (!isPublicProduct(product)) {
+    hints.push(
+      "Use search_products with keyword, category, or location filters to discover products."
+    );
+    return createNotFoundResponse(
+      "Product not found.",
+      relayResult.meta,
+      "product",
+      hints
+    );
+  }
   const { description, truncated } = truncateProductDescription(event.content);
   if (truncated) {
     hints.push(

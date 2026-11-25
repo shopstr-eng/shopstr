@@ -1,5 +1,6 @@
 import type { HodlOrderDetails } from "../lightning/hodl-order-details";
 import { encryptHodlValue, decryptHodlValue } from "../lightning/hodl-storage";
+import type { ProfileCacheScope } from "@/utils/nostr/profile-cache";
 import { Pool, PoolClient } from "pg";
 import { NostrEvent } from "../types/types";
 import { selectPreferredReplaceableEvent } from "../nostr/replaceable-events";
@@ -2975,18 +2976,22 @@ export async function getOrderStatuses(
   }
 }
 
-// Fetch all profiles from database (both user and shop profiles)
-export async function fetchAllProfilesFromDb(): Promise<NostrEvent[]> {
+export async function fetchAllProfilesFromDb(
+  scope?: ProfileCacheScope
+): Promise<NostrEvent[]> {
   const dbPool = getDbPool();
   let client;
 
   try {
     client = await dbPool.connect();
-    const query = `SELECT id, pubkey, created_at, kind, tags, content, sig 
-                   FROM profile_events 
+    const query = `SELECT id, pubkey, created_at, kind, tags, content, sig
+                   FROM profile_events
+                   ${scope ? "WHERE kind = $1 AND pubkey = ANY($2::text[])" : ""}
                    ORDER BY created_at DESC`;
 
-    const result = await client.query(query);
+    const result = scope
+      ? await client.query(query, [scope.kind, scope.pubkeys])
+      : await client.query(query);
 
     return result.rows.map((row) => ({
       id: row.id,
