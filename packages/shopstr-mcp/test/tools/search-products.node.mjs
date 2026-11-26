@@ -1636,3 +1636,85 @@ test("search_products returns no cursor for price sorts", async () => {
     true
   );
 });
+
+async function searchIds(keyword, events) {
+  const response = await handleSearchProducts(
+    { keyword },
+    context({ "wss://relay.example.com": events })
+  );
+  const body = JSON.parse(response.content[0].text);
+  return (body.products ?? []).map((product) => product.id).sort();
+}
+
+test("search_products keyword does not match a URL inside the description", async () => {
+  const launcher = productEvent({
+    id: hex("1"),
+    tags: [
+      ["d", "game-launcher"],
+      ["title", "Retro Game Launcher"],
+      ["price", "5", "USD"],
+    ],
+    content: "Demo video: https://www.youtube.com/watch?v=abc123",
+  });
+  const watch = productEvent({
+    id: hex("2"),
+    tags: [
+      ["d", "smart-watch"],
+      ["title", "Smart Watch"],
+      ["price", "90", "USD"],
+    ],
+  });
+
+  assert.deepEqual(await searchIds("watch", [launcher, watch]), [hex("2")]);
+});
+
+test("search_products keyword does not match parsed status or default format", async () => {
+  const shirt = productEvent({
+    id: hex("1"),
+    tags: [
+      ["d", "shirt"],
+      ["title", "Cotton Shirt"],
+      ["price", "20", "USD"],
+      ["status", "active"],
+    ],
+  });
+  const ebook = productEvent({
+    id: hex("2"),
+    tags: [
+      ["d", "ebook"],
+      ["title", "Digital Painting Guide"],
+      ["summary", "For active learners"],
+      ["price", "10", "USD"],
+      ["status", "active"],
+    ],
+  });
+
+  assert.deepEqual(await searchIds("digital", [shirt, ebook]), [hex("2")]);
+  assert.deepEqual(await searchIds("active", [shirt, ebook]), [hex("2")]);
+});
+
+test("search_products keyword matches at word starts only", async () => {
+  const wallets = productEvent({
+    id: hex("1"),
+    tags: [
+      ["d", "wallets"],
+      ["title", "Leather Wallets"],
+      ["price", "30", "USD"],
+    ],
+  });
+  const stopwatch = productEvent({
+    id: hex("2"),
+    tags: [
+      ["d", "stopwatch"],
+      ["title", "Stopwatch Timer"],
+      ["price", "15", "USD"],
+    ],
+  });
+
+  assert.deepEqual(await searchIds("wallet", [wallets, stopwatch]), [hex("1")]);
+  assert.deepEqual(await searchIds("allet", [wallets, stopwatch]), []);
+  assert.deepEqual(await searchIds("watch", [wallets, stopwatch]), []);
+  assert.deepEqual(await searchIds("leather wall", [wallets, stopwatch]), [
+    hex("1"),
+  ]);
+});
