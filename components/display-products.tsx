@@ -351,13 +351,16 @@ const DisplayProducts = ({
 
   const handleDelete = async (productId: string) => {
     try {
-      const product = productEventContext.productEvents.find(
-        (event) => event.id === productId
-      );
-      const kind = product?.kind ?? 30402;
+      // A relay search result may not have reached the product context yet.
+      const product =
+        productEventContext.productEvents.find(
+          (event) => event.id === productId
+        ) ?? nip50ProductEvents.find((event) => event.id === productId);
+      // Unknown product: no kind, so deleteEvent leaves out the k tag.
+      const kind = product?.kind;
       const dTag = product?.tags.find((tag) => tag[0] === "d")?.[1];
       // Only addressable kinds (30000-39999) have an address. Zapsnag notes are kind 1.
-      const isAddressable = kind >= 30000 && kind < 40000;
+      const isAddressable = kind !== undefined && kind >= 30000 && kind < 40000;
       await deleteEvent(
         nostr!,
         signer!,
