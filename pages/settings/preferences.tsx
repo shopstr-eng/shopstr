@@ -46,6 +46,13 @@ import EditAddressForm from "@/components/utility-components/edit-address-form";
 import SavedAddressesList from "@/components/utility-components/saved-addresses-list";
 import { CashuWalletContext } from "@/utils/context/context";
 
+const RELAY_LIST_LABELS = {
+  all: "Read/Write",
+  read: "Read Only",
+  write: "Write Only",
+  "": "",
+} as const;
+
 const PreferencesPage = () => {
   const { nostr } = useContext(NostrContext);
   const [relays, setRelays] = useState(Array<string>(0));
@@ -231,6 +238,7 @@ const PreferencesPage = () => {
     handleSubmit: handleRelaySubmit,
     control: relayControl,
     reset: relayReset,
+    setError: setRelayError,
   } = useForm();
 
   const {
@@ -240,8 +248,8 @@ const PreferencesPage = () => {
   } = useForm();
 
   const onRelaySubmit = async (data: { [x: string]: string }) => {
-    const relay = data["relay"];
-    await addRelay(relay!, currentRelayType);
+    const relay = data["relay"]!.trim();
+    await addRelay(relay, currentRelayType);
   };
 
   const handleToggleRelayModal = (type: "all" | "read" | "write" | "") => {
@@ -250,20 +258,33 @@ const PreferencesPage = () => {
     setShowRelayModal(!showRelayModal);
   };
 
+  const getRelayList = (type: "all" | "read" | "write" | "") => {
+    if (type === "read") return readRelays;
+    if (type === "write") return writeRelays;
+    return relays;
+  };
+
   const addRelay = async (
     newRelay: string,
     type: "all" | "read" | "write" | ""
   ) => {
+    // Each relay list is managed independently, so only check the list the
+    // relay is being added to.
+    if (getRelayList(type).includes(newRelay)) {
+      setRelayError("relay", {
+        type: "duplicate",
+        message: `This relay is already in your ${RELAY_LIST_LABELS[type]} relays.`,
+      });
+      return;
+    }
     try {
       const relayTest = await Relay.connect(newRelay);
-      if (!relays.includes(newRelay)) {
-        if (type === "read") {
-          setReadRelays([...readRelays, newRelay]);
-        } else if (type === "write") {
-          setWriteRelays([...writeRelays, newRelay]);
-        } else if (type === "all") {
-          setRelays([...relays, newRelay]);
-        }
+      if (type === "read") {
+        setReadRelays([...readRelays, newRelay]);
+      } else if (type === "write") {
+        setWriteRelays([...writeRelays, newRelay]);
+      } else if (type === "all") {
+        setRelays([...relays, newRelay]);
       }
       relayTest.close();
       handleToggleRelayModal(type);
@@ -547,7 +568,7 @@ const PreferencesPage = () => {
           <Modal
             backdrop="blur"
             isOpen={showRelayModal}
-            onClose={() => handleToggleRelayModal("all")}
+            onClose={() => handleToggleRelayModal(currentRelayType)}
             classNames={{
               body: "py-6",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -561,7 +582,9 @@ const PreferencesPage = () => {
           >
             <ModalContent>
               <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
-                Add Relay
+                {currentRelayType
+                  ? `Add ${RELAY_LIST_LABELS[currentRelayType]} Relay`
+                  : "Add Relay"}
               </ModalHeader>
               <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
                 <ModalBody>
@@ -614,7 +637,7 @@ const PreferencesPage = () => {
                   <Button
                     color="danger"
                     variant="light"
-                    onClick={() => handleToggleRelayModal("")}
+                    onClick={() => handleToggleRelayModal(currentRelayType)}
                   >
                     Cancel
                   </Button>
@@ -674,88 +697,6 @@ const PreferencesPage = () => {
               </div>
             )}
           </div>
-          <Modal
-            backdrop="blur"
-            isOpen={showRelayModal}
-            onClose={() => handleToggleRelayModal("read")}
-            classNames={{
-              body: "py-6",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
-            }}
-            scrollBehavior={"outside"}
-            size="2xl"
-          >
-            <ModalContent>
-              <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
-                Add Relay
-              </ModalHeader>
-              <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
-                <ModalBody>
-                  <Controller
-                    name="relay"
-                    control={relayControl}
-                    rules={{
-                      required: "A relay URL is required.",
-                      maxLength: {
-                        value: 500,
-                        message: "This input exceed maxLength of 500.",
-                      },
-                      validate: (value) =>
-                        /^(wss:\/\/|ws:\/\/)/.test(value) ||
-                        "Invalid relay URL, must start with wss:// or ws://.",
-                    }}
-                    render={({
-                      field: { onChange, onBlur, value },
-                      fieldState: { error },
-                    }) => {
-                      const isErrored = error !== undefined;
-                      const errorMessage: string = error?.message
-                        ? error.message
-                        : "";
-                      return (
-                        <Textarea
-                          className="text-light-text dark:text-dark-text"
-                          variant="bordered"
-                          fullWidth={true}
-                          placeholder="wss://..."
-                          isInvalid={isErrored}
-                          errorMessage={errorMessage}
-                          // controller props
-                          onChange={onChange} // send value to hook form
-                          onBlur={onBlur} // notify when input is touched/blur
-                          value={value}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              handleRelaySubmit(onRelaySubmit)();
-                            }
-                          }}
-                        />
-                      );
-                    }}
-                  />
-                </ModalBody>
-
-                <ModalFooter>
-                  <Button
-                    color="danger"
-                    variant="light"
-                    onClick={() => handleToggleRelayModal("")}
-                  >
-                    Cancel
-                  </Button>
-
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
-                    Add Relay
-                  </Button>
-                </ModalFooter>
-              </form>
-            </ModalContent>
-          </Modal>
 
           <span className="text-light-text dark:text-dark-text mt-4 flex text-2xl font-bold">
             Write Only Relays
@@ -804,88 +745,6 @@ const PreferencesPage = () => {
               </div>
             )}
           </div>
-          <Modal
-            backdrop="blur"
-            isOpen={showRelayModal}
-            onClose={() => handleToggleRelayModal("write")}
-            classNames={{
-              body: "py-6",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
-            }}
-            scrollBehavior={"outside"}
-            size="2xl"
-          >
-            <ModalContent>
-              <ModalHeader className="text-light-text dark:text-dark-text flex flex-col gap-1">
-                Add Relay
-              </ModalHeader>
-              <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
-                <ModalBody>
-                  <Controller
-                    name="relay"
-                    control={relayControl}
-                    rules={{
-                      required: "A relay URL is required.",
-                      maxLength: {
-                        value: 500,
-                        message: "This input exceed maxLength of 500.",
-                      },
-                      validate: (value) =>
-                        /^(wss:\/\/|ws:\/\/)/.test(value) ||
-                        "Invalid relay URL, must start with wss:// or ws://.",
-                    }}
-                    render={({
-                      field: { onChange, onBlur, value },
-                      fieldState: { error },
-                    }) => {
-                      const isErrored = error !== undefined;
-                      const errorMessage: string = error?.message
-                        ? error.message
-                        : "";
-                      return (
-                        <Textarea
-                          className="text-light-text dark:text-dark-text"
-                          variant="bordered"
-                          fullWidth={true}
-                          placeholder="wss://..."
-                          isInvalid={isErrored}
-                          errorMessage={errorMessage}
-                          // controller props
-                          onChange={onChange} // send value to hook form
-                          onBlur={onBlur} // notify when input is touched/blur
-                          value={value}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              handleRelaySubmit(onRelaySubmit)();
-                            }
-                          }}
-                        />
-                      );
-                    }}
-                  />
-                </ModalBody>
-
-                <ModalFooter>
-                  <Button
-                    color="danger"
-                    variant="light"
-                    onClick={() => handleToggleRelayModal("")}
-                  >
-                    Cancel
-                  </Button>
-
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
-                    Add Relay
-                  </Button>
-                </ModalFooter>
-              </form>
-            </ModalContent>
-          </Modal>
 
           <span className="text-light-text dark:text-dark-text mt-4 flex text-2xl font-bold">
             Blossom Media Servers
