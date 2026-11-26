@@ -10,6 +10,7 @@ import SignInModal from "./sign-in/SignInModal";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import { ShopProfile } from "../utils/types/types";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
+import { useLocalStorageSubscription } from "@/utils/hooks/useLocalStorageSubscription";
 
 const TopNav = ({
   setFocusedPubkey,
@@ -33,7 +34,11 @@ const TopNav = ({
   const shopMapContext = useContext(ShopMapContext);
 
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
-  const [cartQuantity, setCartQuantity] = useState(0);
+  const cartQuantity = useLocalStorageSubscription(
+    STORAGE_KEYS.CART,
+    () => storage.getJson<unknown[]>(STORAGE_KEYS.CART, []).length,
+    0
+  );
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isLoggedIn: signedIn, pubkey: userPubkey } =
     useContext(SignerContext);
@@ -42,25 +47,6 @@ const TopNav = ({
   const [shopName, setShopName] = useState("");
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    const fetchAndUpdateCartQuantity = async () => {
-      const cartList = storage.getJson<unknown[]>(STORAGE_KEYS.CART, []);
-      if (cartList.length > 0) {
-        setCartQuantity(cartList.length);
-      } else {
-        setCartQuantity(0);
-      }
-    };
-
-    fetchAndUpdateCartQuantity();
-
-    const interval = setInterval(() => {
-      fetchAndUpdateCartQuantity();
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     const getUnreadMessages = async () => {

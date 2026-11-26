@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import {
   ArrowDownTrayIcon,
   ArrowUpTrayIcon,
@@ -7,28 +6,17 @@ import {
   ShoppingBagIcon,
 } from "@heroicons/react/24/outline";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
+import { useLocalStorageSubscription } from "@/utils/hooks/useLocalStorageSubscription";
 import { Transaction } from "@/utils/types/types";
 
 // add found proofs as nutsack deposit with different icon
 
 const Transactions = () => {
-  const [history, setHistory] = useState<Transaction[]>([]);
-
-  useEffect(() => {
-    // Function to fetch and update transactions
-    const fetchAndUpdateTransactions = () => {
-      const history = storage.getJson<Transaction[]>(STORAGE_KEYS.HISTORY, []);
-      setHistory(history);
-    };
-    // Initial fetch
-    fetchAndUpdateTransactions();
-    // Set up polling with setInterval
-    const interval = setInterval(() => {
-      fetchAndUpdateTransactions();
-    }, 2100); // Polling every 2100 milliseconds (2.1 seconds)
-    // Clean up on component unmount
-    return () => clearInterval(interval);
-  }, []);
+  const history = useLocalStorageSubscription<Transaction[]>(
+    STORAGE_KEYS.HISTORY,
+    () => storage.getJson<Transaction[]>(STORAGE_KEYS.HISTORY, []),
+    []
+  );
 
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp * 1000);

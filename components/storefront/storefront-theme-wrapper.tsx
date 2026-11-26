@@ -20,6 +20,7 @@ import StorefrontFooterComponent from "./storefront-footer";
 import { getNavTextColor } from "@/utils/storefront-colors";
 import { storage, STORAGE_KEYS } from "@/utils/storage";
 import { getStorefrontCartQuantity } from "@/utils/storefront-cart";
+import { useLocalStorageSubscription } from "@/utils/hooks/useLocalStorageSubscription";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#a438ba",
@@ -64,7 +65,12 @@ export default function StorefrontThemeWrapper({
 
   const [storefront, setStorefront] = useState<StorefrontConfig | null>(null);
   const [colors, setColors] = useState<StorefrontColorScheme>(DEFAULT_COLORS);
-  const [cartQuantity, setCartQuantity] = useState(0);
+  const cartQuantity = useLocalStorageSubscription(
+    STORAGE_KEYS.CART,
+    () => getStorefrontCartQuantity(sellerPubkey),
+    0,
+    [sellerPubkey]
+  );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -89,15 +95,6 @@ export default function StorefrontThemeWrapper({
       storage.setItem(STORAGE_KEYS.SF_SHOP_SLUG, storefront.shopSlug);
     }
   }, [sellerPubkey, storefront?.shopSlug]);
-
-  useEffect(() => {
-    const sync = () => {
-      setCartQuantity(getStorefrontCartQuantity(sellerPubkey));
-    };
-    sync();
-    const interval = setInterval(sync, 1000);
-    return () => clearInterval(interval);
-  }, [sellerPubkey]);
 
   useEffect(() => {
     const vars: Record<string, string> = {
