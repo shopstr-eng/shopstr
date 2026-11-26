@@ -56,7 +56,9 @@ export const searchProductsInputSchema = {
     .string()
     .max(200)
     .optional()
-    .describe("Search keyword to match against product title or summary"),
+    .describe(
+      "Search keyword matched at word starts against title, summary, location, condition, categories, and description (URLs ignored)"
+    ),
   category: z.string().max(100).optional().describe("Product category tag"),
   location: z.string().max(100).optional().describe("Product location"),
   minPrice: z.number().min(0).finite().optional().describe("Minimum price"),
@@ -121,6 +123,18 @@ const NIP50_RESERVED_SLOTS = 5;
 const NIP50_MAX_TIMEOUT_MS = 3_000;
 const NIP50_MAX_RELAY_LIMIT = 100;
 const SEARCH_EVENT_CONTENT_CHAR_LIMIT = 20_000;
+const SEARCH_URL_PATTERN = /(?:https?:\/\/|www\.)\S+/giu;
+const REGEX_SPECIAL_CHARS = /[.*+?^${}()|[\]\\]/g;
+
+// Matches the keyword at the start of a word, so "watch" matches "watches"
+// but not "stopwatch". URLs are removed first so a link such as
+// youtube.com/watch in a description does not count as a match.
+function textMatchesKeyword(text: string, keyword: string): boolean {
+  const escaped = keyword.replace(REGEX_SPECIAL_CHARS, "\\$&");
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}`, "iu").test(
+    text.replace(SEARCH_URL_PATTERN, " ")
+  );
+}
 
 function productMatchesFilters(
   product: ProductResponse,
@@ -131,20 +145,18 @@ function productMatchesFilters(
   if (product.visibility === "hidden") return false;
 
   if (filters.keyword) {
-    const keyword = filters.keyword.toLowerCase();
+    // productFormat and status are parsed metadata, not seller text. The
+    // format defaults to "digital" and most listings are "active", so
+    // including them made those words match nearly every listing.
     const searchableText = [
       product.title,
       product.summary,
       product.location,
       product.condition,
-      product.productFormat,
-      product.status,
       eventContent.slice(0, SEARCH_EVENT_CONTENT_CHAR_LIMIT),
       ...product.categories,
-    ]
-      .join(" ")
-      .toLowerCase();
-    if (!searchableText.includes(keyword)) return false;
+    ].join(" ");
+    if (!textMatchesKeyword(searchableText, filters.keyword)) return false;
   }
 
   if (filters.category) {
