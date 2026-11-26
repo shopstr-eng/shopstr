@@ -7,12 +7,14 @@ import {
   ProfileMapContext,
   RelaysContext,
   ReportsContext,
+  ShopMapContext,
 } from "@/utils/context/context";
 import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { NostrEvent, NostrManager } from "@/utils/nostr/nostr-manager";
+import type { ProfileData, ShopProfile } from "@/utils/types/types";
 import {
   DEFAULT_NIP50_SEARCH_RELAYS,
   NIP50_SEARCH_TIMEOUT_MS,
@@ -86,6 +88,8 @@ const renderDisplayProducts = ({
   focusedPubkey,
   nostr,
   productEvents = [],
+  profileData = new Map(),
+  shopData = new Map(),
   relayList = ["wss://relay.example"],
   selectedSearch = "coffee",
   reportEvents = [],
@@ -97,6 +101,8 @@ const renderDisplayProducts = ({
   focusedPubkey?: string;
   nostr: { fetch: jest.Mock };
   productEvents?: NostrEvent[];
+  profileData?: Map<string, Partial<ProfileData>>;
+  shopData?: Map<string, ShopProfile>;
   relayList?: string[];
   selectedSearch?: string;
   reportEvents?: NostrEvent[];
@@ -122,45 +128,53 @@ const renderDisplayProducts = ({
         >
           <ProfileMapContext.Provider
             value={{
-              profileData: new Map(),
+              profileData,
               isLoading: false,
               updateProfileData: jest.fn(),
             }}
           >
-            <FollowsContext.Provider
+            <ShopMapContext.Provider
               value={{
-                directFollowList: followList,
-                followList,
-                firstDegreeFollowsLength,
+                shopData,
                 isLoading: false,
-                addFollow: async () => ({ ok: false, reason: "unknown" }),
-                removeFollow: async () => ({ ok: false, reason: "unknown" }),
+                updateShopData: jest.fn(),
               }}
             >
-              <ReportsContext.Provider
+              <FollowsContext.Provider
                 value={{
+                  directFollowList: followList,
+                  followList,
+                  firstDegreeFollowsLength,
                   isLoading: false,
-                  reportEvents,
-                  addReportEvent: jest.fn(),
+                  addFollow: async () => ({ ok: false, reason: "unknown" }),
+                  removeFollow: async () => ({ ok: false, reason: "unknown" }),
                 }}
               >
-                <ProductContext.Provider
+                <ReportsContext.Provider
                   value={{
-                    productEvents,
                     isLoading: false,
-                    addNewlyCreatedProductEvent,
-                    removeDeletedProductEvent,
+                    reportEvents,
+                    addReportEvent: jest.fn(),
                   }}
                 >
-                  <DisplayProducts
-                    focusedPubkey={focusedPubkey}
-                    selectedCategories={new Set()}
-                    selectedLocation=""
-                    selectedSearch={selectedSearch}
-                  />
-                </ProductContext.Provider>
-              </ReportsContext.Provider>
-            </FollowsContext.Provider>
+                  <ProductContext.Provider
+                    value={{
+                      productEvents,
+                      isLoading: false,
+                      addNewlyCreatedProductEvent,
+                      removeDeletedProductEvent,
+                    }}
+                  >
+                    <DisplayProducts
+                      focusedPubkey={focusedPubkey}
+                      selectedCategories={new Set()}
+                      selectedLocation=""
+                      selectedSearch={selectedSearch}
+                    />
+                  </ProductContext.Provider>
+                </ReportsContext.Provider>
+              </FollowsContext.Provider>
+            </ShopMapContext.Provider>
           </ProfileMapContext.Provider>
         </RelaysContext.Provider>
       </NostrContext.Provider>
@@ -878,6 +892,64 @@ describe("DisplayProducts search filtering", () => {
         screen.queryByTestId("product-relay-product")
       ).not.toBeInTheDocument();
       expect(screen.getByTestId("product-local-product")).toBeInTheDocument();
+    });
+  });
+
+  it("matches listings by seller display name and shop name", async () => {
+    const sellerPubkey = "a".repeat(64);
+    const nostr = { fetch: jest.fn().mockResolvedValue([]) };
+    const productEvents: NostrEvent[] = [
+      {
+        id: "alice-product",
+        pubkey: sellerPubkey,
+        created_at: 10,
+        kind: 30402,
+        tags: [
+          ["d", "ceramic-mug"],
+          ["title", "Handmade Ceramic Mug"],
+          ["price", "20", "USD"],
+          ["image", "https://example.com/mug.png"],
+        ],
+        content: "Handcrafted stoneware mug",
+        sig: "sig-alice",
+      },
+    ];
+    const profileData = new Map([
+      [
+        sellerPubkey,
+        {
+          pubkey: sellerPubkey,
+          created_at: 1,
+          content: { name: "alice", display_name: "Alice Potter" },
+        },
+      ],
+    ]);
+    const shopData = new Map<string, ShopProfile>([
+      [
+        sellerPubkey,
+        {
+          pubkey: sellerPubkey,
+          created_at: 1,
+          content: {
+            name: "Kiln Studio",
+            about: "",
+            ui: { picture: "", banner: "", theme: "", darkMode: false },
+            merchants: [],
+          },
+        },
+      ],
+    ]);
+
+    renderDisplayProducts({
+      nostr,
+      productEvents,
+      profileData,
+      shopData,
+      selectedSearch: "kiln studio",
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Handmade Ceramic Mug")).toBeInTheDocument();
     });
   });
 });
