@@ -1,6 +1,33 @@
 import { nip19 } from "nostr-tools";
 import { ProductData } from "./product-parser-functions";
 
+export interface SellerSearchContext {
+  profileData?: Map<
+    string,
+    {
+      content?: { name?: unknown; display_name?: unknown; nip05?: unknown };
+      nip05Verified?: boolean;
+    }
+  >;
+  shopData?: Map<string, { content?: { name?: unknown } }>;
+}
+
+const getSellerSearchFields = (
+  pubkey: string,
+  sellerContext?: SellerSearchContext
+): string[] => {
+  if (!sellerContext) return [];
+  const profile = sellerContext.profileData?.get(pubkey);
+  const content = profile?.content;
+  const shopName = sellerContext.shopData?.get(pubkey)?.content?.name;
+  return [
+    content?.name,
+    content?.display_name,
+    profile?.nip05Verified ? content?.nip05 : undefined,
+    shopName,
+  ].filter((v): v is string => typeof v === "string" && v.length > 0);
+};
+
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -39,15 +66,17 @@ export const productSatisfiesLocationFilter = (
 
 /**
  * Checks if a product satisfies the search filter.
- * Supports Nip-19 addresses (naddr1, npub1) and text-based search in title/summary.
+ * Supports Nip-19 addresses (naddr1, npub1) and text-based search in title/summary/seller metadata.
  * Also supports numeric price matching.
  * @param productData - The product to check.
  * @param selectedSearch - The search query string.
+ * @param sellerContext - Optional seller profile/shop maps for matching seller names.
  * @returns boolean
  */
 export const productSatisfiesSearchFilter = (
   productData: ProductData,
-  selectedSearch: string
+  selectedSearch: string,
+  sellerContext?: SellerSearchContext
 ) => {
   const normalizedSearch = selectedSearch.trim();
 
@@ -96,6 +125,15 @@ export const productSatisfiesSearchFilter = (
       if (summaryMatch && summaryMatch.length > 0) return true;
     }
 
+    // Match seller profile/shop metadata
+    if (
+      getSellerSearchFields(productData.pubkey, sellerContext).some((field) =>
+        re.test(field)
+      )
+    ) {
+      return true;
+    }
+
     // Match numeric price
     const numericSearch = parseFloat(normalizedSearch);
     if (!isNaN(numericSearch) && productData.price === numericSearch) {
@@ -127,12 +165,17 @@ export const productSatisfiesAllFilters = (
     selectedCategories: Set<string>;
     selectedLocation: string;
     selectedSearch: string;
+    sellerContext?: SellerSearchContext;
   }
 ) => {
   return (
     productSatisfiesPriceFilter(productData) &&
     productSatisfiesCategoryFilter(productData, filters.selectedCategories) &&
     productSatisfiesLocationFilter(productData, filters.selectedLocation) &&
-    productSatisfiesSearchFilter(productData, filters.selectedSearch)
+    productSatisfiesSearchFilter(
+      productData,
+      filters.selectedSearch,
+      filters.sellerContext
+    )
   );
 };
