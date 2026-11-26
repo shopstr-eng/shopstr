@@ -15,6 +15,8 @@ import {
 } from "@cashu/cashu-ts";
 import { useRouter } from "next/router";
 import { sumProofAmounts } from "@/utils/cashu/proof-amount";
+import { STORAGE_KEYS } from "@/utils/storage";
+import { useLocalStorageSubscription } from "@/utils/hooks/useLocalStorageSubscription";
 
 interface StorefrontWalletProps {
   colors: StorefrontColorScheme;
@@ -24,14 +26,18 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
   const { isLoggedIn } = useContext(SignerContext);
   const router = useRouter();
 
-  const [totalBalance, setTotalBalance] = useState(0);
-  const [walletBalance, setWalletBalance] = useState(0);
   const [mint, setMint] = useState("");
   const [wallet, setWallet] = useState<CashuWallet>();
   const [mintKeySetIds, setMintKeySetIds] = useState<MintKeyset[]>([]);
 
   const localStorageData = useMemo(() => getLocalStorageData(), []);
-  const { mints, tokens } = localStorageData;
+  const { mints, tokens: initialTokens } = localStorageData;
+
+  const liveTokens = useLocalStorageSubscription<Proof[]>(
+    STORAGE_KEYS.TOKENS,
+    () => getLocalStorageData().tokens as Proof[],
+    (initialTokens as Proof[]) ?? []
+  );
 
   useEffect(() => {
     if (mints && mints[0]) {
@@ -56,45 +62,23 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
   }, [wallet]);
 
   const filteredProofs = useMemo(() => {
-    if (mints && tokens && mintKeySetIds) {
-      return tokens.filter((p: Proof) =>
+    if (mints && liveTokens && mintKeySetIds) {
+      return liveTokens.filter((p: Proof) =>
         mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
     }
     return [];
-  }, [mintKeySetIds, mints, tokens]);
+  }, [mintKeySetIds, mints, liveTokens]);
 
-  useEffect(() => {
-    if (tokens) {
-      const tokensTotal = tokens.length >= 1 ? sumProofAmounts(tokens) : 0;
-      setTotalBalance(tokensTotal);
-    }
-    const walletTotal =
-      filteredProofs.length >= 1 ? sumProofAmounts(filteredProofs) : 0;
-    setWalletBalance(walletTotal);
-  }, [tokens, filteredProofs]);
+  const totalBalance = useMemo(() => {
+    return liveTokens && liveTokens.length >= 1
+      ? sumProofAmounts(liveTokens)
+      : 0;
+  }, [liveTokens]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const { tokens: newTokens } = getLocalStorageData();
-      if (newTokens) {
-        const tokensTotal =
-          newTokens.length >= 1 ? sumProofAmounts(newTokens as Proof[]) : 0;
-        setTotalBalance(tokensTotal);
-        if (mintKeySetIds) {
-          const newFilteredProofs = newTokens.filter((p: Proof) =>
-            mintKeySetIds.some((keysetId: MintKeyset) => keysetId.id === p.id)
-          );
-          const newWalletTotal =
-            newFilteredProofs.length >= 1
-              ? sumProofAmounts(newFilteredProofs)
-              : 0;
-          setWalletBalance(newWalletTotal);
-        }
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [mintKeySetIds]);
+  const walletBalance = useMemo(() => {
+    return filteredProofs.length >= 1 ? sumProofAmounts(filteredProofs) : 0;
+  }, [filteredProofs]);
 
   if (!isLoggedIn) {
     return (

@@ -1,5 +1,6 @@
 import { parseJsonWithFallback } from "./safe-json";
 import type { StorageParseOptions } from "./safe-json";
+import { storageEmitter } from "./storage-emitter";
 
 /**
  * Storage Schema definition for consistent key management and type safety.
@@ -73,7 +74,7 @@ declare const dynamicStorageKeyBrand: unique symbol;
 export type DynamicStorageKey = string & {
   readonly [dynamicStorageKeyBrand]: true;
 };
-type StorageIdentifier = StorageKey | DynamicStorageKey;
+export type StorageIdentifier = StorageKey | DynamicStorageKey;
 
 export function createStorageKey(
   prefix: StorageKeyPrefix,
@@ -104,6 +105,7 @@ class StorageManager {
   setItem(key: StorageIdentifier, value: string): void {
     if (!this.isBrowser) return;
     localStorage.setItem(key, value);
+    storageEmitter.emit(key);
   }
 
   /**
@@ -112,6 +114,7 @@ class StorageManager {
   removeItem(key: StorageIdentifier): void {
     if (!this.isBrowser) return;
     localStorage.removeItem(key);
+    storageEmitter.emit(key);
   }
 
   /**
@@ -154,6 +157,7 @@ class StorageManager {
     try {
       const serialized = JSON.stringify(value);
       localStorage.setItem(key, serialized);
+      storageEmitter.emit(key);
     } catch (err) {
       console.error(`Failed to serialize data for storage key "${key}":`, err);
     }
@@ -164,7 +168,10 @@ class StorageManager {
    */
   clearKeys(keys: StorageIdentifier[]): void {
     if (!this.isBrowser) return;
-    keys.forEach((key) => localStorage.removeItem(key));
+    keys.forEach((key) => {
+      localStorage.removeItem(key);
+      storageEmitter.emit(key);
+    });
   }
 
   /**
@@ -174,6 +181,7 @@ class StorageManager {
     if (!this.isBrowser) return;
     localStorage.clear();
     sessionStorage.clear();
+    storageEmitter.emitAll();
   }
 
   // Session Storage Helpers (for non-persistent session data)

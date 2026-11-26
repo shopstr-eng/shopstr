@@ -1,7 +1,8 @@
-import { render, screen, act, waitFor } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import Transactions from "../transactions";
 import { Transaction } from "@/utils/types/types";
+import { storage, STORAGE_KEYS } from "@/utils/storage";
 
 jest.mock("@heroicons/react/24/outline", () => ({
   ArrowDownTrayIcon: () => <div data-testid="icon-deposit" />,
@@ -66,11 +67,11 @@ describe("Transactions", () => {
     expect(screen.getByTestId("icon-purchase")).toBeInTheDocument();
   });
 
-  it("should poll for new transactions and update the view", async () => {
+  it("should update the view when new transactions are written to storage", () => {
     const initialHistory: Transaction[] = [
       { type: 1, amount: 100, date: 1721915400 },
     ];
-    window.localStorage.setItem("history", JSON.stringify(initialHistory));
+    storage.setJson(STORAGE_KEYS.HISTORY, initialHistory);
     render(<Transactions />);
 
     expect(screen.getByText("100 sats")).toBeInTheDocument();
@@ -80,24 +81,24 @@ describe("Transactions", () => {
       ...initialHistory,
       { type: 2, amount: 200, date: 1721915500 },
     ];
-    window.localStorage.setItem("history", JSON.stringify(updatedHistory));
 
     act(() => {
-      jest.advanceTimersByTime(2100);
+      storage.setJson(STORAGE_KEYS.HISTORY, updatedHistory);
     });
 
-    await waitFor(() => {
-      expect(screen.getByText("200 sats")).toBeInTheDocument();
-    });
+    expect(screen.getByText("200 sats")).toBeInTheDocument();
   });
 
-  it("should clean up the interval on component unmount", () => {
-    const clearIntervalSpy = jest.spyOn(global, "clearInterval");
+  it("should clean up storage listeners on component unmount", () => {
+    const removeEventListenerSpy = jest.spyOn(window, "removeEventListener");
 
     const { unmount } = render(<Transactions />);
 
     unmount();
 
-    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+    expect(removeEventListenerSpy).toHaveBeenCalledWith(
+      "storage",
+      expect.any(Function)
+    );
   });
 });

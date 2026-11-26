@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { finalizeEvent } from "nostr-tools";
 
 import { finalizeEvent, generateSecretKey } from "nostr-tools";
 

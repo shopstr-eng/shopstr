@@ -28,6 +28,7 @@ import {
 import { POLICY_SLUGS, getDefaultPolicies } from "@/utils/storefront-policies";
 import { getNavTextColor } from "@/utils/storefront-colors";
 import { getStorefrontCartQuantity } from "@/utils/storefront-cart";
+import { useLocalStorageSubscription } from "@/utils/hooks/useLocalStorageSubscription";
 import { nip19 } from "nostr-tools";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
@@ -85,7 +86,12 @@ export default function StorefrontLayout({
   const [shop, setShop] = useState<ShopProfile | undefined>();
   const [storefront, setStorefront] = useState<StorefrontConfig>({});
   const [colors, setColors] = useState<StorefrontColorScheme>(DEFAULT_COLORS);
-  const [cartQuantity, setCartQuantity] = useState(0);
+  const cartQuantity = useLocalStorageSubscription(
+    STORAGE_KEYS.CART,
+    () => getStorefrontCartQuantity(shopPubkey),
+    0,
+    [shopPubkey]
+  );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Track the created_at of the DB-seeded config so the relay override
@@ -171,15 +177,6 @@ export default function StorefrontLayout({
       storage.setItem(STORAGE_KEYS.SF_SHOP_SLUG, shopSlug);
     }
   }, [shopPubkey, shopSlug]);
-
-  useEffect(() => {
-    const sync = () => {
-      setCartQuantity(getStorefrontCartQuantity(shopPubkey));
-    };
-    sync();
-    const interval = setInterval(sync, 1000);
-    return () => clearInterval(interval);
-  }, [shopPubkey]);
 
   const sellerProducts = useMemo(() => {
     if (!shopPubkey || !productContext.productEvents.length) return [];
