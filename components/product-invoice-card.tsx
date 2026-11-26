@@ -2271,10 +2271,10 @@ export default function ProductInvoiceCard({
           (proof) => !consumedSecrets.has(proof.secret)
         );
         try {
-          localStorage.setItem(
-            "tokens",
-            JSON.stringify([...unaffectedProofs, ...error.recoverableProofs])
-          );
+          storage.setJson(STORAGE_KEYS.TOKENS, [
+            ...unaffectedProofs,
+            ...error.recoverableProofs,
+          ]);
         } catch (storageError) {
           console.warn(
             "[product-invoice-card] failed to restore confirmed-unspent proofs to the local wallet:",
