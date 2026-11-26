@@ -351,9 +351,11 @@ const DisplayProducts = ({
 
   const handleDelete = async (productId: string) => {
     try {
-      const product = productEventContext.productEvents.find(
-        (event) => event.id === productId
-      );
+      // A relay search result may not have reached the product context yet.
+      const product =
+        productEventContext.productEvents.find(
+          (event) => event.id === productId
+        ) ?? nip50ProductEvents.find((event) => event.id === productId);
       // Unknown product: no kind, so deleteEvent leaves out the k tag.
       const kind = product?.kind;
       const dTag = product?.tags.find((tag) => tag[0] === "d")?.[1];

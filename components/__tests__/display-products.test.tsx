@@ -951,7 +951,7 @@ describe("DisplayProducts deletion", () => {
     );
   });
 
-  it("deletes a relay search result that is not in the product context by event id only", async () => {
+  it("deletes a relay search result that is not in the product context by event id and address", async () => {
     const relayProduct = {
       id: "relay-listing",
       pubkey: "viewer-pubkey",
@@ -977,8 +977,8 @@ describe("DisplayProducts deletion", () => {
         nostr,
         undefined,
         ["relay-listing"],
-        undefined,
-        []
+        30402,
+        ["30402:viewer-pubkey:coffee"]
       )
     );
   });
