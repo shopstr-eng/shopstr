@@ -333,5 +333,65 @@ describe("product-filter-helpers", () => {
         productSatisfiesAllFilters({ ...mockProduct, price: 0 }, filters)
       ).toBe(false);
     });
+
+    it("should match seller profile and shop names while ignoring unverified nip05", () => {
+      const sellerContext = {
+        profileData: new Map([
+          [
+            "test-pubkey",
+            {
+              content: {
+                name: "alice_btc",
+                display_name: "Alice Merchant",
+                nip05: "alice@shopstr.market",
+              },
+              nip05Verified: true,
+            },
+          ],
+          [
+            "unverified-pubkey",
+            {
+              content: { name: "bob", nip05: "spoof@shopstr.market" },
+              nip05Verified: false,
+            },
+          ],
+        ]),
+        shopData: new Map([
+          ["test-pubkey", { content: { name: "Bitcoin Roasters" } }],
+        ]),
+      };
+
+      expect(
+        productSatisfiesSearchFilter(mockProduct, "ALICE_BTC", sellerContext)
+      ).toBe(true);
+      expect(
+        productSatisfiesSearchFilter(mockProduct, "merchant", sellerContext)
+      ).toBe(true);
+      expect(
+        productSatisfiesSearchFilter(
+          mockProduct,
+          "alice@shopstr.market",
+          sellerContext
+        )
+      ).toBe(true);
+      expect(
+        productSatisfiesSearchFilter(mockProduct, "roasters", sellerContext)
+      ).toBe(true);
+      expect(
+        productSatisfiesSearchFilter(
+          { ...mockProduct, pubkey: "unverified-pubkey" },
+          "spoof@shopstr.market",
+          sellerContext
+        )
+      ).toBe(false);
+      expect(
+        productSatisfiesAllFilters(mockProduct, {
+          selectedCategories: new Set(["Outdoors"]),
+          selectedLocation: "San Francisco",
+          selectedSearch: "roasters",
+          sellerContext,
+        })
+      ).toBe(true);
+    });
   });
 });

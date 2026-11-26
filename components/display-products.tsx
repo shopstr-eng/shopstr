@@ -3,6 +3,8 @@ import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import {
   ProductContext,
+  ProfileMapContext,
+  ShopMapContext,
   FollowsContext,
   RelaysContext,
   ReportsContext,
@@ -76,9 +78,19 @@ const DisplayProducts = ({
   );
   const [isNip50SearchLoading, setIsNip50SearchLoading] = useState(false);
   const productEventContext = useContext(ProductContext);
+  const profileMapContext = useContext(ProfileMapContext);
+  const shopMapContext = useContext(ShopMapContext);
   const followsContext = useContext(FollowsContext);
   const reportsContext = useContext(ReportsContext);
   const relaysContext = useContext(RelaysContext);
+
+  const sellerSearchContext = useMemo(
+    () => ({
+      profileData: profileMapContext?.profileData,
+      shopData: shopMapContext?.shopData,
+    }),
+    [profileMapContext?.profileData, shopMapContext?.shopData]
+  );
   const [focusedProduct, setFocusedProduct] = useState<ProductData>();
   const [showModal, setShowModal] = useState(false);
 
@@ -266,6 +278,7 @@ const DisplayProducts = ({
           selectedCategories,
           selectedLocation,
           selectedSearch,
+          sellerContext: sellerSearchContext,
         })
       )
         return false;
@@ -324,6 +337,7 @@ const DisplayProducts = ({
     selectedCategories,
     focusedPubkey,
     isInitialized,
+    sellerSearchContext,
   ]);
 
   // Scroll effect only on page change
