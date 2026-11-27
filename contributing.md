@@ -17,7 +17,7 @@ Welcome to Shopstr! 🛒⚡ We're excited to have you contribute to our global, 
 
 Before you begin, ensure you have the following installed on your system:
 
-- **Node.js**: Version 18.17.0 or higher
+- **Node.js**: Version 22.4.0 or higher
 - **npm**: Version 9.6.7 or higher
 - **Git**: Latest version
 - **Docker** (optional, for containerized development)
@@ -25,7 +25,7 @@ Before you begin, ensure you have the following installed on your system:
 ### Check Your Versions
 
 ```bash
-node --version  # Should be >=18.17.0
+node --version  # Should be >=22.4.0
 npm --version   # Should be >=9.6.7
 git --version
 ```
