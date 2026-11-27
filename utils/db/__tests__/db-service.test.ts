@@ -5862,5 +5862,58 @@ describe("db-service helpers", () => {
         });
       }
     );
+
+    maybeItTc(
+      "MCP read tools return only the newest revision of a listing",
+      async () => {
+        await withPostgresDbService(async (db) => {
+          const seller = "5".repeat(64);
+          const revision = (
+            id: string,
+            created_at: number,
+            price: string
+          ): NostrEvent => ({
+            id,
+            pubkey: seller,
+            created_at,
+            kind: 30402,
+            tags: [
+              ["d", "listing-1"],
+              ["title", "Coffee"],
+              ["price", price, "sats"],
+            ],
+            content: "",
+            sig: "sig",
+          });
+          await db.cacheEventStrict(revision("revision-old", 100, "10"));
+          await db.cacheEventStrict(revision("revision-new", 200, "99"));
+
+          const { registerReadTools } =
+            await import("../../../mcp/tools/read-tools");
+          const tools = new Map<string, (args: unknown) => Promise<any>>();
+          registerReadTools({
+            registerTool: (
+              name: string,
+              _options: unknown,
+              callback: (args: unknown) => Promise<any>
+            ) => tools.set(name, callback),
+          } as any);
+          const call = async (name: string, args: unknown) =>
+            JSON.parse((await tools.get(name)!(args)).content[0].text);
+
+          const search = await call("search_products", {});
+          expect(search.products.map((p: { id: string }) => p.id)).toEqual([
+            "revision-new",
+          ]);
+
+          await expect(
+            call("get_product_details", { productId: "revision-old" })
+          ).resolves.toMatchObject({ error: "Product not found" });
+          await expect(
+            call("get_product_details", { productId: "revision-new" })
+          ).resolves.toMatchObject({ id: "revision-new", price: 99 });
+        });
+      }
+    );
   });
 });

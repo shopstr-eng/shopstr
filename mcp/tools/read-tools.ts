@@ -107,9 +107,9 @@ async function fetchAllProductsFromDbStrict(
          FROM product_events p,
          LATERAL (
            SELECT COALESCE(
-             (SELECT elem->>'1'
+             (SELECT elem->>1
               FROM jsonb_array_elements(p.tags) elem
-              WHERE elem->>'0' = 'd'
+              WHERE elem->>0 = 'd'
               LIMIT 1),
              p.id
            ) AS d_tag
