@@ -733,7 +733,13 @@ export default function Component() {
                                       Bundle: {product.selectedBulkOption} units
                                     </p>
                                   )}
-                                  {product.quantity && (
+                                  {product.quantity !== undefined &&
+                                    product.quantity <= 0 && (
+                                      <p className="mt-2 text-sm text-red-500">
+                                        Out of stock
+                                      </p>
+                                    )}
+                                  {(product.quantity ?? 0) > 0 && (
                                     <div className="mt-2">
                                       <p className="mb-2 text-sm text-green-600">
                                         {product.quantity} in stock

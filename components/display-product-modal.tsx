@@ -273,7 +273,9 @@ export default function DisplayProductModal({
                 </div>
               </>
             )}
-            {productData.quantity && (
+            {/* quantity can be 0 (out of stock), so check for undefined
+                rather than truthiness, which would render a stray "0" */}
+            {productData.quantity !== undefined && (
               <>
                 <div className="text-light-text dark:text-dark-text text-left text-xs">
                   <span className="text-xl font-semibold">Quantity: </span>
