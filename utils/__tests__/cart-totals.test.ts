@@ -182,6 +182,82 @@ describe("cart totals helpers", () => {
     });
   });
 
+  describe("computeProductPricing discount rounding", () => {
+    const discountedPrice = (
+      priceSats: number,
+      discountPercent: number,
+      quantity?: number
+    ) => {
+      const result = computeProductPricing({
+        id: "product-1",
+        priceSats,
+        shippingSats: 0,
+        discountPercent,
+        quantity,
+      });
+      return result.status === "priced" ? result.price : undefined;
+    };
+
+    // ceil(price * (10000 - hundredths) / 10000) in exact integer arithmetic.
+    const exactPrice = (priceSats: number, hundredths: number) =>
+      Number(
+        (BigInt(priceSats) * BigInt(10000 - hundredths) + BigInt(9999)) /
+          BigInt(10000)
+      );
+
+    it.each([
+      [100, 41, 59],
+      [100, 57, 43],
+      [100, 69, 31],
+      [100, 100, 0],
+    ])(
+      "does not add a sat when %i sats at %d%% off is a whole number",
+      (priceSats, discountPercent, expected) => {
+        expect(discountedPrice(priceSats, discountPercent)).toBe(expected);
+      }
+    );
+
+    it("does not multiply the extra sat by the quantity", () => {
+      expect(discountedPrice(100, 41, 3)).toBe(177);
+    });
+
+    it("still rounds a fractional discounted price up", () => {
+      expect(discountedPrice(999, 10)).toBe(900);
+      expect(discountedPrice(1000, 12.55)).toBe(875);
+    });
+
+    it("keeps pricing fractional sat amounts", () => {
+      // 10.5 * 0.9 = 9.45 -> 10
+      expect(discountedPrice(10.5, 10)).toBe(10);
+    });
+
+    it("matches exact arithmetic for every whole percentage", () => {
+      const mismatches: number[][] = [];
+      for (let priceSats = 1; priceSats <= 2000; priceSats++) {
+        for (let percent = 1; percent <= 100; percent++) {
+          const actual = discountedPrice(priceSats, percent);
+          if (actual !== exactPrice(priceSats, percent * 100)) {
+            mismatches.push([priceSats, percent]);
+          }
+        }
+      }
+      expect(mismatches).toEqual([]);
+    });
+
+    it("matches exact arithmetic for two-decimal percentages", () => {
+      const mismatches: number[][] = [];
+      for (const priceSats of [1, 99, 100, 2500, 100000, 99999999999]) {
+        for (let hundredths = 1; hundredths <= 10000; hundredths++) {
+          const actual = discountedPrice(priceSats, hundredths / 100);
+          if (actual !== exactPrice(priceSats, hundredths)) {
+            mismatches.push([priceSats, hundredths / 100]);
+          }
+        }
+      }
+      expect(mismatches).toEqual([]);
+    });
+  });
+
   describe("getCartUnitShippingCost", () => {
     it("charges the listed cost only for Added Cost listings", () => {
       expect(
