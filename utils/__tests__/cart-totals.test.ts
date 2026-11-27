@@ -276,6 +276,57 @@ describe("cart totals helpers", () => {
       });
     });
 
+    it.each([
+      ["3 x 10.10", [[10.1, 3]], 0, 30.3],
+      [
+        "two items of 0.70 and 0.10",
+        [
+          [0.7, 1],
+          [0.1, 1],
+        ],
+        0,
+        0.8,
+      ],
+      ["3 x 10.00 at 3% off", [[10, 3]], 3, 29.1],
+    ])(
+      "qualifies a subtotal that is exactly the threshold (%s)",
+      (_name, lines, discount, threshold) => {
+        const status = computeSellerFreeShippingStatus({
+          products: lines.map(([price], index) => ({
+            id: `p${index}`,
+            pubkey: "seller-a",
+            price: price!,
+            currency: "USD",
+          })),
+          quantities: Object.fromEntries(
+            lines.map(([, quantity], index) => [`p${index}`, quantity!])
+          ),
+          appliedDiscounts: discount ? { "seller-a": discount } : {},
+          getShopProfileContent: profile(threshold, "USD"),
+        });
+        expect(status["seller-a"]).toMatchObject({
+          qualifies: true,
+          sellerSubtotal: threshold,
+        });
+      }
+    );
+
+    it.each([
+      ["one cent", 30.29, 30.3, "USD"],
+      ["one satoshi of a BTC price", 0.00099999, 0.001, "BTC"],
+    ])(
+      "does not qualify a subtotal that is %s short",
+      (_name, price, threshold, currency) => {
+        const status = computeSellerFreeShippingStatus({
+          products: [{ id: "p1", pubkey: "seller-a", price, currency }],
+          quantities: {},
+          appliedDiscounts: {},
+          getShopProfileContent: profile(threshold, currency),
+        });
+        expect(status["seller-a"]?.qualifies).toBe(false);
+      }
+    );
+
     it("keeps comparing in raw units when the seller set no threshold currency", () => {
       const status = computeSellerFreeShippingStatus({
         products: [
