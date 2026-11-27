@@ -846,7 +846,7 @@ describe("handleCreateOrder validation & pricing", () => {
           id: "profile-1",
           pubkey: SELLER_PUBKEY,
           created_at: Math.floor(Date.now() / 1000),
-          kind: 0,
+          kind: 30019,
           tags: [],
           content,
           sig: "sig",
@@ -909,6 +909,89 @@ describe("handleCreateOrder validation & pricing", () => {
 
       expect(res.statusCode).toBe(402);
       expect(pricingOf(res).total).toBe(1000);
+    });
+  });
+
+  describe("seller settings split across profile events", () => {
+    const profileEvent = (
+      kind: 0 | 30019,
+      created_at: number,
+      content: Record<string, unknown>
+    ) => ({
+      id: `profile-${kind}`,
+      pubkey: SELLER_PUBKEY,
+      created_at,
+      kind,
+      tags: [],
+      content: JSON.stringify(content),
+      sig: "sig",
+    });
+    const escrowSettings = {
+      p2pk: { enabled: true, pubkey: "d".repeat(64), refundDelayDays: 7 },
+    };
+    const discountSettings = { paymentMethodDiscounts: { bitcoin: 5 } };
+
+    // The database returns profile events newest first.
+    function withProfiles(...events: ReturnType<typeof profileEvent>[]) {
+      fetchAllProfilesFromDbMock.mockResolvedValue(
+        [...events].sort((a, b) => b.created_at - a.created_at)
+      );
+    }
+
+    beforeEach(() => {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([["price", "1000", "sats"]]),
+      ]);
+    });
+
+    it.each([
+      ["older", 100, 200],
+      ["newer", 200, 100],
+    ])(
+      "refuses an escrow seller when the user profile is %s than the shop profile",
+      async (_order, userCreatedAt, shopCreatedAt) => {
+        withProfiles(
+          profileEvent(0, userCreatedAt, escrowSettings),
+          profileEvent(30019, shopCreatedAt, discountSettings)
+        );
+
+        const res = await createOrder({ productId: "product-1" });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.jsonBody).toMatchObject({
+          error: expect.stringContaining("requires dispute escrow"),
+        });
+        expect(walletCreateMintQuoteBolt11Mock).not.toHaveBeenCalled();
+      }
+    );
+
+    it.each([
+      ["older", 100, 200],
+      ["newer", 200, 100],
+    ])(
+      "applies the shop discount when the shop profile is %s than the user profile",
+      async (_order, shopCreatedAt, userCreatedAt) => {
+        withProfiles(
+          profileEvent(30019, shopCreatedAt, discountSettings),
+          profileEvent(0, userCreatedAt, { name: "Seller" })
+        );
+
+        const res = await createOrder({ productId: "product-1" });
+
+        expect(res.statusCode).toBe(402);
+        expect(pricingOf(res).total).toBe(950);
+      }
+    );
+
+    it("looks up each setting only in the profile kind that holds it", async () => {
+      withProfiles();
+
+      await createOrder({ productId: "product-1" });
+
+      expect(fetchAllProfilesFromDbMock.mock.calls).toEqual([
+        [{ kind: 30019, pubkeys: [SELLER_PUBKEY] }],
+        [{ kind: 0, pubkeys: [SELLER_PUBKEY] }],
+      ]);
     });
   });
 
