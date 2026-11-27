@@ -342,6 +342,25 @@ export interface ComputeProductPricingParams {
 }
 
 /**
+ * Applies a percentage discount to a sat price, rounding up. For whole-sat
+ * prices the math is done on integers in hundredths of a percent (discount
+ * codes are stored with two decimals): `price * (1 - percent / 100)` can land
+ * just above a whole number (100 sats at 41% off gives 59.00000000000001),
+ * which would then round up to an extra sat.
+ */
+const applyDiscountRoundingUp = (
+  priceSats: number,
+  discountPercent: number
+): number => {
+  const scaled = priceSats * (10000 - Math.round(discountPercent * 100));
+  if (Number.isInteger(priceSats) && Number.isSafeInteger(scaled)) {
+    const remainder = scaled % 10000;
+    return (scaled - remainder) / 10000 + (remainder > 0 ? 1 : 0);
+  }
+  return Math.ceil(priceSats * (1 - discountPercent / 100));
+};
+
+/**
  * Pure per-product cart pricing computation. Takes already-converted sat
  * amounts plus the seller discount and selected quantity, applies the discount
  * (rounding up), then scales by quantity (rounding up). The "error" variant is
@@ -356,7 +375,7 @@ export const computeProductPricing = ({
 }: ComputeProductPricingParams): ProductPricingResult => {
   let discountedPrice = priceSats;
   if (discountPercent > 0) {
-    discountedPrice = Math.ceil(priceSats * (1 - discountPercent / 100));
+    discountedPrice = applyDiscountRoundingUp(priceSats, discountPercent);
   }
 
   if (discountedPrice !== null || shippingSats !== null) {
