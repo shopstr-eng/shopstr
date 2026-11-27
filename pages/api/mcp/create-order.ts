@@ -58,10 +58,15 @@ function generateOrderId(): string {
 
 type PaymentMethod = "lightning" | "cashu";
 
-async function getSellerProfile(sellerPubkey: string) {
-  const profiles = await fetchAllProfilesFromDb();
+// A seller's settings are split across two events: the user profile (kind 0)
+// holds `p2pk`, the shop profile (kind 30019) holds `paymentMethodDiscounts`.
+async function getSellerProfile(sellerPubkey: string, kind: 0 | 30019) {
+  const profiles = await fetchAllProfilesFromDb({
+    kind,
+    pubkeys: [sellerPubkey],
+  });
   const profile = profiles.find(
-    (p) => p.pubkey === sellerPubkey && (p.kind === 0 || p.kind === 30019)
+    (p) => p.pubkey === sellerPubkey && p.kind === kind
   );
   if (!profile) return null;
   try {
@@ -309,12 +314,12 @@ async function handleCreateOrder(
       }
     }
 
-    const sellerProfile = await getSellerProfile(product.pubkey);
+    const shopProfile = await getSellerProfile(product.pubkey, 30019);
     if (
-      sellerProfile?.paymentMethodDiscounts &&
-      typeof sellerProfile.paymentMethodDiscounts === "object"
+      shopProfile?.paymentMethodDiscounts &&
+      typeof shopProfile.paymentMethodDiscounts === "object"
     ) {
-      const methodDiscount = sellerProfile.paymentMethodDiscounts["bitcoin"];
+      const methodDiscount = shopProfile.paymentMethodDiscounts["bitcoin"];
       if (typeof methodDiscount === "number" && methodDiscount > 0) {
         subtotal = subtotal * (1 - methodDiscount / 100);
       }
@@ -436,8 +441,8 @@ async function prepareSellerPayment(
   buyerPubkey: string,
   product: any
 ): Promise<string | null> {
-  const sellerProfile = await getSellerProfile(product.pubkey);
-  if (isSellerP2pkEscrowActive(sellerProfile?.p2pk)) {
+  const userProfile = await getSellerProfile(product.pubkey, 0);
+  if (isSellerP2pkEscrowActive(userProfile?.p2pk)) {
     res.status(400).json({
       error:
         "This seller requires dispute escrow, which is not supported for MCP orders yet.",
