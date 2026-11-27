@@ -602,6 +602,88 @@ describe("handleCreateOrder validation & pricing", () => {
     });
   });
 
+  describe("listing availability", () => {
+    const past = String(Math.floor(Date.now() / 1000) - 60);
+    const future = String(Math.floor(Date.now() / 1000) + 3600);
+
+    function withListing(tags: string[][]) {
+      fetchAllProductsFromDbMock.mockResolvedValue([
+        makeProductEvent([["price", "1000", "sats"], ...tags]),
+      ]);
+    }
+
+    it.each([
+      ["marked sold", [["status", "sold"]], {}, "Listing is sold out"],
+      ["expired", [["valid_until", past]], {}, "Listing has expired"],
+      [
+        "out of stock with a size selected",
+        [
+          ["quantity", "0"],
+          ["size", "M", "2"],
+        ],
+        { selectedSize: "M" },
+        "Listing is sold out",
+      ],
+      [
+        "out of stock in every size",
+        [
+          ["size", "S", "0"],
+          ["size", "M", "0"],
+        ],
+        {},
+        "Listing is sold out",
+      ],
+    ])(
+      "rejects a listing that is %s before requesting payment",
+      async (_name, tags, selection, error) => {
+        withListing(tags);
+
+        const res = await createOrder({
+          productId: "product-1",
+          ...selection,
+        });
+
+        expect(res.statusCode).toBe(400);
+        expect(res.jsonBody).toEqual({ error });
+        expect(walletCreateMintQuoteBolt11Mock).not.toHaveBeenCalled();
+        expect(createMcpOrderMock).not.toHaveBeenCalled();
+      }
+    );
+
+    it("rejects a Cashu order for a sold listing before taking the token", async () => {
+      withListing([["status", "sold"]]);
+
+      const res = await createOrder({
+        productId: "product-1",
+        paymentMethod: "cashu",
+        cashuToken: "cashu-token",
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toEqual({ error: "Listing is sold out" });
+      expect(swapCashuPaymentMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["active", [["status", "active"]], {}],
+      ["not yet expired", [["valid_until", future]], {}],
+      [
+        "in stock in one size",
+        [
+          ["size", "S", "0"],
+          ["size", "M", "2"],
+        ],
+        { selectedSize: "M" },
+      ],
+    ])("accepts a listing that is %s", async (_name, tags, selection) => {
+      withListing(tags);
+
+      const res = await createOrder({ productId: "product-1", ...selection });
+
+      expect(res.statusCode).toBe(402);
+    });
+  });
+
   describe("volume/weight pricing", () => {
     it("rejects an unrecognized selectedVolume, listing availableVolumes", async () => {
       fetchAllProductsFromDbMock.mockResolvedValue([

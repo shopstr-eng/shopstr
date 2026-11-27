@@ -33,6 +33,10 @@ import {
   CreateOrderInput,
 } from "@/mcp/tools/purchase-tools";
 import { parseTags } from "@/utils/parsers/product-parser-functions";
+import {
+  PricingValidationError,
+  requireAvailableListing,
+} from "@/utils/payments/listing-pricing";
 import { applyRateLimit } from "@/utils/rate-limit";
 import { getTrustedMintUrl } from "@/utils/cashu/trusted-mints";
 
@@ -190,6 +194,16 @@ async function handleCreateOrder(
     const product = parseTags(productEvent);
     if (!product) {
       return res.status(500).json({ error: "Failed to parse product data" });
+    }
+
+    // Same rule as the web checkout: no sold, expired or out-of-stock listings.
+    try {
+      requireAvailableListing(product);
+    } catch (error) {
+      if (error instanceof PricingValidationError) {
+        return res.status(400).json({ error: error.message });
+      }
+      throw error;
     }
 
     const selectedSpecs: Record<string, any> = {};
