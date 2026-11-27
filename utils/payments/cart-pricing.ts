@@ -199,6 +199,18 @@ export async function computeCartPricing(
       selectedWeight: item.selectedWeight,
       selectedBulkOption: item.selectedBulkOption,
     });
+    // computeListingUnitPricing only rejects sold-out listings, so the
+    // requested quantity is checked here. A selected size has its own stock;
+    // a missing stock value means unlimited. With a bulk tier, the quantity
+    // counts bundles, as in the MCP create-order route.
+    const availableStock = item.selectedSize
+      ? product.sizeQuantities?.get(item.selectedSize)
+      : product.quantity;
+    if (availableStock !== undefined && item.quantity > availableStock) {
+      throw new PricingValidationError(
+        `Insufficient stock for "${product.title}"`
+      );
+    }
     resolved.push({
       product,
       quantity: item.quantity,

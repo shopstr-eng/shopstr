@@ -193,6 +193,105 @@ describe("/api/cart/mint-quote", () => {
     loadMintMock.mockResolvedValue(undefined);
   });
 
+  describe("stock limits", () => {
+    async function quoteLimitedListing(
+      stockTags: string[][],
+      item: Record<string, unknown>
+    ) {
+      const listing = makeProductEvent({
+        id: "prod-q",
+        pubkey: "seller-1",
+        dTag: "d-q",
+        price: 100,
+        shippingType: "Free",
+        extraTags: stockTags,
+      });
+      fetchProductByIdFromDbMock.mockResolvedValue(listing);
+      fetchProductByDTagAndPubkeyMock.mockResolvedValue(listing);
+      const res = createResponse();
+      await handler(
+        createRequest({
+          items: [{ productId: "prod-q", ...item }],
+          formType: "shipping",
+        }),
+        res as unknown as NextApiResponse
+      );
+      return res;
+    }
+
+    it.each([
+      ["the listing quantity", [["quantity", "2"]], { quantity: 3 }],
+      [
+        "the selected size's stock",
+        [["size", "M", "2"]],
+        { quantity: 3, selectedSize: "M" },
+      ],
+      [
+        "the selected size's stock even when the listing quantity is higher",
+        [
+          ["quantity", "10"],
+          ["size", "M", "2"],
+        ],
+        { quantity: 3, selectedSize: "M" },
+      ],
+      [
+        "the listing quantity when counting bulk bundles",
+        [
+          ["quantity", "2"],
+          ["bulk", "5", "400"],
+        ],
+        { quantity: 3, selectedBulkOption: 5 },
+      ],
+    ])("rejects a quantity above %s", async (_name, tags, item) => {
+      const res = await quoteLimitedListing(tags, item);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.jsonBody).toEqual({
+        error: 'Insufficient stock for "Product prod-q"',
+      });
+      expect(createMintQuoteBolt11Mock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [
+        "equal to the listing quantity",
+        [["quantity", "3"]],
+        { quantity: 3 },
+        300,
+      ],
+      [
+        "equal to the selected size's stock",
+        [["size", "M", "3"]],
+        { quantity: 3, selectedSize: "M" },
+        300,
+      ],
+      ["on a listing without a stock value", [], { quantity: 3 }, 300],
+      [
+        "on a size without a stock value",
+        [
+          ["size", "M"],
+          ["size", "L", "1"],
+        ],
+        { quantity: 3, selectedSize: "M" },
+        300,
+      ],
+      [
+        "of bulk bundles within the listing quantity",
+        [
+          ["quantity", "3"],
+          ["bulk", "5", "400"],
+        ],
+        { quantity: 3, selectedBulkOption: 5 },
+        1200,
+      ],
+    ])("quotes a quantity %s", async (_name, tags, item, amount) => {
+      const res = await quoteLimitedListing(tags, item);
+
+      expect(res.statusCode).toBe(200);
+      expect(createMintQuoteBolt11Mock).toHaveBeenCalledWith(amount);
+    });
+  });
+
   it("prices a multi-item cart server-side with shipping and a per-product breakdown", async () => {
     const res = createResponse();
 
