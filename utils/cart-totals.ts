@@ -296,11 +296,14 @@ export const computeSellerFreeShippingStatus = ({
           discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
         sellerSubtotal += discountedPrice * qty;
       });
+      // Float arithmetic can land just under the exact total (3 x 10.10 gives
+      // 30.299999999999997), so compare at 8 decimals, the precision of BTC.
+      const roundedSubtotal = Number(sellerSubtotal.toFixed(8));
       statusMap[pubkey] = {
-        qualifies: sellerSubtotal >= threshold,
+        qualifies: roundedSubtotal >= threshold,
         threshold,
         currency: thresholdCurrency || "USD",
-        sellerSubtotal,
+        sellerSubtotal: roundedSubtotal,
         sellerName,
       };
       return;
