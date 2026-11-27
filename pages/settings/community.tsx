@@ -1,5 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
-
 import { useContext, useEffect, useState } from "react";
 import {
   Card,
@@ -16,10 +14,7 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { CommunityContext } from "@/utils/context/context";
 import { createOrUpdateCommunity } from "@/utils/nostr/community";
-import {
-  deleteEvent,
-  finalizeAndSendNostrEvent,
-} from "@/utils/nostr/nostr-helper-functions";
+import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import CreateCommunityForm from "@/components/communities/CreateCommunityForm";
 import { Community } from "@/utils/types/types";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -54,12 +49,11 @@ const CommunityManagementPage = () => {
       return;
     }
     try {
-      const communityEvent = await createOrUpdateCommunity(signer, nostr, {
+      // createOrUpdateCommunity signs, publishes and caches the event itself.
+      await createOrUpdateCommunity(signer, nostr, {
         ...data,
         moderators: [pubkey], // Add creator as a moderator
       });
-
-      await finalizeAndSendNostrEvent(signer!, nostr!, communityEvent);
       alert("Community saved! It may take a few moments to appear.");
       setCommunityToEdit(null);
     } catch (error) {
