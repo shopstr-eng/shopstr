@@ -78,7 +78,7 @@ function hasPurchasableSizes(product: ProductData): boolean {
   );
 }
 
-function requireAvailableListing(product: ProductData) {
+export function requireAvailableListing(product: ProductData) {
   if (product.status?.toLowerCase() === "sold") {
     throw new PricingValidationError("Listing is sold out");
   }
