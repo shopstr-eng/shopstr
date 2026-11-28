@@ -1489,6 +1489,33 @@ describe("registerPurchaseTools: direct-DB tools", () => {
   });
 
   describe("get_payment_methods", () => {
+    type ProfileRow = { pubkey: string; kind: number; content: string };
+
+    // Behaves like fetchAllProfilesFromDb: a scope selects one kind for the
+    // given pubkeys, no scope returns every row. Pass rows newest first.
+    function mockProfileRows(rows: ProfileRow[]) {
+      fetchAllProfilesFromDbMock.mockImplementation(
+        async (scope?: { kind: number; pubkeys: string[] }) =>
+          scope
+            ? rows.filter(
+                (row) =>
+                  row.kind === scope.kind && scope.pubkeys.includes(row.pubkey)
+              )
+            : rows
+      );
+    }
+
+    const userRow = (content: object): ProfileRow => ({
+      pubkey: "seller-x",
+      kind: 0,
+      content: JSON.stringify(content),
+    });
+    const shopRow = (content: object): ProfileRow => ({
+      pubkey: "seller-x",
+      kind: 30019,
+      content: JSON.stringify(content),
+    });
+
     it("has no permission gate (unlike the other six tools): a 'read'-only key still gets a result", async () => {
       validateApiKeyMock.mockResolvedValueOnce(
         makeApiKey({ permissions: "read" })
@@ -1518,9 +1545,7 @@ describe("registerPurchaseTools: direct-DB tools", () => {
     });
 
     it("matches a kind:30019 profile just as well as kind:0", async () => {
-      fetchAllProfilesFromDbMock.mockResolvedValueOnce([
-        { pubkey: "seller-x", kind: 30019, content: "{}" },
-      ]);
+      mockProfileRows([shopRow({})]);
       const getPaymentMethods = await getToolCallback("get_payment_methods");
 
       const result = await getPaymentMethods({ sellerPubkey: "seller-x" });
@@ -1573,19 +1598,60 @@ describe("registerPurchaseTools: direct-DB tools", () => {
         parseResultJson<{ discounts: unknown }>(noDiscount).discounts
       ).toBeNull();
 
-      fetchAllProfilesFromDbMock.mockResolvedValueOnce([
-        {
-          pubkey: "seller-x",
-          kind: 0,
-          content: JSON.stringify({ paymentMethodDiscounts: { bitcoin: 10 } }),
-        },
-      ]);
+      mockProfileRows([shopRow({ paymentMethodDiscounts: { bitcoin: 10 } })]);
       const withDiscount = await getPaymentMethods({
         sellerPubkey: "seller-x",
       });
       expect(
         parseResultJson<{ discounts: unknown }>(withDiscount).discounts
       ).toEqual({ bitcoin: 10 });
+    });
+
+    const user = userRow({ name: "Alice", lud16: "alice@getalby.com" });
+    const shop = shopRow({
+      name: "Alice's Shop",
+      paymentMethodDiscounts: { bitcoin: 10 },
+    });
+
+    it.each([
+      ["shop profile", [shop, user]],
+      ["user profile", [user, shop]],
+    ])(
+      "reads lud16 and discounts from their own events when the %s is newer",
+      async (_newer, rows) => {
+        mockProfileRows(rows);
+        const getPaymentMethods = await getToolCallback("get_payment_methods");
+
+        const result = await getPaymentMethods({ sellerPubkey: "seller-x" });
+        const parsed = parseResultJson<{
+          sellerName: string;
+          paymentMethods: Array<{ method: string; lud16?: string | null }>;
+          discounts: unknown;
+        }>(result);
+
+        expect(parsed.paymentMethods[0]).toEqual(
+          expect.objectContaining({
+            method: "lightning",
+            lud16: "alice@getalby.com",
+          })
+        );
+        expect(parsed.discounts).toEqual({ bitcoin: 10 });
+        expect(parsed.sellerName).toBe("Alice");
+      }
+    );
+
+    it("uses the shop name when the user profile has no name", async () => {
+      mockProfileRows([
+        userRow({ lud16: "alice@getalby.com" }),
+        shopRow({ name: "Alice's Shop" }),
+      ]);
+      const getPaymentMethods = await getToolCallback("get_payment_methods");
+
+      const result = await getPaymentMethods({ sellerPubkey: "seller-x" });
+
+      expect(
+        parseResultJson<{ sellerName: string | null }>(result).sellerName
+      ).toBe("Alice's Shop");
     });
 
     it("catches a profile.content JSON.parse failure and treats it as {} rather than throwing", async () => {
