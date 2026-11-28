@@ -107,6 +107,42 @@ describe("/api/storefront/register-slug", () => {
     expect(res.jsonBody).toEqual({ slug: "owner-shop" });
   });
 
+  it("does not end a truncated slug on a hyphen", async () => {
+    extractSignedEventFromRequestMock.mockReturnValue({
+      pubkey: "owner-pubkey",
+    });
+    verifySignedHttpRequestProofMock.mockReturnValue({
+      ok: true,
+      status: 200,
+    });
+    queryMock.mockResolvedValue({ rows: [] });
+
+    // the 63 character cut lands right after the hyphen
+    const req = createRequest("POST", { slug: `${"a".repeat(62)} b` });
+    const res = createResponse();
+
+    await handler(req, res as unknown as NextApiResponse);
+
+    expect(res.jsonBody).toEqual({ slug: "a".repeat(62) });
+    expect(queryMock).toHaveBeenCalledWith(
+      expect.stringContaining("INSERT INTO shop_slugs"),
+      ["owner-pubkey", "a".repeat(62)]
+    );
+  });
+
+  it.each([12345, { name: "shop" }, ["shop"]])(
+    "rejects a slug that is not a string (%p)",
+    async (slug) => {
+      const req = createRequest("POST", { slug });
+      const res = createResponse();
+
+      await handler(req, res as unknown as NextApiResponse);
+
+      expect(queryMock).not.toHaveBeenCalled();
+      expect(res.statusCode).toBe(400);
+    }
+  );
+
   it("uses the signed event pubkey, ignoring the body pubkey", async () => {
     extractSignedEventFromRequestMock.mockReturnValue({
       pubkey: "owner-pubkey",
