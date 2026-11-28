@@ -425,13 +425,24 @@ function registerPurchaseTools(
       try {
         const { fetchAllProfilesFromDb } =
           await import("@/utils/db/db-service");
-        const profiles = await fetchAllProfilesFromDb();
-        const profile = profiles.find(
-          (p: any) =>
-            p.pubkey === sellerPubkey && (p.kind === 0 || p.kind === 30019)
-        );
+        // A seller's settings are split across two events: the user profile
+        // (kind 0) holds `lud16`, the shop profile (kind 30019) holds
+        // `paymentMethodDiscounts`.
+        const fetchProfile = async (kind: 0 | 30019) => {
+          const profiles = await fetchAllProfilesFromDb({
+            kind,
+            pubkeys: [sellerPubkey],
+          });
+          return profiles.find(
+            (p) => p.pubkey === sellerPubkey && p.kind === kind
+          );
+        };
+        const [userProfile, shopProfile] = await Promise.all([
+          fetchProfile(0),
+          fetchProfile(30019),
+        ]);
 
-        if (!profile) {
+        if (!userProfile && !shopProfile) {
           return {
             content: [
               {
@@ -449,10 +460,15 @@ function registerPurchaseTools(
           };
         }
 
-        let content: any = {};
-        try {
-          content = JSON.parse(profile.content);
-        } catch {}
+        const parseContent = (event?: { content: string }): any => {
+          try {
+            return (event && JSON.parse(event.content)) || {};
+          } catch {
+            return {};
+          }
+        };
+        const userContent = parseContent(userProfile);
+        const shopContent = parseContent(shopProfile);
 
         const methods: any[] = [];
 
@@ -460,7 +476,7 @@ function registerPurchaseTools(
           method: "lightning",
           available: true,
           description: "Pay with a Bitcoin Lightning invoice",
-          lud16: content.lud16 || null,
+          lud16: userContent.lud16 || null,
         });
 
         methods.push({
@@ -469,7 +485,7 @@ function registerPurchaseTools(
           description: "Pay with Cashu ecash tokens",
         });
 
-        const discounts = content.paymentMethodDiscounts || {};
+        const discounts = shopContent.paymentMethodDiscounts || {};
         const bitcoinDiscount = discounts.bitcoin
           ? { bitcoin: discounts.bitcoin }
           : null;
@@ -481,7 +497,11 @@ function registerPurchaseTools(
               text: JSON.stringify(
                 {
                   sellerPubkey,
-                  sellerName: content.name || content.display_name || null,
+                  sellerName:
+                    userContent.name ||
+                    userContent.display_name ||
+                    shopContent.name ||
+                    null,
                   paymentMethods: methods,
                   discounts: bitcoinDiscount,
                   _meta: {
