@@ -13,13 +13,15 @@ const pool = getDbPool();
 const RATE_LIMIT = { limit: 20, windowMs: 60 * 1000 };
 
 function sanitizeSlug(input: string): string {
-  return input
+  const slug = input
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9-]/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .substring(0, 63);
+  // the cut can land right after a hyphen, and a DNS label cannot end on one
+  return slug.replace(/-+$/, "");
 }
 
 const RESERVED_SLUGS = [
@@ -104,6 +106,10 @@ export default async function handler(
 
   if (!slug) {
     return res.status(400).json({ error: "slug is required" });
+  }
+
+  if (typeof slug !== "string") {
+    return res.status(400).json({ error: "slug must be a string" });
   }
 
   const sanitized = sanitizeSlug(slug);
