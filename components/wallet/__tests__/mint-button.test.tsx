@@ -213,6 +213,43 @@ describe("MintButton Component", () => {
     });
   });
 
+  const submitMintAmount = async (sats: string) => {
+    renderComponent();
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeVisible());
+    fireEvent.change(screen.getByLabelText(/Token amount in sats/i), {
+      target: { value: sats },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Mint/i }));
+  };
+
+  const expectInvoiceFailure = async () => {
+    expect(await screen.findByTestId("failure-modal")).toHaveTextContent(
+      "Failed to get a lightning invoice from your mint!"
+    );
+    expect(screen.queryByText("Lightning Invoice")).not.toBeInTheDocument();
+    expect(mockCheckMintQuote).not.toHaveBeenCalled();
+  };
+
+  it("should show a failure when the mint cannot be loaded", async () => {
+    (CashuWallet as jest.Mock).mockImplementationOnce(() => ({
+      loadMint: jest.fn().mockRejectedValue(new TypeError("Failed to fetch")),
+    }));
+
+    await submitMintAmount("100");
+
+    await expectInvoiceFailure();
+    expect(mockCreateMintQuote).not.toHaveBeenCalled();
+  });
+
+  it("should show a failure when the mint rejects the quote request", async () => {
+    mockCreateMintQuote.mockRejectedValue(new Error("Minting is disabled"));
+
+    await submitMintAmount("100");
+
+    await expectInvoiceFailure();
+  });
+
   it("should handle payment timeout", async () => {
     const satsToMint = "50";
     mockCreateMintQuote.mockResolvedValue({

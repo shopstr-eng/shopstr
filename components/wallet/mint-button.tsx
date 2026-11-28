@@ -91,13 +91,27 @@ const MintButton = () => {
 
   const handleMint = async (numSats: number) => {
     const invoiceAmount = toCashuMintAmountSats(numSats);
-    const wallet = new CashuWallet(new CashuMint(mints[0]!));
-    await wallet.loadMint();
+    let wallet: CashuWallet;
+    let pr: string;
+    let hash: string;
+    try {
+      wallet = new CashuWallet(new CashuMint(mints[0]!));
+      await wallet.loadMint();
 
-    const { request: pr, quote: hash } = await withMintRetry(
-      () => wallet.createMintQuoteBolt11(invoiceAmount),
-      { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
-    );
+      ({ request: pr, quote: hash } = await withMintRetry(
+        () => wallet.createMintQuoteBolt11(invoiceAmount),
+        { maxAttempts: 4, perAttemptTimeoutMs: 15000, totalTimeoutMs: 60000 }
+      ));
+    } catch (error) {
+      // No quote means nothing to pay or recover, so just tell the user.
+      console.warn("Mint quote request failed:", error);
+      setShowInvoiceCard(false);
+      setFailureText(
+        "Failed to get a lightning invoice from your mint! Change your mint in settings and/or please try again."
+      );
+      setShowFailureModal(true);
+      return;
+    }
 
     // Record the pending quote durably so a tab close / network failure
     // between "invoice paid" and "proofs minted" can be recovered on next boot.
